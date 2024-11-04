@@ -2,6 +2,14 @@ import ast
 import logging
 from typing import Any, Dict, List, Tuple
 
+logger = logging.getLogger(__name__)
+
+def add_parent_info(node: ast.AST, parent: ast.AST = None) -> None:
+    """Add parent links to AST nodes."""
+    for child in ast.iter_child_nodes(node):
+        child.parent = node
+        add_parent_info(child, node)
+
 class CodeExtractor:
     """A class to extract classes and functions from Python source code using AST."""
 
@@ -9,6 +17,7 @@ class CodeExtractor:
         self, tree: ast.AST, content: str
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Extract class and function details from an AST."""
+        logger.debug("Starting extraction of classes and functions from AST.")
         classes: List[Dict[str, Any]] = []
         functions: List[Dict[str, Any]] = []
         for node in ast.walk(tree):
@@ -16,15 +25,16 @@ class CodeExtractor:
                 classes.append(self.extract_class_details(node, content))
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not self._is_method(node):
                 functions.append(self.extract_function_details(node, content))
-        
+        logger.debug("Completed extraction from AST.")
         return {"classes": classes, "functions": functions}
 
     def extract_class_details(self, node: ast.ClassDef, content: str) -> Dict[str, Any]:
         """Extract details from a class node."""
+        logger.debug(f"Extracting details for class: {node.name}")
         try:
             class_name = node.name
             class_docstring = ast.get_docstring(node) or ""
-            class_code = ast.get_source_segment(content, node)
+            class_code = ast.get_source_segment(content, node) or ""
             methods: List[Dict[str, Any]] = []
             nested_classes: List[Dict[str, Any]] = []
             for body_item in node.body:
@@ -32,6 +42,7 @@ class CodeExtractor:
                     methods.append(self.extract_function_details(body_item, content))
                 elif isinstance(body_item, ast.ClassDef):
                     nested_classes.append(self.extract_class_details(body_item, content))
+            logger.debug(f"Extracted class: {class_name}")
             return {
                 "name": class_name,
                 "docstring": class_docstring,
@@ -40,18 +51,20 @@ class CodeExtractor:
                 "nested_classes": nested_classes
             }
         except Exception as e:
-            logging.warning(f"Error extracting class details: {e}")
+            logger.warning(f"Error extracting class details: {e}")
             return {"name": "Unknown", "docstring": "", "code": "", "methods": [], "nested_classes": []}
 
     def extract_function_details(self, node: ast.FunctionDef, content: str) -> Dict[str, Any]:
         """Extract details from a function node."""
+        logger.debug(f"Extracting details for function: {node.name}")
         try:
             function_name = node.name
             function_docstring = ast.get_docstring(node) or ""
-            function_code = ast.get_source_segment(content, node)
+            function_code = ast.get_source_segment(content, node) or ""
             params = self._get_parameters(node)
             return_type = self._get_return_type(node)
             complexity_score = self.calculate_complexity(node)
+            logger.debug(f"Extracted function: {function_name}")
             return {
                 "name": function_name,
                 "docstring": function_docstring,
@@ -61,8 +74,15 @@ class CodeExtractor:
                 "complexity_score": complexity_score
             }
         except Exception as e:
-            logging.warning(f"Error extracting function details: {e}")
-            return {"name": "Unknown", "docstring": "", "code": "", "params": [], "return_type": "Unknown", "complexity_score": None}
+            logger.warning(f"Error extracting function details: {e}")
+            return {
+                "name": "Unknown",
+                "docstring": "",
+                "code": "",
+                "params": [],
+                "return_type": "Unknown",
+                "complexity_score": None
+            }
 
     def _get_parameters(self, node: ast.FunctionDef) -> List[Tuple[str, str]]:
         """Retrieve function parameters and their types."""
@@ -71,6 +91,7 @@ class CodeExtractor:
             param_name = arg.arg
             param_type = self._get_annotation(arg.annotation)
             params.append((param_name, param_type))
+        logger.debug(f"Function {node.name} parameters: {params}")
         return params
 
     def _get_return_type(self, node: ast.FunctionDef) -> str:
@@ -100,6 +121,7 @@ class CodeExtractor:
 
     def calculate_complexity(self, node: ast.AST) -> int:
         """Calculate the cyclomatic complexity score for a function or method."""
+        logger.debug(f"Calculating complexity for node: {getattr(node, 'name', 'unknown')}")
         complexity = 1  # Start with one for the function entry point
         try:
             for subnode in ast.walk(node):
@@ -115,18 +137,13 @@ class CodeExtractor:
                         ast.DictComp,
                         ast.SetComp,
                         ast.GeneratorExp,
+                        ast.BoolOp,
+                        ast.And,
+                        ast.Or
                     ),
                 ):
                     complexity += 1
-                elif isinstance(subnode, ast.BoolOp):
-                    # Each boolean operation (and/or) adds branches
-                    complexity += len(subnode.values) - 1
+            logger.debug(f"Function {getattr(node, 'name', 'unknown')} complexity: {complexity}")
         except Exception as e:
-            logging.warning(f"Error calculating complexity for function {getattr(node, 'name', 'unknown')}: {e}")
+            logger.warning(f"Error calculating complexity for function {getattr(node, 'name', 'unknown')}: {e}")
         return complexity
-
-def add_parent_info(node: ast.AST, parent: ast.AST = None) -> None:
-    """Add parent links to AST nodes."""
-    for child in ast.iter_child_nodes(node):
-        child.parent = node
-        add_parent_info(child, node)

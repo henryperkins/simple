@@ -1,9 +1,9 @@
-# monitoring.py
 import sentry_sdk
-import logging
 from sentry_sdk.integrations.logging import LoggingIntegration
+from config import Config
+import logging
 
-def initialize_sentry(environment="development", traces_sample_rate=1.0):
+def initialize_sentry(environment="production", traces_sample_rate=1.0):
     """Initialize Sentry SDK with appropriate configuration."""
     sentry_logging = LoggingIntegration(
         level=logging.INFO,        # Capture info and above as breadcrumbs
@@ -11,13 +11,14 @@ def initialize_sentry(environment="development", traces_sample_rate=1.0):
     )
     
     sentry_sdk.init(
-        dsn="https://04fe86fc2c7757166d62bf0f2e1745c7@o4508070823395328.ingest.us.sentry.io/4508236588122112",
+        dsn=Config.SENTRY_DSN,
         environment=environment,
         traces_sample_rate=traces_sample_rate,
         integrations=[sentry_logging],
         attach_stacktrace=True,
         send_default_pii=False
     )
+    logging.info("Sentry initialized.")
 
 def capture_openai_error(error, context=None):
     """Capture OpenAI-related errors with context."""
