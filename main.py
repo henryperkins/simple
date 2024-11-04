@@ -7,7 +7,6 @@ import sys
 import shutil
 import os
 import sentry_sdk
-from monitoring import initialize_sentry
 from file_processing import (
     clone_repo,
     get_all_files,
@@ -20,7 +19,8 @@ from config import (
     AZURE_OPENAI_API_KEY,
     AZURE_OPENAI_ENDPOINT,
     AZURE_OPENAI_DEPLOYMENT_NAME,
-    OPENAI_API_KEY
+    OPENAI_API_KEY,
+    initialize_sentry
 )
 
 # Initialize Sentry
