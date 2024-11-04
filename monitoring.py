@@ -4,15 +4,10 @@ import logging
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 def initialize_sentry(environment="development", traces_sample_rate=1.0):
-    """Initialize Sentry SDK with appropriate configuration.
-    
-    Args:
-        environment (str): The environment name (development, production, etc.)
-        traces_sample_rate (float): Sample rate for performance monitoring
-    """
+    """Initialize Sentry SDK with appropriate configuration."""
     sentry_logging = LoggingIntegration(
-        level=logging.INFO,
-        event_level=logging.ERROR
+        level=logging.INFO,        # Capture info and above as breadcrumbs
+        event_level=logging.ERROR  # Send errors as events
     )
     
     sentry_sdk.init(
@@ -25,13 +20,9 @@ def initialize_sentry(environment="development", traces_sample_rate=1.0):
     )
 
 def capture_openai_error(error, context=None):
-    """Capture OpenAI-related errors with context.
-    
-    Args:
-        error (Exception): The error to capture
-        context (dict, optional): Additional context information
-    """
+    """Capture OpenAI-related errors with context."""
     with sentry_sdk.push_scope() as scope:
         if context:
-            scope.set_context("openai_context", context)
+            for key, value in context.items():
+                scope.set_extra(key, value)
         sentry_sdk.capture_exception(error)

@@ -1,64 +1,43 @@
-# file_processing.py
-
 import os
 import ast
 import aiofiles
 import asyncio
 import aiohttp
-import random
 import logging
 import shutil
 import subprocess
 import sentry_sdk
-from code_extraction import extract_classes_and_functions_from_ast
-from typing import Any, Callable, Coroutine
+from typing import Any, Dict, List, Tuple
 from pathlib import Path
+from code_extraction import CodeExtractor
+from cache import initialize_cache
 
-def clone_repo(repo_url, clone_dir):
-    """Clone a GitHub repository into a specified directory.
-    Args:
-        repo_url (str): The URL of the GitHub repository to clone.
-        clone_dir (str): The directory where the repository will be cloned.
-    Raises:
-        subprocess.CalledProcessError: If the cloning process fails.
-    """
+def clone_repo(repo_url: str, clone_dir: str) -> None:
+    """Clone a GitHub repository into a specified directory."""
     try:
-        if os.path.exists(clone_dir):
-            logging.info(f"Removing existing directory: {clone_dir}")
-            shutil.rmtree(clone_dir)
-        logging.info(f"Cloning repository {repo_url} into {clone_dir}")
-        subprocess.run(["git", "clone", repo_url, clone_dir], check=True)
-        logging.info(f"Cloned repository from {repo_url} into {clone_dir}")
+        subprocess.run(['git', 'clone', repo_url, clone_dir], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        logging.info(f"Cloned repository {repo_url} into {clone_dir}")
     except subprocess.CalledProcessError as e:
-        logging.error(f"Failed to clone repository: {e}")
+        logging.error(f"Error cloning repository: {e.stderr.decode('utf-8')}")
         sentry_sdk.capture_exception(e)
         raise
 
-def load_gitignore_patterns(repo_dir):
-    """Load .gitignore patterns from the repository directory.
-    
-    Args:
-        repo_dir (str): The root directory of the repository.
-        
-    Returns:
-        list: A list of patterns to ignore.
-    """
-    gitignore_path = Path(repo_dir) / ".gitignore"
-    if not gitignore_path.exists():
-        return []
-    
-    with open(gitignore_path, "r") as f:
-        patterns = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+def load_gitignore_patterns(repo_dir: str) -> List[str]:
+    """Load .gitignore patterns from the repository directory."""
+    gitignore_path = os.path.join(repo_dir, '.gitignore')
+    patterns = []
+    if os.path.exists(gitignore_path):
+        try:
+            with open(gitignore_path, 'r') as f:
+                patterns = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+            logging.info(f"Loaded gitignore patterns from {gitignore_path}")
+        except Exception as e:
+            logging.warning(f"Failed to load .gitignore: {e}")
+            sentry_sdk.capture_exception(e)
     return patterns
 
-def get_all_files(directory, exclude_dirs=None):
-    """Retrieve all Python files in the directory, excluding specified directories.
-    Args:
-        directory (str): The root directory to search for Python files.
-        exclude_dirs (list, optional): A list of directories to exclude from the search.
-    Returns:
-        list: A list of file paths to Python files.
-    """
+def get_all_files(directory: str, exclude_dirs: List[str] = None) -> List[str]:
+    """Retrieve all Python files in the directory, excluding specified directories."""
     if exclude_dirs is None:
         exclude_dirs = []
     files_list = []
@@ -67,216 +46,129 @@ def get_all_files(directory, exclude_dirs=None):
         for file in files:
             if file.endswith(".py"):
                 files_list.append(os.path.join(root, file))
+    logging.info(f"Found {len(files_list)} Python files in {directory}")
     return files_list
 
-async def process_file(filepath):
-    """Read and parse a Python file, extracting classes and functions.
-    Args:
-        filepath (str): The path to the Python file to process.
-    Returns:
-        tuple: A tuple containing the file path and a dictionary with extracted data.
-    Raises:
-        Exception: If an error occurs during file processing.
-    """
+def format_with_black(file_content: str) -> Tuple[bool, str]:
+    """Attempt to format code using black."""
     try:
-        with sentry_sdk.start_span(op="process_file", description=filepath):
-            async with aiofiles.open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                content = await f.read()
-            logging.info(f"Processing file: {filepath}")
-            try:
-                tree = ast.parse(content)
-                add_parent_info(tree)
-                extracted_data = extract_classes_and_functions_from_ast(tree, content)
-            except (IndentationError, SyntaxError) as e:
-                logging.warning(f"Initial parsing failed for {filepath}, attempting black formatting: {e}")
-                success, formatted_content = format_with_black(content)
-                if success:
-                    try:
-                        tree = ast.parse(formatted_content)
-                        add_parent_info(tree)
-                        extracted_data = extract_classes_and_functions_from_ast(tree, formatted_content)
-                        content = formatted_content
-                    except (IndentationError, SyntaxError) as e:
-                        logging.error(f"Parsing failed even after black formatting for {filepath}: {e}")
-                        extracted_data = {"functions": [], "classes": []}
-                else:
+        import black
+        mode = black.FileMode()
+        formatted_content = black.format_file_contents(
+            file_content,
+            fast=False,
+            mode=mode
+        )
+        logging.info("Formatted code with Black")
+        return True, formatted_content
+    except ImportError:
+        logging.warning("Black package not found. Run: pip install black")
+        return False, file_content
+    except Exception as e:
+        logging.warning(f"Black formatting failed: {str(e)}")
+        return False, file_content
+
+def create_complexity_indicator(complexity: int) -> str:
+    """Create a visual indicator for code complexity."""
+    if complexity is None:
+        return "❓"
+    elif complexity <= 5:
+        return "🟢"  # Low complexity
+    elif complexity <= 10:
+        return "🟡"  # Medium complexity
+    else:
+        return "🔴"  # High complexity
+
+async def process_file(filepath: str) -> Tuple[str, Dict[str, Any]]:
+    """Read and parse a Python file, extracting classes and functions."""
+    try:
+        async with aiofiles.open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = await f.read()
+        logging.info(f"Processing file: {filepath}")
+        extractor = CodeExtractor()
+        try:
+            tree = ast.parse(content)
+            add_parent_info(tree)
+            extracted_data = extractor.extract_classes_and_functions_from_ast(tree, content)
+            logging.info(f"Successfully extracted classes and functions from {filepath}")
+        except (IndentationError, SyntaxError) as e:
+            logging.warning(f"Initial parsing failed for {filepath}, attempting black formatting: {e}")
+            success, formatted_content = format_with_black(content)
+            if success:
+                try:
+                    tree = ast.parse(formatted_content)
+                    add_parent_info(tree)
+                    extracted_data = extractor.extract_classes_and_functions_from_ast(tree, formatted_content)
+                    content = formatted_content
+                    logging.info(f"Successfully extracted classes and functions from {filepath} after black formatting")
+                except (IndentationError, SyntaxError) as e:
+                    logging.error(f"Parsing failed even after black formatting for {filepath}: {e}")
                     extracted_data = {"functions": [], "classes": []}
-            extracted_data['file_content'] = content
-            return filepath, extracted_data
+            else:
+                logging.error(f"Black formatting failed for {filepath}")
+                extracted_data = {"functions": [], "classes": []}
+        extracted_data['file_content'] = content
+        return filepath, extracted_data
     except Exception as e:
         logging.error(f"Error processing file {filepath}: {e}")
         sentry_sdk.capture_exception(e)
         return filepath, {"functions": [], "classes": [], "error": str(e)}
 
-def add_parent_info(node, parent=None):
-    """Add parent links to AST nodes."""
-    for child in ast.iter_child_nodes(node):
-        child.parent = node
-        add_parent_info(child, node)
-
-def format_with_black(file_content):
-    """Attempt to format code using black.
-    
-    Args:
-        file_content (str): The source code content to format.
-        
-    Returns:
-        tuple[bool, str]: A tuple containing:
-            - bool: True if formatting succeeded, False otherwise
-            - str: The formatted content if successful, original content if failed
-    """
+def write_analysis_to_markdown(results: Dict[str, Dict[str, Any]], output_file_path: str, repo_dir: str) -> None:
+    """Write the analysis results to a markdown file with improved readability."""
     try:
-        import black
-        mode = black.FileMode()
-        formatted_content = black.format_file_contents(
-            file_content, 
-            fast=False,
-            mode=mode
-        )
-        return True, formatted_content
-        
-    except ImportError:
-        logging.warning("Black package not found. Run: pip install black")
-        return False, file_content
-        
-    except Exception as e:
-        logging.warning(f"Black formatting failed: {str(e)}")
-        return False, file_content
-
-async def exponential_backoff_with_jitter(func, max_retries=5, base_delay=1, max_delay=60):
-    """Execute a coroutine with exponential backoff and jitter for handling rate limits/failures.
-    
-    Args:
-        func (Coroutine): Async function to retry
-        max_retries (int, optional): Maximum retry attempts. Defaults to 5.
-        base_delay (int, optional): Initial delay between retries in seconds. Defaults to 1.
-        max_delay (int, optional): Maximum delay between retries in seconds. Defaults to 60.
-        
-    Returns:
-        Any: Result from the coroutine if successful
-        
-    Raises:
-        Exception: If max retries exceeded or unrecoverable error occurs
-    """
-    retries = 0
-    while retries < max_retries:
-        try:
-            return await func()
+        with open(output_file_path, 'w', encoding='utf-8') as md_file:
+            # Write Table of Contents
+            md_file.write("# Code Analysis Report\n\n")
+            md_file.write("## Table of Contents\n\n")
+            for filepath in results:
+                relative_path = os.path.relpath(filepath, repo_dir)
+                anchor = relative_path.replace('/', '-').replace('.', '-').replace(' ', '-')
+                md_file.write(f"- [{relative_path}](#{anchor})\n")
+            md_file.write("\n---\n\n")
             
-        except aiohttp.ClientResponseError as e:
-            if e.status == 429:  # Rate limit
-                retry_after = 5  # Default retry time
-                try:
-                    if 'retry after' in e.message.lower():
-                        retry_after = int(e.message.split('retry after ')[1].split()[0])
-                except (AttributeError, IndexError, ValueError):
-                    pass
+            # Write details for each file
+            for filepath, analysis in results.items():
+                relative_path = os.path.relpath(filepath, repo_dir)
+                anchor = relative_path.replace('/', '-').replace('.', '-').replace(' ', '-')
                 
-                logging.warning(f"Rate limit hit. Retrying in {retry_after}s...")
-                await asyncio.sleep(retry_after)
-                retries += 1
-                continue
+                # File header
+                md_file.write(f"## {relative_path}\n\n")
                 
-            logging.error(f"API client error: {e}")
-            sentry_sdk.capture_exception(e)
-            raise
-            
-        except Exception as e:
-            retries += 1
-            if retries >= max_retries:
-                logging.error(f"Max retries ({max_retries}) exceeded")
-                sentry_sdk.capture_exception(e)
-                raise
+                # Summary section - AI generated overview
+                md_file.write("### Summary\n\n")
+                file_summary = analysis.get("file_analysis", {}).get("summary", "No summary available.")
+                md_file.write(f"{file_summary}\n\n")
                 
-            delay = min(base_delay * (2 ** (retries - 1)), max_delay)
-            jitter = random.uniform(0, 0.1 * delay)
-            total_delay = delay + jitter
-            
-            logging.warning(
-                f"Attempt {retries}/{max_retries} failed: {str(e)}. "
-                f"Retrying in {total_delay:.2f}s"
-            )
-            
-            await asyncio.sleep(total_delay)
-            
-    raise Exception(f"Failed after {max_retries} retries")
-
-def write_analysis_to_markdown(results, output_file_path, repo_dir):
-    """Write the analysis results to a markdown file with improved readability.
-    
-    Args:
-        results (dict): The analysis results to write.
-        output_file_path (str): The path to the markdown file to write.
-        repo_dir (str): The directory of the repository being analyzed.
-    """
-    with sentry_sdk.start_transaction(name="write_markdown", op="documentation") as transaction:
-        try:
-            with open(output_file_path, "w", encoding="utf-8") as md_file:
-                # Add transaction context
-                transaction.set_tag("output_file", output_file_path)
-                transaction.set_context("results", {
-                    "num_files": len(results),
-                    "repo_dir": repo_dir
-                })
+                # Recent Changes section
+                md_file.write("### Recent Changes\n\n")
+                changelog = analysis.get("file_analysis", {}).get("changelog", "No recent changes.")
+                md_file.write(f"{changelog}\n\n")
                 
-                # Write header and TOC
-                md_file.write("# Code Documentation and Analysis\n\n")
-                md_file.write("## Table of Contents\n\n")
-                
-                # Generate TOC entries
-                for filepath in results.keys():
-                    relative_path = os.path.relpath(filepath, repo_dir)
-                    anchor = relative_path.replace('/', '-').replace('.', '-').replace(' ', '-')
-                    md_file.write(f"- [{relative_path}](#{anchor})\n")
-                md_file.write("\n")
-
-                # Process each file
-                for filepath, analysis in results.items():
-                    relative_path = os.path.relpath(filepath, repo_dir)
-                    anchor = relative_path.replace('/', '-').replace('.', '-').replace(' ', '-')
+                # Function Analysis table
+                md_file.write("### Function Analysis\n\n")
+                if analysis.get("functions"):
+                    md_file.write("| Function/Class/Method | Complexity Score | Summary |\n")
+                    md_file.write("|-----------------------|-------------------|----------|\n")
                     
-                    # File header
-                    md_file.write(f"## {relative_path}\n\n")
-
-                    # Summary section - AI generated overview
-                    md_file.write("### Summary\n\n")
-                    file_summary = analysis.get("file_analysis", {}).get("summary", "No summary available.")
-                    md_file.write(f"{file_summary}\n\n")
-
-                    # Recent Changes section
-                    md_file.write("### Recent Changes\n\n")
-                    changelog = analysis.get("file_analysis", {}).get("changelog", "No recent changes.")
-                    md_file.write(f"{changelog}\n\n")
-
-                    # Function Analysis table
-                    md_file.write("### Function Analysis\n\n")
-                    if analysis.get("functions"):
-                        md_file.write("| Function/Class/Method | Complexity Score | Summary |\n")
-                        md_file.write("|---------------------|-----------------|----------|\n")
-                        
-                        for func_analysis in analysis.get("functions", []):
-                            if not func_analysis:
-                                continue
-                            
-                            name = func_analysis.get('name', 'Unknown')
-                            complexity = func_analysis.get('complexity_score', None)
-                            complexity_indicator = create_complexity_indicator(complexity)
-                            summary = func_analysis.get('summary', 'No documentation available.').replace("\n", " ")
-                            
-                            md_file.write(f"| **{name}** | {complexity} {complexity_indicator} | {summary} |\n")
-                        md_file.write("\n")
-                    else:
-                        md_file.write("No functions analyzed.\n\n")
-
-                    # Source code with docstrings
-                    md_file.write("### Source Code\n\n")
-                    md_file.write("```python\n")
-                    source_code = analysis.get("source_code", "# No source code available")
-                    md_file.write(f"{source_code}\n")
-                    md_file.write("```\n\n")
-
-        except Exception as e:
-            error_msg = f"Error writing markdown file: {str(e)}"
-            logging.error(error_msg)
-            sentry_sdk.capture_exception(e)
-            raise
+                    for func_analysis in analysis.get("functions", []):
+                        if not func_analysis:
+                            continue
+                        name = func_analysis.get('name', 'Unknown')
+                        complexity = func_analysis.get('complexity_score', None)
+                        complexity_indicator = create_complexity_indicator(complexity)
+                        summary = func_analysis.get('summary', 'No documentation available.').replace("\n", " ")
+                        md_file.write(f"| **{name}** | {complexity} {complexity_indicator} | {summary} |\n")
+                    md_file.write("\n")
+                else:
+                    md_file.write("No functions analyzed.\n\n")
+                
+                # Source code with docstrings
+                md_file.write("### Source Code\n\n")
+                md_file.write("```python\n")
+                source_code = analysis.get("file_content", "# No source code available")
+                md_file.write(f"{source_code}\n")
+                md_file.write("```\n\n")
+    except Exception as e:
+        logging.error(f"Error writing markdown file: {str(e)}")
+        sentry_sdk.capture_exception(e)
