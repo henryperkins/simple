@@ -1,121 +1,121 @@
 # main.py
+
 import argparse
 import asyncio
 import logging
 import sys
 import shutil
 import os
-import black
 import sentry_sdk
 from monitoring import initialize_sentry
 from file_processing import (
     clone_repo,
     get_all_files,
-    process_file,
-    write_analysis_to_markdown
+    write_analysis_to_markdown,
+    load_gitignore_patterns,
+    FileProcessor  # Import the FileProcessor
 )
-from api_interaction import analyze_function_with_openai
-from config import (
-    AZURE_OPENAI_API_KEY,
-    AZURE_OPENAI_ENDPOINT,
-    AZURE_OPENAI_DEPLOYMENT_NAME,
-    OPENAI_API_KEY
-)
+from api_interaction import analyze_function_with_openai, RateLimiter  # Import RateLimiter
+from config import Config
+from code_extraction import CodeExtractor
+
+# Initialize Sentry
+initialize_sentry()
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 
+# Define directories to always exclude
+always_exclude_dirs = ['.git', '__pycache__', 'venv', 'node_modules']
+
+# Initialize instances for FileProcessor, CodeExtractor, and RateLimiter
+file_processor = FileProcessor()
+code_extractor = CodeExtractor()
+rate_limiter = RateLimiter(tokens_per_second=0.5, bucket_size=10)  # Adjust as needed
+
 async def process_files_concurrently(files_list):
-    """Process multiple files concurrently.
+    """Process multiple files concurrently using FileProcessor."""
+    tasks = [file_processor.process_large_file(filepath) for filepath in files_list]
+    results = await asyncio.gather(*tasks)
 
-    Args:
-        files_list (list): A list of file paths to process.
+    # Filter out failed results and log errors
+    successful_results = {}
+    for result, filepath in zip(results, files_list):
+        if result.success:
+            # Process the file content here using CodeExtractor
+            try:
+                async with aiofiles.open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                    content = await f.read()
+                tree = ast.parse(content)
+                extracted_data = code_extractor.extract_classes_and_functions_from_ast(tree, content)
+                successful_results[filepath] = extracted_data
+            except Exception as e:
+                logging.error(f"Error processing {filepath}: {e}")
+                sentry_sdk.capture_exception(e)
+        else:
+            logging.error(f"Failed to process file {filepath}: {result.error}")
 
-    Returns:
-        list: A list of tuples containing file paths and extracted data.
-    """
-    tasks = [process_file(filepath) for filepath in files_list]
-    return await asyncio.gather(*tasks)
+    return successful_results
 
 async def analyze_functions_concurrently(functions, service):
-    """Analyze multiple functions concurrently using the selected AI service.
-
-    Args:
-        functions (list): A list of function details to analyze.
-        service (str): The service to use ('openai' or 'azure').
-
-    Returns:
-        list: A list of analysis results for each function.
-    """
-    tasks = [analyze_function_with_openai(func, service) for func in functions]
+    """Analyze multiple functions concurrently using the selected AI service and rate limiting."""
+    tasks = []
+    for func in functions:
+        await rate_limiter.acquire()  # Apply rate limiting before each API call
+        tasks.append(analyze_function_with_openai(func, service))
     return await asyncio.gather(*tasks)
 
 async def main():
-    """Main entry point for the documentation generator."""
-    parser = argparse.ArgumentParser(description="Analyze a GitHub repository or local directory.")
-    parser.add_argument("input_path", help="GitHub Repository URL or Local Directory Path")
-    parser.add_argument("output_file", help="File to save Markdown output")
-    parser.add_argument("--environment", default="development", help="Environment (development/production)")
-    parser.add_argument("--concurrency", type=int, default=5, help="Number of concurrent requests")
-    parser.add_argument("--service", choices=["openai", "azure"], default="openai", help="AI service to use")
-    
+    """Main function to orchestrate code analysis and documentation generation."""
+    parser = argparse.ArgumentParser(description="Analyze code and generate documentation.")
+    parser.add_argument("input_path", help="Path to the input directory or repository URL")
+    parser.add_argument("output_file", help="Path to the output markdown file")
+    parser.add_argument("--service", help="The service to use ('openai' or 'azure')", required=True)
     args = parser.parse_args()
-    
-    # Initialize Sentry
-    initialize_sentry(environment=args.environment)
-    
+
     try:
-        with sentry_sdk.start_transaction(op="process_repository", name=f"Process Repository: {args.input_path}"):
-            # Validate service configuration
-            if args.service == "azure":
-                if not all([AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT_NAME]):
-                    logging.error("Azure OpenAI environment variables are not fully set.")
-                    sys.exit(1)
-            elif not OPENAI_API_KEY:
-                logging.error("OpenAI API key is not set.")
+        input_path = args.input_path
+        output_file = args.output_file
+
+        if input_path.startswith('http://') or input_path.startswith('https://'):
+            repo_url = input_path
+            repo_dir = 'cloned_repo'
+            logging.debug(f"Input is a GitHub repository URL: {repo_url}")
+            clone_result = await clone_repo(repo_url, repo_dir)
+            if not clone_result.success:
+                logging.error(f"Failed to clone repository: {clone_result.error}")
                 sys.exit(1)
+            cleanup_needed = True
+        else:
+            repo_dir = input_path
+            if not os.path.isdir(repo_dir):
+                logging.error(f"The directory {repo_dir} does not exist.")
+                sys.exit(1)
+            logging.info(f"Using local directory {repo_dir}")
 
-            # Handle repository input
-            cleanup_needed = False
-            if args.input_path.startswith(("http://", "https://")):
-                repo_url = args.input_path
-                repo_dir = "cloned_repo"
-                clone_repo(repo_url, repo_dir)
-                cleanup_needed = True
-            else:
-                repo_dir = args.input_path
-                if not os.path.isdir(repo_dir):
-                    logging.error(f"Directory does not exist: {repo_dir}")
-                    sys.exit(1)
+        spec = load_gitignore_patterns(repo_dir)
 
+        files_list = get_all_files(repo_dir, exclude_dirs=always_exclude_dirs)
+        logging.info(f"Found {len(files_list)} files after applying ignore patterns and exclusions.")
+
+        results = await process_files_concurrently(files_list)
+
+        # Analyze functions using the specified AI service
+        for filepath, extracted_data in results.items():
+            functions = extracted_data.get("functions", [])
+            function_analysis_results = await analyze_functions_concurrently(functions, args.service)
+            extracted_data["functions"] = function_analysis_results
+
+        write_analysis_to_markdown(results, output_file, repo_dir)
+        logging.info(f"Documentation written to {output_file}")
+
+        if cleanup_needed:
             try:
-                # Process files
-                files_list = get_all_files(repo_dir, exclude_dirs=[".git", ".github"])
-                file_results = await process_files_concurrently(files_list)
-
-                # Analyze and document code
-                results = {}
-                for filepath, extracted_data in file_results:
-                    functions = extracted_data.get("functions", [])
-                    if functions:
-                        analysis_results = await analyze_functions_concurrently(functions, args.service)
-                        results[filepath] = {
-                            "functions": analysis_results,
-                            "source_code": extracted_data.get("file_content", "")
-                        }
-
-                # Generate documentation
-                write_analysis_to_markdown(results, args.output_file, repo_dir)
-                logging.info(f"Documentation written to {args.output_file}")
-
-            finally:
-                if cleanup_needed and os.path.exists(repo_dir):
-                    try:
-                        shutil.rmtree(repo_dir)
-                        logging.info(f"Cleaned up repository directory: {repo_dir}")
-                    except Exception as e:
-                        logging.error(f"Error cleaning up repository directory: {e}")
-                        sentry_sdk.capture_exception(e)
+                shutil.rmtree(repo_dir)
+                logging.info(f"Cleaned up cloned repository at {repo_dir}")
+            except Exception as e:
+                logging.error(f"Failed to clean up cloned repository: {e}")
+                sentry_sdk.capture_exception(e)
 
     except Exception as e:
         logging.error(f"Fatal error: {e}")
