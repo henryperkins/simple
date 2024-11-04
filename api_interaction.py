@@ -1,5 +1,3 @@
-# api_interaction.py
-
 import openai
 import aiohttp
 import json
@@ -7,15 +5,17 @@ import logging
 import hashlib
 import asyncio
 import sentry_sdk
+import time
 from config import Config
 from monitoring import capture_openai_error
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Callable, Optional
 from cache import ThreadSafeCache
 from error_handling import ProcessingResult
 
 # Initialize a thread-safe cache for prompt responses
 prompt_cache = ThreadSafeCache(max_size_mb=Config.CACHE_MAX_SIZE_MB)
-# Example of improved logging
+
+# Improved logging configuration
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
 
 def get_cached_response(prompt_key: str) -> Optional[Dict[str, Any]]:
@@ -83,8 +83,17 @@ class APIRetryStrategy:
         self.base_delay = base_delay
         self.rate_limiter = RateLimiter(tokens_per_second=0.5, bucket_size=10)
 
-class APIRetryStrategy:
     async def execute_with_retry(self, operation: Callable, *args, **kwargs) -> ProcessingResult:
+        """Execute an operation with retry logic.
+
+        Args:
+            operation (Callable): The operation to execute.
+            *args: Positional arguments for the operation.
+            **kwargs: Keyword arguments for the operation.
+
+        Returns:
+            ProcessingResult: The result of the operation.
+        """
         retries = 0
         while retries < self.max_retries:
             try:
@@ -92,11 +101,11 @@ class APIRetryStrategy:
                 result = await operation(*args, **kwargs)
                 return ProcessingResult(success=True, data=result)
             except aiohttp.ClientResponseError as e:
-                if e.status == 429:
+                if e.status == 429:  # Rate limit
                     retry_after = float(e.headers.get('Retry-After', self.base_delay))
                     logging.warning(f"Rate limit hit. Retrying after {retry_after} seconds.")
                     await asyncio.sleep(retry_after)
-                elif e.status >= 500:
+                elif e.status >= 500:  # Server error
                     delay = self.base_delay * (2 ** retries)
                     logging.warning(f"Server error {e.status}. Retrying after {delay} seconds.")
                     await asyncio.sleep(delay)
@@ -107,6 +116,7 @@ class APIRetryStrategy:
             except Exception as e:
                 logging.error(f"Unexpected error: {str(e)}", exc_info=True)
                 return ProcessingResult(success=False, error=str(e))
+        
         logging.error("Max retries exceeded.")
         return ProcessingResult(success=False, error="Max retries exceeded")
 
