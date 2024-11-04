@@ -4,7 +4,11 @@ import logging
 import sys
 import shutil
 import os
+<<<<<<< HEAD
 from typing import List, Dict, Any
+=======
+import sentry_sdk
+>>>>>>> 2d94ecaaf1aebee3c0cef377a3f4a9dfad24c7e6
 from file_processing import (
     clone_repo, 
     get_all_files,
@@ -13,9 +17,19 @@ from file_processing import (
     write_analysis_to_markdown
 )
 from api_interaction import analyze_function_with_openai
+<<<<<<< HEAD
 from config import Config
 from monitoring import initialize_sentry
 from cache import initialize_cache
+=======
+from config import (
+    AZURE_OPENAI_API_KEY,
+    AZURE_OPENAI_ENDPOINT,
+    AZURE_OPENAI_DEPLOYMENT_NAME,
+    OPENAI_API_KEY,
+    initialize_sentry
+)
+>>>>>>> 2d94ecaaf1aebee3c0cef377a3f4a9dfad24c7e6
 
 # Initialize Sentry
 initialize_sentry()

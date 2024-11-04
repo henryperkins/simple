@@ -1,13 +1,27 @@
+<<<<<<< HEAD
+=======
+import openai
+>>>>>>> 2d94ecaaf1aebee3c0cef377a3f4a9dfad24c7e6
 import aiohttp
 import json
 import logging
 import asyncio
+<<<<<<< HEAD
 import random
 import hashlib
 from typing import Dict, Any, List, Tuple
 from config import Config
 import sentry_sdk
 from cache import get_cached_response, cache_response, initialize_cache
+=======
+import sentry_sdk
+import time
+from config import Config
+from monitoring import capture_openai_error
+from typing import Dict, Any, Callable, Optional
+from cache import ThreadSafeCache
+from error_handling import ProcessingResult
+>>>>>>> 2d94ecaaf1aebee3c0cef377a3f4a9dfad24c7e6
 
 def create_error_response(function_name: str, error_message: str) -> Dict[str, Any]:
     """Create an error response dictionary."""
@@ -19,9 +33,17 @@ def create_error_response(function_name: str, error_message: str) -> Dict[str, A
         "changelog": "No changelog available due to error."
     }
 
+<<<<<<< HEAD
 async def exponential_backoff_with_jitter(coro, max_retries: int = 5, initial_delay: float = 1.0, max_delay: float = 60.0) -> Any:
     """
     Retry a coroutine with exponential backoff and jitter.
+=======
+# Improved logging configuration
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
+
+def get_cached_response(prompt_key: str) -> Optional[Dict[str, Any]]:
+    """Retrieve a cached response if available.
+>>>>>>> 2d94ecaaf1aebee3c0cef377a3f4a9dfad24c7e6
 
     Args:
         coro (coroutine): The coroutine to retry.
@@ -30,7 +52,116 @@ async def exponential_backoff_with_jitter(coro, max_retries: int = 5, initial_de
         max_delay (float): Maximum delay between retries.
 
     Returns:
+<<<<<<< HEAD
         Any: The result of the coroutine.
+=======
+        Optional[Dict[str, Any]]: The cached response if available, otherwise None.
+    """
+    return prompt_cache.get(prompt_key)
+
+def cache_response(prompt_key: str, response: Dict[str, Any]) -> None:
+    """Cache the response for a given prompt key.
+
+    Args:
+        prompt_key (str): The unique key for the prompt.
+        response (Dict[str, Any]): The response to cache.
+    """
+    prompt_cache.set(prompt_key, response)
+
+class RateLimiter:
+    """A token bucket rate limiter for controlling API request rates."""
+
+    def __init__(self, tokens_per_second: float, bucket_size: int):
+        """Initialize the rate limiter.
+
+        Args:
+            tokens_per_second (float): Rate at which tokens are added to the bucket.
+            bucket_size (int): Maximum number of tokens in the bucket.
+        """
+        self.tokens_per_second = tokens_per_second
+        self.bucket_size = bucket_size
+        self.tokens = bucket_size
+        self.last_update = time.time()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self):
+        """Acquire a token from the bucket, waiting if necessary."""
+        async with self._lock:
+            now = time.time()
+            time_passed = now - self.last_update
+            self.tokens = min(self.bucket_size, self.tokens + time_passed * self.tokens_per_second)
+            
+            if self.tokens < 1:
+                wait_time = (1 - self.tokens) / self.tokens_per_second
+                await asyncio.sleep(wait_time)
+                self.tokens = 1
+            
+            self.tokens -= 1
+            self.last_update = now
+
+class APIRetryStrategy:
+    """A strategy for retrying API requests with exponential backoff."""
+
+    def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
+        """Initialize the retry strategy.
+
+        Args:
+            max_retries (int): Maximum number of retry attempts.
+            base_delay (float): Initial delay between retries in seconds.
+        """
+        self.max_retries = max_retries
+        self.base_delay = base_delay
+        self.rate_limiter = RateLimiter(tokens_per_second=0.5, bucket_size=10)
+
+    async def execute_with_retry(self, operation: Callable, *args, **kwargs) -> ProcessingResult:
+        """Execute an operation with retry logic.
+
+        Args:
+            operation (Callable): The operation to execute.
+            *args: Positional arguments for the operation.
+            **kwargs: Keyword arguments for the operation.
+
+        Returns:
+            ProcessingResult: The result of the operation.
+        """
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                await self.rate_limiter.acquire()
+                result = await operation(*args, **kwargs)
+                return ProcessingResult(success=True, data=result)
+            except aiohttp.ClientResponseError as e:
+                if e.status == 429:  # Rate limit
+                    retry_after = float(e.headers.get('Retry-After', self.base_delay))
+                    logging.warning(f"Rate limit hit. Retrying after {retry_after} seconds.")
+                    await asyncio.sleep(retry_after)
+                elif e.status >= 500:  # Server error
+                    delay = self.base_delay * (2 ** retries)
+                    logging.warning(f"Server error {e.status}. Retrying after {delay} seconds.")
+                    await asyncio.sleep(delay)
+                else:
+                    logging.error(f"Client error {e.status}: {str(e)}")
+                    return ProcessingResult(success=False, error=str(e))
+                retries += 1
+            except Exception as e:
+                logging.error(f"Unexpected error: {str(e)}", exc_info=True)
+                return ProcessingResult(success=False, error=str(e))
+        
+        logging.error("Max retries exceeded.")
+        return ProcessingResult(success=False, error="Max retries exceeded")
+
+async def make_openai_request(model_name: str, messages: list, functions: list, service: str) -> Dict[str, Any]:
+    """Make a request to the OpenAI or Azure OpenAI API.
+
+    Args:
+        model_name (str): The name of the model to use.
+        messages (list): The messages to send to the API.
+        functions (list): The function schema for the API request.
+        service (str): The service to use ('openai' or 'azure').
+
+    Returns:
+        Dict[str, Any]: The API response.
+>>>>>>> 2d94ecaaf1aebee3c0cef377a3f4a9dfad24c7e6
 
     Raises:
         Exception: If all retries fail.
