@@ -1,34 +1,15 @@
-# extract/functions.py
-
 import ast
 from typing import Any, Dict, List
-from .utils import get_annotation
-from logging_utils import setup_logger
+from .base import BaseExtractor
+from core.logging.setup import LoggerSetup
 
 # Initialize a logger specifically for this module
-logger = setup_logger("extract.functions")
+logger = LoggerSetup.get_logger("extract.functions")
 
-
-class FunctionExtractor:
+class FunctionExtractor(BaseExtractor):
     """
-    Handles extraction of function details from AST nodes.
-
-    Attributes:
-        node (ast.FunctionDef | ast.AsyncFunctionDef): The function definition node.
-        content (str): The source code content.
+    Extractor for function details from AST nodes.
     """
-
-    def __init__(self, node: ast.FunctionDef | ast.AsyncFunctionDef, content: str):
-        """
-        Initialize the FunctionExtractor with a function node and source code.
-
-        Args:
-            node (ast.FunctionDef | ast.AsyncFunctionDef): The function definition node.
-            content (str): The source code content.
-        """
-        self.node = node
-        self.content = content
-        logger.debug(f"Initialized FunctionExtractor for function: {self.node.name}")
 
     def extract_details(self) -> Dict[str, Any]:
         """
@@ -68,7 +49,7 @@ class FunctionExtractor:
             for arg in self.node.args.args:
                 param_info = {
                     "name": arg.arg,
-                    "type": get_annotation(arg.annotation),
+                    "type": self.get_annotation(arg.annotation),
                     "has_type_hint": arg.annotation is not None,
                 }
                 params.append(param_info)

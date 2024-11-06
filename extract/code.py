@@ -1,15 +1,12 @@
-# extract/code.py
-
 import ast
 from typing import Any, Dict
 from .classes import ClassExtractor
 from .functions import FunctionExtractor
 from .utils import add_parent_info
-from logging_utils import setup_logger
+from core.logging.setup import LoggerSetup
 
 # Initialize a logger specifically for this module
-logger = setup_logger("extract.code")
-
+logger = LoggerSetup.get_logger("extract.code")
 
 def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[str, Any]:
     """
@@ -56,7 +53,6 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
         "functions": functions,
         "file_content": [{"content": content}]
     }
-
 
 def is_method(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """

@@ -1,35 +1,16 @@
-# extract/classes.py
-
 import ast
 from typing import Any, Dict, List
+from .base import BaseExtractor
 from .functions import FunctionExtractor
-from .utils import get_annotation
-from logging_utils import setup_logger
+from core.logging.setup import LoggerSetup
 
 # Initialize a logger specifically for this module
-logger = setup_logger("extract.classes")
+logger = LoggerSetup.get_logger("extract.classes")
 
-
-class ClassExtractor:
+class ClassExtractor(BaseExtractor):
     """
-    Handles extraction of class details from AST nodes.
-
-    Attributes:
-        node (ast.ClassDef): The class definition node.
-        content (str): The source code content.
+    Extractor for class details from AST nodes.
     """
-
-    def __init__(self, node: ast.ClassDef, content: str):
-        """
-        Initialize the ClassExtractor with a class node and source code.
-
-        Args:
-            node (ast.ClassDef): The class definition node.
-            content (str): The source code content.
-        """
-        self.node = node
-        self.content = content
-        logger.debug(f"Initialized ClassExtractor for class: {self.node.name}")
 
     def extract_details(self) -> Dict[str, Any]:
         """
@@ -85,7 +66,7 @@ class ClassExtractor:
             for item in self.node.body:
                 if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                     attr_name = item.target.id
-                    attr_type = get_annotation(item.annotation)
+                    attr_type = self.get_annotation(item.annotation)
                     attributes.append({
                         "name": attr_name,
                         "type": attr_type
@@ -133,7 +114,7 @@ class ClassExtractor:
         base_classes = []
         try:
             for base in self.node.bases:
-                base_name = get_annotation(base)
+                base_name = self.get_annotation(base)
                 base_classes.append(base_name)
                 logger.debug(f"Extracted base class: {base_name}")
             return base_classes

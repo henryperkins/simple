@@ -2,26 +2,26 @@ import aiohttp
 import asyncio
 import json
 from typing import Any, Dict, Optional
-from config import Config
+from core.config.settings import Settings
 import sentry_sdk
-from logging_utils import setup_logger
+from core.logging.setup import LoggerSetup
 from tqdm.asyncio import tqdm
 
 # Initialize a logger specifically for this module
-logger = setup_logger("api_interaction")
+logger = LoggerSetup.get_logger("api_interaction")
 
 async def make_openai_request(
     messages: list, functions: list, service: str, model_name: Optional[str] = None
 ) -> Dict[str, Any]:
-    headers = Config.get_service_headers(service)
+    settings = Settings()
+    headers = settings.get_service_headers(service)
     
-    # Determine the endpoint and model name based on the service
     if service == "azure":
-        endpoint = f"{Config.get_azure_endpoint()}/openai/deployments/{Config.AZURE_DEPLOYMENT_NAME}/completions?api-version={Config.AZURE_API_VERSION}"
-        model_name = Config.AZURE_DEPLOYMENT_NAME  # Use the deployment name for Azure
+        endpoint = f"{settings.get_azure_endpoint()}/openai/deployments/{settings.azure_deployment_name}/completions?api-version={settings.azure_api_version}"
+        model_name = settings.azure_deployment_name
     else:
         endpoint = "https://api.openai.com/v1/chat/completions"
-        model_name = model_name or Config.OPENAI_MODEL_NAME  # Use provided or default model name for OpenAI
+        model_name = model_name or settings.openai_model_name
 
     payload = {
         "model": model_name,
@@ -34,7 +34,7 @@ async def make_openai_request(
     logger.debug(f"Using headers: {headers}")
 
     retries = 3
-    backoff = 2  # Exponential backoff factor
+    backoff = 2
     
     for attempt in tqdm(range(1, retries + 1), desc="API Request Progress"):
         try:
@@ -64,7 +64,6 @@ async def make_openai_request(
             logger.error(f"Attempt {attempt}: Unexpected exception during API request: {e}")
             sentry_sdk.capture_exception(e)
 
-        # Implement exponential backoff with jitter
         sleep_time = backoff ** attempt
         logger.debug(f"Retrying API request in {sleep_time} seconds (Attempt {attempt}/{retries})")
         await asyncio.sleep(sleep_time)

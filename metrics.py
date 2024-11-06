@@ -1,29 +1,12 @@
 import ast
 from collections import defaultdict
 from typing import Any, Dict, List
-from logging_utils import setup_logger
+from core.logging.setup import LoggerSetup
 
 # Initialize a logger specifically for this module
-logger = setup_logger("metrics")
+logger = LoggerSetup.get_logger("metrics")
 
 class CodeMetrics:
-    """
-    Class to store and calculate various code metrics.
-
-    Attributes:
-        total_functions (int): Total number of functions analyzed.
-        total_classes (int): Total number of classes analyzed.
-        total_lines (int): Total number of lines of code.
-        docstring_coverage (float): Percentage of items with docstrings.
-        type_hint_coverage (float): Percentage of parameters with type hints.
-        avg_complexity (float): Average cyclomatic complexity score.
-        max_complexity (int): Maximum cyclomatic complexity score.
-        cognitive_complexity (int): Cognitive complexity score.
-        halstead_metrics (Dict[str, float]): Halstead metrics.
-        type_hints_stats (defaultdict): Statistics about type hints.
-        quality_issues (List[str]): List of quality recommendations.
-    """
-
     def __init__(self):
         self.total_functions = 0
         self.total_classes = 0

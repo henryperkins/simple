@@ -1,11 +1,11 @@
 import os
 from typing import Any, Dict, List
-from logging_utils import setup_logger
+from core.logging.setup import LoggerSetup
 import aiofiles
 import asyncio
 
 # Initialize logger for this module
-logger = setup_logger("docs")
+logger = LoggerSetup.get_logger("docs")
 
 def escape_markdown(text: str) -> str:
     """Escape markdown special characters in a string."""

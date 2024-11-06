@@ -7,10 +7,10 @@ import threading
 import time
 from typing import Any, Dict
 from collections import OrderedDict
-from logging_utils import setup_logger
+from core.logging.setup import LoggerSetup
 
 # Initialize logger for this module
-logger = setup_logger("cache")
+logger = LoggerSetup.get_logger("cache")
 cache_lock = threading.Lock()
 
 # Cache directory and configuration

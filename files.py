@@ -4,16 +4,16 @@ import shutil
 import subprocess
 import sentry_sdk
 import aiofiles
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, List
 from tqdm import tqdm
 import asyncio
 
 from extract.code import extract_classes_and_functions_from_ast
 from api_interaction import analyze_function_with_openai
-from logging_utils import setup_logger
+from core.logging.setup import LoggerSetup
 
 # Initialize a logger for this module
-logger = setup_logger("files")
+logger = LoggerSetup.get_logger("files")
 
 async def clone_repo(repo_url: str, clone_dir: str) -> None:
     """Clone a GitHub repository into a specified directory."""
@@ -185,7 +185,7 @@ def update_function_docstring(file_content: str, tree: ast.AST, function: Dict[s
 
 def insert_docstring(
     source: str,
-    node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef],
+    node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
     docstring: str
 ) -> str:
     """Insert or replace a docstring in a function or class definition."""

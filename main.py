@@ -3,9 +3,8 @@ import asyncio
 import os
 import sys
 import shutil
-import logging
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from urllib.parse import urlparse
 
 from files import (
@@ -16,57 +15,34 @@ from files import (
 )
 from docs import write_analysis_to_markdown
 from api_interaction import analyze_function_with_openai
-from monitoring import initialize_sentry, capture_exception, capture_message
-from config import Config
+from monitoring import initialize_sentry
+from core.config.settings import Settings
+from core.logging.setup import LoggerSetup
 from cache import initialize_cache
-from logging_utils import setup_logger
 import sentry_sdk
 
 # Initialize logger for the main module
-logger = setup_logger("main")
+logger = LoggerSetup.get_logger("main")
 
 def validate_repo_url(url: str) -> bool:
-    """
-    Validate if the given URL is a valid GitHub repository URL.
-
-    Args:
-        url (str): The repository URL.
-
-    Returns:
-        bool: True if valid, False otherwise.
-    """
     try:
         parsed = urlparse(url)
-
         if parsed.netloc not in ['github.com', 'www.github.com']:
             logger.debug("Invalid hostname: %s", parsed.netloc)
             return False
-
         path_parts = [p for p in parsed.path.split('/') if p]
         if len(path_parts) < 2:
             logger.debug("Invalid path format: %s", parsed.path)
             return False
-
         logger.info("Valid GitHub URL: %s", url)
         return True
-
     except ValueError as e:
         logger.error("URL validation error: %s", str(e))
         return False
 
 async def process_files_concurrently(files_list: List[str], service: str) -> Dict[str, Dict[str, Any]]:
-    """
-    Process multiple files concurrently.
-
-    Args:
-        files_list (List[str]): List of file paths to process.
-        service (str): The AI service to use ('azure' or 'openai').
-
-    Returns:
-        Dict[str, Dict[str, Any]]: Processed results mapped by file path.
-    """
     logger.info("Starting to process %d files", len(files_list))
-    semaphore = asyncio.Semaphore(10)  # Limit to 10 concurrent tasks
+    semaphore = asyncio.Semaphore(10)
 
     async def process_with_semaphore(filepath):
         async with semaphore:
@@ -90,15 +66,8 @@ async def process_files_concurrently(files_list: List[str], service: str) -> Dic
     return processed_results
 
 async def analyze_functions_concurrently(results: Dict[str, Dict[str, Any]], service: str) -> None:
-    """
-    Analyze multiple functions concurrently using the selected AI service.
-
-    Args:
-        results (Dict[str, Dict[str, Any]]): The extracted data from files.
-        service (str): The AI service to use ('azure' or 'openai').
-    """
     logger.info("Starting function analysis using %s service", service)
-    semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent API calls
+    semaphore = asyncio.Semaphore(5)
 
     async def analyze_with_semaphore(func, service):
         async with semaphore:
@@ -134,9 +103,6 @@ async def analyze_functions_concurrently(results: Dict[str, Dict[str, Any]], ser
     logger.info("Completed function analysis.")
 
 async def main():
-    """
-    Main function to analyze code and generate documentation.
-    """
     parser = argparse.ArgumentParser(description="Analyze code and generate documentation.")
     parser.add_argument("input_path", help="Path to the input directory or repository URL")
     parser.add_argument("output_path", help="Path to the output directory for markdown files")
@@ -157,7 +123,8 @@ async def main():
         initialize_sentry()
         
         # Load environment variables and validate
-        Config.load_environment()
+        settings = Settings()
+        settings.load_environment()
         
         # Initialize cache
         initialize_cache()
@@ -190,7 +157,6 @@ async def main():
 
         await analyze_functions_concurrently(results, args.service)
 
-        # Await the coroutine
         await write_analysis_to_markdown(results, output_path, input_path)
         logger.info("Analysis complete. Documentation written to %s", output_path)
 

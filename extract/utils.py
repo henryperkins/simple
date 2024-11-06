@@ -1,11 +1,9 @@
-# extract/utils.py
-
 import ast
 from typing import Optional, Any
-from logging_utils import setup_logger
+from core.logging.setup import LoggerSetup
 
 # Initialize a logger for this module
-logger = setup_logger("extract.utils")
+logger = LoggerSetup.get_logger("extract.utils")
 
 def add_parent_info(node: Optional[ast.AST], parent: Optional[ast.AST] = None) -> None:
     """

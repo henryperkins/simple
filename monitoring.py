@@ -1,15 +1,10 @@
-# monitoring.py
-
-import os
-import logging  # Added import for logging
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
-from logging_utils import setup_logger
-from config import Config
+from core.logging.setup import LoggerSetup
+from core.config.settings import Settings
 
 # Initialize a logger specifically for this module
-logger = setup_logger("monitoring")
-
+logger = LoggerSetup.get_logger("monitoring")
 
 def initialize_sentry():
     """
@@ -18,13 +13,10 @@ def initialize_sentry():
     This function configures and initializes the Sentry SDK using the DSN provided
     in the environment variables. It also integrates Sentry with the Python logging
     module to capture logs at various levels.
-
-    Raises:
-        ValueError: If the SENTRY_DSN environment variable is not set.
-        sentry_sdk.init: Propagates any exception raised during Sentry initialization.
     """
     try:
-        sentry_dsn = Config.get_variable("SENTRY_DSN")
+        settings = Settings()
+        sentry_dsn = settings.sentry_dsn
         if not sentry_dsn:
             logger.warning(
                 "SENTRY_DSN is not set. Sentry will not be initialized. "
@@ -43,21 +35,16 @@ def initialize_sentry():
             dsn=sentry_dsn,
             integrations=[sentry_logging],
             traces_sample_rate=1.0,  # Adjust based on your performance monitoring needs
-            environment=os.getenv("ENVIRONMENT", "production"),  # e.g., development, staging, production
-            release=os.getenv("RELEASE_VERSION", "unknown"),     # Optional: Set release version
+            environment=settings.environment,  # e.g., development, staging, production
+            release=settings.release_version,  # Optional: Set release version
         )
 
         logger.info("Sentry has been initialized successfully.")
-
-    except ValueError as ve:
-        logger.error(f"Configuration error during Sentry initialization: {ve}")
-        raise
 
     except Exception as e:
         logger.error(f"Unexpected error during Sentry initialization: {e}")
         sentry_sdk.capture_exception(e)
         raise
-
 
 def capture_exception(exception: Exception):
     """
@@ -71,7 +58,6 @@ def capture_exception(exception: Exception):
         logger.debug("Captured exception and reported to Sentry.")
     except Exception as e:
         logger.error(f"Failed to capture exception with Sentry: {e}")
-
 
 def capture_message(message: str, level: str = "error"):
     """
