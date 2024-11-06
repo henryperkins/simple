@@ -1,79 +1,61 @@
 import os
-from dotenv import load_dotenv
-import logging
+from typing import Optional, Dict
+from logging_utils import setup_logger
 
-load_dotenv()
-
-logger = logging.getLogger(__name__)
+# Initialize a logger specifically for the config module
+logger = setup_logger("config")
 
 class Config:
-    """Configuration settings for the application."""
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-4")
-    AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
-    AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
-    AZURE_OPENAI_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
-    AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
-    SENTRY_DSN = os.getenv("SENTRY_DSN")
-    SENTRY_ENVIRONMENT = os.getenv("SENTRY_ENVIRONMENT", "production")
-    SENTRY_RELEASE = os.getenv("SENTRY_RELEASE", "1.0.0")
-    CACHE_MAX_SIZE_MB = int(os.getenv("CACHE_MAX_SIZE_MB", 500))
-
-    @staticmethod
-    def validate():
-        """Validate that all required environment variables are set."""
-        required_vars = [
-            "OPENAI_API_KEY",
-            "OPENAI_MODEL_NAME",
-            "AZURE_OPENAI_API_KEY",
-            "AZURE_OPENAI_ENDPOINT",
-            "AZURE_OPENAI_DEPLOYMENT_NAME",
-            "SENTRY_DSN"
-        ]
-        missing_vars = [var for var in required_vars if not getattr(Config, var)]
-        if missing_vars:
-            error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
-            logger.error(error_msg)
-            raise EnvironmentError(error_msg)
-        logger.info("All required environment variables are set.")
-
-    @staticmethod
-    def get_service_headers(service: str) -> dict:
-        """
-        Get the appropriate headers for the specified AI service.
-
-        Args:
-            service (str): The AI service to use ('azure' or 'openai').
-
-        Returns:
-            dict: A dictionary of headers.
-        
-        Raises:
-            ValueError: If an invalid service is specified.
-        """
+    """Configuration class to manage access to environment variables and settings."""
+    
+    OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-3.5-turbo")
+    AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT", "")
+    AZURE_API_KEY = os.getenv("AZURE_API_KEY", "")
+    SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+    
+    @classmethod
+    def get_service_headers(cls, service: str) -> Dict[str, str]:
+        """Get headers required for a specific service."""
+        logger.debug(f"Fetching headers for service: {service}")
         if service == "azure":
-            return {
-                "api-key": Config.AZURE_OPENAI_API_KEY,
-                "Content-Type": "application/json"
-            }
-        elif service == "openai":
-            return {
-                "Authorization": f"Bearer {Config.OPENAI_API_KEY}",
-                "Content-Type": "application/json"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {cls.AZURE_API_KEY}"
             }
         else:
-            error_msg = "Invalid service specified"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-    @staticmethod
-    def get_azure_endpoint() -> str:
-        """
-        Construct the Azure OpenAI endpoint URL.
-
-        Returns:
-            str: The constructed endpoint URL.
-        """
-        endpoint = f"{Config.AZURE_OPENAI_ENDPOINT}/openai/deployments/{Config.AZURE_OPENAI_DEPLOYMENT_NAME}/chat/completions?api-version={Config.AZURE_OPENAI_API_VERSION}"
-        logger.debug(f"Constructed Azure endpoint: {endpoint}")
-        return endpoint
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY', '')}"
+            }
+        
+        logger.debug(f"Generated headers for {service}: {headers}")
+        return headers
+    
+    @classmethod
+    def get_azure_endpoint(cls) -> str:
+        """Retrieve the endpoint URL for Azure-based requests."""
+        if not cls.AZURE_ENDPOINT:
+            logger.warning("Azure endpoint is not set. Please configure AZURE_ENDPOINT.")
+        logger.debug(f"Azure endpoint retrieved: {cls.AZURE_ENDPOINT}")
+        return cls.AZURE_ENDPOINT or "https://default.azure.endpoint"
+    
+    @classmethod
+    def load_environment(cls) -> None:
+        """Ensure that all required environment variables are loaded."""
+        required_vars = ["OPENAI_MODEL_NAME", "AZURE_ENDPOINT", "AZURE_API_KEY", "SENTRY_DSN"]
+        missing_vars = [var for var in required_vars if not os.getenv(var)]
+        
+        if missing_vars:
+            logger.warning(f"Missing required environment variables: {', '.join(missing_vars)}")
+        else:
+            logger.info("All required environment variables are set.")
+    
+    @classmethod
+    def get_variable(cls, var_name: str) -> Optional[str]:
+        """Retrieve a specific environment variable by name, with logging."""
+        value = os.getenv(var_name)
+        if value is None:
+            logger.warning(f"Environment variable {var_name} is not set.")
+        else:
+            logger.debug(f"Retrieved environment variable {var_name}: {value}")
+        return value

@@ -1,12 +1,13 @@
 import aiohttp
 import asyncio
 import json
-import logging
 from typing import Any, Dict
 from config import Config
 import sentry_sdk
+from logging_utils import setup_logger
 
-logger = logging.getLogger(__name__)
+# Initialize a logger specifically for this module
+logger = setup_logger("api_interaction")
 
 async def make_openai_request(model_name: str, messages: list, functions: list, service: str) -> Dict[str, Any]:
     """Make an asynchronous request to the OpenAI or Azure OpenAI API with retries."""
@@ -19,6 +20,8 @@ async def make_openai_request(model_name: str, messages: list, functions: list, 
         "function_call": "auto"
     }
     
+    logger.debug(f"Making API request to {endpoint} with payload: {json.dumps(payload, indent=2)}")
+    
     retries = 3
     backoff = 2
     for attempt in range(retries):
@@ -27,7 +30,7 @@ async def make_openai_request(model_name: str, messages: list, functions: list, 
                 async with session.post(endpoint, headers=headers, json=payload) as response:
                     if response.status == 200:
                         result = await response.json()
-                        logger.debug(f"Received response: {result}")
+                        logger.debug(f"Received response: {json.dumps(result, indent=2)}")
                         return result
                     else:
                         error_msg = await response.text()
@@ -37,11 +40,15 @@ async def make_openai_request(model_name: str, messages: list, functions: list, 
             logger.error(f"Exception during API request: {e}")
             sentry_sdk.capture_exception(e)
         await asyncio.sleep(backoff ** attempt)
+        logger.debug(f"Retrying API request, attempt {attempt + 1}")
+    
     logger.error("Exceeded maximum retries for API request.")
     return {"error": "Failed to get a successful response from the API."}
 
 async def analyze_function_with_openai(function_details: Dict[str, Any], service: str) -> Dict[str, Any]:
     """Analyze a function using OpenAI's API and generate documentation."""
+    logger.info(f"Analyzing function: {function_details['name']}")
+    
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": f"Provide a summary, docstring, and changelog for the following function:\n\n{function_details['code']}"}
@@ -113,6 +120,9 @@ async def analyze_function_with_openai(function_details: Dict[str, Any], service
             "docstring": function_args.get("docstring", "No docstring available."),
             "changelog": function_args.get("changelog", "No changelog available.")
         }
+        
+        logger.info(f"Analysis complete for function: {function_details['name']}")
+        logger.debug(f"Analysis result: {json.dumps(result, indent=2)}")
         
         return result
     except Exception as e:
