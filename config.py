@@ -1,5 +1,3 @@
-# config.py
-
 import os
 from typing import Optional, Dict
 from logging_utils import setup_logger
