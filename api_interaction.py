@@ -11,17 +11,17 @@ from tqdm.asyncio import tqdm
 logger = setup_logger("api_interaction")
 
 async def make_openai_request(
-    messages: list, functions: list, service: str
+    messages: list, functions: list, service: str, model_name: Optional[str] = None
 ) -> Dict[str, Any]:
     headers = Config.get_service_headers(service)
     
-    # Construct the endpoint URL based on the service
+    # Determine the endpoint and model name based on the service
     if service == "azure":
         endpoint = f"{Config.get_azure_endpoint()}/openai/deployments/{Config.AZURE_DEPLOYMENT_NAME}/completions?api-version=2024-08-01-preview"
-        model_name = Config.AZURE_DEPLOYMENT_NAME  # Use the deployment name
+        model_name = Config.AZURE_DEPLOYMENT_NAME  # Use the deployment name for Azure
     else:
         endpoint = "https://api.openai.com/v1/chat/completions"
-        model_name = Config.OPENAI_MODEL_NAME
+        model_name = model_name or Config.OPENAI_MODEL_NAME  # Use provided or default model name for OpenAI
 
     payload = {
         "model": model_name,
@@ -127,7 +127,6 @@ async def analyze_function_with_openai(
 
     try:
         response = await make_openai_request(
-            model_name=Config.OPENAI_MODEL_NAME,
             messages=messages,
             functions=[function_schema],
             service=service,
