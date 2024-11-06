@@ -54,7 +54,7 @@ class Config:
         """
         Ensure that all required environment variables are loaded.
         """
-        required_vars = ["OPENAI_MODEL_NAME", "SENTRY_DSN"]
+        required_vars = ["AZURE_ENDPOINT", "AZURE_API_KEY", "AZURE_DEPLOYMENT_NAME", "SENTRY_DSN"]
         missing_vars = [var for var in required_vars if not os.getenv(var)]
 
         if missing_vars:
