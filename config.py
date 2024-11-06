@@ -1,9 +1,7 @@
-# config.py
-
 import os
 from typing import Optional, Dict
 from logging_utils import setup_logger
-from dotenv import load_dotenv  # Import load_dotenv
+from dotenv import load_dotenv
 
 # Initialize a logger specifically for the config module
 logger = setup_logger("config")
@@ -11,13 +9,6 @@ logger = setup_logger("config")
 class Config:
     """
     Configuration class to manage access to environment variables and settings.
-
-    Attributes:
-        OPENAI_MODEL_NAME (str): The name of the OpenAI model to use.
-        AZURE_ENDPOINT (str): The endpoint URL for Azure OpenAI services.
-        AZURE_API_KEY (str): The API key for Azure services.
-        AZURE_DEPLOYMENT_NAME (str): The deployment name for Azure OpenAI services.
-        SENTRY_DSN (str): The DSN for Sentry error tracking.
     """
     # Load environment variables from .env file
     load_dotenv()
@@ -33,10 +24,6 @@ class Config:
     def get_service_headers(cls, service: str) -> Dict[str, str]:
         """
         Get headers required for a specific service.
-        Args:
-            service (str): The service for which to get headers ('azure' or 'openai').
-        Returns:
-            Dict[str, str]: A dictionary of HTTP headers.
         """
         logger.debug(f"Fetching headers for service: {service}")
         headers = {"Content-Type": "application/json"}
@@ -61,10 +48,6 @@ class Config:
     def get_azure_endpoint(cls) -> str:
         """
         Retrieve the endpoint URL for Azure-based requests.
-        Returns:
-            str: The Azure endpoint URL.
-        Raises:
-            ValueError: If AZURE_ENDPOINT is not set.
         """
         if not cls.AZURE_ENDPOINT:
             logger.error("AZURE_ENDPOINT is not set. Please configure AZURE_ENDPOINT.")
@@ -76,9 +59,6 @@ class Config:
     def load_environment(cls) -> None:
         """
         Ensure that all required environment variables are loaded.
-
-        Raises:
-            EnvironmentError: If any required environment variables are missing.
         """
         required_vars = ["OPENAI_MODEL_NAME", "SENTRY_DSN"]
         missing_vars = [var for var in required_vars if not os.getenv(var)]
@@ -93,12 +73,6 @@ class Config:
     def get_variable(cls, var_name: str) -> Optional[str]:
         """
         Retrieve a specific environment variable by name, with logging.
-
-        Args:
-            var_name (str): The name of the environment variable.
-
-        Returns:
-            Optional[str]: The value of the environment variable, or None if not set.
         """
         value = os.getenv(var_name)
         if value is None:
