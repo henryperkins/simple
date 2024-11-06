@@ -1,12 +1,15 @@
+# extract/code.py
+
 import ast
 from typing import Any, Dict
-from .functions import FunctionExtractor
 from .classes import ClassExtractor
+from .functions import FunctionExtractor
 from .utils import add_parent_info
 from logging_utils import setup_logger
 
-# Initialize a logger for this module
+# Initialize a logger specifically for this module
 logger = setup_logger("extract.code")
+
 
 def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[str, Any]:
     """
@@ -36,7 +39,7 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
                     classes.append(class_info)
                     logger.debug(f"Extracted class: {class_info['name']}")
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # Only extract if the function is not a method
+                # Only extract if the function is not a method (i.e., not within a class)
                 if not is_method(node):
                     function_extractor = FunctionExtractor(node, content)
                     func_info = function_extractor.extract_details()
@@ -54,14 +57,18 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
         "file_content": [{"content": content}]
     }
 
-def is_method(node: ast.FunctionDef) -> bool:
+
+def is_method(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """
     Determine if a function node is a method within a class.
 
     Args:
-        node (ast.FunctionDef): The function definition node.
+        node (ast.FunctionDef | ast.AsyncFunctionDef): The function definition node.
 
     Returns:
         bool: True if the function is a method, False otherwise.
     """
-    return isinstance(node.parent, ast.ClassDef)
+    parent = getattr(node, 'parent', None)
+    is_method = isinstance(parent, ast.ClassDef)
+    logger.debug(f"Function '{node.name}' is_method: {is_method}")
+    return is_method

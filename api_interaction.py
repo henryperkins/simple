@@ -12,24 +12,13 @@ logger = setup_logger("api_interaction")
 async def make_openai_request(
     model_name: str, messages: list, functions: list, service: str
 ) -> Dict[str, Any]:
-    """
-    Make an asynchronous request to the OpenAI or Azure OpenAI API with retries.
-
-    Args:
-        model_name (str): The name of the model to use.
-        messages (list): The list of messages to send to the API.
-        functions (list): The list of functions to include in the request.
-        service (str): The service to use ('azure' or 'openai').
-
-    Returns:
-        Dict[str, Any]: The API response as a dictionary.
-    """
     headers = Config.get_service_headers(service)
     endpoint = (
-        Config.get_azure_endpoint()
+        f"{Config.get_azure_endpoint()}/openai/deployments/{Config.AZURE_DEPLOYMENT_NAME}/completions?api-version=2024-08-01-preview"
         if service == "azure"
         else "https://api.openai.com/v1/chat/completions"
     )
+
     payload = {
         "model": model_name,
         "messages": messages,
@@ -37,7 +26,8 @@ async def make_openai_request(
         "function_call": "auto",
     }
 
-    logger.debug(f"Preparing API request to {endpoint}")
+    logger.debug(f"Using endpoint: {endpoint}")
+    logger.debug(f"Using headers: {headers}")
 
     retries = 3
     backoff = 2  # Exponential backoff factor
@@ -54,19 +44,19 @@ async def make_openai_request(
                     else:
                         error_msg = await response.text()
                         logger.warning(
-                            f"API request failed with status {response.status}: {error_msg}"
+                            f"Attempt {attempt}: API request failed with status {response.status}: {error_msg}"
                         )
                         sentry_sdk.capture_message(
-                            f"API request failed with status {response.status}: {error_msg}"
+                            f"Attempt {attempt}: API request failed with status {response.status}: {error_msg}"
                         )
         except aiohttp.ClientError as e:
-            logger.warning(f"HTTP error during API request: {e}")
+            logger.error(f"Attempt {attempt}: Client error during API request: {e}")
             sentry_sdk.capture_exception(e)
         except asyncio.TimeoutError:
-            logger.warning("API request timed out.")
+            logger.error(f"Attempt {attempt}: API request timed out.")
             sentry_sdk.capture_message("API request timed out.")
         except Exception as e:
-            logger.error(f"Unexpected exception during API request: {e}")
+            logger.error(f"Attempt {attempt}: Unexpected exception during API request: {e}")
             sentry_sdk.capture_exception(e)
 
         # Implement exponential backoff with jitter
@@ -188,10 +178,8 @@ async def analyze_function_with_openai(
             "docstring": function_args.get("docstring", "No docstring available."),
             "changelog": function_args.get("changelog", "No changelog available."),
         }
-
         logger.info(f"Analysis complete for function: {function_name}")
         logger.debug(f"Analysis result: {json.dumps(result, indent=2)}")
-
         return result
 
     except (KeyError, TypeError, json.JSONDecodeError) as e:
@@ -204,6 +192,7 @@ async def analyze_function_with_openai(
             "docstring": "Error: Documentation generation failed.",
             "changelog": "Error: Changelog generation failed.",
         }
+
     except Exception as e:
         logger.error(f"Unexpected error analyzing function {function_name}: {e}")
         sentry_sdk.capture_exception(e)

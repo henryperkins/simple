@@ -16,7 +16,7 @@ from files import (
 )
 from docs import write_analysis_to_markdown
 from api_interaction import analyze_function_with_openai
-from monitoring import initialize_sentry
+from monitoring import initialize_sentry, capture_exception, capture_message
 from config import Config
 from cache import initialize_cache
 from logging_utils import setup_logger
@@ -153,8 +153,13 @@ async def main():
     }
 
     try:
+        # Initialize monitoring (Sentry)
         initialize_sentry()
+        
+        # Load environment variables and validate
         Config.load_environment()
+        
+        # Initialize cache
         initialize_cache()
 
         input_path = args.input_path
@@ -185,7 +190,8 @@ async def main():
 
         await analyze_functions_concurrently(results, args.service)
 
-        write_analysis_to_markdown(results, output_path, input_path)
+        # Await the coroutine
+        await write_analysis_to_markdown(results, output_path, input_path)
         logger.info("Analysis complete. Documentation written to %s", output_path)
 
     except Exception as e:

@@ -1,4 +1,15 @@
-# extract/__init__.py
+"""
+extract package.
+
+This package provides utilities for extracting classes and functions from Python source code,
+parsing their details, and analyzing them for documentation and metrics purposes.
+
+Modules:
+    - code: Functions to extract classes and functions from AST.
+    - classes: ClassExtractor for extracting class details.
+    - functions: FunctionExtractor for extracting function details.
+    - utils: Utility functions for AST manipulation and annotation processing.
+"""
 
 from .code import extract_classes_and_functions_from_ast
 from .functions import FunctionExtractor

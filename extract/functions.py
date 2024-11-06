@@ -1,24 +1,34 @@
+# extract/functions.py
+
 import ast
 from typing import Any, Dict, List
 from .utils import get_annotation
 from logging_utils import setup_logger
 
-# Initialize a logger for this module
+# Initialize a logger specifically for this module
 logger = setup_logger("extract.functions")
+
 
 class FunctionExtractor:
     """
     Handles extraction of function details from AST nodes.
 
-    Args:
-        node (ast.FunctionDef): The function definition node.
+    Attributes:
+        node (ast.FunctionDef | ast.AsyncFunctionDef): The function definition node.
         content (str): The source code content.
     """
 
-    def __init__(self, node: ast.FunctionDef, content: str):
+    def __init__(self, node: ast.FunctionDef | ast.AsyncFunctionDef, content: str):
+        """
+        Initialize the FunctionExtractor with a function node and source code.
+
+        Args:
+            node (ast.FunctionDef | ast.AsyncFunctionDef): The function definition node.
+            content (str): The source code content.
+        """
         self.node = node
         self.content = content
-        logger.debug(f"Initialized FunctionExtractor for function: {node.name}")
+        logger.debug(f"Initialized FunctionExtractor for function: {self.node.name}")
 
     def extract_details(self) -> Dict[str, Any]:
         """
@@ -70,10 +80,10 @@ class FunctionExtractor:
 
     def calculate_complexity(self) -> int:
         """
-        Calculate the function's complexity.
+        Calculate the function's cyclomatic complexity score.
 
         Returns:
-            int: The complexity score.
+            int: The cyclomatic complexity score.
         """
         complexity = 1  # Start with one for the function entry point
         try:
@@ -95,12 +105,13 @@ class FunctionExtractor:
         """
         try:
             if not hasattr(self.node, 'lineno') or not hasattr(self.node, 'end_lineno'):
+                logger.warning(f"Function node {self.node.name} lacks line number information.")
                 return ""
-            
+
             lines = self.content.splitlines()
-            start_line = self.node.lineno - 1
+            start_line = self.node.lineno - 1  # Convert to 0-based index
             end_line = getattr(self.node, 'end_lineno', start_line + 1)
-            
+
             code = "\n".join(lines[start_line:end_line])
             logger.debug(f"Extracted code for function {self.node.name}")
             return code
@@ -118,7 +129,7 @@ class FunctionExtractor:
         try:
             for node in ast.walk(self.node):
                 if isinstance(node, (ast.Yield, ast.YieldFrom)):
-                    logger.debug(f"Function {self.node.name} is a generator")
+                    logger.debug(f"Function {self.node.name} is a generator.")
                     return True
             return False
         except Exception as e:
@@ -127,7 +138,7 @@ class FunctionExtractor:
 
     def is_recursive(self) -> bool:
         """
-        Check if the function calls itself.
+        Check if the function calls itself recursively.
 
         Returns:
             bool: True if the function is recursive, False otherwise.
@@ -136,7 +147,7 @@ class FunctionExtractor:
             for node in ast.walk(self.node):
                 if isinstance(node, ast.Call):
                     if isinstance(node.func, ast.Name) and node.func.id == self.node.name:
-                        logger.debug(f"Function {self.node.name} is recursive")
+                        logger.debug(f"Function {self.node.name} is recursive.")
                         return True
             return False
         except Exception as e:

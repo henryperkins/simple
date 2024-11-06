@@ -3,6 +3,7 @@
 import os
 from typing import Optional, Dict
 from logging_utils import setup_logger
+from dotenv import load_dotenv  # Import load_dotenv
 
 # Initialize a logger specifically for the config module
 logger = setup_logger("config")
@@ -15,29 +16,30 @@ class Config:
         OPENAI_MODEL_NAME (str): The name of the OpenAI model to use.
         AZURE_ENDPOINT (str): The endpoint URL for Azure OpenAI services.
         AZURE_API_KEY (str): The API key for Azure services.
+        AZURE_DEPLOYMENT_NAME (str): The deployment name for Azure OpenAI services.
         SENTRY_DSN (str): The DSN for Sentry error tracking.
     """
+    # Load environment variables from .env file
+    load_dotenv()
 
     # Class variables for configuration settings
     OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-3.5-turbo")
     AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT", "")
     AZURE_API_KEY = os.getenv("AZURE_API_KEY", "")
+    AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_DEPLOYMENT_NAME", "")
     SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 
     @classmethod
     def get_service_headers(cls, service: str) -> Dict[str, str]:
         """
         Get headers required for a specific service.
-
         Args:
             service (str): The service for which to get headers ('azure' or 'openai').
-
         Returns:
             Dict[str, str]: A dictionary of HTTP headers.
         """
         logger.debug(f"Fetching headers for service: {service}")
         headers = {"Content-Type": "application/json"}
-
         if service == "azure":
             if not cls.AZURE_API_KEY:
                 logger.error("AZURE_API_KEY is not set.")
@@ -52,7 +54,6 @@ class Config:
         else:
             logger.error(f"Unsupported service: {service}")
             raise ValueError(f"Unsupported service: {service}")
-
         logger.debug(f"Generated headers for {service}: {headers}")
         return headers
 
@@ -60,10 +61,8 @@ class Config:
     def get_azure_endpoint(cls) -> str:
         """
         Retrieve the endpoint URL for Azure-based requests.
-
         Returns:
             str: The Azure endpoint URL.
-
         Raises:
             ValueError: If AZURE_ENDPOINT is not set.
         """

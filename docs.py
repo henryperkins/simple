@@ -2,6 +2,7 @@ import os
 from typing import Any, Dict, List
 from logging_utils import setup_logger
 import aiofiles
+import asyncio
 
 # Initialize logger for this module
 logger = setup_logger("docs")
@@ -24,46 +25,46 @@ def create_complexity_indicator(complexity: int) -> str:
     logger.debug(f"Complexity {complexity} has indicator {indicator}")
     return indicator
 
-async def write_analysis_to_markdown(results: Dict[str, Dict[str, Any]], output_dir: str, repo_dir: str) -> None:
-    """Write analysis results to separate markdown files."""
-    logger.info("Writing analysis results to directory: %s", output_dir)
-    os.makedirs(output_dir, exist_ok=True)
-    index_file_path = os.path.join(output_dir, "README.md")
+async def write_analysis_to_markdown(results: Dict[str, Any], output_path: str, input_path: str) -> None:
+    """
+    Write the analysis results to markdown files.
 
+    Args:
+        results (Dict[str, Any]): The analysis results containing classes and functions.
+        output_path (str): The directory where markdown files will be saved.
+        input_path (str): The path to the input directory or repository.
+    """
     try:
-        async with aiofiles.open(index_file_path, 'w', encoding='utf-8') as index_file:
-            if not results:
-                logger.error("No analysis results to write")
-                await index_file.write("# ⚠️ No Analysis Results\n\nNo valid code analysis data was found.")
-                return
+        os.makedirs(output_path, exist_ok=True)
+        logger.debug(f"Created output directory at: {output_path}")
 
-            await index_file.write("# 📊 Code Analysis Report\n\n")
-            await index_file.write("## 📑 Table of Contents\n\n")
+        async def write_file(filename: str, content: str):
+            filepath = os.path.join(output_path, filename)
+            async with aiofiles.open(filepath, 'w', encoding='utf-8') as f:
+                await f.write(content)
+            logger.debug(f"Wrote markdown file: {filepath}")
 
-            valid_results = {k: v for k, v in results.items() if v and isinstance(v, dict)}
-            logger.debug(f"Valid results count: {len(valid_results)}")
+        tasks = []
 
-            if not valid_results:
-                logger.warning("No valid analysis results after filtering")
-                await index_file.write("\n## ⚠️ Warning\nNo valid analysis results found after filtering.")
-                return
+        for filepath, data in results.items():
+            # Create separate markdown files for classes and functions
+            for class_info in data.get("classes", []):
+                class_md = f"# Class: {class_info['name']}\n\n"
+                class_md += f"**Docstring:** {class_info['docstring']}\n\n"
+                # Add more class details as needed
+                tasks.append(write_file(f"{class_info['name']}.md", class_md))
 
-            for filepath in valid_results:
-                rel_path = os.path.relpath(filepath, repo_dir)
-                file_slug = rel_path.replace('/', '_').replace('.', '_').replace(' ', '_')
-                md_filename = f"{file_slug}.md"
-                await index_file.write(f"- [📄 {rel_path}]({md_filename})\n")
-                analysis = valid_results[filepath]
-                md_file_path = os.path.join(output_dir, md_filename)
-                await write_individual_markdown(md_file_path, rel_path, analysis)
+            for func_info in data.get("functions", []):
+                func_md = f"# Function: {func_info['name']}\n\n"
+                func_md += f"**Docstring:** {func_info['docstring']}\n\n"
+                # Add more function details as needed
+                tasks.append(write_file(f"{func_info['name']}.md", func_md))
 
-            await index_file.write(f"\n## 📈 Summary\n\n")
-            await index_file.write(f"- Total files analyzed: {len(valid_results)}\n")
+        await asyncio.gather(*tasks)
+        logger.info("Successfully wrote all markdown files.")
 
-        logger.info("Successfully wrote analysis to markdown files.")
-
-    except OSError as e:
-        logger.error("Error writing markdown files: %s", str(e))
+    except Exception as e:
+        logger.error(f"Error writing analysis to markdown: {e}")
         raise
 
 async def write_individual_markdown(md_file_path: str, rel_path: str, analysis: Dict[str, Any]) -> None:
