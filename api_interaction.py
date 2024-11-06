@@ -6,6 +6,8 @@ from core.config.settings import Settings
 import sentry_sdk
 from core.logging.setup import LoggerSetup
 from tqdm.asyncio import tqdm
+import os
+import random
 
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("api_interaction")
@@ -34,7 +36,7 @@ async def make_openai_request(
     logger.debug(f"Using headers: {headers}")
 
     retries = 3
-    backoff = 2
+    base_backoff = 2
     
     for attempt in tqdm(range(1, retries + 1), desc="API Request Progress"):
         try:
@@ -64,13 +66,14 @@ async def make_openai_request(
             logger.error(f"Attempt {attempt}: Unexpected exception during API request: {e}")
             sentry_sdk.capture_exception(e)
 
-        sleep_time = backoff ** attempt
-        logger.debug(f"Retrying API request in {sleep_time} seconds (Attempt {attempt}/{retries})")
+        # Implement exponential backoff with jitter
+        sleep_time = base_backoff * (2 ** attempt) + random.uniform(0, 1)
+        logger.debug(f"Retrying API request in {sleep_time:.2f} seconds (Attempt {attempt}/{retries})")
         await asyncio.sleep(sleep_time)
 
     logger.error("Exceeded maximum retries for API request.")
     return {"error": "Failed to get a successful response from the API."}
-    
+
 async def analyze_function_with_openai(
     function_details: Dict[str, Any], service: str
 ) -> Dict[str, Any]:
