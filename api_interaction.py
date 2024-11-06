@@ -5,6 +5,7 @@ from typing import Any, Dict
 from config import Config
 import sentry_sdk
 from logging_utils import setup_logger
+from tqdm.asyncio import tqdm
 
 # Initialize a logger specifically for this module
 logger = setup_logger("api_interaction")
@@ -31,7 +32,8 @@ async def make_openai_request(
 
     retries = 3
     backoff = 2  # Exponential backoff factor
-    for attempt in range(1, retries + 1):
+    
+    for attempt in tqdm(range(1, retries + 1), desc="API Request Progress"):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
