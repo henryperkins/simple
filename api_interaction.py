@@ -17,7 +17,7 @@ async def make_openai_request(
     
     # Determine the endpoint and model name based on the service
     if service == "azure":
-        endpoint = f"{Config.get_azure_endpoint()}/openai/deployments/{Config.AZURE_DEPLOYMENT_NAME}/completions?api-version=2024-08-01-preview"
+        endpoint = f"{Config.get_azure_endpoint()}/openai/deployments/{Config.AZURE_DEPLOYMENT_NAME}/completions?api-version={Config.AZURE_API_VERSION}"
         model_name = Config.AZURE_DEPLOYMENT_NAME  # Use the deployment name for Azure
     else:
         endpoint = "https://api.openai.com/v1/chat/completions"
