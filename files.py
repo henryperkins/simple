@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import sentry_sdk
 import aiofiles
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Optional
 from tqdm import tqdm
 import asyncio
 

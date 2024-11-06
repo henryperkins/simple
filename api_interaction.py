@@ -1,7 +1,7 @@
 import aiohttp
 import asyncio
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from config import Config
 import sentry_sdk
 from logging_utils import setup_logger

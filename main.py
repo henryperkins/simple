@@ -5,7 +5,7 @@ import sys
 import shutil
 import logging
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse
 
 from files import (
