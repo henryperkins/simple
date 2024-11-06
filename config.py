@@ -44,7 +44,7 @@ class Config:
             if not cls.AZURE_API_KEY:
                 logger.error("AZURE_API_KEY is not set.")
                 raise ValueError("AZURE_API_KEY is not set.")
-            headers["Authorization"] = f"Bearer {cls.AZURE_API_KEY}"
+            headers["api-key"] = cls.AZURE_API_KEY
         elif service == "openai":
             openai_api_key = os.getenv('OPENAI_API_KEY')
             if not openai_api_key:
