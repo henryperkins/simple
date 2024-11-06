@@ -14,17 +14,14 @@ class Config:
     load_dotenv()
 
     # Class variables for configuration settings
-    OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-2024-08-06")
-    AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT", "")
+    OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-3.5-turbo")
+    AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT", "").rstrip('/')
     AZURE_API_KEY = os.getenv("AZURE_API_KEY", "")
     AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_DEPLOYMENT_NAME", "")
     SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 
     @classmethod
     def get_service_headers(cls, service: str) -> Dict[str, str]:
-        """
-        Get headers required for a specific service.
-        """
         logger.debug(f"Fetching headers for service: {service}")
         headers = {"Content-Type": "application/json"}
         if service == "azure":
@@ -46,9 +43,6 @@ class Config:
 
     @classmethod
     def get_azure_endpoint(cls) -> str:
-        """
-        Retrieve the endpoint URL for Azure-based requests.
-        """
         if not cls.AZURE_ENDPOINT:
             logger.error("AZURE_ENDPOINT is not set. Please configure AZURE_ENDPOINT.")
             raise ValueError("AZURE_ENDPOINT is not set.")
