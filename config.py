@@ -18,6 +18,7 @@ class Config:
     AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT", "").rstrip('/')
     AZURE_API_KEY = os.getenv("AZURE_API_KEY", "")
     AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_DEPLOYMENT_NAME", "")
+    AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-08-01-preview")
     SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 
     @classmethod
@@ -48,7 +49,7 @@ class Config:
             raise ValueError("AZURE_ENDPOINT is not set.")
         logger.debug(f"Azure endpoint retrieved: {cls.AZURE_ENDPOINT}")
         return cls.AZURE_ENDPOINT
-
+        
     @classmethod
     def load_environment(cls) -> None:
         """
