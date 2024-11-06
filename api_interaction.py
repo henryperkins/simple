@@ -14,11 +14,12 @@ async def make_openai_request(
     model_name: str, messages: list, functions: list, service: str
 ) -> Dict[str, Any]:
     headers = Config.get_service_headers(service)
-    endpoint = (
-        f"{Config.get_azure_endpoint()}/openai/deployments/{Config.AZURE_DEPLOYMENT_NAME}/completions?api-version=2024-08-01-preview"
-        if service == "azure"
-        else "https://api.openai.com/v1/chat/completions"
-    )
+    
+    # Construct the endpoint URL based on the service
+    if service == "azure":
+        endpoint = f"{Config.get_azure_endpoint()}/openai/deployments/{Config.AZURE_DEPLOYMENT_NAME}/completions?api-version=2024-08-01-preview"
+    else:
+        endpoint = "https://api.openai.com/v1/chat/completions"
 
     payload = {
         "model": model_name,
@@ -41,7 +42,7 @@ async def make_openai_request(
                 ) as response:
                     if response.status == 200:
                         result = await response.json()
-                        logger.debug(f"Received response: {json.dumps(result, indent=2)}")
+                        logger.debug(f"Received response: {result}")
                         return result
                     else:
                         error_msg = await response.text()
@@ -68,7 +69,7 @@ async def make_openai_request(
 
     logger.error("Exceeded maximum retries for API request.")
     return {"error": "Failed to get a successful response from the API."}
-
+    
 async def analyze_function_with_openai(
     function_details: Dict[str, Any], service: str
 ) -> Dict[str, Any]:
