@@ -14,7 +14,7 @@ class Config:
     load_dotenv()
 
     # Class variables for configuration settings
-    OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-3.5-turbo")
+    OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-2024-08-06")
     AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT", "").rstrip('/')
     AZURE_API_KEY = os.getenv("AZURE_API_KEY", "")
     AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_DEPLOYMENT_NAME", "")
