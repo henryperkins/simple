@@ -22,7 +22,7 @@ async def make_openai_request(
         endpoint = "https://api.openai.com/v1/chat/completions"
 
     payload = {
-        "model": model_name,
+        "model": model_name,  # Use the model name from configuration
         "messages": messages,
         "functions": functions,
         "function_call": "auto",
