@@ -1,6 +1,7 @@
 import aiohttp
 import asyncio
 import json
+from openai import AzureOpenAI
 import sentry_sdk
 import os
 from typing import Any, Dict, Optional
