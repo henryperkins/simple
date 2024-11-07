@@ -20,8 +20,8 @@ import os
 from openai import AzureOpenAI
 
 # Core configuration
-endpoint = os.getenv("ENDPOINT_URL", "https://openai-eastus2-hp.openai.azure.com/")
-deployment = os.getenv("DEPLOYMENT_NAME", "gpt-4o-400ktpm")
+endpoint = os.getenv("ENDPOINT_URL", "https://openai-hp.openai.azure.com/")
+deployment = os.getenv("DEPLOYMENT_NAME", "gpt-4o")
 subscription_key = os.getenv("AZURE_OPENAI_API_KEY")
 
 # Initialize Azure OpenAI client
@@ -189,7 +189,7 @@ functions = [
 
 # Client setup
 client = AzureOpenAI(
-    azure_endpoint="https://your-endpoint.openai.azure.com/",
+    azure_endpoint="https://openai-hp.openai.azure.com/",
     api_key="your-api-key",
     api_version="2024-05-01-preview"
 )
@@ -461,7 +461,7 @@ client = AzureOpenAI(
 
 # GPT-4o specific parameters
 response = client.chat.completions.create(
-    model="gpt-4o",  # or "gpt-4o-mini"
+    model="gpt-4o-2024-08-06",  # or "gpt-4o-mini"
     messages=[{"role": "user", "content": "Your prompt"}],
     temperature=0.13,  # Lower temperature for more focused outputs
     max_tokens=16384,  # GPT-4o supports larger context
