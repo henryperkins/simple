@@ -1,13 +1,12 @@
-# cache.py
-
 import os
 import json
+import time
 import hashlib
 import threading
-import time
-from typing import Any, Dict
 from collections import OrderedDict
-from core.logging.setup import LoggerSetup
+from typing import Any, Dict
+from core.logger import LoggerSetup
+import sentry_sdk
 
 # Initialize logger for this module
 logger = LoggerSetup.get_logger("cache")
@@ -23,7 +22,6 @@ def initialize_cache():
     if not os.path.exists(CACHE_DIR):
         os.makedirs(CACHE_DIR)
         logger.info("Created cache directory.")
-
     if not os.path.exists(CACHE_INDEX_FILE):
         with open(CACHE_INDEX_FILE, 'w', encoding='utf-8') as f:
             json.dump({}, f)
@@ -52,9 +50,11 @@ def load_cache_index() -> OrderedDict:
                 return OrderedDict()
         except json.JSONDecodeError as e:
             logger.error(f"JSON decoding failed for cache index: {e}")
+            sentry_sdk.capture_exception(e)
             return OrderedDict()
         except OSError as e:
             logger.error(f"OS error while loading cache index: {e}")
+            sentry_sdk.capture_exception(e)
             return OrderedDict()
 
 def save_cache_index(index: OrderedDict) -> None:
@@ -65,7 +65,9 @@ def save_cache_index(index: OrderedDict) -> None:
                 json.dump(index, f)
             logger.debug("Saved cache index.")
         except OSError as e:
-            logger.error(f"Failed to save cache index: {e}")
+            logger.error(f"OS error while saving cache index: {e}")
+            sentry_sdk.capture_exception(e)
+
 
 def cache_response(key: str, data: Dict[str, Any]) -> None:
     """Cache the response data with the given key."""
@@ -84,6 +86,7 @@ def cache_response(key: str, data: Dict[str, Any]) -> None:
             clear_cache(index)
         except OSError as e:
             logger.error(f"Failed to cache response for key {key}: {e}")
+            sentry_sdk.capture_exception(e)
 
 def get_cached_response(key: str) -> Dict[str, Any]:
     """Retrieve cached response based on the key."""
@@ -104,8 +107,10 @@ def get_cached_response(key: str) -> Dict[str, Any]:
                     return data
                 except json.JSONDecodeError as e:
                     logger.error(f"JSON decoding failed for cached response {key}: {e}")
+                    sentry_sdk.capture_exception(e)
                 except OSError as e:
                     logger.error(f"OS error while loading cached response for key {key}: {e}")
+                    sentry_sdk.capture_exception(e)
             else:
                 logger.warning(f"Cache file does not exist for key: {key}")
                 # Remove invalid cache entry
@@ -127,6 +132,7 @@ def clear_cache(index: OrderedDict) -> None:
                     total_size += file_size
                 except OSError as e:
                     logger.error(f"Error getting size for cache file {cache_path}: {e}")
+                    sentry_sdk.capture_exception(e)
                     continue
         total_size_mb = total_size / (1024 * 1024)
         if total_size_mb > CACHE_MAX_SIZE_MB:
@@ -144,6 +150,7 @@ def clear_cache(index: OrderedDict) -> None:
                         logger.debug(f"Removed cache file {cache_path} for key {key}")
                     except OSError as e:
                         logger.error(f"Error removing cache file {cache_path}: {e}")
+                        sentry_sdk.capture_exception(e)
                 else:
                     logger.debug(f"Cache file {cache_path} does not exist.")
             save_cache_index(index)

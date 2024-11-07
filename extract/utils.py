@@ -1,60 +1,28 @@
-import ast
-from typing import Optional, Any
-from core.logging.setup import LoggerSetup
-
-# Initialize a logger for this module
+import ast  # Ensure this is imported
+from typing import Optional
+from core.logger import LoggerSetup  # Updated import
+# Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("extract.utils")
 
-def add_parent_info(node: Optional[ast.AST], parent: Optional[ast.AST] = None) -> None:
+def add_parent_info(tree: ast.AST) -> None:
     """
-    Add parent links to AST nodes recursively.
-
-    This function traverses the AST nodes and sets a 'parent' attribute on each node,
-    which refers to its immediate parent node. This is useful for backtracking and
-    context-aware analyses when processing the AST.
-
+    Add parent information to AST nodes.
     Args:
-        node (Optional[ast.AST]): The current AST node to process.
-        parent (Optional[ast.AST]): The parent of the current node.
+        tree (ast.AST): The abstract syntax tree to process.
     """
-    if node is None:
-        logger.warning("No node provided to add_parent_info.")
-        return
-
-    try:
+    for node in ast.walk(tree):
         for child in ast.iter_child_nodes(node):
-            setattr(child, 'parent', node)
-            child_name = getattr(child, 'name', getattr(child, 'id', 'unknown'))
-            parent_name = getattr(node, 'name', getattr(node, 'id', 'unknown'))
-            logger.debug(f"Set parent of node '{child_name}' to '{parent_name}'")
-            add_parent_info(child, node)
-        node_name = getattr(node, 'name', getattr(node, 'id', 'unknown'))
-        logger.debug(f"Added parent info to node: '{node_name}'")
-    except Exception as e:
-        node_repr = getattr(node, 'name', str(node))
-        logger.error(f"Error adding parent info to node '{node_repr}': {e}")
+            child.parent = node
+    logger.debug("Added parent information to AST nodes.")
 
 def get_annotation(annotation: Optional[ast.AST]) -> str:
     """
-    Convert an AST annotation to a string representation.
-
-    This function handles various types of annotations in AST nodes and converts them
-    into their string representations, which can include complex types like subscripts
-    and attributes.
-
+    Get the string representation of an annotation.
     Args:
-        annotation (Optional[ast.AST]): The annotation node to process.
-
+        annotation (Optional[ast.AST]): The annotation node.
     Returns:
         str: The string representation of the annotation.
-
-    Raises:
-        ValueError: If an unknown annotation type is encountered.
     """
-    if annotation is None:
-        logger.debug("No annotation found; returning 'None'")
-        return "None"
-
     try:
         if isinstance(annotation, ast.Str):
             logger.debug(f"Annotation is a string: {annotation.s}")

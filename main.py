@@ -1,5 +1,5 @@
+# main.py
 import argparse
-import logging
 import asyncio
 import os
 import sys
@@ -7,6 +7,9 @@ import shutil
 from datetime import datetime
 from typing import List, Dict, Any
 from urllib.parse import urlparse
+
+# Remove load_dotenv() from main.py
+# It's already called in settings.py
 
 from files import (
     clone_repo,
@@ -18,12 +21,13 @@ from docs import write_analysis_to_markdown
 from api_interaction import analyze_function_with_openai
 from monitoring import initialize_sentry
 from core.config.settings import Settings
-from core.logging.setup import LoggerSetup
+from core.logger import LoggerSetup  # Updated import
 from cache import initialize_cache
 import sentry_sdk
 
 # Initialize logger for the main module
 logger = LoggerSetup.get_logger("main")
+
 
 def validate_repo_url(url: str) -> bool:
     try:
@@ -61,7 +65,7 @@ async def process_files_concurrently(files_list: List[str], service: str) -> Dic
         if result and ('classes' in result or 'functions' in result):
             processed_results[filepath] = result
         else:
-            logger.warning(f"No valid data extracted for {filepath}")
+            logger.warning("No valid data extracted for %s", filepath)
 
     logger.info("Completed processing files.")
     return processed_results
@@ -108,24 +112,20 @@ async def main():
     parser.add_argument("input_path", help="Path to the input directory or repository URL")
     parser.add_argument("output_path", help="Path to the output directory for markdown files")
     parser.add_argument("--service", choices=["azure", "openai"], required=True, help="AI service to use")
-
     args = parser.parse_args()
     repo_dir = None
-
     summary_data = {
         'files_processed': 0,
         'errors_encountered': 0,
         'start_time': datetime.now(),
         'end_time': None
     }
-
     try:
         # Initialize monitoring (Sentry)
         initialize_sentry()
         
         # Load environment variables and validate
         settings = Settings()
-        settings.load_environment()
         
         # Initialize cache
         initialize_cache()
@@ -137,7 +137,6 @@ async def main():
             if not validate_repo_url(input_path):
                 logger.error("Invalid GitHub repository URL: %s", input_path)
                 sys.exit(1)
-
             repo_dir = 'cloned_repo'
             await clone_repo(input_path, repo_dir)
             input_path = repo_dir
@@ -157,16 +156,13 @@ async def main():
             sys.exit(1)
 
         await analyze_functions_concurrently(results, args.service)
-
         await write_analysis_to_markdown(results, output_path, input_path)
         logger.info("Analysis complete. Documentation written to %s", output_path)
-
     except Exception as e:
         summary_data['errors_encountered'] += 1
         logger.error("Error during execution: %s", str(e))
         sentry_sdk.capture_exception(e)
         sys.exit(1)
-
     finally:
         summary_data['end_time'] = datetime.now()
         if repo_dir and os.path.exists(repo_dir):
@@ -175,7 +171,6 @@ async def main():
                 logger.info("Cleaned up temporary repository files")
             except OSError as e:
                 logger.error("Error cleaning up repository: %s", str(e))
-
         logger.info(
             "Summary: Files processed: %d, Errors: %d, Start: %s, End: %s, Duration: %s",
             summary_data['files_processed'],

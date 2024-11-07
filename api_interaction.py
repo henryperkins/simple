@@ -1,13 +1,12 @@
 import aiohttp
 import asyncio
 import json
+import sentry_sdk
+import os
 from typing import Any, Dict, Optional
 from core.config.settings import Settings
-import sentry_sdk
-from core.logging.setup import LoggerSetup
 from tqdm.asyncio import tqdm
-import os
-import random
+from core.logger import LoggerSetup
 
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("api_interaction")
@@ -20,10 +19,9 @@ async def make_openai_request(
     
     if service == "azure":
         endpoint = f"{settings.get_azure_endpoint()}/openai/deployments/{settings.azure_deployment_name}/completions?api-version={settings.azure_api_version}"
-        model_name = settings.azure_deployment_name
+        model_name = settings.azure_model_name  # Use the specific model name here
     else:
         endpoint = "https://api.openai.com/v1/chat/completions"
-        model_name = model_name or settings.openai_model_name
 
     payload = {
         "model": model_name,
@@ -34,6 +32,7 @@ async def make_openai_request(
 
     logger.debug(f"Using endpoint: {endpoint}")
     logger.debug(f"Using headers: {headers}")
+    logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
 
     retries = 3
     base_backoff = 2
@@ -46,7 +45,7 @@ async def make_openai_request(
                 ) as response:
                     if response.status == 200:
                         result = await response.json()
-                        logger.debug(f"Received response: {result}")
+                        logger.debug(f"Received response: {json.dumps(result, indent=2)}")
                         return result
                     else:
                         error_msg = await response.text()
@@ -67,8 +66,8 @@ async def make_openai_request(
             sentry_sdk.capture_exception(e)
 
         # Implement exponential backoff with jitter
-        sleep_time = base_backoff * (2 ** attempt) + random.uniform(0, 1)
-        logger.debug(f"Retrying API request in {sleep_time:.2f} seconds (Attempt {attempt}/{retries})")
+        sleep_time = base_backoff ** attempt
+        logger.debug(f"Retrying API request in {sleep_time} seconds (Attempt {attempt}/{retries})")
         await asyncio.sleep(sleep_time)
 
     logger.error("Exceeded maximum retries for API request.")
@@ -145,51 +144,35 @@ async def analyze_function_with_openai(
                 "changelog": "Error: Changelog generation failed.",
             }
 
-        response_message = response.get("choices", [{}])[0].get("message", {})
-        if not response_message:
-            error_msg = "Missing 'choices' or 'message' in API response."
+        choices = response.get("choices", [])
+        if not choices:
+            error_msg = "Missing 'choices' in API response."
             logger.error(error_msg)
             raise KeyError(error_msg)
 
+        response_message = choices[0].get("message", {})
         if "function_call" in response_message:
             function_args_str = response_message["function_call"].get("arguments", "{}")
             try:
                 function_args = json.loads(function_args_str)
             except json.JSONDecodeError as e:
                 logger.error(f"JSON decoding error in function_call arguments: {e}")
-                function_args = {}
-        elif "content" in response_message:
-            content = response_message["content"]
-            try:
-                function_args = json.loads(content)
-            except json.JSONDecodeError:
-                logger.warning("Model did not return valid JSON in content.")
-                function_args = {
-                    "summary": content.strip(),
-                    "docstring": "No valid docstring generated.",
-                    "changelog": "No changelog available.",
-                }
-        else:
-            logger.warning("No function_call or content in response message.")
-            function_args = {
-                "summary": "No summary available.",
-                "docstring": "No docstring available.",
-                "changelog": "No changelog available.",
+                raise
+
+            return {
+                "name": function_name,
+                "complexity_score": function_details.get("complexity_score", "Unknown"),
+                "summary": function_args.get("summary", ""),
+                "docstring": function_args.get("docstring", ""),
+                "changelog": function_args.get("changelog", ""),
             }
 
-        result = {
-            "name": function_name,
-            "complexity_score": function_details.get("complexity_score", "Unknown"),
-            "summary": function_args.get("summary", "No summary available."),
-            "docstring": function_args.get("docstring", "No docstring available."),
-            "changelog": function_args.get("changelog", "No changelog available."),
-        }
-        logger.info(f"Analysis complete for function: {function_name}")
-        logger.debug(f"Analysis result: {json.dumps(result, indent=2)}")
-        return result
+        error_msg = "Missing 'function_call' in API response message."
+        logger.error(error_msg)
+        raise KeyError(error_msg)
 
     except (KeyError, TypeError, json.JSONDecodeError) as e:
-        logger.error(f"Error parsing API response for function {function_name}: {e}")
+        logger.error(f"Error processing API response: {e}")
         sentry_sdk.capture_exception(e)
         return {
             "name": function_name,
@@ -200,12 +183,12 @@ async def analyze_function_with_openai(
         }
 
     except Exception as e:
-        logger.error(f"Unexpected error analyzing function {function_name}: {e}")
+        logger.error(f"Unexpected error during function analysis: {e}")
         sentry_sdk.capture_exception(e)
         return {
             "name": function_name,
             "complexity_score": function_details.get("complexity_score", "Unknown"),
-            "summary": f"Error during analysis: {str(e)}",
+            "summary": "Error during analysis.",
             "docstring": "Error: Documentation generation failed.",
             "changelog": "Error: Changelog generation failed.",
         }

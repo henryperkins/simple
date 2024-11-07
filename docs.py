@@ -1,8 +1,8 @@
-import os
-from typing import Any, Dict, List
-from core.logging.setup import LoggerSetup
-import aiofiles
 import asyncio
+from typing import Any, Dict, List
+import aiofiles
+import os
+from core.logger import LoggerSetup
 
 # Initialize logger for this module
 logger = LoggerSetup.get_logger("docs")
@@ -45,7 +45,6 @@ async def write_analysis_to_markdown(results: Dict[str, Any], output_path: str, 
             logger.debug(f"Wrote markdown file: {filepath}")
 
         tasks = []
-
         for filepath, data in results.items():
             # Create separate markdown files for classes and functions
             for class_info in data.get("classes", []):
@@ -62,7 +61,6 @@ async def write_analysis_to_markdown(results: Dict[str, Any], output_path: str, 
 
         await asyncio.gather(*tasks)
         logger.info("Successfully wrote all markdown files.")
-
     except Exception as e:
         logger.error(f"Error writing analysis to markdown: {e}")
         raise

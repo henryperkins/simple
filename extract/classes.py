@@ -1,8 +1,8 @@
 import ast
 from typing import Any, Dict, List
-from .base import BaseExtractor
-from .functions import FunctionExtractor
-from core.logging.setup import LoggerSetup
+from core.logger import LoggerSetup
+from extract.base import BaseExtractor
+from extract.functions import FunctionExtractor
 
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("extract.classes")

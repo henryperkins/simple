@@ -1,7 +1,7 @@
 import ast
 from collections import defaultdict
 from typing import Any, Dict, List
-from core.logging.setup import LoggerSetup
+from core.logger import LoggerSetup
 
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("metrics")
@@ -24,10 +24,8 @@ class CodeMetrics:
     def calculate_complexity(self, node: ast.AST) -> int:
         """
         Calculate the cyclomatic complexity score for a function or method.
-
         Args:
             node (ast.AST): The AST node representing a function or method.
-
         Returns:
             int: The cyclomatic complexity score.
         """
@@ -46,10 +44,8 @@ class CodeMetrics:
     def calculate_cognitive_complexity(self, node: ast.AST) -> int:
         """
         Calculate the cognitive complexity score for a function or method.
-
         Args:
             node (ast.AST): The AST node representing a function or method.
-
         Returns:
             int: The cognitive complexity score.
         """
@@ -60,10 +56,8 @@ class CodeMetrics:
     def calculate_halstead_metrics(self, node: ast.AST) -> Dict[str, float]:
         """
         Calculate Halstead metrics for a function or method.
-
         Args:
             node (ast.AST): The AST node representing a function or method.
-
         Returns:
             Dict[str, float]: The Halstead metrics.
         """
@@ -74,14 +68,12 @@ class CodeMetrics:
     def analyze_function_quality(self, function_info: Dict[str, Any]) -> None:
         """
         Analyze function quality and add recommendations.
-
         Args:
             function_info (Dict[str, Any]): The function details.
         """
         name = function_info.get('name', 'unknown')
         score = function_info.get('complexity_score', 0)
         logger.debug(f"Analyzing quality for function: {name}")
-
         if score > 10:
             msg = (
                 f"Function '{name}' has high complexity ({score}). "
@@ -89,12 +81,10 @@ class CodeMetrics:
             )
             self.quality_issues.append(msg)
             logger.info(msg)
-
         if not function_info.get("docstring"):
             msg = f"Function '{name}' lacks a docstring."
             self.quality_issues.append(msg)
             logger.info(msg)
-
         params_without_types = [
             p["name"] for p in function_info.get("params", [])
             if not p.get("has_type_hint")
@@ -111,18 +101,15 @@ class CodeMetrics:
     def analyze_class_quality(self, class_info: Dict[str, Any]) -> None:
         """
         Analyze class quality and add recommendations.
-
         Args:
             class_info (Dict[str, Any]): The class details.
         """
         name = class_info.get('name', 'unknown')
         logger.debug(f"Analyzing quality for class: {name}")
-
         if not class_info.get("docstring"):
             msg = f"Class '{name}' lacks a docstring."
             self.quality_issues.append(msg)
             logger.info(msg)
-
         method_count = len(class_info.get("methods", []))
         if method_count > 10:
             msg = (
@@ -135,7 +122,6 @@ class CodeMetrics:
     def update_type_hint_stats(self, function_info: Dict[str, Any]) -> None:
         """
         Update type hint statistics based on function information.
-
         Args:
             function_info (Dict[str, Any]): The function details.
         """
@@ -145,7 +131,6 @@ class CodeMetrics:
         )
         if function_info.get("return_type", {}).get("has_type_hint", False):
             hints_present += 1
-
         self.type_hints_stats["total_possible"] += total_hints_possible
         self.type_hints_stats["total_present"] += hints_present
         logger.debug(f"Updated type hint stats: {self.type_hints_stats}")
@@ -153,7 +138,6 @@ class CodeMetrics:
     def calculate_final_metrics(self, all_items: List[Dict[str, Any]]) -> None:
         """
         Calculate final metrics after processing all items.
-
         Args:
             all_items (List[Dict[str, Any]]): List of all functions and methods analyzed.
         """
@@ -162,19 +146,16 @@ class CodeMetrics:
         if total_items > 0:
             items_with_doc = sum(1 for item in all_items if item.get("docstring"))
             self.docstring_coverage = (items_with_doc / total_items) * 100
-
             total_complexity = sum(
                 item.get("complexity_score", 0)
                 for item in all_items
             )
             self.avg_complexity = total_complexity / total_items if total_items else 0
-
         if self.type_hints_stats["total_possible"] > 0:
             self.type_hint_coverage = (
                 self.type_hints_stats["total_present"] /
                 self.type_hints_stats["total_possible"]
             ) * 100
-
         logger.info(
             f"Final metrics calculated: Docstring coverage: {self.docstring_coverage:.2f}%, "
             f"Type hint coverage: {self.type_hint_coverage:.2f}%, "
@@ -185,7 +166,6 @@ class CodeMetrics:
     def get_summary(self) -> Dict[str, Any]:
         """
         Generate a comprehensive summary of code metrics.
-
         Returns:
             Dict[str, Any]: The summary of code metrics.
         """
