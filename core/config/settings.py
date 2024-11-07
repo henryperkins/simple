@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from openai import AzureOpenAI
 from core.logger import LoggerSetup
 
 # Load environment variables from .env file
