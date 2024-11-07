@@ -27,10 +27,6 @@ class LoggerSetup:
     def _add_file_handler(logger: logging.Logger, module_name: str) -> None:
         """
         Add a rotating file handler to the logger.
-
-        Args:
-            logger (logging.Logger): The logger to which the handler is added.
-            module_name (str): The name of the module for log file naming.
         """
         log_dir = os.path.join("logs", module_name)
         os.makedirs(log_dir, exist_ok=True)
@@ -48,36 +44,9 @@ class LoggerSetup:
     def _add_console_handler(logger: logging.Logger) -> None:
         """
         Add a console handler to the logger.
-
-        Args:
-            logger (logging.Logger): The logger to which the handler is added.
         """
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(
             logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         )
         logger.addHandler(console_handler)
-
-    @staticmethod
-    def generate_summary():
-        """
-        Generates a summary log file with critical information from all module logs.
-        """
-        log_dir = "logs"
-        summary_log_path = os.path.join(log_dir, "summary.log")
-        try:
-            with open(summary_log_path, 'w', encoding='utf-8') as summary_file:
-                for module_name in os.listdir(log_dir):
-                    module_log_dir = os.path.join(log_dir, module_name)
-                    module_log_path = os.path.join(module_log_dir, f"{module_name}.log")
-                    if os.path.exists(module_log_path):
-                        try:
-                            with open(module_log_path, 'r', encoding='utf-8') as log_file:
-                                for line in log_file:
-                                    if "ERROR" in line or "WARNING" in line:
-                                        summary_file.write(line)
-                        except OSError as e:
-                            print(f"Error reading log file {module_log_path}: {e}")
-            print(f"Summary log generated at: {summary_log_path}")
-        except OSError as e:
-            print(f"Error writing summary log file: {e}")

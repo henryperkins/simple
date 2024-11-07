@@ -2,6 +2,8 @@ import ast
 from typing import Dict, Any, Optional
 from core.logging.setup import LoggerSetup
 
+logger = LoggerSetup.get_logger("extract.base")
+
 class BaseExtractor:
     """
     Base class for extractors that provides common functionality for extracting

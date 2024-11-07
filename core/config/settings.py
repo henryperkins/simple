@@ -3,6 +3,8 @@ from typing import Dict, Optional
 from dotenv import load_dotenv
 from core.logging.setup import LoggerSetup
 
+logger = LoggerSetup.get_logger("config")
+
 class Settings:
     _instance = None
 
