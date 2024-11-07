@@ -2,6 +2,7 @@ import ast
 from typing import Any, Dict, List
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
+from extract.classes import ClassExtractor
 
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("extract.functions")
