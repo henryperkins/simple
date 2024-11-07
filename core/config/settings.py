@@ -14,7 +14,7 @@ class Settings:
         self.azure_endpoint = os.getenv("AZURE_ENDPOINT")
         self.azure_deployment_name = os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4o")
         self.azure_model_name = os.getenv("AZURE_MODEL_NAME", "gpt-4o-2024-08-06")
-        self.azure_api_version = os.getenv("AZURE_API_VERSION", "2022-12-01")
+        self.azure_api_version = os.getenv("AZURE_API_VERSION", "2024-08-01-preview")
         self.sentry_dsn = os.getenv("SENTRY_DSN")
         self.environment = os.getenv("ENVIRONMENT", "development")
         self.release_version = os.getenv("RELEASE_VERSION", "1.0.0")

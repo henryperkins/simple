@@ -7,9 +7,7 @@ import shutil
 from datetime import datetime
 from typing import List, Dict, Any
 from urllib.parse import urlparse
-
-# Remove load_dotenv() from main.py
-# It's already called in settings.py
+from dotenv import load_dotenv
 
 from files import (
     clone_repo,
@@ -20,7 +18,6 @@ from files import (
 from docs import write_analysis_to_markdown
 from api_interaction import analyze_function_with_openai
 from monitoring import initialize_sentry
-from core.config.settings import Settings
 from core.logger import LoggerSetup  # Updated import
 from cache import initialize_cache
 import sentry_sdk
@@ -28,6 +25,8 @@ import sentry_sdk
 # Initialize logger for the main module
 logger = LoggerSetup.get_logger("main")
 
+# Load environment variables from .env file
+load_dotenv()
 
 def validate_repo_url(url: str) -> bool:
     try:
@@ -123,10 +122,26 @@ async def main():
     try:
         # Initialize monitoring (Sentry)
         initialize_sentry()
-        
+
         # Load environment variables and validate
-        settings = Settings()
-        
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        azure_api_key = os.getenv("AZURE_API_KEY")
+        azure_endpoint = os.getenv("AZURE_ENDPOINT")
+        sentry_dsn = os.getenv("SENTRY_DSN")
+
+        if not openai_api_key:
+            logger.error("OPENAI_API_KEY is not set.")
+            raise ValueError("OPENAI_API_KEY is not set.")
+        if not azure_api_key:
+            logger.error("AZURE_API_KEY is not set.")
+            raise ValueError("AZURE_API_KEY is not set.")
+        if not azure_endpoint:
+            logger.error("AZURE_ENDPOINT is not set.")
+            raise ValueError("AZURE_ENDPOINT is not set.")
+        if not sentry_dsn:
+            logger.error("SENTRY_DSN is not set.")
+            raise ValueError("SENTRY_DSN is not set.")
+
         # Initialize cache
         initialize_cache()
 

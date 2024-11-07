@@ -1,26 +1,88 @@
 import aiohttp
 import asyncio
 import json
-from openai import AzureOpenAI
-import sentry_sdk
 import os
+import sentry_sdk
 from typing import Any, Dict, Optional
-from core.config.settings import Settings
+from dotenv import load_dotenv
 from tqdm.asyncio import tqdm
 from core.logger import LoggerSetup
 
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("api_interaction")
 
+# Load environment variables from .env file
+load_dotenv()
+
+# Load environment variables and validate
+openai_api_key = os.getenv("OPENAI_API_KEY")
+azure_api_key = os.getenv("AZURE_API_KEY")
+azure_endpoint = os.getenv("AZURE_ENDPOINT")
+azure_deployment_name = os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4o")
+azure_model_name = os.getenv("AZURE_MODEL_NAME", "gpt-4o-2024-08-06")
+azure_api_version = os.getenv("AZURE_API_VERSION", "2022-12-01")
+sentry_dsn = os.getenv("SENTRY_DSN")
+
+# Validate required environment variables
+required_vars = {
+    "OPENAI_API_KEY": openai_api_key,
+    "AZURE_API_KEY": azure_api_key,
+    "AZURE_ENDPOINT": azure_endpoint,
+    "SENTRY_DSN": sentry_dsn
+}
+
+for var_name, var_value in required_vars.items():
+    if not var_value:
+        logger.error(f"{var_name} is not set.")
+        raise ValueError(f"{var_name} is not set.")
+
+def get_service_headers(service: str) -> dict:
+    """
+    Get headers required for a specific service.
+
+    Args:
+        service (str): The service name ('azure' or 'openai').
+
+    Returns:
+        dict: Headers with authorization for the specified service.
+
+    Raises:
+        ValueError: If the service is unsupported or required keys are not set.
+    """
+    headers = {"Content-Type": "application/json"}
+
+    if service == "azure":
+        headers["api-key"] = azure_api_key
+    elif service == "openai":
+        headers["Authorization"] = f"Bearer {openai_api_key}"
+    else:
+        logger.error(f"Unsupported service: {service}")
+        raise ValueError(f"Unsupported service: {service}")
+
+    return headers
+
+def get_azure_endpoint() -> str:
+    """
+    Retrieve the endpoint URL for Azure-based requests.
+
+    Returns:
+        str: The Azure endpoint URL.
+
+    Raises:
+        ValueError: If AZURE_ENDPOINT is not set.
+    """
+    logger.debug(f"Azure endpoint retrieved: {azure_endpoint}")
+    return azure_endpoint
+
 async def make_openai_request(
     messages: list, functions: list, service: str, model_name: Optional[str] = None
 ) -> Dict[str, Any]:
-    settings = Settings()
-    headers = settings.get_service_headers(service)
+    headers = get_service_headers(service)
     
     if service == "azure":
-        endpoint = f"{settings.get_azure_endpoint()}/openai/deployments/{settings.azure_deployment_name}/completions?api-version={settings.azure_api_version}"
-        model_name = settings.azure_model_name  # Use the specific model name here
+        # Correctly include azure_deployment_name in the endpoint URL
+        endpoint = f"{get_azure_endpoint()}/openai/deployments/{azure_deployment_name}/chat/completions?api-version={azure_api_version}"
+        model_name = azure_model_name  # Use the specific model name here
     else:
         endpoint = "https://api.openai.com/v1/chat/completions"
 
