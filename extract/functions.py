@@ -1,3 +1,4 @@
+# functions.py
 from typing import Any, Dict, List, Optional
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
@@ -36,7 +37,7 @@ class FunctionExtractor(BaseExtractor):
                 param_info = {
                     "name": param.arg,
                     "type": self.get_annotation(param.annotation),
-                    "default": self._get_default_value(param)
+                    "has_type_hint": param.annotation is not None
                 }
                 params.append(param_info)
         except Exception as e:
@@ -45,51 +46,35 @@ class FunctionExtractor(BaseExtractor):
 
     def calculate_complexity(self) -> int:
         complexity = 1  # Base score
-        # Add logic to calculate complexity
+        try:
+            for node in ast.walk(self.node):
+                if isinstance(node, (ast.If, ast.While, ast.For, ast.AsyncFor,
+                                  ast.ExceptHandler, ast.With, ast.AsyncWith)):
+                    complexity += 1
+                elif isinstance(node, ast.BoolOp):
+                    complexity += len(node.values) - 1
+        except Exception as e:
+            logger.error(f"Error calculating complexity: {e}")
         return complexity
-
-    def is_async(self) -> bool:
-        return isinstance(self.node, ast.AsyncFunctionDef)
-
-    def is_generator(self) -> bool:
-        return any(isinstance(stmt, ast.Yield) for stmt in ast.walk(self.node))
-
-    def is_recursive(self) -> bool:
-        return any(isinstance(stmt, ast.Call) and stmt.func.id == self.node.name for stmt in ast.walk(self.node))
-
-    def _get_empty_details(self) -> Dict[str, Any]:
-        return {
-            "name": "",
-            "docstring": "",
-            "params": [],
-            "returns": "",
-            "complexity_score": 0,
-            "line_number": 0,
-            "end_line_number": 0,
-            "code": "",
-            "is_async": False,
-            "is_generator": False,
-            "is_recursive": False,
-            "summary": "",
-            "changelog": []
-        }
-
-    def _extract_return_annotation(self) -> Dict[str, Any]:
-        return {
-            "type": self.get_annotation(self.node.returns),
-            "has_type_hint": self.node.returns is not None
-        }
 
     def _generate_summary(self) -> str:
         parts = []
-        if self.node.returns:
-            parts.append(f"Returns {get_annotation(self.node.returns)}")
-        if self.is_generator():
-            parts.append("Generator")
-        if self.is_async():
-            parts.append("Async")
-        if self.is_recursive():
-            parts.append("Recursive")
-        complexity = self.calculate_complexity()
-        parts.append(f"Complexity: {complexity}")
+        try:
+            if self.node.returns:
+                parts.append(f"Returns: {self.get_annotation(self.node.returns)}")
+            
+            if self.is_generator():
+                parts.append("Generator function")
+            
+            if self.is_async():
+                parts.append("Async function")
+            
+            if self.is_recursive():
+                parts.append("Recursive function")
+            
+            complexity = self.calculate_complexity()
+            parts.append(f"Complexity: {complexity}")
+        except Exception as e:
+            logger.error(f"Error generating summary: {e}")
+        
         return " | ".join(parts)

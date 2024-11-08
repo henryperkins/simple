@@ -11,7 +11,6 @@ This module provides functionality for:
 The module implements a thread-safe caching system with LRU (Least Recently Used)
 eviction policy and size-based cache management.
 """
-
 import asyncio
 import os
 import json
@@ -24,7 +23,7 @@ import subprocess
 import aiofiles
 import shutil
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from core.logger import LoggerSetup
 import sentry_sdk
 from extract.code import extract_classes_and_functions_from_ast
@@ -60,8 +59,7 @@ def initialize_cache() -> None:
                 json.dump({}, f)
             logger.info("Initialized cache index file.")
     except OSError as e:
-        logger.error(f"Failed to initialize cache: {e}")
-        sentry_sdk.capture_exception(e)
+        logger.error(f"Error initializing cache: {e}")
         raise
 
 def get_cache_path(key: str) -> str:
@@ -92,22 +90,13 @@ def load_cache_index() -> OrderedDict:
     """
     with CacheConfig.LOCK:
         try:
-            if os.path.exists(CacheConfig.INDEX_FILE):
-                with open(CacheConfig.INDEX_FILE, 'r', encoding='utf-8') as f:
-                    index_data = json.load(f)
-                    index = OrderedDict(sorted(
-                        index_data.items(),
-                        key=lambda item: item[1]['last_access_time']
-                    ))
-                    logger.debug("Loaded and sorted cache index.")
-                    return index
-            else:
-                logger.debug("Cache index file not found. Initializing empty index.")
-                return OrderedDict()
+            with open(CacheConfig.INDEX_FILE, 'r', encoding='utf-8') as f:
+                index = json.load(f, object_pairs_hook=OrderedDict)
+            logger.debug("Loaded cache index.")
+            return OrderedDict(sorted(index.items(), key=lambda item: item[1]['last_access_time']))
         except (json.JSONDecodeError, OSError) as e:
             logger.error(f"Error loading cache index: {e}")
-            sentry_sdk.capture_exception(e)
-            return OrderedDict()
+            raise
 
 def save_cache_index(index: OrderedDict) -> None:
     """
@@ -126,7 +115,6 @@ def save_cache_index(index: OrderedDict) -> None:
             logger.debug("Saved cache index.")
         except OSError as e:
             logger.error(f"Error saving cache index: {e}")
-            sentry_sdk.capture_exception(e)
             raise
 
 def cache_response(key: str, data: Dict[str, Any]) -> None:
@@ -151,11 +139,9 @@ def cache_response(key: str, data: Dict[str, Any]) -> None:
                 'last_access_time': time.time()
             }
             save_cache_index(index)
-            logger.debug(f"Cached response for key: {key}")
-            clear_cache(index)
+            logger.debug(f"Cached response for key {key}.")
         except OSError as e:
-            logger.error(f"Failed to cache response for key {key}: {e}")
-            sentry_sdk.capture_exception(e)
+            logger.error(f"Error caching response for key {key}: {e}")
             raise
 
 def get_cached_response(key: str) -> Dict[str, Any]:
@@ -181,6 +167,7 @@ def get_cached_response(key: str) -> Dict[str, Any]:
                 try:
                     with open(cache_path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
+                    # Update last access time
                     cache_entry['last_access_time'] = time.time()
                     index.move_to_end(key)
                     save_cache_index(index)
@@ -215,7 +202,6 @@ def clear_cache(index: OrderedDict) -> None:
                 cache_path = entry.get('cache_path')
                 if cache_path and os.path.exists(cache_path):
                     total_size += os.path.getsize(cache_path)
-
             total_size_mb = total_size / (1024 * 1024)
             if total_size_mb > CacheConfig.MAX_SIZE_MB:
                 logger.info("Cache size exceeded limit. Starting eviction process.")
@@ -315,8 +301,7 @@ def get_all_files(directory: str, exclude_patterns: Optional[List[str]] = None) 
             for file in files:
                 if file.endswith('.py'):
                     file_path = os.path.join(root, file)
-                    if not any(fnmatch.fnmatch(file_path, pattern) 
-                             for pattern in exclude_patterns):
+                    if not any(fnmatch.fnmatch(file_path, pattern) for pattern in exclude_patterns):
                         python_files.append(file_path)
         logger.debug(f"Found {len(python_files)} Python files in {directory}")
         return python_files
@@ -349,12 +334,10 @@ async def process_file(filepath: str, service: str) -> Dict[str, Any]:
     except UnicodeDecodeError:
         logger.error(f"Unicode decode error in file {filepath}")
         return {"error": "Unicode decode error", "file_content": [{"content": ""}]}
-    except SyntaxError as e:
-        logger.error(f"Syntax error in file {filepath}: {e}")
-        return {"error": "Syntax error", "file_content": [{"content": ""}]}
     except Exception as e:
-        logger.error(f"Unexpected error processing file {filepath}: {e}")
-        return {"error": "Unexpected error", "file_content": [{"content": ""}]}
+        logger.error(f"Error processing file {filepath}: {e}")
+        sentry_sdk.capture_exception(e)
+        return {"error": str(e), "file_content": [{"content": ""}]}
 
 async def read_file_content(filepath: str) -> str:
     """
@@ -372,13 +355,18 @@ async def read_file_content(filepath: str) -> str:
         OSError: For other file system errors
     """
     try:
-        async with aiofiles.open(filepath, "r", encoding="utf-8") as f:
+        async with aiofiles.open(filepath, 'r', encoding='utf-8') as f:
             content = await f.read()
-        logger.debug(f"Read file content from {filepath}")
+        logger.debug(f"Read content from {filepath}")
         return content
-    except (FileNotFoundError, UnicodeDecodeError, OSError) as e:
-        logger.error(f"Error reading file {filepath}: {e}")
-        sentry_sdk.capture_exception(e)
+    except FileNotFoundError as e:
+        logger.error(f"File not found: {filepath}")
+        raise
+    except UnicodeDecodeError as e:
+        logger.error(f"Unicode decode error in file {filepath}")
+        raise
+    except OSError as e:
+        logger.error(f"OS error while reading file {filepath}: {e}")
         raise
 
 async def analyze_and_update_functions(
@@ -391,25 +379,18 @@ async def analyze_and_update_functions(
     Analyze functions and update their docstrings.
     
     Args:
-        extracted_data (Dict[str, Any]): The extracted function data
-        tree (ast.AST): The AST of the file
-        content (str): The original file content
+        extracted_data (Dict[str, Any]): The extracted data
+        tree (ast.AST): The AST tree of the file
+        content (str): The file content
         service (str): The service to use for analysis
         
     Returns:
         str: The updated file content
     """
-    file_content = content
-    for function in extracted_data.get('functions', []):
-        try:
-            analysis = await analyze_function_with_openai(function, service)
-            function.update(analysis)
-            file_content = update_function_docstring(file_content, tree, function, analysis)
-            logger.info(f"Updated docstring for function {function['name']}")
-        except Exception as e:
-            logger.error(f"Error analyzing function {function.get('name', 'unknown')}: {e}")
-            sentry_sdk.capture_exception(e)
-    return file_content
+    for func in extracted_data.get("functions", []):
+        analysis = await analyze_function_with_openai(func, service)
+        content = update_function_docstring(content, tree, func, analysis)
+    return content
 
 def update_function_docstring(
     file_content: str,
@@ -418,38 +399,34 @@ def update_function_docstring(
     analysis: Dict[str, Any]
 ) -> str:
     """
-    Update the docstring of a function in the file content.
+    Update the docstring of a function.
     
     Args:
-        file_content (str): The original file content
-        tree (ast.AST): The AST of the file
-        function (Dict[str, Any]): The function information
+        file_content (str): The file content
+        tree (ast.AST): The AST tree of the file
+        function (Dict[str, Any]): The function details
         analysis (Dict[str, Any]): The analysis results
         
     Returns:
         str: The updated file content
     """
-    try:
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function['name']:
-                docstring = analysis.get('docstring')
-                if docstring:
-                    logger.debug(f"Inserting docstring for function {function['name']}")
-                    return insert_docstring(file_content, node, docstring)
-        logger.warning(f"Function {function['name']} not found in AST.")
+    new_docstring = analysis.get("docstring", "")
+    if not new_docstring:
         return file_content
-    except Exception as e:
-        logger.error(f"Error updating docstring for function {function['name']}: {e}")
-        sentry_sdk.capture_exception(e)
-        return file_content
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function["name"]:
+            file_content = insert_docstring(file_content, node, new_docstring)
+            break
+    return file_content
 
 def insert_docstring(
     source: str,
-    node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
+    node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef],
     docstring: str
 ) -> str:
     """
-    Insert or replace a docstring in a function or class definition.
+    Insert a docstring into a function or class.
     
     Args:
         source (str): The source code
@@ -459,32 +436,9 @@ def insert_docstring(
     Returns:
         str: The updated source code
     """
-    try:
-        if not hasattr(node, 'body') or not node.body:
-            logger.warning(f"No body found for node {getattr(node, 'name', 'unknown')}.")
-            return source
-
-        body_start = node.body[0].lineno - 1
-        lines = source.splitlines()
-        def_line = lines[node.lineno - 1]
-        indent = " " * (len(def_line) - len(def_line.lstrip()))
-
-        if isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Str):
-            docstring_start = node.body[0].lineno - 1
-            docstring_end = node.body[0].end_lineno
-            lines[docstring_start:docstring_end] = [
-                f'{indent}"""',
-                f'{indent}{docstring}',
-                f'{indent}"""'
-            ]
-        else:
-            lines.insert(body_start, f'{indent}"""')
-            lines.insert(body_start + 1, f'{indent}{docstring}')
-            lines.insert(body_start + 2, f'{indent}"""')
-
-        logger.debug(f"Docstring inserted for node {getattr(node, 'name', 'unknown')}")
-        return "\n".join(lines)
-    except Exception as e:
-        logger.error(f"Error inserting docstring: {e}")
-        sentry_sdk.capture_exception(e)
-        return so
+    lines = source.splitlines()
+    start_line = node.body[0].lineno - 1
+    indent = " " * (node.body[0].col_offset or 0)
+    docstring_lines = [f'{indent}"""', f'{indent}{docstring}', f'{indent}"""']
+    lines[start_line:start_line] = docstring_lines
+    return "\n".join(lines)

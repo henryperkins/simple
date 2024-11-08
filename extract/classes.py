@@ -1,8 +1,9 @@
+# classes.py
 from typing import Any, Dict, List, Optional
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
 from extract.functions import FunctionExtractor
-from extract.utils import get_annotation
+import ast
 
 # Initialize logger for this module
 logger = LoggerSetup.get_logger("extract.classes")
@@ -30,8 +31,9 @@ class ClassExtractor(BaseExtractor):
         try:
             for node in self.node.body:
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    method_extractor = FunctionExtractor(node, self.content)
-                    methods.append(method_extractor.extract_details())
+                    extractor = FunctionExtractor(node, self.content)
+                    method_details = extractor.extract_details()
+                    methods.append(method_details)
         except Exception as e:
             logger.error(f"Error extracting methods: {e}")
         return methods
@@ -40,11 +42,20 @@ class ClassExtractor(BaseExtractor):
         attributes = []
         try:
             for node in self.node.body:
-                if isinstance(node, ast.AnnAssign):
+                if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                     attributes.append({
                         "name": node.target.id,
-                        "type": self.get_annotation(node.annotation)
+                        "type": self.get_annotation(node.annotation),
+                        "line_number": node.lineno
                     })
+                elif isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            attributes.append({
+                                "name": target.id,
+                                "type": "Any",
+                                "line_number": node.lineno
+                            })
         except Exception as e:
             logger.error(f"Error extracting attributes: {e}")
         return attributes
@@ -53,15 +64,14 @@ class ClassExtractor(BaseExtractor):
         instance_vars = []
         try:
             for node in self.node.body:
-                if isinstance(node, ast.FunctionDef) and node.name == "__init__":
-                    for stmt in node.body:
-                        if isinstance(stmt, ast.Assign):
-                            for target in stmt.targets:
-                                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
-                                    instance_vars.append({
-                                        "name": target.attr,
-                                        "line_number": target.lineno
-                                    })
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "__init__":
+                    for sub_node in ast.walk(node):
+                        if isinstance(sub_node, ast.Attribute) and isinstance(sub_node.value, ast.Name):
+                            if sub_node.value.id == "self":
+                                instance_vars.append({
+                                    "name": sub_node.attr,
+                                    "line_number": sub_node.lineno
+                                })
         except Exception as e:
             logger.error(f"Error extracting instance variables: {e}")
         return instance_vars
@@ -72,24 +82,34 @@ class ClassExtractor(BaseExtractor):
             for base in self.node.bases:
                 if isinstance(base, ast.Name):
                     base_classes.append(base.id)
+                elif isinstance(base, ast.Attribute):
+                    parts = []
+                    node = base
+                    while isinstance(node, ast.Attribute):
+                        parts.append(node.attr)
+                        node = node.value
+                    if isinstance(node, ast.Name):
+                        parts.append(node.id)
+                        base_classes.append(".".join(reversed(parts)))
         except Exception as e:
             logger.error(f"Error extracting base classes: {e}")
         return base_classes
 
-    def _get_empty_details(self) -> Dict[str, Any]:
-        return {
-            "name": "",
-            "docstring": "",
-            "methods": [],
-            "attributes": [],
-            "instance_variables": [],
-            "base_classes": [],
-            "summary": "",
-            "changelog": []
-        }
-
     def _generate_summary(self) -> str:
         parts = []
-        if self.node.bases:
-            parts.append(f"Inherits from {', '.join(base.id for base in self.node.bases if isinstance(base, ast.Name))}")
+        try:
+            if self.node.bases:
+                base_classes = self.extract_base_classes()
+                parts.append(f"Inherits from: {', '.join(base_classes)}")
+            
+            method_count = len(self.extract_methods())
+            attr_count = len(self.extract_attributes())
+            instance_var_count = len(self.extract_instance_variables())
+            
+            parts.append(f"Methods: {method_count}")
+            parts.append(f"Attributes: {attr_count}")
+            parts.append(f"Instance Variables: {instance_var_count}")
+        except Exception as e:
+            logger.error(f"Error generating summary: {e}")
+        
         return " | ".join(parts)

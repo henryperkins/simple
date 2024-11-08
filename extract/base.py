@@ -1,11 +1,14 @@
-from typing import Any, Optional, List, Union
+# extract/base.py
 from abc import ABC, abstractmethod
+from typing import Dict, Any, List, Optional
+import ast
 from core.logger import LoggerSetup
 
-# Initialize logger for this module
 logger = LoggerSetup.get_logger("extract.base")
 
 class BaseExtractor(ABC):
+    """Base class for AST extractors."""
+    
     def __init__(self, node: ast.AST, content: str) -> None:
         if node is None:
             raise ValueError("AST node cannot be None")
@@ -15,41 +18,41 @@ class BaseExtractor(ABC):
         self.content = content
         logger.debug(f"Initialized {self.__class__.__name__} for node type {type(node).__name__}")
 
-    def get_annotation(self, annotation: Optional[ast.AST]) -> str:
-        try:
-            return get_annotation(annotation)
-        except Exception as e:
-            logger.error(f"Error getting annotation: {e}")
-            return "Unknown"
-
-    def get_source_segment(self, node: ast.AST) -> str:
-        try:
-            return ast.get_source_segment(self.content, node)
-        except Exception as e:
-            logger.error(f"Error getting source segment: {e}")
-            return ""
-
     @abstractmethod
-    def extract_details(self) -> dict:
+    def extract_details(self) -> Dict[str, Any]:
+        """Extract details from the AST node."""
         pass
 
     def get_docstring(self) -> str:
+        """Extract docstring from node."""
         try:
             return ast.get_docstring(self.node) or ""
         except Exception as e:
             logger.error(f"Error extracting docstring: {e}")
             return ""
 
-    def get_decorators(self) -> List[str]:
-        decorators = []
+    def get_source_segment(self, node: ast.AST) -> str:
+        """Get source code segment for a node."""
         try:
-            if hasattr(self.node, 'decorator_list'):
-                for decorator in self.node.decorator_list:
-                    if isinstance(decorator, ast.Name):
-                        decorators.append(decorator.id)
-                    elif isinstance(decorator, ast.Call):
-                        if isinstance(decorator.func, ast.Name):
-                            decorators.append(decorator.func.id)
+            return ast.get_source_segment(self.content, node) or ""
         except Exception as e:
-            logger.error(f"Error extracting decorators: {e}")
-        return decorators
+            logger.error(f"Error getting source segment: {e}")
+            return ""
+
+    def _get_empty_details(self) -> Dict[str, Any]:
+        """Return empty details structure matching schema."""
+        return {
+            "name": "",
+            "docstring": "",
+            "params": [],
+            "returns": {"type": "None", "has_type_hint": False},
+            "complexity_score": 0,
+            "line_number": 0,
+            "end_line_number": 0,
+            "code": "",
+            "is_async": False,
+            "is_generator": False,
+            "is_recursive": False,
+            "summary": "",
+            "changelog": ""
+        }

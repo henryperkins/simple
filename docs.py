@@ -1,11 +1,21 @@
+import json
 import os
 import aiofiles
 from typing import Dict, Any, List
 import jsonschema
+from core.logger import LoggerSetup
+
+# Initialize logger for this module
+logger = LoggerSetup.get_logger("docs")
 
 # Load the function schema
-with open('function_schema.json') as schema_file:
-    function_schema = json.load(schema_file)
+try:
+    with open('function_schema.json') as schema_file:
+        function_schema = json.load(schema_file)
+        logger.debug("Successfully loaded function schema")
+except Exception as e:
+    logger.error(f"Failed to load function schema: {e}")
+    raise
 
 async def write_analysis_to_markdown(results: Dict[str, Any], output_path: str) -> None:
     """
@@ -26,29 +36,41 @@ async def write_analysis_to_markdown(results: Dict[str, Any], output_path: str) 
         OSError: If there are issues creating directories or writing files
         Exception: For other unexpected errors during documentation generation
     """
+    logger.info(f"Starting documentation generation in {output_path}")
+    
     try:
         os.makedirs(output_path, exist_ok=True)
+        logger.debug(f"Created output directory: {output_path}")
+        
         output_file = os.path.join(output_path, "complete_documentation.md")
+        logger.debug(f"Writing documentation to: {output_file}")
         
         async with aiofiles.open(output_file, 'w', encoding='utf-8') as md_file:
+            # Validate the input data against schema
+            try:
+                jsonschema.validate(instance=results, schema=function_schema)
+                logger.debug("Input data validation successful")
+            except jsonschema.ValidationError as ve:
+                logger.error(f"Schema validation failed: {ve}")
+                raise
+            
             await write_header(md_file)
+            logger.debug("Wrote documentation header")
+            
             await write_overview(md_file, results)
+            logger.debug("Wrote overview section")
             
             for filepath, analysis in results.items():
-                # Validate the analysis data against the schema
-                jsonschema.validate(instance=analysis, schema=function_schema)
+                logger.debug(f"Processing file: {filepath}")
                 await write_file_section(md_file, filepath, analysis)
-                
-        logger.info(f"Documentation written to {output_file}")
-        
-    except jsonschema.ValidationError as e:
-        logger.error(f"Schema validation error: {e}")
-        raise
+            
+            logger.info("Documentation generation completed successfully")
+            
     except OSError as e:
-        logger.error(f"File system error writing documentation: {e}")
+        logger.error(f"File system error during documentation generation: {e}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error writing documentation: {e}")
+        logger.error(f"Unexpected error during documentation generation: {e}")
         raise
 
 async def write_header(md_file) -> None:
