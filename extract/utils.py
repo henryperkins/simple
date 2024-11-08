@@ -1,12 +1,14 @@
-import ast  # Ensure this is imported
+import ast
 from typing import Optional
-from core.logger import LoggerSetup  # Updated import
+from core.logger import LoggerSetup
+
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("extract.utils")
 
 def add_parent_info(tree: ast.AST) -> None:
     """
     Add parent information to AST nodes.
+
     Args:
         tree (ast.AST): The abstract syntax tree to process.
     """
@@ -18,8 +20,10 @@ def add_parent_info(tree: ast.AST) -> None:
 def get_annotation(annotation: Optional[ast.AST]) -> str:
     """
     Get the string representation of an annotation.
+
     Args:
         annotation (Optional[ast.AST]): The annotation node.
+
     Returns:
         str: The string representation of the annotation.
     """
@@ -47,7 +51,7 @@ def get_annotation(annotation: Optional[ast.AST]) -> str:
             logger.debug(f"Annotation is a constant: {annotation.value}")
             return str(annotation.value)
         else:
-            logger.warning(f"Unknown annotation type encountered: {type(annotation)}")
+            logger.warning(f"Unhandled annotation type: {type(annotation)} with value: {ast.dump(annotation)}")
             return "Unknown"
     except Exception as e:
         logger.error(f"Error processing annotation: {e}")

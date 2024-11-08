@@ -171,7 +171,7 @@ async def main():
             sys.exit(1)
 
         await analyze_functions_concurrently(results, args.service)
-        await write_analysis_to_markdown(results, output_path, input_path)
+        await write_analysis_to_markdown(results, output_path)
         logger.info("Analysis complete. Documentation written to %s", output_path)
     except Exception as e:
         summary_data['errors_encountered'] += 1

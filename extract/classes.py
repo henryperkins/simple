@@ -1,123 +1,95 @@
-import ast
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
 from extract.functions import FunctionExtractor
+from extract.utils import get_annotation
 
-# Initialize a logger specifically for this module
+# Initialize logger for this module
 logger = LoggerSetup.get_logger("extract.classes")
 
 class ClassExtractor(BaseExtractor):
-    """
-    Extractor for class details from AST nodes.
-    """
-
     def extract_details(self) -> Dict[str, Any]:
-        """
-        Extract comprehensive information from a class node.
-
-        Returns:
-            Dict[str, Any]: The extracted class details.
-        """
         try:
             details = {
                 "name": self.node.name,
-                "docstring": ast.get_docstring(self.node) or "",
+                "docstring": self.get_docstring(),
                 "methods": self.extract_methods(),
                 "attributes": self.extract_attributes(),
                 "instance_variables": self.extract_instance_variables(),
                 "base_classes": self.extract_base_classes(),
+                "summary": self._generate_summary(),
+                "changelog": []
             }
-            logger.debug(f"Extracted details for class {self.node.name}: {details}")
             return details
         except Exception as e:
-            logger.error(f"Error extracting details for class {self.node.name}: {e}")
-            return {}
+            logger.error(f"Error extracting class details: {e}")
+            return self._get_empty_details()
 
     def extract_methods(self) -> List[Dict[str, Any]]:
-        """
-        Extract methods from the class.
-
-        Returns:
-            List[Dict[str, Any]]: A list of method details.
-        """
         methods = []
         try:
-            for item in self.node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    method_extractor = FunctionExtractor(item, self.content)
-                    method_info = method_extractor.extract_details()
-                    methods.append(method_info)
-                    logger.debug(f"Extracted method: {method_info['name']}")
-            return methods
+            for node in self.node.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    method_extractor = FunctionExtractor(node, self.content)
+                    methods.append(method_extractor.extract_details())
         except Exception as e:
-            logger.error(f"Error extracting methods in class {self.node.name}: {e}")
-            return methods
+            logger.error(f"Error extracting methods: {e}")
+        return methods
 
-    def extract_attributes(self) -> List[Dict[str, str]]:
-        """
-        Extract class-level attributes (annotated assignments).
-
-        Returns:
-            List[Dict[str, str]]: A list of attribute details.
-        """
+    def extract_attributes(self) -> List[Dict[str, Any]]:
         attributes = []
         try:
-            for item in self.node.body:
-                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                    attr_name = item.target.id
-                    attr_type = self.get_annotation(item.annotation)
+            for node in self.node.body:
+                if isinstance(node, ast.AnnAssign):
                     attributes.append({
-                        "name": attr_name,
-                        "type": attr_type
+                        "name": node.target.id,
+                        "type": self.get_annotation(node.annotation)
                     })
-                    logger.debug(f"Extracted attribute: {attr_name} with type {attr_type}")
-            return attributes
         except Exception as e:
-            logger.error(f"Error extracting attributes in class {self.node.name}: {e}")
-            return attributes
+            logger.error(f"Error extracting attributes: {e}")
+        return attributes
 
     def extract_instance_variables(self) -> List[Dict[str, Any]]:
-        """
-        Extract instance variables initialized within methods.
-
-        Returns:
-            List[Dict[str, Any]]: A list of instance variable details.
-        """
         instance_vars = []
         try:
-            for item in self.node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    for stmt in ast.walk(item):
+            for node in self.node.body:
+                if isinstance(node, ast.FunctionDef) and node.name == "__init__":
+                    for stmt in node.body:
                         if isinstance(stmt, ast.Assign):
                             for target in stmt.targets:
-                                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == 'self':
-                                    var_name = target.attr
-                                    var_line = stmt.lineno
+                                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
                                     instance_vars.append({
-                                        "name": var_name,
-                                        "line_number": var_line
+                                        "name": target.attr,
+                                        "line_number": target.lineno
                                     })
-                                    logger.debug(f"Extracted instance variable: {var_name} at line {var_line}")
-            return instance_vars
         except Exception as e:
-            logger.error(f"Error extracting instance variables in class {self.node.name}: {e}")
-            return instance_vars
+            logger.error(f"Error extracting instance variables: {e}")
+        return instance_vars
 
     def extract_base_classes(self) -> List[str]:
-        """
-        Extract base classes of the class.
-
-        Returns:
-            List[str]: A list of base class names.
-        """
         base_classes = []
         try:
             for base in self.node.bases:
-                base_name = self.get_annotation(base)
-                base_classes.append(base_name)
-                logger.debug(f"Extracted base class: {base_name}")
-            return base_classes
+                if isinstance(base, ast.Name):
+                    base_classes.append(base.id)
         except Exception as e:
-            logger.error(f"Error extracting base classes for class {self.node.name}: {e}")
-            return base_classes
+            logger.error(f"Error extracting base classes: {e}")
+        return base_classes
+
+    def _get_empty_details(self) -> Dict[str, Any]:
+        return {
+            "name": "",
+            "docstring": "",
+            "methods": [],
+            "attributes": [],
+            "instance_variables": [],
+            "base_classes": [],
+            "summary": "",
+            "changelog": []
+        }
+
+    def _generate_summary(self) -> str:
+        parts = []
+        if self.node.bases:
+            parts.append(f"Inherits from {', '.join(base.id for base in self.node.bases if isinstance(base, ast.Name))}")
+        return " | ".join(parts)

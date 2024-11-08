@@ -147,7 +147,7 @@ async def analyze_function_with_openai(
         service (str): The AI service to use ('azure' or 'openai').
 
     Returns:
-        Dict[str, Any]: Analysis results including summary, docstring, and changelog.
+        Dict[str, Any]: Analysis results including summary, docstring, changelog, classes, functions, and file content.
     """
     function_name = function_details.get("name", "unknown")
     logger.info(f"Analyzing function: {function_name}")
@@ -160,33 +160,159 @@ async def analyze_function_with_openai(
         {
             "role": "user",
             "content": (
-                f"Provide a summary, docstring, and changelog for the following function:\n\n"
+                f"Provide a detailed analysis for the following function:\n\n"
                 f"{function_details.get('code', '')}"
             ),
         },
     ]
 
+    # Expand the existing function schema to include additional fields
     function_schema = {
         "name": "analyze_function",
-        "description": "Analyze a Python function and provide a summary, docstring, and changelog.",
+        "description": "Analyze a Python function and provide structured outputs.",
         "parameters": {
             "type": "object",
             "properties": {
                 "summary": {
                     "type": "string",
-                    "description": "Concise description of function purpose and behavior",
-                },
-                "docstring": {
-                    "type": "string",
-                    "description": "Complete Google-style docstring",
+                    "description": "A brief summary of the extracted data."
                 },
                 "changelog": {
-                    "type": "string",
-                    "description": "Documentation change history or 'Initial documentation'",
+                    "type": "array",
+                    "description": "A list of changes or updates made during the extraction process.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "change": { "type": "string" },
+                            "timestamp": { "type": "string", "format": "date-time" }
+                        },
+                        "required": ["change", "timestamp"],
+                        "additionalProperties": false
+                    }
                 },
+                "classes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string" },
+                            "docstring": { "type": "string" },
+                            "methods": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": { "type": "string" },
+                                        "docstring": { "type": "string" },
+                                        "params": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "name": { "type": "string" },
+                                                    "type": { "type": "string" },
+                                                    "has_type_hint": { "type": "boolean" }
+                                                },
+                                                "required": ["name", "type", "has_type_hint"],
+                                                "additionalProperties": false
+                                            }
+                                        },
+                                        "complexity_score": { "type": "integer" },
+                                        "line_number": { "type": "integer" },
+                                        "end_line_number": { "type": "integer" },
+                                        "code": { "type": "string" },
+                                        "is_async": { "type": "boolean" },
+                                        "is_generator": { "type": "boolean" },
+                                        "is_recursive": { "type": "boolean" },
+                                        "summary": { "type": "string" },
+                                        "changelog": { "type": "string" }
+                                    },
+                                    "required": ["name", "docstring", "params", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"],
+                                    "additionalProperties": false
+                                }
+                            },
+                            "attributes": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": { "type": "string" },
+                                        "type": { "type": "string" }
+                                    },
+                                    "required": ["name", "type"],
+                                    "additionalProperties": false
+                                }
+                            },
+                            "instance_variables": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": { "type": "string" },
+                                        "line_number": { "type": "integer" }
+                                    },
+                                    "required": ["name", "line_number"],
+                                    "additionalProperties": false
+                                }
+                            },
+                            "base_classes": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                            }
+                        },
+                        "required": ["name", "docstring", "methods", "attributes", "instance_variables", "base_classes"],
+                        "additionalProperties": false
+                    }
+                },
+                "functions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string" },
+                            "docstring": { "type": "string" },
+                            "params": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": { "type": "string" },
+                                        "type": { "type": "string" },
+                                        "has_type_hint": { "type": "boolean" }
+                                    },
+                                    "required": ["name", "type", "has_type_hint"],
+                                    "additionalProperties": false
+                                }
+                            },
+                            "complexity_score": { "type": "integer" },
+                            "line_number": { "type": "integer" },
+                            "end_line_number": { "type": "integer" },
+                            "code": { "type": "string" },
+                            "is_async": { "type": "boolean" },
+                            "is_generator": { "type": "boolean" },
+                            "is_recursive": { "type": "boolean" },
+                            "summary": { "type": "string" },
+                            "changelog": { "type": "string" }
+                        },
+                        "required": ["name", "docstring", "params", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"],
+                        "additionalProperties": false
+                    }
+                },
+                "file_content": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "content": { "type": "string" }
+                        },
+                        "required": ["content"],
+                        "additionalProperties": false
+                    }
+                }
             },
-            "required": ["summary", "docstring", "changelog"],
-        },
+            "required": ["summary", "changelog", "classes", "functions", "file_content"],
+            "additionalProperties": false
+        }
     }
 
     try:
@@ -228,6 +354,9 @@ async def analyze_function_with_openai(
                 "summary": function_args.get("summary", ""),
                 "docstring": function_args.get("docstring", ""),
                 "changelog": function_args.get("changelog", ""),
+                "classes": function_args.get("classes", []),
+                "functions": function_args.get("functions", []),
+                "file_content": function_args.get("file_content", [])
             }
 
         error_msg = "Missing 'function_call' in API response message."

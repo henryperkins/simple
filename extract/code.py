@@ -1,9 +1,9 @@
-import ast  # Add this import
+import ast
 from typing import Any, Dict
-from core.logger import LoggerSetup  # Lazy import to avoid circular dependency
-from extract.utils import add_parent_info
+from core.logger import LoggerSetup
 from extract.classes import ClassExtractor
 from extract.functions import FunctionExtractor
+from extract.utils import add_parent_info
 
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("extract.code")
@@ -44,8 +44,16 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
         logger.debug("Completed extraction from AST.")
     except Exception as e:
         logger.error(f"Error during extraction from AST: {e}")
-        return {}
+        return {
+            "summary": "",
+            "changelog": [],
+            "classes": [],
+            "functions": [],
+            "file_content": [{"content": content}]
+        }
     return {
+        "summary": "Extracted classes and functions from the source code.",
+        "changelog": [],
         "classes": classes,
         "functions": functions,
         "file_content": [{"content": content}]

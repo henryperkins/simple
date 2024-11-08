@@ -1,137 +1,95 @@
-import ast
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
-# from extract.classes import ClassExtractor
+from extract.utils import get_annotation
 
-# Initialize a logger specifically for this module
+# Initialize logger for this module
 logger = LoggerSetup.get_logger("extract.functions")
 
 class FunctionExtractor(BaseExtractor):
-    """
-    Extractor for function details from AST nodes.
-    """
-
     def extract_details(self) -> Dict[str, Any]:
-        """
-        Extract comprehensive information from a function node.
-
-        Returns:
-            Dict[str, Any]: The extracted function details.
-        """
         try:
             details = {
                 "name": self.node.name,
-                "docstring": ast.get_docstring(self.node) or "",
+                "docstring": self.get_docstring(),
                 "params": self.extract_parameters(),
+                "returns": self._extract_return_annotation(),
                 "complexity_score": self.calculate_complexity(),
                 "line_number": self.node.lineno,
-                "end_line_number": getattr(self.node, 'end_lineno', self.node.lineno),
-                "code": self.extract_function_code(),
-                "is_async": isinstance(self.node, ast.AsyncFunctionDef),
+                "end_line_number": self.node.end_lineno,
+                "code": self.get_source_segment(self.node),
+                "is_async": self.is_async(),
                 "is_generator": self.is_generator(),
                 "is_recursive": self.is_recursive(),
+                "summary": self._generate_summary(),
+                "changelog": []
             }
-            logger.debug(f"Extracted details for function {self.node.name}: {details}")
             return details
         except Exception as e:
-            logger.error(f"Error extracting details for function {self.node.name}: {e}")
-            return {}
+            logger.error(f"Error extracting function details: {e}")
+            return self._get_empty_details()
 
     def extract_parameters(self) -> List[Dict[str, Any]]:
-        """
-        Extract parameters from the function.
-
-        Returns:
-            List[Dict[str, Any]]: A list of parameter details.
-        """
         params = []
         try:
-            for arg in self.node.args.args:
+            for param in self.node.args.args:
                 param_info = {
-                    "name": arg.arg,
-                    "type": self.get_annotation(arg.annotation),
-                    "has_type_hint": arg.annotation is not None,
+                    "name": param.arg,
+                    "type": self.get_annotation(param.annotation),
+                    "default": self._get_default_value(param)
                 }
                 params.append(param_info)
-                logger.debug(f"Extracted parameter: {param_info}")
-            return params
         except Exception as e:
-            logger.error(f"Error extracting parameters for function {self.node.name}: {e}")
-            return params
+            logger.error(f"Error extracting parameters: {e}")
+        return params
 
     def calculate_complexity(self) -> int:
-        """
-        Calculate the function's cyclomatic complexity score.
+        complexity = 1  # Base score
+        # Add logic to calculate complexity
+        return complexity
 
-        Returns:
-            int: The cyclomatic complexity score.
-        """
-        complexity = 1  # Start with one for the function entry point
-        try:
-            for subnode in ast.walk(self.node):
-                if isinstance(subnode, (ast.If, ast.For, ast.While, ast.Try, ast.With, ast.BoolOp)):
-                    complexity += 1
-            logger.debug(f"Calculated complexity for function {self.node.name}: {complexity}")
-            return complexity
-        except Exception as e:
-            logger.error(f"Error calculating complexity for function {self.node.name}: {e}")
-            return complexity
-
-    def extract_function_code(self) -> str:
-        """
-        Extract the function's source code.
-
-        Returns:
-            str: The source code of the function.
-        """
-        try:
-            if not hasattr(self.node, 'lineno') or not hasattr(self.node, 'end_lineno'):
-                logger.warning(f"Function node {self.node.name} lacks line number information.")
-                return ""
-
-            lines = self.content.splitlines()
-            start_line = self.node.lineno - 1  # Convert to 0-based index
-            end_line = getattr(self.node, 'end_lineno', start_line + 1)
-
-            code = "\n".join(lines[start_line:end_line])
-            logger.debug(f"Extracted code for function {self.node.name}")
-            return code
-        except Exception as e:
-            logger.error(f"Error extracting code for function {self.node.name}: {e}")
-            return ""
+    def is_async(self) -> bool:
+        return isinstance(self.node, ast.AsyncFunctionDef)
 
     def is_generator(self) -> bool:
-        """
-        Check if the function is a generator.
-
-        Returns:
-            bool: True if the function is a generator, False otherwise.
-        """
-        try:
-            for node in ast.walk(self.node):
-                if isinstance(node, (ast.Yield, ast.YieldFrom)):
-                    logger.debug(f"Function {self.node.name} is a generator.")
-                    return True
-            return False
-        except Exception as e:
-            logger.error(f"Error checking if function {self.node.name} is a generator: {e}")
-            return False
+        return any(isinstance(stmt, ast.Yield) for stmt in ast.walk(self.node))
 
     def is_recursive(self) -> bool:
-        """
-        Check if the function calls itself recursively.
+        return any(isinstance(stmt, ast.Call) and stmt.func.id == self.node.name for stmt in ast.walk(self.node))
 
-        Returns:
-            bool: True if the function is recursive, False otherwise.
-        """
-        try:
-            for node in ast.walk(self.node):
-                if isinstance(node, ast.Call):
-                    if isinstance(node.func, ast.Name) and node.func.id == self.node.name:
-                        logger.debug(f"Function {self.node.name} is recursive.")
-                        return True
-            return False
-        except Exception as e:
-            logger.error(f"Error checking if function {self.node.name} is recursive: {e}")
-            return False
+    def _get_empty_details(self) -> Dict[str, Any]:
+        return {
+            "name": "",
+            "docstring": "",
+            "params": [],
+            "returns": "",
+            "complexity_score": 0,
+            "line_number": 0,
+            "end_line_number": 0,
+            "code": "",
+            "is_async": False,
+            "is_generator": False,
+            "is_recursive": False,
+            "summary": "",
+            "changelog": []
+        }
+
+    def _extract_return_annotation(self) -> Dict[str, Any]:
+        return {
+            "type": self.get_annotation(self.node.returns),
+            "has_type_hint": self.node.returns is not None
+        }
+
+    def _generate_summary(self) -> str:
+        parts = []
+        if self.node.returns:
+            parts.append(f"Returns {get_annotation(self.node.returns)}")
+        if self.is_generator():
+            parts.append("Generator")
+        if self.is_async():
+            parts.append("Async")
+        if self.is_recursive():
+            parts.append("Recursive")
+        complexity = self.calculate_complexity()
+        parts.append(f"Complexity: {complexity}")
+        return " | ".join(parts)
