@@ -1,0 +1,7 @@
+.env 
+__pycache__/         
+cache/ 
+core/__pycache__/
+__pycache__/ 
+logs/ 
+pip/
