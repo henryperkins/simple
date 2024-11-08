@@ -44,26 +44,176 @@ class CodeMetrics:
     def calculate_cognitive_complexity(self, node: ast.AST) -> int:
         """
         Calculate the cognitive complexity score for a function or method.
+        This metric measures how difficult the code is to understand, considering:
+        - Nesting depth (loops, conditionals)
+        - Logical operators
+        - Recursion
+        - Multiple exit points
+        
         Args:
             node (ast.AST): The AST node representing a function or method.
         Returns:
             int: The cognitive complexity score.
         """
-        # Placeholder for cognitive complexity calculation
-        # Implement cognitive complexity calculation logic here
-        return 0
+        name = getattr(node, 'name', 'unknown')
+        try:
+            cognitive_score = 0
+            nesting_level = 0
+
+            class CognitiveComplexityVisitor(ast.NodeVisitor):
+                def __init__(self):
+                    self.score = 0
+                    self.depth = 0
+
+                def visit_If(self, node):
+                    self.score += (1 + self.depth)  # Base cost + nesting
+                    self.depth += 1
+                    self.generic_visit(node)
+                    self.depth -= 1
+
+                def visit_For(self, node):
+                    self.score += (1 + self.depth)
+                    self.depth += 1
+                    self.generic_visit(node)
+                    self.depth -= 1
+
+                def visit_While(self, node):
+                    self.score += (1 + self.depth)
+                    self.depth += 1
+                    self.generic_visit(node)
+                    self.depth -= 1
+
+                def visit_BoolOp(self, node):
+                    # Add complexity for boolean operations (and, or)
+                    self.score += len(node.values) - 1
+                    self.generic_visit(node)
+
+                def visit_Try(self, node):
+                    self.score += 1  # Base cost for try block
+                    self.depth += 1
+                    self.generic_visit(node)
+                    self.depth -= 1
+                    # Add cost for each except handler
+                    self.score += len(node.handlers)
+
+                def visit_Return(self, node):
+                    # Add complexity for multiple return statements
+                    if self.depth > 0:
+                        self.score += 1
+                    self.generic_visit(node)
+
+            visitor = CognitiveComplexityVisitor()
+            visitor.visit(node)
+            cognitive_score = visitor.score
+
+            logger.debug(f"Calculated cognitive complexity for node {name}: {cognitive_score}")
+            return cognitive_score
+
+        except Exception as e:
+            logger.error(f"Error calculating cognitive complexity for node {name}: {e}")
+            return 0
 
     def calculate_halstead_metrics(self, node: ast.AST) -> Dict[str, float]:
         """
         Calculate Halstead metrics for a function or method.
+        Halstead metrics include:
+        - Program Length (N): Total number of operators and operands
+        - Program Vocabulary (n): Number of unique operators and operands
+        - Program Volume (V): N * log2(n)
+        - Difficulty (D): Related to error proneness
+        - Effort (E): Mental effort required to implement
+        
         Args:
             node (ast.AST): The AST node representing a function or method.
         Returns:
             Dict[str, float]: The Halstead metrics.
         """
-        # Placeholder for Halstead metrics calculation
-        # Implement Halstead metrics calculation logic here
-        return {}
+        name = getattr(node, 'name', 'unknown')
+        try:
+            class HalsteadVisitor(ast.NodeVisitor):
+                def __init__(self):
+                    self.operators = set()
+                    self.operands = set()
+                    self.total_operators = 0
+                    self.total_operands = 0
+
+                def visit_BinOp(self, node):
+                    self.operators.add(type(node.op).__name__)
+                    self.total_operators += 1
+                    self.generic_visit(node)
+
+                def visit_UnaryOp(self, node):
+                    self.operators.add(type(node.op).__name__)
+                    self.total_operators += 1
+                    self.generic_visit(node)
+
+                def visit_BoolOp(self, node):
+                    self.operators.add(type(node.op).__name__)
+                    self.total_operators += 1
+                    self.generic_visit(node)
+
+                def visit_Compare(self, node):
+                    for op in node.ops:
+                        self.operators.add(type(op).__name__)
+                        self.total_operators += 1
+                    self.generic_visit(node)
+
+                def visit_Name(self, node):
+                    self.operands.add(node.id)
+                    self.total_operands += 1
+                    self.generic_visit(node)
+
+                def visit_Constant(self, node):
+                    self.operands.add(str(node.value))
+                    self.total_operands += 1
+                    self.generic_visit(node)
+
+            visitor = HalsteadVisitor()
+            visitor.visit(node)
+
+            # Calculate basic Halstead metrics
+            n1 = len(visitor.operators)  # Number of unique operators
+            n2 = len(visitor.operands)   # Number of unique operands
+            N1 = visitor.total_operators # Total operators
+            N2 = visitor.total_operands  # Total operands
+
+            # Prevent division by zero and log(0)
+            if n1 + n2 == 0:
+                return {
+                    "program_length": 0,
+                    "vocabulary_size": 0,
+                    "program_volume": 0,
+                    "difficulty": 0,
+                    "effort": 0
+                }
+
+            import math
+            program_length = N1 + N2
+            vocabulary_size = n1 + n2
+            volume = program_length * math.log2(vocabulary_size) if vocabulary_size > 0 else 0
+            difficulty = (n1 / 2) * (N2 / n2) if n2 > 0 else 0
+            effort = difficulty * volume
+
+            metrics = {
+                "program_length": program_length,
+                "vocabulary_size": vocabulary_size,
+                "program_volume": volume,
+                "difficulty": difficulty,
+                "effort": effort
+            }
+
+            logger.debug(f"Calculated Halstead metrics for node {name}: {metrics}")
+            return metrics
+
+        except Exception as e:
+            logger.error(f"Error calculating Halstead metrics for node {name}: {e}")
+            return {
+                "program_length": 0,
+                "vocabulary_size": 0,
+                "program_volume": 0,
+                "difficulty": 0,
+                "effort": 0
+            }
 
     def analyze_function_quality(self, function_info: Dict[str, Any]) -> None:
         """

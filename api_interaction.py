@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm
 from core.logger import LoggerSetup
+from extract.utils import validate_schema
 
 # Initialize a logger specifically for this module
 logger = LoggerSetup.get_logger("api_interaction")
@@ -14,43 +15,41 @@ logger = LoggerSetup.get_logger("api_interaction")
 # Load environment variables from .env file
 load_dotenv()
 
-# Load environment variables and validate
+# Determine which service to use
+use_azure = os.getenv("USE_AZURE", "false").lower() == "true"
+
+# Load environment variables
 openai_api_key = os.getenv("OPENAI_API_KEY")
 azure_api_key = os.getenv("AZURE_API_KEY")
 azure_endpoint = os.getenv("AZURE_ENDPOINT")
 azure_deployment_name = os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4o")
 azure_model_name = os.getenv("AZURE_MODEL_NAME", "gpt-4o-2024-08-06")
-azure_api_version = os.getenv("AZURE_API_VERSION", "2022-12-01")
+azure_api_version = os.getenv("AZURE_API_VERSION", "2024-08-01-preview")
 sentry_dsn = os.getenv("SENTRY_DSN")
 
-# Validate required environment variables
-required_vars = {
-    "OPENAI_API_KEY": openai_api_key,
-    "AZURE_API_KEY": azure_api_key,
-    "AZURE_ENDPOINT": azure_endpoint,
-    "SENTRY_DSN": sentry_dsn
-}
+# Validate required environment variables based on the service
+if use_azure:
+    required_vars = {
+        "AZURE_API_KEY": azure_api_key,
+        "AZURE_ENDPOINT": azure_endpoint,
+        "SENTRY_DSN": sentry_dsn
+    }
+else:
+    required_vars = {
+        "OPENAI_API_KEY": openai_api_key,
+        "SENTRY_DSN": sentry_dsn
+    }
 
 for var_name, var_value in required_vars.items():
     if not var_value:
         logger.error(f"{var_name} is not set.")
         raise ValueError(f"{var_name} is not set.")
+    else:
+        logger.debug(f"{var_name} is set.")
 
 def get_service_headers(service: str) -> dict:
-    """
-    Get headers required for a specific service.
-
-    Args:
-        service (str): The service name ('azure' or 'openai').
-
-    Returns:
-        dict: Headers with authorization for the specified service.
-
-    Raises:
-        ValueError: If the service is unsupported or required keys are not set.
-    """
+    logger.debug(f"Getting headers for service: {service}")
     headers = {"Content-Type": "application/json"}
-
     if service == "azure":
         headers["api-key"] = azure_api_key
     elif service == "openai":
@@ -58,31 +57,22 @@ def get_service_headers(service: str) -> dict:
     else:
         logger.error(f"Unsupported service: {service}")
         raise ValueError(f"Unsupported service: {service}")
-
+    logger.debug(f"Headers set: {headers}")
     return headers
 
 def get_azure_endpoint() -> str:
-    """
-    Retrieve the endpoint URL for Azure-based requests.
-
-    Returns:
-        str: The Azure endpoint URL.
-
-    Raises:
-        ValueError: If AZURE_ENDPOINT is not set.
-    """
     logger.debug(f"Azure endpoint retrieved: {azure_endpoint}")
     return azure_endpoint
 
 async def make_openai_request(
     messages: list, functions: list, service: str, model_name: Optional[str] = None
 ) -> Dict[str, Any]:
+    logger.info(f"Preparing to make request to {service} service")
     headers = get_service_headers(service)
     
     if service == "azure":
-        # Correctly include azure_deployment_name in the endpoint URL
         endpoint = f"{get_azure_endpoint()}/openai/deployments/{azure_deployment_name}/chat/completions?api-version={azure_api_version}"
-        model_name = azure_model_name  # Use the specific model name here
+        model_name = azure_model_name
     else:
         endpoint = "https://api.openai.com/v1/chat/completions"
 
@@ -101,11 +91,13 @@ async def make_openai_request(
     base_backoff = 2
     
     for attempt in tqdm(range(1, retries + 1), desc="API Request Progress"):
+        logger.info(f"Attempt {attempt} of {retries}")
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     endpoint, headers=headers, json=payload, timeout=30
                 ) as response:
+                    logger.debug(f"Response status: {response.status}")
                     if response.status == 200:
                         result = await response.json()
                         logger.debug(f"Received response: {json.dumps(result, indent=2)}")
@@ -128,7 +120,6 @@ async def make_openai_request(
             logger.error(f"Attempt {attempt}: Unexpected exception during API request: {e}")
             sentry_sdk.capture_exception(e)
 
-        # Implement exponential backoff with jitter
         sleep_time = base_backoff ** attempt
         logger.debug(f"Retrying API request in {sleep_time} seconds (Attempt {attempt}/{retries})")
         await asyncio.sleep(sleep_time)
@@ -139,16 +130,6 @@ async def make_openai_request(
 async def analyze_function_with_openai(
     function_details: Dict[str, Any], service: str
 ) -> Dict[str, Any]:
-    """
-    Analyze a function using OpenAI's API and generate documentation.
-
-    Args:
-        function_details (Dict[str, Any]): Details of the function to analyze.
-        service (str): The AI service to use ('azure' or 'openai').
-
-    Returns:
-        Dict[str, Any]: Analysis results including summary, docstring, changelog, classes, functions, and file content.
-    """
     function_name = function_details.get("name", "unknown")
     logger.info(f"Analyzing function: {function_name}")
 
@@ -166,156 +147,14 @@ async def analyze_function_with_openai(
         },
     ]
 
-    # Expand the existing function schema to include additional fields
-    function_schema = {
-        "name": "analyze_function",
-        "description": "Analyze a Python function and provide structured outputs.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "summary": {
-                    "type": "string",
-                    "description": "A brief summary of the extracted data."
-                },
-                "changelog": {
-                    "type": "array",
-                    "description": "A list of changes or updates made during the extraction process.",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "change": { "type": "string" },
-                            "timestamp": { "type": "string", "format": "date-time" }
-                        },
-                        "required": ["change", "timestamp"],
-                        "additionalProperties": false
-                    }
-                },
-                "classes": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": { "type": "string" },
-                            "docstring": { "type": "string" },
-                            "methods": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": { "type": "string" },
-                                        "docstring": { "type": "string" },
-                                        "params": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "name": { "type": "string" },
-                                                    "type": { "type": "string" },
-                                                    "has_type_hint": { "type": "boolean" }
-                                                },
-                                                "required": ["name", "type", "has_type_hint"],
-                                                "additionalProperties": false
-                                            }
-                                        },
-                                        "complexity_score": { "type": "integer" },
-                                        "line_number": { "type": "integer" },
-                                        "end_line_number": { "type": "integer" },
-                                        "code": { "type": "string" },
-                                        "is_async": { "type": "boolean" },
-                                        "is_generator": { "type": "boolean" },
-                                        "is_recursive": { "type": "boolean" },
-                                        "summary": { "type": "string" },
-                                        "changelog": { "type": "string" }
-                                    },
-                                    "required": ["name", "docstring", "params", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"],
-                                    "additionalProperties": false
-                                }
-                            },
-                            "attributes": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": { "type": "string" },
-                                        "type": { "type": "string" }
-                                    },
-                                    "required": ["name", "type"],
-                                    "additionalProperties": false
-                                }
-                            },
-                            "instance_variables": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": { "type": "string" },
-                                        "line_number": { "type": "integer" }
-                                    },
-                                    "required": ["name", "line_number"],
-                                    "additionalProperties": false
-                                }
-                            },
-                            "base_classes": {
-                                "type": "array",
-                                "items": { "type": "string" }
-                            }
-                        },
-                        "required": ["name", "docstring", "methods", "attributes", "instance_variables", "base_classes"],
-                        "additionalProperties": false
-                    }
-                },
-                "functions": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": { "type": "string" },
-                            "docstring": { "type": "string" },
-                            "params": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": { "type": "string" },
-                                        "type": { "type": "string" },
-                                        "has_type_hint": { "type": "boolean" }
-                                    },
-                                    "required": ["name", "type", "has_type_hint"],
-                                    "additionalProperties": false
-                                }
-                            },
-                            "complexity_score": { "type": "integer" },
-                            "line_number": { "type": "integer" },
-                            "end_line_number": { "type": "integer" },
-                            "code": { "type": "string" },
-                            "is_async": { "type": "boolean" },
-                            "is_generator": { "type": "boolean" },
-                            "is_recursive": { "type": "boolean" },
-                            "summary": { "type": "string" },
-                            "changelog": { "type": "string" }
-                        },
-                        "required": ["name", "docstring", "params", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"],
-                        "additionalProperties": false
-                    }
-                },
-                "file_content": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "content": { "type": "string" }
-                        },
-                        "required": ["content"],
-                        "additionalProperties": false
-                    }
-                }
-            },
-            "required": ["summary", "changelog", "classes", "functions", "file_content"],
-            "additionalProperties": false
-        }
-    }
-
     try:
+        # Load the function schema from the JSON file
+        function_schema_path = os.path.join(os.path.dirname(__file__), 'function_schema.json')
+        logger.debug(f"Loading function schema from {function_schema_path}")
+        with open(function_schema_path, 'r', encoding='utf-8') as schema_file:
+            function_schema = json.load(schema_file)
+        logger.debug("Function schema loaded successfully")
+
         response = await make_openai_request(
             messages=messages,
             functions=[function_schema],
@@ -344,6 +183,7 @@ async def analyze_function_with_openai(
             function_args_str = response_message["function_call"].get("arguments", "{}")
             try:
                 function_args = json.loads(function_args_str)
+                logger.debug(f"Parsed function arguments: {function_args}")
             except json.JSONDecodeError as e:
                 logger.error(f"JSON decoding error in function_call arguments: {e}")
                 raise

@@ -1,4 +1,3 @@
-# main.py
 import argparse
 import asyncio
 import os
@@ -18,7 +17,7 @@ from files import (
 from docs import write_analysis_to_markdown
 from api_interaction import analyze_function_with_openai
 from monitoring import initialize_sentry
-from core.logger import LoggerSetup  # Updated import
+from core.logger import LoggerSetup
 from cache import initialize_cache
 import sentry_sdk
 

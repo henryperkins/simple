@@ -1,11 +1,10 @@
-# classes.py
-from typing import Any, Dict, List, Optional
+from typing import Dict, Any, List
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
 from extract.functions import FunctionExtractor
+from extract.utils import get_annotation  # Import the get_annotation function
 import ast
 
-# Initialize logger for this module
 logger = LoggerSetup.get_logger("extract.classes")
 
 class ClassExtractor(BaseExtractor):
@@ -45,7 +44,7 @@ class ClassExtractor(BaseExtractor):
                 if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                     attributes.append({
                         "name": node.target.id,
-                        "type": self.get_annotation(node.annotation),
+                        "type": get_annotation(node.annotation),  # Use the imported function
                         "line_number": node.lineno
                     })
                 elif isinstance(node, ast.Assign):
