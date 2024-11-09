@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
 from extract.functions import FunctionExtractor
-from extract.utils import get_annotation  # Import the get_annotation function
+from extract.utils import get_annotation  # Ensure this import is correct
 import ast
 
 logger = LoggerSetup.get_logger("extract.classes")

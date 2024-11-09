@@ -1,144 +1,188 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-      "summary": {
-        "type": "string",
-        "description": "A brief summary of the extracted data."
-      },
-      "changelog": {
-        "type": "array",
-        "description": "A list of changes or updates made during the extraction process.",
-        "items": {
-          "type": "object",
-          "properties": {
-            "change": { "type": "string" },
-            "timestamp": { "type": "string", "format": "date-time" }
-          },
-          "required": ["change", "timestamp"],
-          "additionalProperties": false
-        }
-      },
-      "classes": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "name": { "type": "string" },
-            "docstring": { "type": "string" },
-            "methods": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "docstring": { "type": "string" },
-                  "params": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "name": { "type": "string" },
-                        "type": { "type": "string" },
-                        "has_type_hint": { "type": "boolean" }
-                      },
-                      "required": ["name", "type", "has_type_hint"],
-                      "additionalProperties": false
-                    }
-                  },
-                  "complexity_score": { "type": "integer" },
-                  "line_number": { "type": "integer" },
-                  "end_line_number": { "type": "integer" },
-                  "code": { "type": "string" },
-                  "is_async": { "type": "boolean" },
-                  "is_generator": { "type": "boolean" },
-                  "is_recursive": { "type": "boolean" },
-                  "summary": { "type": "string" },
-                  "changelog": { "type": "string" }
-                },
-                "required": ["name", "docstring", "params", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"],
-                "additionalProperties": false
-              }
-            },
-            "attributes": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "type": { "type": "string" }
-                },
-                "required": ["name", "type"],
-                "additionalProperties": false
-              }
-            },
-            "instance_variables": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "line_number": { "type": "integer" }
-                },
-                "required": ["name", "line_number"],
-                "additionalProperties": false
-              }
-            },
-            "base_classes": {
-              "type": "array",
-              "items": { "type": "string" }
-            }
-          },
-          "required": ["name", "docstring", "methods", "attributes", "instance_variables", "base_classes"],
-          "additionalProperties": false
-        }
-      },
-      "functions": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "name": { "type": "string" },
-            "docstring": { "type": "string" },
-            "params": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "type": { "type": "string" },
-                  "has_type_hint": { "type": "boolean" }
-                },
-                "required": ["name", "type", "has_type_hint"],
-                "additionalProperties": false
-              }
-            },
-            "complexity_score": { "type": "integer" },
-            "line_number": { "type": "integer" },
-            "end_line_number": { "type": "integer" },
-            "code": { "type": "string" },
-            "is_async": { "type": "boolean" },
-            "is_generator": { "type": "boolean" },
-            "is_recursive": { "type": "boolean" },
-            "summary": { "type": "string" },
-            "changelog": { "type": "string" }
-          },
-          "required": ["name", "docstring", "params", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"],
-          "additionalProperties": false
-        }
-      },
-      "file_content": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "content": { "type": "string" }
-          },
-          "required": ["content"],
-          "additionalProperties": false
-        }
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "A brief summary of the extracted data."
+    },
+    "changelog": {
+      "type": "array",
+      "description": "A list of changes or updates made during the extraction process.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "change": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["change", "timestamp"],
+        "additionalProperties": false
       }
     },
-    "required": ["summary", "changelog", "classes", "functions", "file_content"],
-    "additionalProperties": false
-  }
+    "classes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "docstring": { "type": "string" },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "docstring": { "type": "string" },
+                "params": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": { "type": "string" },
+                      "type": { "type": "string" },
+                      "has_type_hint": { "type": "boolean" }
+                    },
+                    "required": ["name", "type", "has_type_hint"],
+                    "additionalProperties": false
+                  }
+                },
+                "returns": {
+                  "type": "object",
+                  "properties": {
+                    "type": { "type": "string" },
+                    "has_type_hint": { "type": "boolean" }
+                  },
+                  "required": ["type", "has_type_hint"],
+                  "additionalProperties": false
+                },
+                "complexity_score": { "type": "integer" },
+                "cognitive_complexity": { "type": "integer" },
+                "halstead_metrics": {
+                  "type": "object",
+                  "properties": {
+                    "program_length": { "type": "number" },
+                    "vocabulary_size": { "type": "number" },
+                    "program_volume": { "type": "number" },
+                    "difficulty": { "type": "number" },
+                    "effort": { "type": "number" }
+                  },
+                  "additionalProperties": false
+                },
+                "line_number": { "type": "integer" },
+                "end_line_number": { "type": "integer" },
+                "code": { "type": "string" },
+                "is_async": { "type": "boolean" },
+                "is_generator": { "type": "boolean" },
+                "is_recursive": { "type": "boolean" },
+                "summary": { "type": "string" },
+                "changelog": { "type": "string" }
+              },
+              "required": ["name", "docstring", "params", "returns", "complexity_score", "cognitive_complexity", "halstead_metrics", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"],
+              "additionalProperties": false
+            }
+          },
+          "attributes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" }
+              },
+              "required": ["name", "type"],
+              "additionalProperties": false
+            }
+          },
+          "instance_variables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "line_number": { "type": "integer" }
+              },
+              "required": ["name", "line_number"],
+              "additionalProperties": false
+            }
+          },
+          "base_classes": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "summary": { "type": "string" },
+          "changelog": { "type": "array" }
+        },
+        "required": ["name", "docstring", "methods", "attributes", "instance_variables", "base_classes", "summary", "changelog"],
+        "additionalProperties": false
+      }
+    },
+    "functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "docstring": { "type": "string" },
+          "params": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "has_type_hint": { "type": "boolean" }
+              },
+              "required": ["name", "type", "has_type_hint"],
+              "additionalProperties": false
+            }
+          },
+          "complexity_score": { "type": "integer" },
+          "cognitive_complexity": { "type": "integer" },
+          "halstead_metrics": {
+            "type": "object",
+            "properties": {
+              "program_length": { "type": "number" },
+              "vocabulary_size": { "type": "number" },
+              "program_volume": { "type": "number" },
+              "difficulty": { "type": "number" },
+              "effort": { "type": "number" }
+            },
+            "additionalProperties": false
+          },
+          "returns": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "has_type_hint": { "type": "boolean" }
+            },
+            "required": ["type", "has_type_hint"],
+            "additionalProperties": false
+          },
+          "line_number": { "type": "integer" },
+          "end_line_number": { "type": "integer" },
+          "code": { "type": "string" },
+          "is_async": { "type": "boolean" },
+          "is_generator": { "type": "boolean" },
+          "is_recursive": { "type": "boolean" },
+          "summary": { "type": "string" },
+          "changelog": { "type": "string" }
+        },
+        "required": ["name", "docstring", "params", "complexity_score", "cognitive_complexity", "halstead_metrics", "returns", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"],
+        "additionalProperties": false
+      }
+    },
+    "file_content": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string" }
+        },
+        "required": ["content"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["summary", "changelog", "classes", "functions", "file_content"],
+  "additionalProperties": false
+}

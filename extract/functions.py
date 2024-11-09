@@ -34,7 +34,7 @@ class FunctionExtractor(BaseExtractor):
                 "is_generator": self.is_generator(),
                 "is_recursive": self.is_recursive(),
                 "summary": self._generate_summary(complexity_score, cognitive_score, halstead_metrics),
-                "changelog": []
+                "changelog": ""  # Initialize as an empty string
             }
             return details
         except Exception as e:
@@ -170,5 +170,5 @@ class FunctionExtractor(BaseExtractor):
             "is_generator": False,
             "is_recursive": False,
             "summary": "",
-            "changelog": []
+            "changelog": ""  # Initialize as an empty string
         }
