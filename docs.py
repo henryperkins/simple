@@ -145,11 +145,6 @@ async def write_class_details(md_file, class_info: Dict[str, Any]) -> None:
     if class_info.get('docstring'):
         await md_file.write(f"{class_info['docstring']}\n\n")
     
-    if class_info.get('code'):
-        await md_file.write("```python\n")
-        await md_file.write(class_info['code'])
-        await md_file.write("\n```\n\n")
-    
     await write_class_methods(md_file, class_info)
     await write_class_attributes(md_file, class_info)
     await write_class_instance_variables(md_file, class_info)
@@ -161,20 +156,22 @@ async def write_class_methods(md_file, class_info: Dict[str, Any]) -> None:
         return
         
     await md_file.write("##### Methods\n\n")
-    for method in class_info['methods']:
-        await md_file.write(f"###### {method['name']}\n\n")
-        if method.get('docstring'):
-            await md_file.write(f"{method['docstring']}\n\n")
-        if method.get('code'):
-            await md_file.write("```python\n")
-            await md_file.write(method['code'])
-            await md_file.write("\n```\n\n")
-        # Write method parameters
-        if method.get('params'):
-            await md_file.write("Parameters:\n")
-            for param in method['params']:
-                type_hint = " (typed)" if param.get('has_type_hint') else ""
-                await md_file.write(f"- {param['name']}: {param['type']}{type_hint}\n")
+    for method_info in class_info.get('methods', []):
+        if not isinstance(method_info, dict):
+            continue
+            
+        await md_file.write(f"###### {method_info.get('name', 'Unknown')}\n\n")
+        if method_info.get('docstring'):
+            await md_file.write(f"{method_info['docstring']}\n\n")
+        
+        # Write method parameters as table
+        if method_info.get('params'):
+            await md_file.write("Parameters:\n\n")
+            await md_file.write("| Name | Type | Type Hint |\n")
+            await md_file.write("|------|------|------------|\n")
+            for param in method_info['params']:
+                type_hint = "✓" if param.get('has_type_hint') else ""
+                await md_file.write(f"| {param['name']} | {param['type']} | {type_hint} |\n")
             await md_file.write("\n")
 
 async def write_class_attributes(md_file, class_info: Dict[str, Any]) -> None:
@@ -183,8 +180,10 @@ async def write_class_attributes(md_file, class_info: Dict[str, Any]) -> None:
         return
         
     await md_file.write("##### Attributes\n\n")
+    await md_file.write("| Name | Type |\n")
+    await md_file.write("|------|------|\n")
     for attribute in class_info['attributes']:
-        await md_file.write(f"- **{attribute['name']}**: {attribute['type']}\n")
+        await md_file.write(f"| **{attribute['name']}** | {attribute['type']} |\n")
     await md_file.write("\n")
 
 async def write_class_instance_variables(md_file, class_info: Dict[str, Any]) -> None:
@@ -193,8 +192,10 @@ async def write_class_instance_variables(md_file, class_info: Dict[str, Any]) ->
         return
         
     await md_file.write("##### Instance Variables\n\n")
+    await md_file.write("| Name | Line Number |\n")
+    await md_file.write("|------|-------------|\n")
     for instance_var in class_info['instance_variables']:
-        await md_file.write(f"- **{instance_var['name']}** (line {instance_var['line_number']})\n")
+        await md_file.write(f"| **{instance_var['name']}** | {instance_var['line_number']} |\n")
     await md_file.write("\n")
 
 async def write_class_base_classes(md_file, class_info: Dict[str, Any]) -> None:
@@ -220,11 +221,6 @@ async def write_function_details(md_file, func_info: Dict[str, Any]) -> None:
     if func_info.get('docstring'):
         await md_file.write(f"{func_info['docstring']}\n\n")
     
-    if func_info.get('code'):
-        await md_file.write("```python\n")
-        await md_file.write(func_info['code'])
-        await md_file.write("\n```\n\n")
-    
     await write_function_params(md_file, func_info)
     await write_function_return_type(md_file, func_info)
     await write_function_complexity_metrics(md_file, func_info)
@@ -235,9 +231,11 @@ async def write_function_params(md_file, func_info: Dict[str, Any]) -> None:
         return
         
     await md_file.write("##### Parameters\n\n")
+    await md_file.write("| Name | Type | Type Hint |\n")
+    await md_file.write("|------|------|------------|\n")
     for param in func_info['params']:
-        type_hint = " (typed)" if param.get('has_type_hint') else ""
-        await md_file.write(f"- **{param['name']}**: {param['type']}{type_hint}\n")
+        type_hint = "✓" if param.get('has_type_hint') else ""
+        await md_file.write(f"| **{param['name']}** | {param['type']} | {type_hint} |\n")
     await md_file.write("\n")
 
 async def write_function_return_type(md_file, func_info: Dict[str, Any]) -> None:
@@ -247,12 +245,16 @@ async def write_function_return_type(md_file, func_info: Dict[str, Any]) -> None
         
     await md_file.write("##### Return Type\n\n")
     returns = func_info['returns']
-    type_hint = " (typed)" if returns.get('has_type_hint') else ""
-    await md_file.write(f"{returns['type']}{type_hint}\n\n")
+    type_hint = "✓" if returns.get('has_type_hint') else ""
+    await md_file.write("| Type | Type Hint |\n")
+    await md_file.write("|------|------------|\n")
+    await md_file.write(f"| {returns['type']} | {type_hint} |\n\n")
 
 async def write_function_complexity_metrics(md_file, func_info: Dict[str, Any]) -> None:
     """Write complexity metrics for a single function."""
     await md_file.write("##### Complexity Metrics\n\n")
+    await md_file.write("| Metric | Value |\n")
+    await md_file.write("|--------|--------|\n")
     metrics = [
         ("Cyclomatic Complexity", func_info.get('complexity_score', 'N/A')),
         ("Cognitive Complexity", func_info.get('cognitive_complexity', 'N/A')),
@@ -262,7 +264,7 @@ async def write_function_complexity_metrics(md_file, func_info: Dict[str, Any]) 
     ]
     
     for metric_name, metric_value in metrics:
-        await md_file.write(f"- {metric_name}: {metric_value}\n")
+        await md_file.write(f"| {metric_name} | {metric_value} |\n")
     await md_file.write("\n")
 
 async def write_source_code_section(md_file, file_content: List[Dict[str, Any]]) -> None:

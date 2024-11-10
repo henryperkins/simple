@@ -87,9 +87,10 @@
               "type": "object",
               "properties": {
                 "name": { "type": "string" },
-                "type": { "type": "string" }
+                "type": { "type": "string" },
+                "line_number": { "type": "integer" }
               },
-              "required": ["name", "type"],
+              "required": ["name", "type", "line_number"],
               "additionalProperties": false
             }
           },

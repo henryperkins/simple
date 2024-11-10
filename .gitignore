@@ -5,3 +5,5 @@ core/__pycache__/
 __pycache__/ 
 logs/ 
 pip/
+output/
+extract/__pycache__/
