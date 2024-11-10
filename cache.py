@@ -1,3 +1,5 @@
+# cache.py
+
 import os
 import json
 import time
@@ -5,155 +7,198 @@ import hashlib
 import threading
 from collections import OrderedDict
 from typing import Any, Dict
+from dataclasses import dataclass
 from core.logger import LoggerSetup
 import sentry_sdk
 
-# Initialize logger for this module
 logger = LoggerSetup.get_logger("cache")
-cache_lock = threading.Lock()
 
-# Cache directory and configuration
-CACHE_DIR = "cache"
-CACHE_INDEX_FILE = os.path.join(CACHE_DIR, "index.json")
-CACHE_MAX_SIZE_MB = 500
+@dataclass
+class CacheConfig:
+    """Configuration for the caching system."""
+    dir: str = "cache"
+    max_size_mb: int = 500
+    index_file: str = "index.json"
 
-def initialize_cache():
-    """Initialize the cache directory and index."""
-    if not os.path.exists(CACHE_DIR):
-        os.makedirs(CACHE_DIR)
-        logger.info("Created cache directory.")
-    if not os.path.exists(CACHE_INDEX_FILE):
-        with open(CACHE_INDEX_FILE, 'w', encoding='utf-8') as f:
-            json.dump({}, f)
-        logger.info("Initialized cache index file.")
+    @property
+    def index_path(self) -> str:
+        """Get the full path to the index file."""
+        return os.path.join(self.dir, self.index_file)
 
-def get_cache_path(key: str) -> str:
-    """Generate a cache file path based on the key."""
-    hashed_key = hashlib.sha256(key.encode()).hexdigest()
-    cache_path = os.path.join(CACHE_DIR, f"{hashed_key}.json")
-    logger.debug(f"Generated cache path for key {key}: {cache_path}")
-    return cache_path
+class CacheManager:
+    """Manages file-based caching operations."""
+    
+    def __init__(self, config: CacheConfig):
+        """
+        Initialize the cache manager.
 
-def load_cache_index() -> OrderedDict:
-    """Load the cache index, sorted by last access time."""
-    with cache_lock:
+        Args:
+            config (CacheConfig): Configuration for the cache system
+        """
+        self.config = config
+        self._lock = threading.Lock()
+        self.initialize_cache()
+
+    def initialize_cache(self) -> None:
+        """Initialize cache directory and index file."""
         try:
-            if os.path.exists(CACHE_INDEX_FILE):
-                with open(CACHE_INDEX_FILE, 'r', encoding='utf-8') as f:
-                    index_data = json.load(f)
-                    # Convert index_data to OrderedDict sorted by last_access_time
-                    index = OrderedDict(sorted(index_data.items(), key=lambda item: item[1]['last_access_time']))
-                    logger.debug("Loaded and sorted cache index.")
-                    return index
-            else:
-                logger.debug("Cache index file not found. Initializing empty index.")
+            os.makedirs(self.config.dir, exist_ok=True)
+            if not os.path.exists(self.config.index_path):
+                with open(self.config.index_path, 'w', encoding='utf-8') as f:
+                    json.dump({}, f)
+            logger.info("Cache initialized successfully")
+        except OSError as e:
+            logger.error(f"Failed to initialize cache: {e}")
+            sentry_sdk.capture_exception(e)
+            raise
+
+    def get_cache_path(self, key: str) -> str:
+        """
+        Generate cache file path from key.
+
+        Args:
+            key (str): The cache key
+
+        Returns:
+            str: The path to the cache file
+        """
+        hashed_key = hashlib.sha256(key.encode()).hexdigest()
+        return os.path.join(self.config.dir, f"{hashed_key}.json")
+
+    def load_index(self) -> OrderedDict:
+        """
+        Load and sort cache index.
+
+        Returns:
+            OrderedDict: The sorted cache index
+        """
+        with self._lock:
+            try:
+                with open(self.config.index_path, 'r', encoding='utf-8') as f:
+                    index = json.load(f, object_pairs_hook=OrderedDict)
+                return OrderedDict(sorted(index.items(), 
+                                       key=lambda item: item[1]['last_access_time']))
+            except Exception as e:
+                logger.error(f"Failed to load cache index: {e}")
+                sentry_sdk.capture_exception(e)
                 return OrderedDict()
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decoding failed for cache index: {e}")
-            sentry_sdk.capture_exception(e)
-            return OrderedDict()
-        except OSError as e:
-            logger.error(f"OS error while loading cache index: {e}")
-            sentry_sdk.capture_exception(e)
-            return OrderedDict()
 
-def save_cache_index(index: OrderedDict) -> None:
-    """Save the cache index."""
-    with cache_lock:
-        try:
-            with open(CACHE_INDEX_FILE, 'w', encoding='utf-8') as f:
-                json.dump(index, f)
-            logger.debug("Saved cache index.")
-        except OSError as e:
-            logger.error(f"OS error while saving cache index: {e}")
-            sentry_sdk.capture_exception(e)
+    def save_index(self, index: OrderedDict) -> None:
+        """
+        Save cache index to disk.
 
+        Args:
+            index (OrderedDict): The cache index to save
+        """
+        with self._lock:
+            try:
+                with open(self.config.index_path, 'w', encoding='utf-8') as f:
+                    json.dump(index, f)
+            except Exception as e:
+                logger.error(f"Failed to save cache index: {e}")
+                sentry_sdk.capture_exception(e)
+                raise
 
-def cache_response(key: str, data: Dict[str, Any]) -> None:
-    """Cache the response data with the given key."""
-    index = load_cache_index()
-    cache_path = get_cache_path(key)
-    with cache_lock:
-        try:
-            with open(cache_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f)
-            index[key] = {
-                'cache_path': cache_path,
-                'last_access_time': time.time()
-            }
-            save_cache_index(index)
-            logger.debug(f"Cached response for key: {key}")
-            clear_cache(index)
-        except OSError as e:
-            logger.error(f"Failed to cache response for key {key}: {e}")
-            sentry_sdk.capture_exception(e)
+    def cache_response(self, key: str, data: Dict[str, Any]) -> None:
+        """
+        Cache response data.
 
-def get_cached_response(key: str) -> Dict[str, Any]:
-    """Retrieve cached response based on the key."""
-    index = load_cache_index()
-    with cache_lock:
-        cache_entry = index.get(key)
-        if cache_entry:
+        Args:
+            key (str): The cache key
+            data (Dict[str, Any]): The data to cache
+        """
+        index = self.load_index()
+        cache_path = self.get_cache_path(key)
+        
+        with self._lock:
+            try:
+                with open(cache_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f)
+                index[key] = {
+                    'cache_path': cache_path,
+                    'last_access_time': time.time()
+                }
+                self.save_index(index)
+                self.clear_old_entries(index)
+            except Exception as e:
+                logger.error(f"Failed to cache response: {e}")
+                sentry_sdk.capture_exception(e)
+                raise
+
+    def get_cached_response(self, key: str) -> Dict[str, Any]:
+        """
+        Retrieve cached response.
+
+        Args:
+            key (str): The cache key
+
+        Returns:
+            Dict[str, Any]: The cached data or empty dict if not found
+        """
+        index = self.load_index()
+        
+        with self._lock:
+            cache_entry = index.get(key)
+            if not cache_entry:
+                return {}
+
             cache_path = cache_entry.get('cache_path')
-            if cache_path and os.path.exists(cache_path):
-                try:
-                    with open(cache_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    # Update last access time
-                    cache_entry['last_access_time'] = time.time()
-                    index.move_to_end(key)  # Move to end to reflect recent access
-                    save_cache_index(index)
-                    logger.debug(f"Loaded cached response for key: {key}")
-                    return data
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON decoding failed for cached response {key}: {e}")
-                    sentry_sdk.capture_exception(e)
-                except OSError as e:
-                    logger.error(f"OS error while loading cached response for key {key}: {e}")
-                    sentry_sdk.capture_exception(e)
-            else:
-                logger.warning(f"Cache file does not exist for key: {key}")
-                # Remove invalid cache entry
+            if not cache_path or not os.path.exists(cache_path):
                 del index[key]
-                save_cache_index(index)
-        else:
-            logger.debug(f"No cached response found for key: {key}")
-    return {}
+                self.save_index(index)
+                return {}
 
-def clear_cache(index: OrderedDict) -> None:
-    """Evict least recently used cache entries if cache exceeds size limit."""
-    total_size = 0
-    with cache_lock:
-        for key, entry in index.items():
-            cache_path = entry.get('cache_path')
-            if cache_path and os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                cache_entry['last_access_time'] = time.time()
+                index.move_to_end(key)
+                self.save_index(index)
+                return data
+            except Exception as e:
+                logger.error(f"Failed to retrieve cached response: {e}")
+                sentry_sdk.capture_exception(e)
+                return {}
+
+    def clear_old_entries(self, index: OrderedDict) -> None:
+        """
+        Clear old cache entries if size limit exceeded.
+
+        Args:
+            index (OrderedDict): The current cache index
+        """
+        total_size = sum(
+            os.path.getsize(entry['cache_path'])
+            for entry in index.values()
+            if os.path.exists(entry['cache_path'])
+        )
+        
+        total_size_mb = total_size / (1024 * 1024)
+        while total_size_mb > self.config.max_size_mb and index:
+            key, entry = index.popitem(last=False)
+            cache_path = entry['cache_path']
+            if os.path.exists(cache_path):
                 try:
                     file_size = os.path.getsize(cache_path)
-                    total_size += file_size
+                    os.remove(cache_path)
+                    total_size_mb -= file_size / (1024 * 1024)
                 except OSError as e:
-                    logger.error(f"Error getting size for cache file {cache_path}: {e}")
+                    logger.error(f"Failed to remove cache file: {e}")
                     sentry_sdk.capture_exception(e)
-                    continue
-        total_size_mb = total_size / (1024 * 1024)
-        if total_size_mb > CACHE_MAX_SIZE_MB:
-            logger.info("Cache size exceeded limit. Starting eviction process.")
-            while total_size_mb > CACHE_MAX_SIZE_MB and index:
-                # Pop the least recently used item
-                key, entry = index.popitem(last=False)
-                cache_path = entry.get('cache_path')
-                if cache_path and os.path.exists(cache_path):
-                    try:
-                        file_size = os.path.getsize(cache_path)
-                        os.remove(cache_path)
-                        total_size -= file_size
-                        total_size_mb = total_size / (1024 * 1024)
-                        logger.debug(f"Removed cache file {cache_path} for key {key}")
-                    except OSError as e:
-                        logger.error(f"Error removing cache file {cache_path}: {e}")
-                        sentry_sdk.capture_exception(e)
-                else:
-                    logger.debug(f"Cache file {cache_path} does not exist.")
-            save_cache_index(index)
-            logger.info("Cache eviction completed.")
-        else:
-            logger.debug(f"Cache size within limit: {total_size_mb:.2f} MB")
+
+        self.save_index(index)
+
+def create_cache_manager(cache_dir: str = "cache", 
+                        max_cache_size_mb: int = 500) -> CacheManager:
+    """
+    Factory function to create a CacheManager instance.
+
+    Args:
+        cache_dir (str): Directory for cache files
+        max_cache_size_mb (int): Maximum cache size in MB
+
+    Returns:
+        CacheManager: Configured cache manager instance
+    """
+    config = CacheConfig(dir=cache_dir, max_size_mb=max_cache_size_mb)
+    return CacheManager(config)

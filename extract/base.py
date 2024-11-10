@@ -1,3 +1,5 @@
+# extract/base.py
+
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 import ast
@@ -7,8 +9,18 @@ logger = LoggerSetup.get_logger("extract.base")
 
 class BaseExtractor(ABC):
     """Base class for AST extractors."""
-    
+
     def __init__(self, node: ast.AST, content: str) -> None:
+        """
+        Initialize the BaseExtractor with an AST node and source content.
+
+        Args:
+            node (ast.AST): The AST node to extract information from.
+            content (str): The source code content.
+        
+        Raises:
+            ValueError: If node is None or content is empty.
+        """
         if node is None:
             raise ValueError("AST node cannot be None")
         if not content:
@@ -53,5 +65,5 @@ class BaseExtractor(ABC):
             "is_generator": False,
             "is_recursive": False,
             "summary": "",
-            "changelog": ""
+            "changelog": []
         }

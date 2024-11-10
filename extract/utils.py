@@ -1,13 +1,15 @@
+# extract/utils.py
+
 import ast
 import json
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, List
 import jsonschema
+from datetime import datetime
 from core.logger import LoggerSetup
 
 logger = LoggerSetup.get_logger("extract.utils")
 
-# Cache for the schema to avoid repeated file reads
 _schema_cache: Dict[str, Any] = {}
 
 def add_parent_info(tree: ast.AST) -> None:
@@ -24,6 +26,60 @@ def add_parent_info(tree: ast.AST) -> None:
         for child in ast.iter_child_nodes(parent):
             child.parent = parent
 
+# extract/utils.py
+
+def convert_changelog(changelog: Union[List, str, None]) -> str:
+    """Convert changelog to string format."""
+    if changelog is None:
+        return "No changes recorded"
+        
+    if isinstance(changelog, str):
+        return changelog if changelog.strip() else "No changes recorded"
+        
+    if isinstance(changelog, list):
+        if not changelog:
+            return "No changes recorded"
+            
+        entries = []
+        for entry in changelog:
+            if isinstance(entry, dict):
+                timestamp = entry.get("timestamp", datetime.now().isoformat())
+                change = entry.get("change", "No description")
+                entries.append(f"[{timestamp}] {change}")
+            else:
+                entries.append(str(entry))
+        return " | ".join(entries)
+        
+    return "No changes recorded"
+
+def format_function_response(function_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Format function data ensuring proper changelog format."""
+    result = function_data.copy()
+    
+    # Ensure changelog is string
+    result["changelog"] = convert_changelog(result.get("changelog"))
+    
+    # Add other required fields with defaults
+    result.setdefault("summary", "No summary available")
+    result.setdefault("docstring", "")
+    result.setdefault("params", [])
+    result.setdefault("returns", {"type": "None", "description": ""})
+    
+    return result
+
+def validate_function_data(data: Dict[str, Any]) -> None:
+    """Validate function data before processing."""
+    try:
+        # Convert changelog before validation
+        if "changelog" in data:
+            data["changelog"] = convert_changelog(data["changelog"])
+            
+        schema = _load_schema()
+        jsonschema.validate(instance=data, schema=schema)
+        
+    except jsonschema.ValidationError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise
 def get_annotation(node: Optional[ast.AST]) -> str:
     """
     Convert AST annotation to string representation.
@@ -54,7 +110,6 @@ def get_annotation(node: Optional[ast.AST]) -> str:
         elif isinstance(node, ast.Subscript):
             return f"{get_annotation(node.value)}[{get_annotation(node.slice)}]"
         elif isinstance(node, ast.BinOp):
-            # Handle Union types written with | operator (Python 3.10+)
             if isinstance(node.op, ast.BitOr):
                 left = get_annotation(node.left)
                 right = get_annotation(node.right)
@@ -64,6 +119,24 @@ def get_annotation(node: Optional[ast.AST]) -> str:
     except Exception as e:
         logger.error(f"Error processing type annotation: {e}")
         return "Any"
+
+def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
+    """Format parsed sections into a standardized response with validation."""
+    
+    # Initialize with required fields
+    result = {
+        "summary": sections.get("summary", "No summary available"),
+        "docstring": sections.get("docstring", "No documentation available"),
+        "params": sections.get("params", []),
+        "returns": sections.get("returns", {
+            "type": "None",
+            "description": ""
+        }),
+        "examples": sections.get("examples", []),
+        "changelog": convert_changelog(sections.get("changelog", []))
+    }
+    
+    return result
 
 def _load_schema() -> Dict[str, Any]:
     """

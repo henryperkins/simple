@@ -1,3 +1,5 @@
+# extract/functions.py
+
 from typing import Dict, Any, List
 import ast
 from core.logger import LoggerSetup
@@ -8,18 +10,28 @@ from metrics import CodeMetrics
 logger = LoggerSetup.get_logger("extract.functions")
 
 class FunctionExtractor(BaseExtractor):
+    """Extractor for function definitions in AST."""
+
     def __init__(self, node: ast.AST, content: str):
+        """
+        Initialize the FunctionExtractor with an AST node and source content.
+
+        Args:
+            node (ast.AST): The AST node to extract information from.
+            content (str): The source code content.
+        """
         super().__init__(node, content)
         self.metrics = CodeMetrics()
 
     def extract_details(self) -> Dict[str, Any]:
+        """Extract details of the function."""
+        details = self._get_empty_details()
         try:
-            # Calculate all metrics first
             complexity_score = self.calculate_complexity()
             cognitive_score = self.calculate_cognitive_complexity()
             halstead_metrics = self.calculate_halstead_metrics()
 
-            details = {
+            details.update({
                 "name": self.node.name,
                 "docstring": self.get_docstring(),
                 "params": self.extract_parameters(),
@@ -34,14 +46,14 @@ class FunctionExtractor(BaseExtractor):
                 "is_generator": self.is_generator(),
                 "is_recursive": self.is_recursive(),
                 "summary": self._generate_summary(complexity_score, cognitive_score, halstead_metrics),
-                "changelog": ""  # Initialize as an empty string
-            }
-            return details
+                "changelog": []  # Initialize changelog
+            })
         except Exception as e:
             logger.error(f"Error extracting function details: {e}")
-            return self._get_empty_details()
+        return details
 
     def extract_parameters(self) -> List[Dict[str, Any]]:
+        """Extract parameters of the function."""
         params = []
         try:
             for param in self.node.args.args:
@@ -86,7 +98,7 @@ class FunctionExtractor(BaseExtractor):
         """Check if the function is a generator."""
         try:
             for node in ast.walk(self.node):
-                if isinstance(node, ast.Yield) or isinstance(node, ast.YieldFrom):
+                if isinstance(node, (ast.Yield, ast.YieldFrom)):
                     return True
             return False
         except Exception as e:
@@ -110,7 +122,6 @@ class FunctionExtractor(BaseExtractor):
         """Generate a comprehensive summary of the function."""
         parts = []
         try:
-            # Basic function characteristics
             if self.node.returns:
                 parts.append(f"Returns: {get_annotation(self.node.returns)}")
             
@@ -123,17 +134,14 @@ class FunctionExtractor(BaseExtractor):
             if self.is_recursive():
                 parts.append("Recursive function")
             
-            # Complexity metrics
             parts.append(f"Cyclomatic Complexity: {complexity}")
             parts.append(f"Cognitive Complexity: {cognitive}")
             
-            # Halstead metrics summary
             if halstead.get("program_volume", 0) > 0:
                 parts.append(f"Volume: {halstead['program_volume']:.2f}")
             if halstead.get("difficulty", 0) > 0:
                 parts.append(f"Difficulty: {halstead['difficulty']:.2f}")
             
-            # Quality assessment
             if complexity > 10:
                 parts.append("⚠️ High cyclomatic complexity")
             if cognitive > 15:
@@ -146,29 +154,3 @@ class FunctionExtractor(BaseExtractor):
             parts.append("Error generating complete summary")
         
         return " | ".join(parts)
-
-    def _get_empty_details(self) -> Dict[str, Any]:
-        """Return empty details structure matching schema."""
-        return {
-            "name": "",
-            "docstring": "",
-            "params": [],
-            "returns": {"type": "Any", "has_type_hint": False},
-            "complexity_score": 0,
-            "cognitive_complexity": 0,
-            "halstead_metrics": {
-                "program_length": 0,
-                "vocabulary_size": 0,
-                "program_volume": 0,
-                "difficulty": 0,
-                "effort": 0
-            },
-            "line_number": 0,
-            "end_line_number": 0,
-            "code": "",
-            "is_async": False,
-            "is_generator": False,
-            "is_recursive": False,
-            "summary": "",
-            "changelog": ""  # Initialize as an empty string
-        }

@@ -1,16 +1,22 @@
+# extract/classes.py
+
 from typing import Dict, Any, List
+import ast
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
 from extract.functions import FunctionExtractor
-from extract.utils import get_annotation  # Ensure this import is correct
-import ast
+from extract.utils import get_annotation
 
 logger = LoggerSetup.get_logger("extract.classes")
 
 class ClassExtractor(BaseExtractor):
+    """Extractor for class definitions in AST."""
+
     def extract_details(self) -> Dict[str, Any]:
+        """Extract details of the class."""
+        details = self._get_empty_details()
         try:
-            details = {
+            details.update({
                 "name": self.node.name,
                 "docstring": self.get_docstring(),
                 "methods": self.extract_methods(),
@@ -18,14 +24,14 @@ class ClassExtractor(BaseExtractor):
                 "instance_variables": self.extract_instance_variables(),
                 "base_classes": self.extract_base_classes(),
                 "summary": self._generate_summary(),
-                "changelog": []
-            }
-            return details
+                "changelog": []  # Initialize changelog
+            })
         except Exception as e:
             logger.error(f"Error extracting class details: {e}")
-            return self._get_empty_details()
+        return details
 
     def extract_methods(self) -> List[Dict[str, Any]]:
+        """Extract methods from the class."""
         methods = []
         try:
             for node in self.node.body:
@@ -38,13 +44,14 @@ class ClassExtractor(BaseExtractor):
         return methods
 
     def extract_attributes(self) -> List[Dict[str, Any]]:
+        """Extract attributes from the class."""
         attributes = []
         try:
             for node in self.node.body:
                 if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                     attributes.append({
                         "name": node.target.id,
-                        "type": get_annotation(node.annotation),  # Use the imported function
+                        "type": get_annotation(node.annotation),
                         "line_number": node.lineno
                     })
                 elif isinstance(node, ast.Assign):
@@ -60,6 +67,7 @@ class ClassExtractor(BaseExtractor):
         return attributes
 
     def extract_instance_variables(self) -> List[Dict[str, Any]]:
+        """Extract instance variables from the class."""
         instance_vars = []
         try:
             for node in self.node.body:
@@ -76,6 +84,7 @@ class ClassExtractor(BaseExtractor):
         return instance_vars
 
     def extract_base_classes(self) -> List[str]:
+        """Extract base classes of the class."""
         base_classes = []
         try:
             for base in self.node.bases:
@@ -95,6 +104,7 @@ class ClassExtractor(BaseExtractor):
         return base_classes
 
     def _generate_summary(self) -> str:
+        """Generate a summary of the class."""
         parts = []
         try:
             if self.node.bases:
