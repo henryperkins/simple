@@ -81,6 +81,7 @@ def extract_code_examples(text: str) -> List[str]:
 
 def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
     """Format parsed sections into a standardized response."""
+    logger.debug(f"Formatting response with sections: {sections}")
     return {
         "summary": sections.get("summary", "No summary available"),
         "docstring": sections.get("summary", "No documentation available"),
@@ -96,6 +97,7 @@ class APIClient:
     
     def __init__(self):
         # Initialize API clients
+        logger.info("Initializing API clients")
         self.azure_client = self._init_azure_client()
         self.openai_client = self._init_openai_client()
         self.anthropic_client = self._init_anthropic_client()
@@ -109,6 +111,7 @@ class APIClient:
         """Initialize Azure OpenAI client."""
         try:
             if os.getenv("AZURE_OPENAI_API_KEY"):
+                logger.debug("Initializing Azure OpenAI client")
                 return AzureOpenAI(
                     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
                     azure_endpoint=os.getenv("AZURE_ENDPOINT", "https://api.azure.com"),
@@ -117,6 +120,7 @@ class APIClient:
                     azure_ad_token=os.getenv("AZURE_AD_TOKEN"),
                     azure_ad_token_provider=None  # Add token provider if needed
                 )
+            logger.warning("Azure OpenAI API key not found")
             return None
         except Exception as e:
             logger.error(f"Error initializing Azure client: {e}")
@@ -126,12 +130,14 @@ class APIClient:
         """Initialize OpenAI client."""
         try:
             if os.getenv("OPENAI_API_KEY"):
+                logger.debug("Initializing OpenAI client")
                 return OpenAI(
                     api_key=os.getenv("OPENAI_API_KEY"),
                     base_url=os.getenv("OPENAI_API_BASE"),  # Updated from api_base
                     timeout=60.0,
                     max_retries=3
                 )
+            logger.warning("OpenAI API key not found")
             return None
         except Exception as e:
             logger.error(f"Error initializing OpenAI client: {e}")
@@ -141,7 +147,9 @@ class APIClient:
         """Initialize Anthropic client."""
         try:
             if os.getenv("ANTHROPIC_API_KEY"):
+                logger.debug("Initializing Anthropic client")
                 return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            logger.warning("Anthropic API key not found")
             return None
         except Exception as e:
             logger.error(f"Error initializing Anthropic client: {e}")
@@ -154,6 +162,7 @@ class ClaudeResponseParser:
     def parse_function_analysis(response: str) -> Dict[str, Any]:
         """Parse Claude's natural language response into structured format."""
         try:
+            logger.debug(f"Parsing function analysis response: {response}")
             # Extract key sections from Claude's response
             sections = {
                 'summary': extract_section(response, 'Summary'),
@@ -174,6 +183,7 @@ class ClaudeResponseParser:
     @staticmethod
     def get_default_response() -> Dict[str, Any]:
         """Return a default response in case of parsing errors."""
+        logger.debug("Returning default response due to parsing error")
         return {
             "summary": "Error parsing response",
             "docstring": "Error occurred while parsing the documentation.",
@@ -189,10 +199,12 @@ class DocumentationAnalyzer:
     
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
+        logger.info("Initializing DocumentationAnalyzer")
         self.function_schema = self._get_function_schema()
 
     def _get_function_schema(self) -> FunctionDefinition:
         """Get the function schema for documentation generation."""
+        logger.debug("Retrieving function schema")
         return {
             "name": "generate_documentation",
             "description": "Generates documentation for code.",
@@ -578,6 +590,7 @@ async def analyze_function_with_openai(
                 function_args = json.loads(tool_calls[0].function.arguments)
                 parsed_response = function_args
             else:
+                logger.warning("No tool calls found in response")
                 return ClaudeResponseParser.get_default_response()
 
         # Ensure changelog is included in the parsed response
@@ -595,6 +608,7 @@ async def analyze_function_with_openai(
             logger.error(f"Schema validation failed: {e}")
             return ClaudeResponseParser.get_default_response()
 
+        logger.info(f"Successfully analyzed function: {function_name}")
         return {
             "name": function_name,
             "complexity_score": function_details.get("complexity_score", "Unknown"),

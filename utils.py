@@ -146,6 +146,7 @@ def format_function_response(function_data: Dict[str, Any]) -> Dict[str, Any]:
     result.setdefault("docstring", "")
     result.setdefault("params", [])
     result.setdefault("returns", {"type": "None", "description": ""})
+    result.setdefault("functions", [])  # Ensure functions is included
     return result
 
 def validate_function_data(data: Dict[str, Any]) -> None:
