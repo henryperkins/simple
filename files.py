@@ -70,6 +70,7 @@ class FileProcessor:
 
     async def process_file(self, filepath: str, service: str) -> Dict[str, Any]:
         """Process a Python file for analysis."""
+        logger.debug(f"Processing file: {filepath}")
         try:
             # Check cache first
             cache_key = f"{filepath}:{service}"
@@ -93,6 +94,7 @@ class FileProcessor:
 
     async def _analyze_file_content(self, content: str, service: str) -> Dict[str, Any]:
         """Analyze file content and extract information."""
+        logger.debug("Analyzing file content")
         try:
             tree = ast.parse(content)
             add_parent_info(tree)
@@ -137,6 +139,7 @@ class CodeAnalyzer:
 
     async def analyze_directory(self, directory: str, service: str) -> Dict[str, Any]:
         """Analyze a local directory."""
+        logger.debug(f"Analyzing directory: {directory}")
         try:
             python_files = filter_files(directory, "*.py")
             

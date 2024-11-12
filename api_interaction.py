@@ -527,18 +527,33 @@ class DocumentationAnalyzer:
     async def make_api_request(
         self,
         messages: List[Dict[str, str]],
+        service: str,
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+        system_message: Optional[str] = None
+    ) -> Any:
+        """Make an API request to the specified service."""
+        try:
+            logger.debug(f"Making API request with messages: {messages} and service: {service}")
+            claude_messages = [
+                {
                     "role": cast(Literal["user", "assistant"], msg["role"]),
                     "content": msg["content"]
-                })
+                }
+                for msg in messages
+            ]
             
-        return await asyncio.to_thread(
-            self.api_client.anthropic_client.messages.create,
-            model=self.api_client.claude_model,
-            messages=claude_messages,
-            temperature=temperature,
-            max_tokens=2000,
-            system=system_message
-        )
+            return await asyncio.to_thread(
+                self.api_client.anthropic_client.messages.create,
+                model=self.api_client.claude_model,
+                messages=claude_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                system=system_message
+            )
+        except Exception as e:
+            logger.error(f"Error making API request: {e}")
+            raise
 
 async def analyze_function_with_openai(
     function_details: Dict[str, Any],

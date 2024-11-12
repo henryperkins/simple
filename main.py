@@ -56,6 +56,7 @@ class CodeAnalysisRunner:
 
     async def run_analysis(self, input_path: str, output_path: str, service: str) -> None:
         """Run the code analysis process."""
+        logger.info("Starting code analysis process")
         try:
             # Initialize services
             initialize_sentry()
@@ -66,14 +67,17 @@ class CodeAnalysisRunner:
             if input_path.startswith(('http://', 'https://')):
                 if not self.validate_repo_url(input_path):
                     raise ValueError(f"Invalid GitHub repository URL: {input_path}")
+                logger.debug(f"Analyzing repository: {input_path}")
                 results = await self.analyzer.analyze_repository(input_path, output_path, service)
             else:
+                logger.debug(f"Analyzing directory: {input_path}")
                 results = await self.analyzer.analyze_directory(input_path, service)
 
             if not results:
                 raise ValueError("No valid results from analysis")
 
             # Generate documentation
+            logger.debug("Generating markdown documentation")
             await write_analysis_to_markdown(results, output_path)
             self.summary_data['files_processed'] = len(results)
             logger.info(f"Analysis complete. Documentation written to {output_path}")

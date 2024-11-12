@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
 class LoggerSetup:
@@ -26,12 +27,14 @@ class LoggerSetup:
     @staticmethod
     def _add_file_handler(logger: logging.Logger, module_name: str) -> None:
         """
-        Add a rotating file handler to the logger.
+        Add a file handler with a timestamped filename to the logger.
         """
         log_dir = os.path.join("logs", module_name)
         os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_filename = os.path.join(log_dir, f"{module_name}_{timestamp}.log")
         handler = RotatingFileHandler(
-            os.path.join(log_dir, f"{module_name}.log"),
+            log_filename,
             maxBytes=10**6,  # 1 MB
             backupCount=5
         )
