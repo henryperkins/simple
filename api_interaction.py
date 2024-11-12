@@ -677,6 +677,7 @@ async def analyze_function_with_openai(
         return ClaudeResponseParser.get_default_response()
 
 
+
 class AsyncAPIClient:
     """
     Asynchronous API client for batch processing.
