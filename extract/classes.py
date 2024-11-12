@@ -1,8 +1,104 @@
 import ast
 from typing import Dict, Any, List
 from core.logger import LoggerSetup
+from extract.base import BaseExtractor
 
 logger = LoggerSetup.get_logger("classes")
+
+class ClassExtractor(BaseExtractor):
+    """Extractor for class definitions in AST."""
+
+    def extract_details(self) -> Dict[str, Any]:
+        """Extract details of the class."""
+        details = self._get_empty_details()
+        try:
+            details.update({
+                "name": getattr(self.node, 'name', 'unknown'),  # Ensure 'name' is included
+                "docstring": self.get_docstring(),
+                "base_classes": [base.id for base in self.node.bases if isinstance(base, ast.Name)],
+                "methods": self.extract_methods(),
+                "attributes": self.extract_attributes(),
+                "instance_variables": self.extract_instance_variables(),
+                "summary": self._generate_summary(),
+                "changelog": ""  # Initialize changelog as a string
+            })
+        except Exception as e:
+            logger.error(f"Error extracting class details: {e}")
+        return details
+
+    def extract_methods(self) -> List[Dict[str, Any]]:
+        """Extract methods of the class."""
+        methods = []
+        try:
+            for node in self.node.body:
+                if isinstance(node, ast.FunctionDef):
+                    method_info = {
+                        "name": node.name,
+                        "docstring": ast.get_docstring(node) or "",
+                        "params": [{"name": arg.arg, "type": "Any"} for arg in node.args.args],
+                        "returns": {"type": "None", "description": ""},
+                        "line_number": node.lineno,
+                        "end_line_number": node.end_lineno if hasattr(node, 'end_lineno') else node.lineno,
+                        "code": self.get_source_segment(node),
+                        "is_async": isinstance(node, ast.AsyncFunctionDef),
+                        "is_generator": any(isinstance(n, ast.Yield) for n in ast.walk(node)),
+                        "is_recursive": any(n for n in ast.walk(node) if isinstance(n, ast.Call) and n.func.id == node.name),
+                        "summary": "",
+                        "changelog": []
+                    }
+                    methods.append(method_info)
+        except Exception as e:
+            logger.error(f"Error extracting methods: {e}")
+        return methods
+
+    def extract_attributes(self) -> List[Dict[str, Any]]:
+        """Extract attributes of the class."""
+        attributes = []
+        try:
+            for node in self.node.body:
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            attributes.append({
+                                "name": target.id,
+                                "type": "Any",
+                                "line_number": target.lineno
+                            })
+        except Exception as e:
+            logger.error(f"Error extracting attributes: {e}")
+        return attributes
+
+    def extract_instance_variables(self) -> List[Dict[str, Any]]:
+        """Extract instance variables of the class."""
+        instance_vars = []
+        try:
+            for node in self.node.body:
+                if isinstance(node, ast.FunctionDef):
+                    for subnode in ast.walk(node):
+                        if isinstance(subnode, ast.Assign):
+                            for target in subnode.targets:
+                                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == 'self':
+                                    instance_vars.append({
+                                        "name": target.attr,
+                                        "line_number": target.lineno
+                                    })
+        except Exception as e:
+            logger.error(f"Error extracting instance variables: {e}")
+        return instance_vars
+
+    def _generate_summary(self) -> str:
+        """Generate a summary of the class."""
+        parts = []
+        try:
+            if self.node.bases:
+                parts.append(f"Base classes: {', '.join(base.id for base in self.node.bases if isinstance(base, ast.Name))}")
+            if len(self.extract_methods()) > 10:
+                parts.append("⚠️ High number of methods")
+        except Exception as e:
+            logger.error(f"Error generating summary: {e}")
+            parts.append("Error generating complete summary")
+        
+        return " | ".join(parts)
 
 def extract_classes_from_ast(tree: ast.AST, content: str) -> List[Dict[str, Any]]:
     """
