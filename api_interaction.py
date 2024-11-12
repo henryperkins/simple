@@ -87,7 +87,8 @@ def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
         "params": sections.get("params", []),
         "returns": sections.get("returns", {"type": "None", "description": ""}),
         "examples": sections.get("examples", []),
-        "classes": sections.get("classes", [])  # Ensure classes is included
+        "classes": sections.get("classes", []),  # Ensure classes is included
+        "functions": sections.get("functions", [])  # Ensure functions is included
     }
 
 class APIClient:
@@ -159,7 +160,8 @@ class ClaudeResponseParser:
                 'params': extract_parameter_section(response),
                 'returns': extract_return_section(response),
                 'examples': extract_code_examples(response),
-                'classes': []  # Ensure classes is included
+                'classes': [],  # Ensure classes is included
+                'functions': []  # Ensure functions is included
             }
             
             # Validate and format response
@@ -178,7 +180,8 @@ class ClaudeResponseParser:
             "params": [],
             "returns": {"type": "None", "description": ""},
             "examples": [],
-            "classes": []  # Ensure classes is included
+            "classes": [],  # Ensure classes is included
+            "functions": []  # Ensure functions is included
         }
 
 class DocumentationAnalyzer:
@@ -415,106 +418,103 @@ class DocumentationAnalyzer:
                             },
                             "required": ["name", "docstring", "methods", "attributes", "instance_variables", "base_classes", "summary", "changelog"]
                         }
+                    },
+                    "functions": {  # Ensure functions is included
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "description": "Function name"
+                                },
+                                "docstring": {
+                                    "type": "string",
+                                    "description": "Function documentation"
+                                },
+                                "params": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Parameter name"
+                                            },
+                                            "type": {
+                                                "type": "string",
+                                                "description": "Parameter type"
+                                            },
+                                            "has_type_hint": {
+                                                "type": "boolean",
+                                                "description": "Whether the parameter has a type hint"
+                                            }
+                                        },
+                                        "required": ["name", "type", "has_type_hint"]
+                                    }
+                                },
+                                "returns": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "description": "Return type"
+                                        },
+                                        "has_type_hint": {
+                                            "type": "boolean",
+                                            "description": "Whether the return type has a type hint"
+                                        }
+                                    },
+                                    "required": ["type", "has_type_hint"]
+                                },
+                                "complexity_score": {
+                                    "type": "integer",
+                                    "description": "Complexity score of the function"
+                                },
+                                "line_number": {
+                                    "type": "integer",
+                                    "description": "Line number where the function starts"
+                                },
+                                "end_line_number": {
+                                    "type": "integer",
+                                    "description": "Line number where the function ends"
+                                },
+                                "code": {
+                                    "type": "string",
+                                    "description": "Code of the function"
+                                },
+                                "is_async": {
+                                    "type": "boolean",
+                                    "description": "Whether the function is asynchronous"
+                                },
+                                "is_generator": {
+                                    "type": "boolean",
+                                    "description": "Whether the function is a generator"
+                                },
+                                "is_recursive": {
+                                    "type": "boolean",
+                                    "description": "Whether the function is recursive"
+                                },
+                                "summary": {
+                                    "type": "string",
+                                    "description": "Summary of the function"
+                                },
+                                "changelog": {
+                                    "type": "string",
+                                    "description": "Changelog of the function"
+                                }
+                            },
+                            "required": ["name", "docstring", "params", "returns", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"]
+                        }
                     }
                 },
-                "required": ["summary", "docstring", "params", "returns", "classes"]
+                "required": ["summary", "docstring", "params", "returns", "classes", "functions"]
             }
         }
 
     async def make_api_request(
         self,
         messages: List[Dict[str, str]],
-        service: str,
-        temperature: float = 0.1
-    ) -> Any:
-        """Make API request to specified service."""
-        logger.info(f"Making API request to {service}")
-        
-        retries = 3
-        base_backoff = 2
-
-        for attempt in range(retries):
-            try:
-                if service == "azure" and self.api_client.azure_client:
-                    return await self._azure_request(messages, temperature)
-                elif service == "openai" and self.api_client.openai_client:
-                    return await self._openai_request(messages, temperature)
-                elif service == "claude" and self.api_client.anthropic_client:
-                    return await self._claude_request(messages, temperature)
-                else:
-                    raise ValueError(f"Invalid service: {service}")
-
-            except Exception as e:
-                logger.error(f"API request failed (attempt {attempt + 1}/{retries}): {e}")
-                if attempt < retries - 1:
-                    await asyncio.sleep(base_backoff ** attempt)
-                else:
-                    raise
-
-    async def _azure_request(self, messages: List[Dict[str, str]], temperature: float) -> ChatCompletion:
-        """Make request to Azure OpenAI."""
-        if not self.api_client.azure_client:
-            raise ValueError("Azure client is not initialized")
-            
-        chat_messages: List[ChatCompletionMessageParam] = [
-            ChatCompletionSystemMessageParam(role="system", content=msg["content"]) if msg["role"] == "system"
-            else ChatCompletionUserMessageParam(role="user", content=msg["content"])
-            for msg in messages
-        ]
-            
-        tools: List[ChatCompletionToolParam] = [{
-            "type": "function",
-            "function": cast(FunctionDefinition, self.function_schema)
-        }]
-            
-        return await asyncio.to_thread(
-            self.api_client.azure_client.chat.completions.create,
-            model=self.api_client.azure_deployment,
-            messages=chat_messages,
-            temperature=temperature,
-            tools=tools,
-            tool_choice={"type": "function", "function": {"name": "generate_documentation"}}
-        )
-
-    async def _openai_request(self, messages: List[Dict[str, str]], temperature: float) -> ChatCompletion:
-        """Make request to OpenAI."""
-        if not self.api_client.openai_client:
-            raise ValueError("OpenAI client is not initialized")
-            
-        chat_messages: List[ChatCompletionMessageParam] = [
-            ChatCompletionSystemMessageParam(role="system", content=msg["content"]) if msg["role"] == "system"
-            else ChatCompletionUserMessageParam(role="user", content=msg["content"])
-            for msg in messages
-        ]
-            
-        tools: List[ChatCompletionToolParam] = [{
-            "type": "function",
-            "function": cast(FunctionDefinition, self.function_schema)
-        }]
-            
-        return await asyncio.to_thread(
-            self.api_client.openai_client.chat.completions.create,
-            model=self.api_client.openai_model,
-            messages=chat_messages,
-            temperature=temperature,
-            tools=tools,
-            tool_choice={"type": "function", "function": {"name": "generate_documentation"}},
-            response_format={"type": "json_object"}
-        )
-
-    async def _claude_request(self, messages: List[Dict[str, str]], temperature: float) -> Message:
-        """Make request to Anthropic Claude."""
-        if not self.api_client.anthropic_client:
-            raise ValueError("Anthropic client is not initialized")
-            
-        system_message = "You are an expert code documentation generator."
-        
-        claude_messages: List[MessageParam] = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_message = msg["content"]
-            else:
-                claude_messages.append({
                     "role": cast(Literal["user", "assistant"], msg["role"]),
                     "content": msg["content"]
                 })
