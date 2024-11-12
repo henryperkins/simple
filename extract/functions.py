@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 import ast
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
-from extract.utils import get_annotation
+from utils import get_annotation
 from metrics import CodeMetrics
 
 logger = LoggerSetup.get_logger("extract.functions")
@@ -46,7 +46,7 @@ class FunctionExtractor(BaseExtractor):
                 "is_generator": self.is_generator(),
                 "is_recursive": self.is_recursive(),
                 "summary": self._generate_summary(complexity_score, cognitive_score, halstead_metrics),
-                "changelog": []  # Initialize changelog
+                "changelog": ""  # Initialize changelog as a string
             })
         except Exception as e:
             logger.error(f"Error extracting function details: {e}")

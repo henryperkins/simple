@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Union, List, Iterable, cast, TypedDict, 
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm
 from core.logger import LoggerSetup
-from extract.utils import validate_schema
+from utils import validate_schema
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import (
     ChatCompletion,
@@ -407,6 +407,10 @@ async def analyze_function_with_openai(
             else:
                 return ClaudeResponseParser.get_default_response()
 
+        # Ensure changelog is included in the parsed response
+        if "changelog" not in parsed_response:
+            parsed_response["changelog"] = []
+
         # Validate response against schema
         try:
             validate_schema(parsed_response)
@@ -422,7 +426,7 @@ async def analyze_function_with_openai(
             "params": parsed_response.get("params", []),
             "returns": parsed_response.get("returns", {"type": "None", "description": ""}),
             "examples": parsed_response.get("examples", []),
-            "changelog": f"Documentation generated using {service}"
+            "changelog": parsed_response.get("changelog")
         }
 
     except Exception as e:

@@ -7,7 +7,7 @@ from core.logger import LoggerSetup
 from extract.base import BaseExtractor
 from extract.classes import ClassExtractor
 from extract.functions import FunctionExtractor
-from extract.utils import validate_schema
+from utils import validate_schema
 from metrics import CodeMetrics
 
 logger = LoggerSetup.get_logger("extract.code")

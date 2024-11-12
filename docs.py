@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 import jsonschema
 from core.logger import LoggerSetup
 from datetime import datetime
-from extract.utils import validate_schema
+from utils import validate_schema
 
 # Initialize logger for this module
 logger = LoggerSetup.get_logger("docs")
@@ -49,7 +49,7 @@ async def write_analysis_to_markdown(results: Dict[str, Any], output_path: str) 
                 if "changelog" not in analysis:
                     analysis["changelog"] = []
                 if "classes" not in analysis:
-                    analysis["classes"] = []
+                    analysis["classes"] = []  # Ensure classes field is present
                 if "functions" not in analysis:
                     analysis["functions"] = []
                 if "file_content" not in analysis:
