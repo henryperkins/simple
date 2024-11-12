@@ -5,7 +5,6 @@ import asyncio
 import os
 import sys
 from datetime import datetime
-from typing import Dict, Any
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
