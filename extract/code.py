@@ -2,7 +2,6 @@
 
 import ast
 from datetime import datetime
-from typing import Dict, Any
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
 from extract.classes import ClassExtractor
