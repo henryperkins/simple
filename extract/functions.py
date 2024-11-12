@@ -4,8 +4,8 @@ from typing import Dict, Any, List
 import ast
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
-from ..utils import get_annotation
-from ..metrics import CodeMetrics
+from utils import get_annotation
+from .metrics import CodeMetrics
 
 logger = LoggerSetup.get_logger("extract.functions")
 
@@ -30,9 +30,8 @@ class FunctionExtractor(BaseExtractor):
             complexity_score = self.calculate_complexity()
             cognitive_score = self.calculate_cognitive_complexity()
             halstead_metrics = self.calculate_halstead_metrics()
-
             details.update({
-                "name": self.node.name,
+                "name": getattr(self.node, 'name', 'unknown'),  # Ensure 'name' is included
                 "docstring": self.get_docstring(),
                 "params": self.extract_parameters(),
                 "returns": self._extract_return_annotation(),

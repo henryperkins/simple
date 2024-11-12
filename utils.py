@@ -15,31 +15,9 @@ logger = LoggerSetup.get_logger("utils")
 _schema_cache: Dict[str, Any] = {}
 
 def generate_hash(content: str) -> str:
-    """
-    Generate a hash from content.
-
-    Args:
-        content (str): Content to hash
-
-    Returns:
-        str: SHA-256 hash of the content
-    """
     return hashlib.sha256(content.encode()).hexdigest()
 
 def load_json_file(filepath: str) -> Dict[str, Any]:
-    """
-    Load and parse a JSON file.
-
-    Args:
-        filepath (str): Path to JSON file
-
-    Returns:
-        Dict[str, Any]: Parsed JSON content
-
-    Raises:
-        FileNotFoundError: If file doesn't exist
-        json.JSONDecodeError: If file contains invalid JSON
-    """
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -51,16 +29,6 @@ def load_json_file(filepath: str) -> Dict[str, Any]:
         raise
 
 def save_json_file(filepath: str, data: Dict[str, Any]) -> None:
-    """
-    Save data to a JSON file.
-
-    Args:
-        filepath (str): Path to save file
-        data (Dict[str, Any]): Data to save
-
-    Raises:
-        OSError: If file cannot be written
-    """
     try:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
@@ -69,24 +37,9 @@ def save_json_file(filepath: str, data: Dict[str, Any]) -> None:
         raise
 
 def create_timestamp() -> str:
-    """
-    Create an ISO format timestamp.
-
-    Returns:
-        str: Current timestamp in ISO format
-    """
     return datetime.now().isoformat()
 
 def ensure_directory(directory: str) -> None:
-    """
-    Ensure a directory exists, create if it doesn't.
-
-    Args:
-        directory (str): Directory path to ensure exists
-
-    Raises:
-        OSError: If directory cannot be created
-    """
     try:
         os.makedirs(directory, exist_ok=True)
     except OSError as e:
@@ -94,16 +47,6 @@ def ensure_directory(directory: str) -> None:
         raise
 
 def validate_file_path(filepath: str, extension: Optional[str] = None) -> bool:
-    """
-    Validate if a file path exists and has the correct extension.
-
-    Args:
-        filepath (str): Path to validate
-        extension (Optional[str]): Expected file extension (e.g., '.py')
-
-    Returns:
-        bool: True if path is valid, False otherwise
-    """
     if not os.path.exists(filepath):
         return False
     if extension and not filepath.endswith(extension):
@@ -111,16 +54,6 @@ def validate_file_path(filepath: str, extension: Optional[str] = None) -> bool:
     return True
 
 def create_error_result(error_type: str, error_message: str) -> Dict[str, Any]:
-    """
-    Create a standardized error result dictionary.
-
-    Args:
-        error_type (str): Type of error
-        error_message (str): Error message
-
-    Returns:
-        Dict[str, Any]: Standardized error result
-    """
     return {
         "summary": f"Error: {error_type}",
         "changelog": [{
@@ -133,26 +66,11 @@ def create_error_result(error_type: str, error_message: str) -> Dict[str, Any]:
     }
 
 def add_parent_info(tree: ast.AST) -> None:
-    """
-    Add parent information to each node in an AST.
-
-    Args:
-        tree (ast.AST): The AST to process
-    """
     for parent in ast.walk(tree):
         for child in ast.iter_child_nodes(parent):
             child.parent = parent
 
 def get_file_stats(filepath: str) -> Dict[str, Any]:
-    """
-    Get statistics about a file.
-
-    Args:
-        filepath (str): Path to the file
-
-    Returns:
-        Dict[str, Any]: File statistics including size, modification time, etc.
-    """
     try:
         stats = os.stat(filepath)
         return {
@@ -165,25 +83,10 @@ def get_file_stats(filepath: str) -> Dict[str, Any]:
         logger.error(f"Failed to get file stats for {filepath}: {e}")
         return {}
 
-def filter_files(directory: str, 
-                pattern: str = "*.py", 
-                exclude_patterns: Optional[List[str]] = None) -> List[str]:
-    """
-    Filter files in a directory based on pattern and exclusions.
-
-    Args:
-        directory (str): Directory to search
-        pattern (str): Pattern to match (default: "*.py")
-        exclude_patterns (Optional[List[str]]): Patterns to exclude
-
-    Returns:
-        List[str]: List of matching file paths
-    """
+def filter_files(directory: str, pattern: str = "*.py", exclude_patterns: Optional[List[str]] = None) -> List[str]:
     import fnmatch
-    
     exclude_patterns = exclude_patterns or []
     matching_files = []
-
     try:
         for root, _, files in os.walk(directory):
             for filename in files:
@@ -197,40 +100,12 @@ def filter_files(directory: str,
         return []
 
 def normalize_path(path: str) -> str:
-    """
-    Normalize a file path for consistent handling.
-
-    Args:
-        path (str): Path to normalize
-
-    Returns:
-        str: Normalized path
-    """
     return os.path.normpath(os.path.abspath(path))
 
 def get_relative_path(path: str, base_path: str) -> str:
-    """
-    Get relative path from base path.
-
-    Args:
-        path (str): Path to convert
-        base_path (str): Base path for relative conversion
-
-    Returns:
-        str: Relative path
-    """
     return os.path.relpath(path, base_path)
 
 def is_python_file(filepath: str) -> bool:
-    """
-    Check if a file is a Python file.
-
-    Args:
-        filepath (str): Path to check
-
-    Returns:
-        bool: True if file is a Python file, False otherwise
-    """
     if not os.path.isfile(filepath):
         return False
     if not filepath.endswith('.py'):
@@ -246,17 +121,13 @@ def is_python_file(filepath: str) -> bool:
         return False
 
 def convert_changelog(changelog: Union[List, str, None]) -> str:
-    """Convert changelog to string format."""
     if changelog is None:
         return "No changes recorded"
-        
     if isinstance(changelog, str):
         return changelog if changelog.strip() else "No changes recorded"
-        
     if isinstance(changelog, list):
         if not changelog:
             return "No changes recorded"
-            
         entries = []
         for entry in changelog:
             if isinstance(entry, dict):
@@ -266,52 +137,31 @@ def convert_changelog(changelog: Union[List, str, None]) -> str:
             else:
                 entries.append(str(entry))
         return " | ".join(entries)
-        
     return "No changes recorded"
 
 def format_function_response(function_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Format function data ensuring proper changelog format."""
     result = function_data.copy()
-    
-    # Ensure changelog is string
     result["changelog"] = convert_changelog(result.get("changelog"))
-    
-    # Add other required fields with defaults
     result.setdefault("summary", "No summary available")
     result.setdefault("docstring", "")
     result.setdefault("params", [])
     result.setdefault("returns", {"type": "None", "description": ""})
-    
     return result
 
 def validate_function_data(data: Dict[str, Any]) -> None:
-    """Validate function data before processing."""
     try:
-        # Convert changelog before validation
         if "changelog" in data:
             data["changelog"] = convert_changelog(data["changelog"])
-            
         schema = _load_schema()
         jsonschema.validate(instance=data, schema=schema)
-        
     except jsonschema.ValidationError as e:
         logger.error(f"Validation error: {str(e)}")
         raise
 
 def get_annotation(node: Optional[ast.AST]) -> str:
-    """
-    Convert AST annotation to string representation.
-    
-    Args:
-        node (Optional[ast.AST]): The AST node containing type annotation
-        
-    Returns:
-        str: String representation of the type annotation
-    """
     try:
         if node is None:
             return "Any"
-            
         if isinstance(node, ast.Name):
             return node.id
         elif isinstance(node, ast.Constant):
@@ -339,9 +189,6 @@ def get_annotation(node: Optional[ast.AST]) -> str:
         return "Any"
 
 def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
-    """Format parsed sections into a standardized response with validation."""
-    
-    # Initialize with required fields
     result = {
         "summary": sections.get("summary", "No summary available"),
         "docstring": sections.get("docstring", "No documentation available"),
@@ -353,22 +200,11 @@ def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
         "examples": sections.get("examples", []),
         "changelog": convert_changelog(sections.get("changelog", []))
     }
-    
     return result
 
 def _load_schema() -> Dict[str, Any]:
-    """
-    Load the JSON schema from file with caching.
-    
-    Returns:
-        Dict[str, Any]: The loaded schema
-        
-    Raises:
-        FileNotFoundError: If schema file is not found
-        json.JSONDecodeError: If schema file is invalid JSON
-    """
     if 'schema' not in _schema_cache:
-        schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'function_schema.json')
+        schema_path = os.path.join('/workspaces/simple', 'function_schema.json')
         try:
             with open(schema_path, 'r', encoding='utf-8') as schema_file:
                 _schema_cache['schema'] = json.load(schema_file)
@@ -382,18 +218,6 @@ def _load_schema() -> Dict[str, Any]:
     return _schema_cache['schema']
 
 def validate_schema(data: Dict[str, Any]) -> None:
-    """
-    Validate extracted data against schema.
-    
-    Args:
-        data (Dict[str, Any]): The data to validate
-        
-    Raises:
-        jsonschema.ValidationError: If validation fails
-        jsonschema.SchemaError: If schema is invalid
-        FileNotFoundError: If schema file is not found
-        json.JSONDecodeError: If schema file is invalid JSON
-    """
     try:
         schema = _load_schema()
         jsonschema.validate(instance=data, schema=schema)
@@ -411,15 +235,6 @@ def validate_schema(data: Dict[str, Any]) -> None:
         raise
 
 def format_validation_error(error: jsonschema.ValidationError) -> str:
-    """
-    Format a validation error into a human-readable message.
-    
-    Args:
-        error (jsonschema.ValidationError): The validation error
-        
-    Returns:
-        str: Formatted error message
-    """
     path = ' -> '.join(str(p) for p in error.path) if error.path else 'root'
     return (
         f"Validation error at {path}:\n"
@@ -429,31 +244,22 @@ def format_validation_error(error: jsonschema.ValidationError) -> str:
     )
 
 class TextProcessor:
-    """Process and analyze text data."""
-    
     def __init__(self):
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
     
     def calculate_similarity(self, text1: str, text2: str) -> float:
-        """Calculate cosine similarity between two texts."""
         embeddings = self.model.encode([text1, text2])
         similarity = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
         return float(similarity)
     
     def extract_keywords(self, text: str, top_k: int = 5) -> List[str]:
-        """Extract key terms from text."""
-        # Implement keyword extraction logic
         pass
 
 class MetricsCalculator:
-    """Calculate various metrics for RAG system evaluation."""
-    
     @staticmethod
     def calculate_precision(retrieved_docs: List[Dict], relevant_docs: List[str]) -> float:
-        """Calculate precision of retrieved documents."""
         if not retrieved_docs:
             return 0.0
-        
         relevant_count = sum(
             1 for doc in retrieved_docs
             if any(rel in doc['content'] for rel in relevant_docs)
@@ -462,10 +268,8 @@ class MetricsCalculator:
     
     @staticmethod
     def calculate_recall(retrieved_docs: List[Dict], relevant_docs: List[str]) -> float:
-        """Calculate recall of retrieved documents."""
         if not relevant_docs:
             return 0.0
-        
         retrieved_count = sum(
             1 for rel in relevant_docs
             if any(rel in doc['content'] for doc in retrieved_docs)
@@ -474,7 +278,6 @@ class MetricsCalculator:
     
     @staticmethod
     def calculate_f1_score(precision: float, recall: float) -> float:
-        """Calculate F1 score."""
         if precision + recall == 0:
             return 0.0
         return 2 * (precision * recall) / (precision + recall)

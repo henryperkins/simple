@@ -86,7 +86,8 @@ def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
         "docstring": sections.get("summary", "No documentation available"),
         "params": sections.get("params", []),
         "returns": sections.get("returns", {"type": "None", "description": ""}),
-        "examples": sections.get("examples", [])
+        "examples": sections.get("examples", []),
+        "classes": sections.get("classes", [])  # Ensure classes is included
     }
 
 class APIClient:
@@ -157,7 +158,8 @@ class ClaudeResponseParser:
                 'summary': extract_section(response, 'Summary'),
                 'params': extract_parameter_section(response),
                 'returns': extract_return_section(response),
-                'examples': extract_code_examples(response)
+                'examples': extract_code_examples(response),
+                'classes': []  # Ensure classes is included
             }
             
             # Validate and format response
@@ -175,7 +177,8 @@ class ClaudeResponseParser:
             "docstring": "Error occurred while parsing the documentation.",
             "params": [],
             "returns": {"type": "None", "description": ""},
-            "examples": []
+            "examples": [],
+            "classes": []  # Ensure classes is included
         }
 
 class DocumentationAnalyzer:
@@ -242,9 +245,179 @@ class DocumentationAnalyzer:
                             "type": "string",
                             "description": "Code example"
                         }
+                    },
+                    "classes": {  # Ensure classes is included
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "description": "Class name"
+                                },
+                                "docstring": {
+                                    "type": "string",
+                                    "description": "Class documentation"
+                                },
+                                "methods": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Method name"
+                                            },
+                                            "docstring": {
+                                                "type": "string",
+                                                "description": "Method documentation"
+                                            },
+                                            "params": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "name": {
+                                                            "type": "string",
+                                                            "description": "Parameter name"
+                                                        },
+                                                        "type": {
+                                                            "type": "string",
+                                                            "description": "Parameter type"
+                                                        },
+                                                        "has_type_hint": {
+                                                            "type": "boolean",
+                                                            "description": "Whether the parameter has a type hint"
+                                                        }
+                                                    },
+                                                    "required": ["name", "type", "has_type_hint"]
+                                                }
+                                            },
+                                            "returns": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "type": {
+                                                        "type": "string",
+                                                        "description": "Return type"
+                                                    },
+                                                    "has_type_hint": {
+                                                        "type": "boolean",
+                                                        "description": "Whether the return type has a type hint"
+                                                    }
+                                                },
+                                                "required": ["type", "has_type_hint"]
+                                            },
+                                            "complexity_score": {
+                                                "type": "integer",
+                                                "description": "Complexity score of the method"
+                                            },
+                                            "line_number": {
+                                                "type": "integer",
+                                                "description": "Line number where the method starts"
+                                            },
+                                            "end_line_number": {
+                                                "type": "integer",
+                                                "description": "Line number where the method ends"
+                                            },
+                                            "code": {
+                                                "type": "string",
+                                                "description": "Code of the method"
+                                            },
+                                            "is_async": {
+                                                "type": "boolean",
+                                                "description": "Whether the method is asynchronous"
+                                            },
+                                            "is_generator": {
+                                                "type": "boolean",
+                                                "description": "Whether the method is a generator"
+                                            },
+                                            "is_recursive": {
+                                                "type": "boolean",
+                                                "description": "Whether the method is recursive"
+                                            },
+                                            "summary": {
+                                                "type": "string",
+                                                "description": "Summary of the method"
+                                            },
+                                            "changelog": {
+                                                "type": "string",
+                                                "description": "Changelog of the method"
+                                            }
+                                        },
+                                        "required": ["name", "docstring", "params", "returns", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"]
+                                    }
+                                },
+                                "attributes": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Attribute name"
+                                            },
+                                            "type": {
+                                                "type": "string",
+                                                "description": "Attribute type"
+                                            },
+                                            "line_number": {
+                                                "type": "integer",
+                                                "description": "Line number where the attribute is defined"
+                                            }
+                                        },
+                                        "required": ["name", "type", "line_number"]
+                                    }
+                                },
+                                "instance_variables": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Instance variable name"
+                                            },
+                                            "line_number": {
+                                                "type": "integer",
+                                                "description": "Line number where the instance variable is defined"
+                                            }
+                                        },
+                                        "required": ["name", "line_number"]
+                                    }
+                                },
+                                "base_classes": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "description": "Base class name"
+                                    }
+                                },
+                                "summary": {
+                                    "type": "string",
+                                    "description": "Summary of the class"
+                                },
+                                "changelog": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "change": {
+                                                "type": "string",
+                                                "description": "Description of the change"
+                                            },
+                                            "timestamp": {
+                                                "type": "string",
+                                                "description": "Timestamp of the change"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "required": ["name", "docstring", "methods", "attributes", "instance_variables", "base_classes", "summary", "changelog"]
+                        }
                     }
                 },
-                "required": ["summary", "docstring", "params", "returns"]
+                "required": ["summary", "docstring", "params", "returns", "classes"]
             }
         }
 
@@ -411,6 +584,10 @@ async def analyze_function_with_openai(
         if "changelog" not in parsed_response:
             parsed_response["changelog"] = []
 
+        # Ensure classes is included in the parsed response
+        if "classes" not in parsed_response:
+            parsed_response["classes"] = []
+
         # Validate response against schema
         try:
             validate_schema(parsed_response)
@@ -426,6 +603,7 @@ async def analyze_function_with_openai(
             "params": parsed_response.get("params", []),
             "returns": parsed_response.get("returns", {"type": "None", "description": ""}),
             "examples": parsed_response.get("examples", []),
+            "classes": parsed_response.get("classes", []),
             "changelog": parsed_response.get("changelog")
         }
 

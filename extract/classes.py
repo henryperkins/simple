@@ -5,19 +5,19 @@ import ast
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
 from extract.functions import FunctionExtractor
-from extract.utils import get_annotation
+from utils import get_annotation
 
 logger = LoggerSetup.get_logger("extract.classes")
 
 class ClassExtractor(BaseExtractor):
     """Extractor for class definitions in AST."""
-
+    
     def extract_details(self) -> Dict[str, Any]:
         """Extract details of the class."""
         details = self._get_empty_details()
         try:
             details.update({
-                "name": self.node.name,
+                "name": getattr(self.node, 'name', 'unknown'),  # Ensure 'name' is included
                 "docstring": self.get_docstring(),
                 "methods": self.extract_methods(),
                 "attributes": self.extract_attributes(),
@@ -29,7 +29,7 @@ class ClassExtractor(BaseExtractor):
         except Exception as e:
             logger.error(f"Error extracting class details: {e}")
         return details
-
+    
     def extract_methods(self) -> List[Dict[str, Any]]:
         """Extract methods from the class."""
         methods = []

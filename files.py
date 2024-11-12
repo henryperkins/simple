@@ -98,6 +98,10 @@ class FileProcessor:
             add_parent_info(tree)
             extracted_data = extract_classes_and_functions_from_ast(tree, content)
             
+            # Ensure 'classes' is always present
+            if "classes" not in extracted_data:
+                extracted_data["classes"] = []
+
             # Analyze functions
             for func in extracted_data.get("functions", []):
                 try:
