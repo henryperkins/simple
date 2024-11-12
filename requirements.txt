@@ -2,3 +2,6 @@ aiohttp
 aiofiles
 sentry-sdk
 tqdm
+openai
+pydantic
+tiktoken

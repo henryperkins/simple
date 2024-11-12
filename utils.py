@@ -1,13 +1,15 @@
+# extract/utils.py
+
 import os
 import ast
 import json
 import hashlib
-from typing import Any, Dict, Optional, List, Union
-from datetime import datetime
+from typing import Optional, Dict, Any, Union, List
 import jsonschema
+from datetime import datetime
 from core.logger import LoggerSetup
 
-logger = LoggerSetup.get_logger("utils")
+logger = LoggerSetup.get_logger("extract.utils")
 
 _schema_cache: Dict[str, Any] = {}
 
@@ -131,8 +133,11 @@ def create_error_result(error_type: str, error_message: str) -> Dict[str, Any]:
 
 def add_parent_info(tree: ast.AST) -> None:
     """
-    Add parent information to each node in an AST.
-
+    Add parent information to each node in the AST.
+    
+    This function traverses the AST and adds a 'parent' attribute to each node,
+    which is needed for correctly identifying top-level functions vs methods.
+    
     Args:
         tree (ast.AST): The AST to process
     """
@@ -356,10 +361,10 @@ def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
 def _load_schema() -> Dict[str, Any]:
     """
     Load the JSON schema from file with caching.
-    
+
     Returns:
         Dict[str, Any]: The loaded schema
-        
+
     Raises:
         FileNotFoundError: If schema file is not found
         json.JSONDecodeError: If schema file is invalid JSON

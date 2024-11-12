@@ -4,8 +4,8 @@ from typing import Dict, Any, List
 import ast
 from core.logger import LoggerSetup
 from extract.base import BaseExtractor
-from utils import get_annotation
-from metrics import CodeMetrics
+from ..utils import get_annotation
+from ..metrics import CodeMetrics
 
 logger = LoggerSetup.get_logger("extract.functions")
 

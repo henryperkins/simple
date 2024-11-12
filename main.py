@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 from core.logger import LoggerSetup
-from core.utils import ensure_directory
+from utils import ensure_directory
 from files import create_analyzer
 from docs import write_analysis_to_markdown
 from monitoring import initialize_sentry
