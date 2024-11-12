@@ -24,9 +24,16 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
             logger.debug(f"Found class: {node.name}")
+            base_classes = []
+            for base in node.bases:
+                if isinstance(base, ast.Name):
+                    base_classes.append(base.id)
+                elif isinstance(base, ast.Attribute):
+                    base_classes.append(get_full_qualified_name(base))
+            
             class_info = {
                 "name": node.name,
-                "base_classes": [base.id for base in node.bases if isinstance(base, ast.Name)],
+                "base_classes": base_classes,
                 "methods": [],
                 "attributes": [],
                 "instance_variables": [],
@@ -47,7 +54,7 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
                 "code": ast.get_source_segment(content, node),
                 "is_async": isinstance(node, ast.AsyncFunctionDef),
                 "is_generator": any(isinstance(n, ast.Yield) for n in ast.walk(node)),
-                "is_recursive": any(n for n in ast.walk(node) if isinstance(n, ast.Call) and n.func.id == node.name),
+                "is_recursive": any(n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == node.name),
                 "summary": "",
                 "changelog": []
             }
@@ -55,3 +62,13 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
 
     logger.debug("Extraction complete")
     return extracted_data
+
+def get_full_qualified_name(node: ast.Attribute) -> str:
+    """Helper function to get the full qualified name of an attribute."""
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+    return '.'.join(reversed(parts))

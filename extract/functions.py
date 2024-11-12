@@ -12,12 +12,12 @@ logger = LoggerSetup.get_logger("extract.functions")
 class FunctionExtractor(BaseExtractor):
     """Extractor for function definitions in AST."""
 
-    def __init__(self, node: ast.AST, content: str):
+    def __init__(self, node: ast.FunctionDef, content: str):
         """
         Initialize the FunctionExtractor with an AST node and source content.
 
         Args:
-            node (ast.AST): The AST node to extract information from.
+            node (ast.FunctionDef): The AST node to extract information from.
             content (str): The source code content.
         """
         super().__init__(node, content)
@@ -27,41 +27,49 @@ class FunctionExtractor(BaseExtractor):
         """Extract details of the function."""
         details = self._get_empty_details()
         try:
-            complexity_score = self.calculate_complexity()
-            cognitive_score = self.calculate_cognitive_complexity()
-            halstead_metrics = self.calculate_halstead_metrics()
-            details.update({
-                "name": getattr(self.node, 'name', 'unknown'),  # Ensure 'name' is included
-                "docstring": self.get_docstring(),
-                "params": self.extract_parameters(),
-                "returns": self._extract_return_annotation(),
-                "complexity_score": complexity_score,
-                "cognitive_complexity": cognitive_score,
-                "halstead_metrics": halstead_metrics,
-                "line_number": self.node.lineno,
-                "end_line_number": self.node.end_lineno,
-                "code": self.get_source_segment(self.node),
-                "is_async": self.is_async(),
-                "is_generator": self.is_generator(),
-                "is_recursive": self.is_recursive(),
-                "summary": self._generate_summary(complexity_score, cognitive_score, halstead_metrics),
-                "changelog": ""  # Initialize changelog as a string
-            })
+            if isinstance(self.node, ast.FunctionDef):
+                complexity_score = self.calculate_complexity()
+                cognitive_score = self.calculate_cognitive_complexity()
+                halstead_metrics = self.calculate_halstead_metrics()
+
+                # Extract decorators
+                decorators = [ast.unparse(decorator) for decorator in self.node.decorator_list]
+
+                details.update({
+                    "name": getattr(self.node, 'name', 'unknown'),
+                    "docstring": self.get_docstring(),
+                    "params": self.extract_parameters(),
+                    "returns": self._extract_return_annotation(),
+                    "complexity_score": complexity_score,
+                    "cognitive_complexity": cognitive_score,
+                    "halstead_metrics": halstead_metrics,
+                    "line_number": self.node.lineno,
+                    "end_line_number": self.node.end_lineno,
+                    "code": self.get_source_segment(self.node),
+                    "is_async": self.is_async(),
+                    "is_generator": self.is_generator(),
+                    "is_recursive": self.is_recursive(),
+                    "decorators": decorators,  # Store decorators
+                    "summary": self._generate_summary(complexity_score, cognitive_score, halstead_metrics),
+                    "changelog": []  # Initialize changelog as a list
+                })
         except Exception as e:
             logger.error(f"Error extracting function details: {e}")
         return details
+
 
     def extract_parameters(self) -> List[Dict[str, Any]]:
         """Extract parameters of the function."""
         params = []
         try:
-            for param in self.node.args.args:
-                param_info = {
-                    "name": param.arg,
-                    "type": get_annotation(param.annotation),
-                    "has_type_hint": param.annotation is not None
-                }
-                params.append(param_info)
+            if isinstance(self.node, ast.FunctionDef):
+                for param in self.node.args.args:
+                    param_info = {
+                        "name": param.arg,
+                        "type": get_annotation(param.annotation),
+                        "has_type_hint": param.annotation is not None
+                    }
+                    params.append(param_info)
         except Exception as e:
             logger.error(f"Error extracting parameters: {e}")
         return params
@@ -81,13 +89,14 @@ class FunctionExtractor(BaseExtractor):
     def _extract_return_annotation(self) -> Dict[str, Any]:
         """Extract return type annotation."""
         try:
-            return {
-                "type": get_annotation(self.node.returns),
-                "has_type_hint": self.node.returns is not None
-            }
+            if isinstance(self.node, ast.FunctionDef):
+                return {
+                    "type": get_annotation(self.node.returns),
+                    "has_type_hint": self.node.returns is not None
+                }
         except Exception as e:
             logger.error(f"Error extracting return annotation: {e}")
-            return {"type": "Any", "has_type_hint": False}
+        return {"type": "Any", "has_type_hint": False}
 
     def is_async(self) -> bool:
         """Check if the function is async."""
@@ -107,11 +116,12 @@ class FunctionExtractor(BaseExtractor):
     def is_recursive(self) -> bool:
         """Check if the function is recursive."""
         try:
-            function_name = self.node.name
-            for node in ast.walk(self.node):
-                if isinstance(node, ast.Call):
-                    if isinstance(node.func, ast.Name) and node.func.id == function_name:
-                        return True
+            if isinstance(self.node, ast.FunctionDef):
+                function_name = self.node.name
+                for node in ast.walk(self.node):
+                    if isinstance(node, ast.Call):
+                        if isinstance(node.func, ast.Name) and node.func.id == function_name:
+                            return True
             return False
         except Exception as e:
             logger.error(f"Error checking recursive status: {e}")
@@ -121,7 +131,7 @@ class FunctionExtractor(BaseExtractor):
         """Generate a comprehensive summary of the function."""
         parts = []
         try:
-            if self.node.returns:
+            if isinstance(self.node, ast.FunctionDef) and self.node.returns:
                 parts.append(f"Returns: {get_annotation(self.node.returns)}")
             
             if self.is_generator():

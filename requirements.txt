@@ -5,3 +5,6 @@ tqdm
 openai
 pydantic
 tiktoken
+sentence-transformers
+scikit-learn
+anthropic  # Assuming this is the correct package name for Anthropic

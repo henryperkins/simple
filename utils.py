@@ -2,6 +2,7 @@ import os
 import ast
 import json
 import hashlib
+import time
 from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
 import jsonschema
@@ -17,24 +18,40 @@ _schema_cache: Dict[str, Any] = {}
 def generate_hash(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
-def load_json_file(filepath: str) -> Dict[str, Any]:
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        logger.error(f"File not found: {filepath}")
-        raise
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in file {filepath}: {e}")
-        raise
+def load_json_file(filepath: str, max_retries: int = 3) -> Dict[str, Any]:
+    for attempt in range(max_retries):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            logger.error(f"File not found: {filepath}")
+            raise
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in file {filepath}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error loading JSON file {filepath}: {e}")
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(2 ** attempt)  # Exponential backoff
+    return {}  # Ensure a return value on all paths
 
-def save_json_file(filepath: str, data: Dict[str, Any]) -> None:
-    try:
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
-    except OSError as e:
-        logger.error(f"Failed to save file {filepath}: {e}")
-        raise
+def save_json_file(filepath: str, data: Dict[str, Any], max_retries: int = 3) -> None:
+    for attempt in range(max_retries):
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            return
+        except OSError as e:
+            logger.error(f"Failed to save file {filepath}: {e}")
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(2 ** attempt)  # Exponential backoff
+        except Exception as e:
+            logger.error(f"Unexpected error saving JSON file {filepath}: {e}")
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(2 ** attempt)  # Exponential backoff
 
 def create_timestamp() -> str:
     return datetime.now().isoformat()
@@ -68,7 +85,7 @@ def create_error_result(error_type: str, error_message: str) -> Dict[str, Any]:
 def add_parent_info(tree: ast.AST) -> None:
     for parent in ast.walk(tree):
         for child in ast.iter_child_nodes(parent):
-            child.parent = parent
+            setattr(child, 'parent', parent)  # Use setattr to avoid direct assignment error
 
 def get_file_stats(filepath: str) -> Dict[str, Any]:
     try:
@@ -250,11 +267,11 @@ class TextProcessor:
     
     def calculate_similarity(self, text1: str, text2: str) -> float:
         embeddings = self.model.encode([text1, text2])
-        similarity = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
+        similarity = cosine_similarity(np.array([embeddings[0]]), np.array([embeddings[1]]))[0][0]
         return float(similarity)
     
     def extract_keywords(self, text: str, top_k: int = 5) -> List[str]:
-        pass
+        return []  # Ensure a return value on all paths
 
 class MetricsCalculator:
     @staticmethod

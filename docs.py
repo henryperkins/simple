@@ -60,6 +60,14 @@ async def write_analysis_to_markdown(results: Dict[str, Any], output_path: str) 
                     if isinstance(entry, dict) and "timestamp" not in entry:
                         entry["timestamp"] = datetime.now().isoformat()
                 
+                # Ensure changelog is a list
+                if not isinstance(analysis["changelog"], list):
+                    logger.error(f"Changelog is not a list for {filepath}: {analysis['changelog']}")
+                    analysis["changelog"] = []
+                
+                # Log changelog for debugging
+                logger.debug(f"Changelog for {filepath}: {analysis['changelog']}")
+                
                 # Validate the analysis data
                 try:
                     validate_schema(analysis)

@@ -1,11 +1,14 @@
-import aiohttp
-import asyncio
-import json
 import os
 import re
+import time
+import json
+import asyncio
 from typing import Any, Dict, Optional, Union, List, Iterable, cast, TypedDict, Literal
+
+import aiohttp
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm
+
 from core.logger import LoggerSetup
 from utils import validate_schema
 from openai import AzureOpenAI, OpenAI
@@ -18,9 +21,8 @@ from openai.types.chat import (
     ChatCompletionFunctionMessageParam,
 )
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
-from openai.types.chat.chat_completion_tool_param import FunctionDefinition
+from openai.types.shared_params.function_definition import FunctionDefinition
 from anthropic import Anthropic
-from anthropic.types import Message, MessageParam
 
 # Initialize logger
 logger = LoggerSetup.get_logger("api_interaction")
@@ -28,19 +30,23 @@ logger = LoggerSetup.get_logger("api_interaction")
 # Load environment variables
 load_dotenv()
 
+
 class ParameterProperty(TypedDict):
     type: str
     description: str
+
 
 class Parameters(TypedDict):
     type: Literal["object"]
     properties: Dict[str, ParameterProperty]
     required: List[str]
 
+
 class FunctionSchema(TypedDict):
     name: str
     description: str
     parameters: Parameters
+
 
 def extract_section(text: str, section_name: str) -> str:
     """Extract a section from Claude's response."""
@@ -48,11 +54,12 @@ def extract_section(text: str, section_name: str) -> str:
     match = re.search(pattern, text, re.DOTALL)
     return match.group(1).strip() if match else ""
 
+
 def extract_parameter_section(text: str) -> List[Dict[str, str]]:
     """Extract parameter information from Claude's response."""
     params_section = extract_section(text, "Parameters")
     params = []
-    param_pattern = r"(\w+)\s*\(([^)]+)\):\s*(.+?)(?=\n\w+\s*\(|\Z)"
+    param_pattern = r"(\w+)\s*$([^)]+)$:\s*(.+?)(?=\n\w+\s*$|\Z)"
     for match in re.finditer(param_pattern, params_section, re.DOTALL):
         params.append({
             "name": match.group(1),
@@ -60,6 +67,7 @@ def extract_parameter_section(text: str) -> List[Dict[str, str]]:
             "description": match.group(3).strip()
         })
     return params
+
 
 def extract_return_section(text: str) -> Dict[str, str]:
     """Extract return information from Claude's response."""
@@ -71,6 +79,7 @@ def extract_return_section(text: str) -> Dict[str, str]:
         "description": match.group(2).strip() if match else ""
     }
 
+
 def extract_code_examples(text: str) -> List[str]:
     """Extract code examples from Claude's response."""
     examples_section = extract_section(text, "Examples")
@@ -78,6 +87,7 @@ def extract_code_examples(text: str) -> List[str]:
     for match in re.finditer(r"```python\s*(.*?)\s*```", examples_section, re.DOTALL):
         examples.append(match.group(1).strip())
     return examples
+
 
 def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
     """Format parsed sections into a standardized response."""
@@ -92,39 +102,44 @@ def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
         "functions": sections.get("functions", [])  # Ensure functions is included
     }
 
+
 class APIClient:
     """Unified API client for multiple LLM providers."""
-    
+
     def __init__(self):
         # Initialize API clients
         logger.info("Initializing API clients")
         self.azure_client = self._init_azure_client()
         self.openai_client = self._init_openai_client()
         self.anthropic_client = self._init_anthropic_client()
-        
+
         # Configuration
         self.azure_deployment = os.getenv("DEPLOYMENT_NAME", "gpt-4")
         self.openai_model = "gpt-4-turbo-preview"  # Updated to latest model
         self.claude_model = "claude-3-opus-20240229"
 
     def _init_azure_client(self) -> Optional[AzureOpenAI]:
-        """Initialize Azure OpenAI client."""
-        try:
-            if os.getenv("AZURE_OPENAI_API_KEY"):
-                logger.debug("Initializing Azure OpenAI client")
-                return AzureOpenAI(
-                    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-                    azure_endpoint=os.getenv("AZURE_ENDPOINT", "https://api.azure.com"),
-                    api_version=os.getenv("AZURE_API_VERSION", "2024-02-15-preview"),
-                    azure_deployment=os.getenv("DEPLOYMENT_NAME", "gpt-4"),
-                    azure_ad_token=os.getenv("AZURE_AD_TOKEN"),
-                    azure_ad_token_provider=None  # Add token provider if needed
-                )
-            logger.warning("Azure OpenAI API key not found")
-            return None
-        except Exception as e:
-            logger.error(f"Error initializing Azure client: {e}")
-            return None
+        """Initialize Azure OpenAI client with retry logic."""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                if os.getenv("AZURE_OPENAI_API_KEY"):
+                    logger.debug("Initializing Azure OpenAI client")
+                    return AzureOpenAI(
+                        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+                        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "https://api.azure.com"),
+                        api_version=os.getenv("AZURE_API_VERSION", "2024-02-15-preview"),
+                        azure_deployment=os.getenv("DEPLOYMENT_NAME", "gpt-4"),
+                        azure_ad_token=os.getenv("AZURE_AD_TOKEN"),
+                        azure_ad_token_provider=None  # Add token provider if needed
+                    )
+                logger.warning("Azure OpenAI API key not found")
+                return None
+            except Exception as e:
+                logger.error(f"Error initializing Azure client: {e}")
+                if attempt == max_retries - 1:
+                    return None
+                time.sleep(2 ** attempt)  # Exponential backoff
 
     def _init_openai_client(self) -> Optional[OpenAI]:
         """Initialize OpenAI client."""
@@ -155,9 +170,10 @@ class APIClient:
             logger.error(f"Error initializing Anthropic client: {e}")
             return None
 
+
 class ClaudeResponseParser:
     """Handles Claude-specific response parsing and formatting."""
-    
+
     @staticmethod
     def parse_function_analysis(response: str) -> Dict[str, Any]:
         """Parse Claude's natural language response into structured format."""
@@ -172,10 +188,10 @@ class ClaudeResponseParser:
                 'classes': [],  # Ensure classes is included
                 'functions': []  # Ensure functions is included
             }
-            
+
             # Validate and format response
             return format_response(sections)
-            
+
         except Exception as e:
             logger.error(f"Error parsing Claude response: {e}")
             return ClaudeResponseParser.get_default_response()
@@ -194,9 +210,10 @@ class ClaudeResponseParser:
             "functions": []  # Ensure functions is included
         }
 
+
 class DocumentationAnalyzer:
     """Handles code analysis and documentation generation."""
-    
+
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
         logger.info("Initializing DocumentationAnalyzer")
@@ -534,7 +551,10 @@ class DocumentationAnalyzer:
     ) -> Any:
         """Make an API request to the specified service."""
         try:
-            logger.debug(f"Making API request with messages: {messages} and service: {service}")
+            logger.info(f"Preparing to make API request to {service}")
+            logger.debug(f"Request parameters: temperature={temperature}, max_tokens={max_tokens}")
+            logger.debug(f"Messages: {messages}")
+
             claude_messages = [
                 {
                     "role": cast(Literal["user", "assistant"], msg["role"]),
@@ -542,7 +562,7 @@ class DocumentationAnalyzer:
                 }
                 for msg in messages
             ]
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     url=f"https://api.anthropic.com/v1/complete",
@@ -558,10 +578,18 @@ class DocumentationAnalyzer:
                         "Content-Type": "application/json"
                     }
                 ) as response:
-                    return await response.json()
-        except Exception as e:
-            logger.error(f"Error making API request: {e}")
+                    logger.info(f"API request to {service} completed with status {response.status}")
+                    response.raise_for_status()  # Ensure HTTP errors are raised
+                    response_data = await response.json()
+                    logger.debug(f"Response data: {response_data}")
+                    return response_data
+        except aiohttp.ClientError as e:
+            logger.error(f"HTTP error during API request to {service}: {e}")
             raise
+        except Exception as e:
+            logger.error(f"Error making API request to {service}: {e}")
+            raise
+
 
 async def analyze_function_with_openai(
     function_details: Dict[str, Any],
@@ -569,21 +597,21 @@ async def analyze_function_with_openai(
 ) -> Dict[str, Any]:
     """
     Analyze function and generate documentation using specified service.
-    
+
     Args:
         function_details: Dictionary containing function information
         service: Service to use ("azure", "openai", or "claude")
-        
+
     Returns:
         Dictionary containing analysis results
     """
     # Define function_name early to avoid unbound variable issue
     function_name = function_details.get("name", "unknown")
-    
+
     try:
         api_client = APIClient()
         analyzer = DocumentationAnalyzer(api_client)
-        
+
         logger.info(f"Analyzing function: {function_name} using {service}")
 
         messages = [
@@ -602,7 +630,7 @@ async def analyze_function_with_openai(
         ]
 
         response = await analyzer.make_api_request(messages, service)
-        
+
         # Handle different response formats
         if service == "claude":
             content = response["completion"]
@@ -648,12 +676,13 @@ async def analyze_function_with_openai(
         logger.error(f"Error analyzing function {function_name}: {e}")
         return ClaudeResponseParser.get_default_response()
 
+
 class AsyncAPIClient:
     """
     Asynchronous API client for batch processing.
     Useful for processing multiple functions concurrently.
     """
-    
+
     def __init__(self, service: str):
         self.service = service
         self.api_client = APIClient()
@@ -666,10 +695,10 @@ class AsyncAPIClient:
     ) -> List[Dict[str, Any]]:
         """
         Process a batch of functions concurrently.
-        
+
         Args:
             functions: List of function details to process
-            
+
         Returns:
             List of documentation results
         """
@@ -679,7 +708,7 @@ class AsyncAPIClient:
 
         tasks = [process_with_semaphore(func) for func in functions]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         processed_results = []
         for result in results:
             if isinstance(result, Exception):
@@ -687,8 +716,9 @@ class AsyncAPIClient:
                 processed_results.append(ClaudeResponseParser.get_default_response())
             else:
                 processed_results.append(result)
-                
+
         return processed_results
+
 
 # Initialize default API client
 default_api_client = APIClient()

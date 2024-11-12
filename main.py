@@ -5,6 +5,7 @@ import asyncio
 import os
 import sys
 from datetime import datetime
+from typing import Optional
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
@@ -27,7 +28,7 @@ class CodeAnalysisRunner:
             'files_processed': 0,
             'errors_encountered': 0,
             'start_time': datetime.now(),
-            'end_time': None
+            'end_time': None  # Initialize as None
         }
 
     @staticmethod
@@ -69,9 +70,11 @@ class CodeAnalysisRunner:
                     raise ValueError(f"Invalid GitHub repository URL: {input_path}")
                 logger.debug(f"Analyzing repository: {input_path}")
                 results = await self.analyzer.analyze_repository(input_path, output_path, service)
+                logger.debug("Repository analysis complete")
             else:
                 logger.debug(f"Analyzing directory: {input_path}")
                 results = await self.analyzer.analyze_directory(input_path, service)
+                logger.debug("Directory analysis complete")
 
             if not results:
                 raise ValueError("No valid results from analysis")
@@ -79,6 +82,7 @@ class CodeAnalysisRunner:
             # Generate documentation
             logger.debug("Generating markdown documentation")
             await write_analysis_to_markdown(results, output_path)
+            logger.debug("Markdown documentation generation complete")
             self.summary_data['files_processed'] = len(results)
             logger.info(f"Analysis complete. Documentation written to {output_path}")
 
@@ -88,12 +92,15 @@ class CodeAnalysisRunner:
             sentry_sdk.capture_exception(e)
             raise
         finally:
-            self.summary_data['end_time'] = datetime.now()
+            self.summary_data['end_time'] = datetime.now()  # Ensure end_time is set
             self._log_summary()
 
     def _log_summary(self) -> None:
         """Log analysis summary."""
-        duration = self.summary_data['end_time'] - self.summary_data['start_time']
+        end_time: Optional[datetime] = self.summary_data['end_time']
+        if end_time is None:
+            end_time = datetime.now()
+        duration = end_time - self.summary_data['start_time']
         logger.info(
             "Summary: Files processed: %d, Errors: %d, Duration: %s",
             self.summary_data['files_processed'],
