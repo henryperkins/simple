@@ -543,14 +543,22 @@ class DocumentationAnalyzer:
                 for msg in messages
             ]
             
-            return await asyncio.to_thread(
-                self.api_client.anthropic_client.messages.create,
-                model=self.api_client.claude_model,
-                messages=claude_messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                system=system_message
-            )
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url=f"https://api.anthropic.com/v1/complete",
+                    json={
+                        "model": self.api_client.claude_model,
+                        "messages": claude_messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "system": system_message
+                    },
+                    headers={
+                        "Authorization": f"Bearer {os.getenv('ANTHROPIC_API_KEY')}",
+                        "Content-Type": "application/json"
+                    }
+                ) as response:
+                    return await response.json()
         except Exception as e:
             logger.error(f"Error making API request: {e}")
             raise
@@ -597,7 +605,7 @@ async def analyze_function_with_openai(
         
         # Handle different response formats
         if service == "claude":
-            content = response.content[0].text if isinstance(response.content, list) else response.content
+            content = response["completion"]
             parsed_response = ClaudeResponseParser.parse_function_analysis(content)
         else:
             tool_calls = response.choices[0].message.tool_calls
