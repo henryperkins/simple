@@ -17,12 +17,34 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
     """
     logger.debug("Starting extraction of classes and functions from AST")
     extracted_data = {
+        "functions": [],
         "classes": [],
-        "functions": []
+        "constants": []  # Add constants if applicable
     }
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
+        if isinstance(node, ast.FunctionDef):
+            logger.debug(f"Found function: {node.name}")
+            function_info = {
+                "name": node.name,
+                "params": [{"name": arg.arg, "type": "Any", "has_type_hint": arg.annotation is not None} for arg in node.args.args],
+                "returns": {"type": "None", "has_type_hint": node.returns is not None},
+                "docstring": ast.get_docstring(node) or "",
+                "complexity_score": 0,  # Placeholder for actual complexity calculation
+                "cognitive_complexity": 0,  # Placeholder for cognitive complexity
+                "halstead_metrics": {},  # Placeholder for Halstead metrics
+                "line_number": node.lineno,
+                "end_line_number": getattr(node, 'end_lineno', node.lineno),
+                "code": ast.get_source_segment(content, node),
+                "is_async": isinstance(node, ast.AsyncFunctionDef),
+                "is_generator": any(isinstance(n, (ast.Yield, ast.YieldFrom)) for n in ast.walk(node)),
+                "is_recursive": any(isinstance(n, ast.Call) and n.func.id == node.name for n in ast.walk(node)),
+                "summary": "",  # Placeholder for summary
+                "changelog": ""  # Placeholder for changelog
+            }
+            extracted_data["functions"].append(function_info)
+
+        elif isinstance(node, ast.ClassDef):
             logger.debug(f"Found class: {node.name}")
             base_classes = []
             for base in node.bases:
@@ -34,31 +56,15 @@ def extract_classes_and_functions_from_ast(tree: ast.AST, content: str) -> Dict[
             class_info = {
                 "name": node.name,
                 "base_classes": base_classes,
-                "methods": [],
-                "attributes": [],
-                "instance_variables": [],
-                "summary": "",
-                "changelog": []
+                "methods": [],  # Populate with method extraction logic
+                "attributes": [],  # Populate with attribute extraction logic
+                "instance_variables": [],  # Populate with instance variable extraction logic
+                "summary": "",  # Placeholder for summary
+                "changelog": ""  # Placeholder for changelog
             }
             extracted_data["classes"].append(class_info)
 
-        elif isinstance(node, ast.FunctionDef):
-            logger.debug(f"Found function: {node.name}")
-            function_info = {
-                "name": node.name,
-                "params": [{"name": arg.arg, "type": "Any"} for arg in node.args.args],
-                "returns": {"type": "None", "description": ""},
-                "complexity_score": 0,
-                "line_number": node.lineno,
-                "end_line_number": node.end_lineno if hasattr(node, 'end_lineno') else node.lineno,
-                "code": ast.get_source_segment(content, node),
-                "is_async": isinstance(node, ast.AsyncFunctionDef),
-                "is_generator": any(isinstance(n, ast.Yield) for n in ast.walk(node)),
-                "is_recursive": any(n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == node.name),
-                "summary": "",
-                "changelog": []
-            }
-            extracted_data["functions"].append(function_info)
+        # Add logic for extracting constants if needed
 
     logger.debug("Extraction complete")
     return extracted_data

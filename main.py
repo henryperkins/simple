@@ -120,7 +120,6 @@ async def main():
         help="AI service to use"
     )
     args = parser.parse_args()
-
     try:
         runner = CodeAnalysisRunner()
         await runner.run_analysis(args.input_path, args.output_path, args.service)
