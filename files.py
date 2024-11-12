@@ -105,13 +105,15 @@ class FileProcessor:
                 extracted_data["classes"] = []
 
             # Analyze functions
-            for func in extracted_data.get("functions", []):
-                try:
-                    analysis = await analyze_function_with_openai(func, service)
+            tasks = [analyze_function_with_openai(func, service) for func in extracted_data.get("functions", [])]
+            analyzed_functions = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for func, analysis in zip(extracted_data.get("functions", []), analyzed_functions):
+                if isinstance(analysis, Exception):
+                    logger.error(f"Error analyzing function {func.get('name', 'unknown')}: {analysis}")
+                    sentry_sdk.capture_exception(analysis)
+                else:
                     func.update(analysis)
-                except Exception as e:
-                    logger.error(f"Error analyzing function {func.get('name', 'unknown')}: {e}")
-                    sentry_sdk.capture_exception(e)
 
             return extracted_data
 
@@ -144,9 +146,15 @@ class CodeAnalyzer:
             python_files = filter_files(directory, "*.py")
             
             results = {}
-            for filepath in python_files:
-                if is_python_file(filepath):
-                    result = await self.file_processor.process_file(filepath, service)
+            tasks = [self.file_processor.process_file(filepath, service) for filepath in python_files if is_python_file(filepath)]
+            analyzed_files = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for filepath, result in zip(python_files, analyzed_files):
+                if isinstance(result, Exception):
+                    logger.error(f"Error analyzing file {filepath}: {result}")
+                    sentry_sdk.capture_exception(result)
+                    results[filepath] = create_error_result("Processing Error", str(result))
+                else:
                     results[filepath] = result
 
             return results
