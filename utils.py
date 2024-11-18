@@ -1,368 +1,242 @@
-# utils.py
-
 import os
 import ast
-import json
+import fnmatch
 import hashlib
-import time
-from typing import Any, Dict, Optional, List, Union, TypedDict, Literal
+import json
+import asyncio
 from datetime import datetime
-from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
-from core.logger import LoggerSetup
-from jsonschema import validate, ValidationError
+from typing import Dict, List, Any, Optional
+from core.logger import log_info, log_error, log_debug
 
-# Initialize logger
-logger = LoggerSetup.get_logger("utils")
-
-# Cache for schemas
-_schema_cache: Dict[str, Any] = {}
-
-# Define TypedDicts for schema validation
-class ParameterProperty(TypedDict):
-    type: str
-    description: str
-
-class Parameters(TypedDict):
-    type: Literal["object"]
-    properties: Dict[str, ParameterProperty]
-    required: List[str]
-
-class FunctionSchema(TypedDict):
-    name: str
-    description: str
-    parameters: Parameters
 
 def generate_hash(content: str) -> str:
-    """Generate a SHA-256 hash of the given content."""
-    return hashlib.sha256(content.encode()).hexdigest()
+    """
+    Generate an MD5 hash for the given content.
 
-def load_json_file(filepath: str, max_retries: int = 3) -> Dict[str, Any]:
-    """Load a JSON file with retry logic."""
+    Args:
+        content (str): The content to hash.
+
+    Returns:
+        str: The generated MD5 hash value.
+    """
+    log_debug(f"Generating hash for content of length {len(content)}.")
+    hash_value = hashlib.md5(content.encode()).hexdigest()
+    log_debug(f"Generated hash: {hash_value}")
+    return hash_value
+
+
+def handle_exceptions(log_func):
+    """
+    Decorator to handle exceptions and log errors.
+
+    Args:
+        log_func (callable): The logging function to use for error messages.
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                # Attempt to retrieve the node from args or kwargs
+                node = kwargs.get('node', None)
+                if not node and args:
+                    node = next((arg for arg in args if isinstance(arg, ast.AST)), None)
+
+                node_name = getattr(node, 'name', '<unknown>') if node else '<unknown>'
+                log_func(f"Error in {func.__name__} for node {node_name}: {e}")
+                return None  # Return a default value or handle as needed
+        return wrapper
+    return decorator
+
+
+async def load_json_file(filepath: str, max_retries: int = 3) -> Dict:
+    """
+    Load and parse a JSON file with a retry mechanism.
+
+    Args:
+        filepath (str): Path to the JSON file.
+        max_retries (int): Maximum number of retry attempts.
+
+    Returns:
+        Dict: Parsed JSON data.
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist.
+        json.JSONDecodeError: If the file contains invalid JSON.
+    """
+    log_debug(f"Loading JSON file: {filepath}")
     for attempt in range(max_retries):
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+                log_info(f"Successfully loaded JSON file: {filepath}")
+                return data
         except FileNotFoundError:
-            logger.error(f"File not found: {filepath}")
+            log_error(f"File not found: {filepath}")
             raise
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in file {filepath}: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error loading JSON file {filepath}: {e}")
+            log_error(f"JSON decode error in file {filepath}: {e}")
             if attempt == max_retries - 1:
                 raise
-            time.sleep(2 ** attempt)  # Exponential backoff
+        except Exception as e:
+            log_error(f"Unexpected error loading JSON file {filepath}: {e}")
+            if attempt == max_retries - 1:
+                raise
+        # Exponential backoff before retrying
+        await asyncio.sleep(2 ** attempt)
+
+    # If all retries fail, log an error and return an empty dictionary
+    log_error(f"Failed to load JSON file after {max_retries} attempts: {filepath}")
     return {}
 
-def save_json_file(filepath: str, data: Dict[str, Any], max_retries: int = 3) -> None:
-    """Save data to a JSON file with retry logic."""
-    for attempt in range(max_retries):
-        try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
-            return
-        except OSError as e:
-            logger.error(f"Failed to save file {filepath}: {e}")
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(2 ** attempt)  # Exponential backoff
-        except Exception as e:
-            logger.error(f"Unexpected error saving JSON file {filepath}: {e}")
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(2 ** attempt)  # Exponential backoff
 
-def create_timestamp() -> str:
-    """Create a timestamp in ISO format."""
-    return datetime.now().isoformat()
+def ensure_directory(directory_path: str) -> None:
+    """
+    Ensure a directory exists, creating it if necessary.
 
-def ensure_directory(directory: str) -> None:
-    """Ensure that a directory exists."""
-    try:
-        os.makedirs(directory, exist_ok=True)
-    except OSError as e:
-        logger.error(f"Failed to create directory {directory}: {e}")
-        raise
+    Args:
+        directory_path (str): The path of the directory to ensure exists.
+    """
+    log_debug(f"Ensuring directory exists: {directory_path}")
+    os.makedirs(directory_path, exist_ok=True)
+    log_info(f"Directory ensured: {directory_path}")
 
-def validate_file_path(filepath: str, extension: Optional[str] = None) -> bool:
-    """Validate if a file path exists and optionally check its extension."""
-    if not os.path.exists(filepath):
-        return False
-    if extension and not filepath.endswith(extension):
-        return False
-    return True
 
-def create_error_result(error_type: str, error_message: str) -> Dict[str, Any]:
-    """Create a standardized error result."""
-    return {
-        "summary": f"Error: {error_type}",
-        "changelog": [{
-            "change": f"{error_type}: {error_message}",
-            "timestamp": create_timestamp()
-        }],
-        "classes": [],
-        "functions": [],
-        "file_content": [{"content": ""}]
+def validate_file_path(filepath: str, extension: str = '.py') -> bool:
+    """
+    Validate if a file path exists and has the correct extension.
+
+    Args:
+        filepath (str): The path to the file to validate.
+        extension (str): The expected file extension (default: '.py').
+
+    Returns:
+        bool: True if the file path is valid, False otherwise.
+    """
+    is_valid = os.path.isfile(filepath) and filepath.endswith(extension)
+    log_debug(f"File path validation for '{filepath}' with extension '{extension}': {is_valid}")
+    return is_valid
+
+
+def create_error_result(error_type: str, error_message: str) -> Dict[str, str]:
+    """
+    Create a standardized error result dictionary.
+
+    Args:
+        error_type (str): The type of error that occurred.
+        error_message (str): The detailed error message.
+
+    Returns:
+        Dict[str, str]: Dictionary containing error information.
+    """
+    error_result = {
+        'error_type': error_type,
+        'error_message': error_message,
+        'timestamp': datetime.now().isoformat()
     }
+    log_debug(f"Created error result: {error_result}")
+    return error_result
+
 
 def add_parent_info(tree: ast.AST) -> None:
-    """Add parent information to AST nodes."""
+    """
+    Add parent node information to each node in an AST.
+
+    Args:
+        tree (ast.AST): The Abstract Syntax Tree to process.
+
+    Returns:
+        None: Modifies the tree in place.
+    """
+    log_debug("Adding parent information to AST nodes.")
     for parent in ast.walk(tree):
         for child in ast.iter_child_nodes(parent):
             setattr(child, 'parent', parent)
+    log_info("Parent information added to AST nodes.")
+
 
 def get_file_stats(filepath: str) -> Dict[str, Any]:
-    """Get file statistics."""
-    try:
-        stats = os.stat(filepath)
-        return {
-            "size": stats.st_size,
-            "created": datetime.fromtimestamp(stats.st_ctime).isoformat(),
-            "modified": datetime.fromtimestamp(stats.st_mtime).isoformat(),
-            "accessed": datetime.fromtimestamp(stats.st_atime).isoformat()
-        }
-    except OSError as e:
-        logger.error(f"Failed to get file stats for {filepath}: {e}")
-        return {}
+    """
+    Get statistical information about a file.
 
-def filter_files(directory: str, pattern: str = "*.py", exclude_patterns: Optional[List[str]] = None) -> List[str]:
-    """Filter files in a directory based on a pattern and exclusion list."""
-    import fnmatch
+    Args:
+        filepath (str): Path to the file to analyze.
+
+    Returns:
+        Dict[str, Any]: Dictionary containing file statistics including size,
+                        modification time, and other relevant metrics.
+    """
+    log_debug(f"Getting file statistics for: {filepath}")
+    stats = os.stat(filepath)
+    file_stats = {
+        'size': stats.st_size,
+        'modified': datetime.fromtimestamp(stats.st_mtime).isoformat(),
+        'created': datetime.fromtimestamp(stats.st_ctime).isoformat(),
+        'is_empty': stats.st_size == 0
+    }
+    log_info(f"File statistics for '{filepath}': {file_stats}")
+    return file_stats
+
+
+def filter_files(
+    directory: str,
+    pattern: str = '*.py',
+    exclude_patterns: Optional[List[str]] = None
+) -> List[str]:
+    """
+    Filter files in a directory based on patterns.
+
+    Args:
+        directory (str): The directory path to search in.
+        pattern (str): The pattern to match files against (default: '*.py').
+        exclude_patterns (Optional[List[str]]): Patterns to exclude from results.
+
+    Returns:
+        List[str]: List of file paths that match the criteria.
+    """
+    log_debug(f"Filtering files in directory '{directory}' with pattern '{pattern}'.")
     exclude_patterns = exclude_patterns or []
-    matching_files = []
-    try:
-        for root, _, files in os.walk(directory):
-            for filename in files:
-                if fnmatch.fnmatch(filename, pattern):
-                    filepath = os.path.join(root, filename)
-                    if not any(fnmatch.fnmatch(filepath, exp) for exp in exclude_patterns):
-                        matching_files.append(filepath)
-        return matching_files
-    except Exception as e:
-        logger.error(f"Error filtering files in {directory}: {e}")
-        return []
+    matches = []
+    for root, _, filenames in os.walk(directory):
+        for filename in filenames:
+            if fnmatch.fnmatch(filename, pattern):
+                filepath = os.path.join(root, filename)
+                if not any(fnmatch.fnmatch(filepath, ep) for ep in exclude_patterns):
+                    matches.append(filepath)
+    log_info(f"Filtered files: {matches}")
+    return matches
 
-def normalize_path(path: str) -> str:
-    """Normalize and return the absolute path."""
-    return os.path.normpath(os.path.abspath(path))
 
-def get_relative_path(path: str, base_path: str) -> str:
-    """Get the relative path from a base path."""
-    return os.path.relpath(path, base_path)
+def get_all_files(directory, exclude_dirs=None):
+    """
+    Traverse the given directory recursively and collect paths to all Python files,
+    while excluding any directories specified in the `exclude_dirs` list.
 
-def is_python_file(filepath: str) -> bool:
-    """Check if a file is a valid Python file."""
-    if not os.path.isfile(filepath):
-        return False
-    if not filepath.endswith('.py'):
-        return False
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            ast.parse(f.read())
-        return True
-    except (SyntaxError, UnicodeDecodeError):
-        return False
-    except Exception as e:
-        logger.error(f"Error checking Python file {filepath}: {e}")
-        return False
+    Args:
+        directory (str): The root directory to search for Python files.
+        exclude_dirs (list, optional): A list of directory names to exclude from the search.
+            Defaults to None, which means no directories are excluded.
 
-def convert_changelog(changelog: Union[List, str, None]) -> str:
-    """Convert a changelog to a string format."""
-    if changelog is None:
-        return "No changes recorded"
-    if isinstance(changelog, str):
-        return changelog if changelog.strip() else "No changes recorded"
-    if isinstance(changelog, list):
-        if not changelog:
-            return "No changes recorded"
-        entries = []
-        for entry in changelog:
-            if isinstance(entry, dict):
-                timestamp = entry.get("timestamp", datetime.now().isoformat())
-                change = entry.get("change", "No description")
-                entries.append(f"[{timestamp}] {change}")
-            else:
-                entries.append(str(entry))
-        return " | ".join(entries)
-    return "No changes recorded"
+    Returns:
+        list: A list of file paths to Python files found in the directory, excluding specified directories.
 
-def format_function_response(function_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Format function data into a standardized response."""
-    result = function_data.copy()
-    result["changelog"] = convert_changelog(result.get("changelog"))
-    result.setdefault("summary", "No summary available")
-    result.setdefault("docstring", "")
-    result.setdefault("params", [])
-    result.setdefault("returns", {"type": "None", "description": ""})
-    result.setdefault("functions", [])
-    return result
+    Raises:
+        ValueError: If the provided directory does not exist or is not accessible.
+    """
+    if not os.path.isdir(directory):
+        raise ValueError(f"The directory {directory} does not exist or is not accessible.")
 
-def validate_function_data(data: Dict[str, Any]) -> None:
-    """Validate function data against a schema."""
-    try:
-        if "changelog" in data:
-            data["changelog"] = convert_changelog(data["changelog"])
-        schema = _load_schema()
-        validate(instance=data, schema=schema)
-    except ValidationError as e:
-        logger.error(f"Validation error: {str(e)}")
-        raise
+    if exclude_dirs is None:
+        exclude_dirs = []
 
-def get_annotation(node: Optional[ast.AST]) -> str:
-    """Get the annotation of an AST node."""
-    try:
-        if node is None:
-            return "Any"
-        if isinstance(node, ast.Name):
-            return node.id
-        elif isinstance(node, ast.Constant):
-            return str(node.value)
-        elif isinstance(node, ast.Attribute):
-            parts = []
-            current = node
-            while isinstance(current, ast.Attribute):
-                parts.append(current.attr)
-                current = current.value
-            if isinstance(current, ast.Name):
-                parts.append(current.id)
-            return ".".join(reversed(parts))
-        elif isinstance(node, ast.Subscript):
-            return f"{get_annotation(node.value)}[{get_annotation(node.slice)}]"
-        elif isinstance(node, ast.BinOp):
-            if isinstance(node.op, ast.BitOr):
-                left = get_annotation(node.left)
-                right = get_annotation(node.right)
-                return f"Union[{left}, {right}]"
-        else:
-            return "Any"
-    except Exception as e:
-        logger.error(f"Error processing type annotation: {e}")
-        return "Any"
+    python_files = []
+    for dirpath, dirnames, filenames in os.walk(directory):
+        # Exclude specified directories
+        dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
 
-def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
-    """Format parsed sections into a standardized response."""
-    logger.debug(f"Formatting response with sections: {sections}")
-    return {
-        "summary": sections.get("summary", "No summary available"),
-        "docstring": sections.get("docstring", "No documentation available"),
-        "params": sections.get("params", []),
-        "returns": sections.get("returns", {"type": "None", "description": ""}),
-        "examples": sections.get("examples", []),
-        "classes": sections.get("classes", []),
-        "functions": sections.get("functions", [])
-    }
+        # Collect Python files
+        for filename in filenames:
+            if filename.endswith('.py'):
+                python_files.append(os.path.join(dirpath, filename))
 
-def _load_schema() -> Dict[str, Any]:
-    """Load the JSON schema for validation."""
-    if 'schema' not in _schema_cache:
-        schema_path = os.path.join('/workspaces/simple', 'function_schema.json')
-        try:
-            with open(schema_path, 'r', encoding='utf-8') as schema_file:
-                _schema_cache['schema'] = json.load(schema_file)
-                logger.debug("Loaded schema from file")
-        except FileNotFoundError:
-            logger.error(f"Schema file not found at {schema_path}")
-            raise
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in schema file: {e}")
-            raise
-    return _schema_cache['schema']
-
-def validate_schema(parsed_response: Dict[str, Any]) -> None:
-    """Validate the parsed response against a predefined schema."""
-    schema = {
-        "type": "object",
-        "properties": {
-            "summary": {"type": "string"},
-            "docstring": {"type": "string"},
-            "params": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "type": {"type": "string"},
-                        "description": {"type": "string"}
-                    },
-                    "required": ["name", "type", "description"]
-                }
-            },
-            "returns": {
-                "type": "object",
-                "properties": {
-                    "type": {"type": "string"},
-                    "description": {"type": "string"}
-                },
-                "required": ["type", "description"]
-            },
-            "examples": {"type": "array", "items": {"type": "string"}},
-            "classes": {"type": "array", "items": {"type": "string"}},
-            "functions": {"type": "array", "items": {"type": "string"}}
-        },
-        "required": ["summary", "docstring", "params", "returns", "classes", "functions"]
-    }
-    
-    try:
-        validate(instance=parsed_response, schema=schema)
-    except ValidationError as e:
-        raise ValueError(f"Schema validation error: {e.message}")
-
-def format_validation_error(error: ValidationError) -> str:
-    """Format a validation error message."""
-    path = ' -> '.join(str(p) for p in error.path) if error.path else 'root'
-    return (
-        f"Validation error at {path}:\n"
-        f"Message: {error.message}\n"
-        f"Failed value: {error.instance}\n"
-        f"Schema path: {' -> '.join(str(p) for p in error.schema_path)}"
-    )
-
-class TextProcessor:
-    """Handles text processing tasks such as similarity calculation."""
-    
-    def __init__(self):
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
-    
-    def calculate_similarity(self, text1: str, text2: str) -> float:
-        """Calculate cosine similarity between two texts."""
-        embeddings = self.model.encode([text1, text2])
-        similarity = cosine_similarity(np.array([embeddings[0]]), np.array([embeddings[1]]))[0][0]
-        return float(similarity)
-    
-    def extract_keywords(self, text: str, top_k: int = 5) -> List[str]:
-        """Extract keywords from text."""
-        return []  # Placeholder for keyword extraction logic
-
-class MetricsCalculator:
-    """Calculates precision, recall, and F1 score for document retrieval tasks."""
-    
-    @staticmethod
-    def calculate_precision(retrieved_docs: List[Dict], relevant_docs: List[str]) -> float:
-        """Calculate precision for retrieved documents."""
-        if not retrieved_docs:
-            return 0.0
-        relevant_count = sum(
-            1 for doc in retrieved_docs
-            if any(rel in doc['content'] for rel in relevant_docs)
-        )
-        return relevant_count / len(retrieved_docs)
-    
-    @staticmethod
-    def calculate_recall(retrieved_docs: List[Dict], relevant_docs: List[str]) -> float:
-        """Calculate recall for retrieved documents."""
-        if not relevant_docs:
-            return 0.0
-        retrieved_count = sum(
-            1 for rel in relevant_docs
-            if any(rel in doc['content'] for doc in retrieved_docs)
-        )
-        return retrieved_count / len(relevant_docs)
-    
-    @staticmethod
-    def calculate_f1_score(precision: float, recall: float) -> float:
-        """Calculate F1 score based on precision and recall."""
-        if precision + recall == 0:
-            return 0.0
-        return 2 * (precision * recall) / (precision + recall)
+    return python_files
