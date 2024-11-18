@@ -1,4 +1,4 @@
-# openai_client.py
+# openai_model.py
 from typing import Dict, Any, Optional, List, Tuple
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
