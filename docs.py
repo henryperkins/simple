@@ -1,490 +1,422 @@
+#!/usr/bin/env python3
 """
-Enhanced Cache Management Module
+docs.py - Documentation Generation System
 
-This module provides advanced caching capabilities for docstrings and API responses,
-with Redis-based distributed caching and in-memory fallback.
+This module provides a comprehensive system for generating documentation from Python source code,
+including docstring management, markdown generation, and documentation workflow automation.
 
-Version: 1.3.0
-Author: Development Team
+Classes:
+    DocStringManager: Manages docstring operations for source code files.
+    MarkdownGenerator: Generates markdown documentation from Python code elements.
+    DocumentationManager: Manages the overall documentation generation process.
+
+Functions:
+    main(): Demonstrates usage of the documentation system.
 """
 
-import json
-import time
-import hashlib
+import ast
+import logging
 from typing import Optional, Dict, Any, List, Union
-import redis
-from dataclasses import dataclass
-import asyncio
-from core.logger import log_info, log_error, log_debug
-from docstring_utils import DocstringValidator  # Ensure this import is added
+from pathlib import Path
+from datetime import datetime
+from docstring_utils import parse_docstring, parse_and_validate_docstring
+from core.logger import log_error
+from core.utils import handle_exceptions  # Import the decorator
+from docstring_utils import DocstringValidator  # Assuming this is where the validator is defined
 
-@dataclass
-class CacheStats:
-    """Statistics for cache operations."""
-    hits: int = 0
-    misses: int = 0
-    errors: int = 0
-    total_requests: int = 0
-    cache_size: int = 0
-    avg_response_time: float = 0.0
-
-class Cache:
-    """Enhanced cache management with Redis and in-memory fallback.
-
-    Provides distributed caching with Redis and falls back to in-memory
-    caching when Redis is unavailable.
+class DocStringManager:
     """
-
-    def __init__(
-        self,
-        host: str = "localhost",
-        port: int = 6379,
-        db: int = 0,
-        password: Optional[str] = None,
-        default_ttl: int = 86400,
-        max_retries: int = 3,
-        max_memory_items: int = 1000,
-    ):
-        """Initializes the cache system with proper synchronization.
-
-        Args:
-            host (str): Redis host.
-            port (int): Redis port.
-            db (int): Redis database number.
-            password (Optional[str]): Redis password.
-            default_ttl (int): Default time-to-live for cache entries in seconds.
-            max_retries (int): Maximum number of Redis connection attempts.
-            max_memory_items (int): Maximum number of items in memory cache.
-        """
-        self.default_ttl = default_ttl
-        self.max_retries = max_retries
-        self.stats = CacheStats()
-        self._stats_lock = asyncio.Lock()  # Lock for stats
-        self._redis_lock = asyncio.Lock()  # Lock for Redis operations
-
-        # Initialize Redis connection with proper error handling
-        self.redis_available = False
-        self._init_redis(host, port, db, password)
-
-        # Initialize in-memory cache with synchronization
-        self.memory_cache = LRUCache(max_size=max_memory_items)
-
-    def _init_redis(self, host, port, db, password):
-        """Initialize Redis connection with retries."""
-        for attempt in range(self.max_retries):
-            try:
-                self.redis_client = redis.Redis(
-                    host=host,
-                    port=port,
-                    db=db,
-                    password=password,
-                    decode_responses=True,
-                    retry_on_timeout=True,
-                    socket_timeout=5,
-                    socket_connect_timeout=5,
-                )
-                self.redis_client.ping()
-                self.redis_available = True
-                log_info("Redis cache initialized successfully")
-                break
-            except redis.RedisError as e:
-                log_error(f"Redis connection error (attempt {attempt + 1}): {e}")
-                if attempt == self.max_retries - 1:
-                    log_error("Falling back to in-memory cache only")
-                time.sleep(2**attempt)
-
-    def generate_cache_key(
-        self,
-        model_type: str,
-        function_name: str,
-        params: Dict[str, Any]
-    ) -> str:
-        """Generate cache key including model type."""
-        key_components = [
-            model_type,
-            function_name,
-            hashlib.md5(str(params).encode()).hexdigest()
-        ]
-        return ":".join(key_components)
-
-    async def _update_stats(self, hit: bool = False, error: bool = False, response_time: float = 0.0):
-        """Thread-safe update of cache statistics."""
-        async with self._stats_lock:
-            self.stats.total_requests += 1
-            if hit:
-                self.stats.hits += 1
-            else:
-                self.stats.misses += 1
-            if error:
-                self.stats.errors += 1
-
-            # Update average response time thread-safely
-            self.stats.avg_response_time = (
-                (self.stats.avg_response_time * (self.stats.total_requests - 1) +
-                 response_time) / self.stats.total_requests
-            )
-
-    async def get_cached_docstring(
-        self, key: str, return_metadata: bool = True
-    ) -> Optional[Dict[str, Any]]:
-        """Thread-safe retrieval of cached docstring.
-
-        Args:
-            key (str): Cache key.
-            return_metadata (bool): Whether to return metadata with the docstring.
-
-        Returns:
-            Optional[Dict[str, Any]]: Cached data if found, otherwise None.
-        """
-        start_time = time.time()
-        try:
-            # Try Redis first with proper locking
-            if self.redis_available:
-                async with self._redis_lock:
-                    value = await self._get_from_redis(key)
-                    if value:
-                        await self._update_stats(hit=True, response_time=time.time() - start_time)
-                        return (
-                            value if return_metadata else {"docstring": value["docstring"]}
-                        )
-
-            # Try memory cache with built-in synchronization
-            value = await self.memory_cache.get(key)
-            if value:
-                await self._update_stats(hit=True, response_time=time.time() - start_time)
-                return value if return_metadata else {"docstring": value["docstring"]}
-
-            await self._update_stats(hit=False, response_time=time.time() - start_time)
-            return None
-
-        except Exception as e:
-            log_error(f"Cache retrieval error: {e}")
-            await self._update_stats(error=True, response_time=time.time() - start_time)
-            return None
-
-    async def save_docstring(
-        self,
-        key: str,
-        data: Dict[str, Any],
-        ttl: Optional[int] = None,
-        tags: Optional[List[str]] = None,
-    ) -> bool:
-        """Save docstring with validation.
-
-        Args:
-            key (str): Cache key.
-            data (Dict[str, Any]): Data to cache.
-            ttl (Optional[int]): Time-to-live in seconds.
-            tags (Optional[List[str]]): List of tags for the cache entry.
-
-        Returns:
-            bool: True if save was successful, otherwise False.
-        """
-        ttl = ttl or self.default_ttl
-        try:
-            # Validate docstring before caching
-            validator = DocstringValidator()
-            is_valid, validation_errors = validator.validate_docstring(data)
-            
-            if not is_valid:
-                log_error(f"Invalid docstring not cached: {validation_errors}")
-                return False
-
-            cache_entry = {
-                **data,
-                "cache_metadata": {
-                    "timestamp": time.time(),
-                    "ttl": ttl,
-                    "tags": tags or [],
-                    "validation_status": {
-                        "is_valid": True,
-                        "validated_at": time.time()
-                    }
-                }
-            }
-
-            # Try Redis first
-            if self.redis_available:
-                success = await self._set_in_redis(key, cache_entry, ttl)
-                if success:
-                    return True
-
-            # Fallback to memory cache
-            await self.memory_cache.set(key, cache_entry, ttl)
-            return True
-
-        except Exception as e:
-            log_error(f"Cache save error: {e}")
-            return False
-
-    async def invalidate_by_tags(self, tags: List[str]) -> int:
-        """Invalidates cache entries based on tags.
-
-        Args:
-            tags (List[str]): List of tags to match.
-
-        Returns:
-            int: Number of entries invalidated.
-        """
-        count = 0
-        try:
-            if self.redis_available:
-                count += await self._invalidate_redis_by_tags(tags)
-            count += await self.memory_cache.invalidate_by_tags(tags)
-            return count
-        except Exception as e:
-            log_error(f"Tag-based invalidation error: {e}")
-            return count
-
-    async def _get_from_redis(self, key: str) -> Optional[Dict[str, Any]]:
-        """Gets value from Redis.
-
-        Args:
-            key (str): Cache key.
-
-        Returns:
-            Optional[Dict[str, Any]]: Cached value if found, otherwise None.
-        """
-        try:
-            value = self.redis_client.get(key)
-            return json.loads(value) if value else None
-        except Exception as e:
-            log_error(f"Redis get error: {e}")
-            return None
-
-    async def _set_in_redis(self, key: str, value: Dict[str, Any], ttl: int) -> bool:
-        """Sets value in Redis with tags.
-
-        Args:
-            key (str): Cache key.
-            value (Dict[str, Any]): Value to cache.
-            ttl (int): Time-to-live in seconds.
-
-        Returns:
-            bool: True if set was successful, otherwise False.
-        """
-        try:
-            serialized = json.dumps(value)
-            self.redis_client.setex(key, ttl, serialized)
-
-            # Store tags
-            if value.get("cache_metadata", {}).get("tags"):
-                for tag in value["cache_metadata"]["tags"]:
-                    tag_key = f"tag:{tag}"
-                    self.redis_client.sadd(tag_key, key)
-                    self.redis_client.expire(tag_key, ttl)
-
-            return True
-        except Exception as e:
-            log_error(f"Redis set error: {e}")
-            return False
-
-    async def _invalidate_redis_by_tags(self, tags: List[str]) -> int:
-        """Invalidates Redis entries based on tags.
-
-        Args:
-            tags (List[str]): List of tags to match.
-
-        Returns:
-            int: Number of entries invalidated.
-        """
-        count = 0
-        try:
-            for tag in tags:
-                tag_key = f"tag:{tag}"
-                keys = self.redis_client.smembers(tag_key)
-                if keys:
-                    count += len(keys)
-                    for key in keys:
-                        await self._delete_from_redis(key)
-                    self.redis_client.delete(tag_key)
-            return count
-        except Exception as e:
-            log_error(f"Redis tag invalidation error: {e}")
-            return count
-
-    async def _delete_from_redis(self, key: str) -> bool:
-        """Deletes value and associated tags from Redis.
-
-        Args:
-            key (str): Key to delete.
-
-        Returns:
-            bool: True if deletion was successful, otherwise False.
-        """
-        try:
-            # Get tags before deletion
-            value = await self._get_from_redis(key)
-            if value and value.get("cache_metadata", {}).get("tags"):
-                for tag in value["cache_metadata"]["tags"]:
-                    self.redis_client.srem(f"tag:{tag}", key)
-
-            self.redis_client.delete(key)
-            return True
-        except Exception as e:
-            log_error(f"Redis delete error: {e}")
-            return False
-
-    async def clear(self) -> bool:
-        """Clears all cache entries.
-
-        Returns:
-            bool: True if clear was successful, otherwise False.
-        """
-        try:
-            if self.redis_available:
-                self.redis_client.flushdb()
-            await self.memory_cache.clear()
-            self.stats = CacheStats()
-            return True
-        except Exception as e:
-            log_error(f"Cache clear error: {e}")
-            return False
-
-    def get_stats(self) -> Dict[str, Union[int, float]]:
-        """Gets cache statistics.
-
-        Returns:
-            Dict[str, Union[int, float]]: Dictionary of cache statistics.
-        """
-        return {
-            "hits": self.stats.hits,
-            "misses": self.stats.misses,
-            "errors": self.stats.errors,
-            "total_requests": self.stats.total_requests,
-            "hit_ratio": self.stats.hits / max(self.stats.total_requests, 1),
-            "avg_response_time": self.stats.avg_response_time,
-            "redis_available": self.redis_available,
-        }
-
-class LRUCache:
-    """Thread-safe LRU cache implementation for in-memory caching.
+    Manages docstring operations for source code files.
 
     Attributes:
-        max_size (int): Maximum number of items to store.
-        cache (Dict[str, Dict[str, Any]]): In-memory cache storage.
-        access_order (List[str]): Order of access for cache keys.
-        lock (asyncio.Lock): Lock for thread-safe operations.
+        source_code (str): The source code to manage docstrings for.
+        tree (ast.AST): The abstract syntax tree of the source code.
     """
 
-    def __init__(self, max_size: int = 1000):
-        """Initializes LRU cache.
-
-        Args:
-            max_size (int): Maximum number of items to store.
+    def __init__(self, source_code: str):
         """
-        self.max_size = max_size
-        self.cache: Dict[str, Dict[str, Any]] = {}
-        self.access_order: List[str] = []
-        self.lock = asyncio.Lock()
-
-    async def get(self, key: str) -> Optional[Any]:
-        """Gets value from cache and updates access order.
+        Initialize with source code and validator.
 
         Args:
-            key (str): Cache key.
+            source_code (str): The source code to manage docstrings for
+        """
+        self.source_code = source_code
+        self.tree = ast.parse(source_code)
+        self.validator = DocstringValidator()
+        logging.debug("DocStringManager initialized with validator.")
+
+    @handle_exceptions(log_error)
+    def insert_docstring(self, node: ast.FunctionDef, docstring: str) -> None:
+        """
+        Insert or update docstring with validation.
+
+        Args:
+            node (ast.FunctionDef): The function node to update
+            docstring (str): The new docstring to insert
+        """
+        if not isinstance(docstring, str):
+            log_error(f"Invalid docstring for function '{node.name}'. Expected a string.")
+            return
+
+        # Validate before insertion
+        parsed_docstring, validation_errors = parse_and_validate_docstring(docstring)
+        if parsed_docstring:
+            logging.debug(f"Inserting validated docstring into function '{node.name}'.")
+            node.body.insert(0, ast.Expr(value=ast.Constant(value=docstring)))
+        else:
+            log_error(
+                f"Docstring validation failed for {node.name}: {validation_errors}"
+            )
+
+    @handle_exceptions(log_error)
+    def update_source_code(self, documentation_entries: List[Dict]) -> str:
+        """
+        Update source code with validated docstrings.
+
+        Args:
+            documentation_entries (List[Dict]): List of documentation updates
 
         Returns:
-            Optional[Any]: Cached value if found and not expired, otherwise None.
+            str: Updated source code
         """
-        async with self.lock:
-            if key not in self.cache:
+        logging.debug("Updating source code with validated docstrings.")
+        for entry in documentation_entries:
+            for node in ast.walk(self.tree):
+                if isinstance(node, ast.FunctionDef) and node.name == entry['function_name']:
+                    # Validate docstring before updating
+                    parsed_docstring, validation_errors = parse_and_validate_docstring(
+                        entry['docstring']
+                    )
+                    if parsed_docstring:
+                        self.insert_docstring(node, entry['docstring'])
+                    else:
+                        log_error(
+                            f"Skipping invalid docstring for {node.name}: {validation_errors}"
+                        )
+
+        updated_code = ast.unparse(self.tree)
+        logging.info("Source code updated with new docstrings.")
+        return updated_code
+
+    @handle_exceptions(log_error)
+    def generate_markdown_documentation(
+        self,
+        documentation_entries: List[Dict],
+        module_name: str = "",
+        file_path: str = "",
+        description: str = ""
+    ) -> str:
+        """
+        Generate markdown documentation for the code.
+
+        Args:
+            documentation_entries (List[Dict]): List of documentation updates
+            module_name (str): Name of the module
+            file_path (str): Path to the source file 
+            description (str): Module description
+
+        Returns:
+            str: Generated markdown documentation
+        """
+        logging.debug("Generating markdown documentation.")
+        markdown_gen = MarkdownGenerator()
+        if module_name:
+            markdown_gen.add_header(f"Module: {module_name}")
+        if description:
+            markdown_gen.add_section("Description", description)
+    
+        for entry in documentation_entries:
+            if 'function_name' in entry and 'docstring' in entry:
+                markdown_gen.add_section(
+                    f"Function: {entry['function_name']}",
+                    entry['docstring'] or "No documentation available"
+                )
+
+        markdown = markdown_gen.generate_markdown()
+        logging.info("Markdown documentation generated.")
+        return markdown
+    
+
+class MarkdownGenerator:
+    """
+    Generates markdown documentation from Python code elements.
+
+    Attributes:
+        output (List[str]): List of markdown lines to be generated.
+
+    Methods:
+        add_header(text: str, level: int = 1) -> None: Adds a header to the markdown document.
+        add_code_block(code: str, language: str = "python") -> None: Adds a code block to the markdown document.
+        add_section(title: str, content: str, level: int = 3) -> None: Adds a section with title and content.
+        generate_markdown() -> str: Generates the final markdown document.
+    """
+
+    def __init__(self):
+        """Initialize the MarkdownGenerator."""
+        self.output = []
+        logging.debug("MarkdownGenerator initialized.")
+
+    def add_header(self, text: str, level: int = 1) -> None:
+        """
+        Add a header to the markdown document.
+
+        Args:
+            text (str): Header text
+            level (int): Header level (1-6)
+        """
+        logging.debug(f"Adding header: {text}")
+        self.output.append(f"{'#' * level} {text}\n")
+
+    def add_code_block(self, code: str, language: str = "python") -> None:
+        """
+        Add a code block to the markdown document.
+
+        Args:
+            code (str): The code to include
+            language (str): Programming language for syntax highlighting
+        """
+        logging.debug("Adding code block.")
+        self.output.append(f"```{language}\n{code}\n```\n")
+
+    def add_section(self, title: str, content: str) -> None:
+        """
+        Add a section with title and content.
+
+        Args:
+            title (str): Section title
+            content (str): Section content
+        """
+        logging.debug(f"Adding section: {title}")
+        self.output.append(f"### {title}\n\n{content}\n")
+
+    def generate_markdown(self) -> str:
+        """
+        Generate the final markdown document.
+
+        Returns:
+            str: Complete markdown document
+        """
+        logging.debug("Generating final markdown document.")
+        return "\n".join(self.output)
+
+
+class DocumentationManager:
+    """
+    Manages the overall documentation generation process.
+
+    Attributes:
+        output_dir (Path): Directory for output documentation.
+        logger (logging.Logger): Logger instance for logging.
+
+    Methods:
+        process_file(file_path: Union[str, Path]) -> Optional[str]: Processes a single Python file for documentation.
+        process_directory(directory_path: Union[str, Path]) -> Dict[str, str]: Processes all Python files in a directory.
+        save_documentation(content: str, output_file: Union[str, Path]) -> bool: Saves documentation content to a file.
+        generate_index(docs_map: Dict[str, str]) -> str: Generates an index page for all documentation files.
+    """
+
+    def __init__(self, output_dir: str = "docs"):
+        """
+        Initialize the DocumentationManager.
+
+        Args:
+            output_dir (str): Directory for output documentation
+        """
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+        self.logger = self._setup_logging()
+        logging.debug("DocumentationManager initialized.")
+
+    def _setup_logging(self) -> logging.Logger:
+        """
+        Set up logging configuration.
+
+        Returns:
+            logging.Logger: Configured logger instance
+        """
+        logger = logging.getLogger('documentation_manager')
+        logger.setLevel(logging.DEBUG)
+        
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+        
+        return logger
+
+    def process_file(self, file_path: Union[str, Path]) -> Optional[str]:
+        """
+        Process a single Python file for documentation.
+
+        Args:
+            file_path (Union[str, Path]): Path to the Python file
+
+        Returns:
+            Optional[str]: Generated markdown documentation
+        """
+        logging.debug(f"Processing file: {file_path}")
+        try:
+            file_path = Path(file_path)
+            if not file_path.exists() or file_path.suffix != '.py':
+                self.logger.error(f"Invalid Python file: {file_path}")
                 return None
 
-            entry = self.cache[key]
-            if self._is_expired(entry):
-                await self.delete(key)
-                return None
+            with open(file_path, 'r') as f:
+                source = f.read()
 
-            # Update access order
-            self.access_order.remove(key)
-            self.access_order.append(key)
+            module_doc = parse_docstring(source)
+            
+            markdown_gen = MarkdownGenerator()
+            markdown_gen.add_header(f"Documentation for {file_path.name}")
+            if module_doc:
+                markdown_gen.add_section("Module Description", module_doc.get('Description', ''))
 
-            return entry["value"]
+            # Parse the source code
+            tree = ast.parse(source)
+            
+            # Process classes and functions
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    self._process_class(node, markdown_gen)
+                elif isinstance(node, ast.FunctionDef):
+                    self._process_function(node, markdown_gen)
 
-    async def set(self, key: str, value: Any, ttl: int):
-        """Sets value in cache with TTL.
+            markdown = markdown_gen.generate_markdown()
+            logging.info(f"Generated markdown for file: {file_path}")
+            return markdown
 
-        Args:
-            key (str): Cache key.
-            value (Any): Value to cache.
-            ttl (int): Time-to-live in seconds.
+        except Exception as e:
+            self.logger.error(f"Error processing file {file_path}: {e}")
+            return None
+
+    def _process_class(self, node: ast.ClassDef, markdown_gen: MarkdownGenerator) -> None:
         """
-        async with self.lock:
-            # Evict oldest item if cache is full
-            if len(self.cache) >= self.max_size:
-                await self._evict_oldest()
-
-            entry = {"value": value, "expires_at": time.time() + ttl}
-
-            self.cache[key] = entry
-            if key in self.access_order:
-                self.access_order.remove(key)
-            self.access_order.append(key)
-
-    async def delete(self, key: str):
-        """Deletes value from cache.
+        Process a class definition node.
 
         Args:
-            key (str): Cache key to delete.
+            node (ast.ClassDef): AST node representing a class definition
+            markdown_gen (MarkdownGenerator): Markdown generator instance
         """
-        async with self.lock:
-            if key in self.cache:
-                del self.cache[key]
-                self.access_order.remove(key)
+        logging.debug(f"Processing class: {node.name}")
+        try:
+            class_doc = ast.get_docstring(node) or "No documentation available"
+            markdown_gen.add_section(f"Class: {node.name}", 
+                                    class_doc)
+            
+            # Process class methods
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef):
+                    self._process_function(item, markdown_gen, is_method=True, class_name=node.name)
+        except Exception as e:
+            self.logger.error(f"Error processing class {node.name}: {e}")
 
-    async def invalidate_by_tags(self, tags: List[str]) -> int:
-        """Invalidates cache entries by tags.
+    def _process_function(self, node: ast.FunctionDef, markdown_gen: MarkdownGenerator, is_method: bool = False, class_name: str = None) -> None:
+        """
+        Process a function definition node.
 
         Args:
-            tags (List[str]): List of tags to match.
+            node (ast.FunctionDef): AST node representing a function definition
+            markdown_gen (MarkdownGenerator): Markdown generator instance
+            is_method (bool): Whether the function is a class method
+            class_name (str): Name of the containing class if is_method is True
+        """
+        logging.debug(f"Processing function: {node.name}")
+        try:
+            func_doc = ast.get_docstring(node) or "No documentation available"
+            section_title = f"{'Method' if is_method else 'Function'}: {node.name}"
+            if is_method:
+                section_title = f"Method: {class_name}.{node.name}"
+
+            # Extract function signature
+            args = [arg.arg for arg in node.args.args]
+            signature = f"{node.name}({', '.join(args)})"
+
+            content = [
+                f"```python\n{signature}\n```\n",
+                func_doc
+            ]
+            
+            markdown_gen.add_section(section_title, "\n".join(content))
+        except Exception as e:
+            self.logger.error(f"Error processing function {node.name}: {e}")
+
+    def process_directory(self, directory_path: Union[str, Path]) -> Dict[str, str]:
+        """
+        Process all Python files in a directory for documentation.
+
+        Args:
+            directory_path (Union[str, Path]): Path to the directory to process
 
         Returns:
-            int: Number of entries invalidated.
+            Dict[str, str]: Dictionary mapping file paths to their documentation
         """
-        count = 0
-        async with self.lock:
-            keys_to_delete = []
-            for key, entry in self.cache.items():
-                if entry["value"].get("cache_metadata", {}).get("tags"):
-                    if any(
-                        tag in entry["value"]["cache_metadata"]["tags"] for tag in tags
-                    ):
-                        keys_to_delete.append(key)
+        logging.debug(f"Processing directory: {directory_path}")
+        directory_path = Path(directory_path)
+        results = {}
 
-            for key in keys_to_delete:
-                await self.delete(key)
-                count += 1
+        if not directory_path.is_dir():
+            self.logger.error(f"Invalid directory path: {directory_path}")
+            return results
 
-            return count
+        for file_path in directory_path.rglob("*.py"):
+            try:
+                doc_content = self.process_file(file_path)
+                if doc_content:
+                    results[str(file_path)] = doc_content
+            except Exception as e:
+                self.logger.error(f"Error processing directory {directory_path}: {e}")
 
-    async def clear(self):
-        """Clears all cache entries."""
-        async with self.lock:
-            self.cache.clear()
-            self.access_order.clear()
+        return results
 
-    def _is_expired(self, entry: Dict[str, Any]) -> bool:
-        """Checks if cache entry is expired.
+    def save_documentation(self, content: str, output_file: Union[str, Path]) -> bool:
+        """
+        Save documentation content to a file.
 
         Args:
-            entry (Dict[str, Any]): Cache entry to check.
+            content (str): Documentation content to save
+            output_file (Union[str, Path]): Path to the output file
 
         Returns:
-            bool: True if entry is expired, otherwise False.
+            bool: True if successful, False otherwise
         """
-        return time.time() > entry["expires_at"]
+        logging.debug(f"Saving documentation to: {output_file}")
+        try:
+            output_file = Path(output_file)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            self.logger.info(f"Documentation saved to {output_file}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error saving documentation: {e}")
+            return False
 
-    async def _evict_oldest(self):
-        """Evicts oldest cache entry."""
-        if self.access_order:
-            oldest_key = self.access_order[0]
-            await self.delete(oldest_key)
+    def generate_index(self, docs_map: Dict[str, str]) -> str:
+        """
+        Generate an index page for all documentation files.
 
-    def get_size(self) -> int:
-        """Gets current cache size.
+        Args:
+            docs_map (Dict[str, str]): Dictionary mapping file paths to their documentation
 
         Returns:
-            int: Number of items in cache.
+            str: Generated index page content
         """
-        return len(self.cache)
+        logging.debug("Generating documentation index.")
+        index_content = [
+            "# Documentation Index\n",
+            f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n",
+            "## Files\n"
+        ]
+
+        for file_path in sorted(docs_map.keys()):
+            rel_path = Path(file_path).name
+            doc_path = Path(file_path).with_suffix('.md').name
+            index_content.append(f"- [{rel_path}]({doc_path})")
+
+        logging.info("Documentation index generated.")
+        return "\n".join(index_content)
