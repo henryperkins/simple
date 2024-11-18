@@ -1,90 +1,193 @@
-# response_parser.py
+"""
+Response Parser Module
 
-import re
-from typing import Any, Dict, List
+This module provides functionality to parse and validate responses from Azure OpenAI,
+focusing on extracting docstrings, summaries, and other metadata from API responses.
 
-from core.logger import LoggerSetup
-from utils import format_response
+Version: 1.2.0
+Author: Development Team
+"""
 
-logger = LoggerSetup.get_logger("response_parser")
+import json
+from typing import Optional, Dict, Any
+from jsonschema import validate, ValidationError
+from core.logger import log_info, log_error, log_debug
 
+# Define JSON schema for API response validation
+JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "docstring": {
+            "type": "string",
+            "minLength": 1
+        },
+        "summary": {
+            "type": "string",
+            "minLength": 1
+        },
+        "changelog": {
+            "type": "string"
+        },
+        "complexity_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+        }
+    },
+    "required": ["docstring", "summary"],
+    "additionalProperties": False
+}
 
-def extract_section(text: str, section_name: str) -> str:
-    """Extract a section from the response text."""
-    pattern = rf"{section_name}:\s*(.*?)(?=\n\n|\Z)"
-    match = re.search(pattern, text, re.DOTALL)
-    return match.group(1).strip() if match else ""
+class ResponseParser:
+    """
+    Parses and validates responses from Azure OpenAI API.
 
+    Methods:
+        parse_json_response: Parses the Azure OpenAI response to extract generated docstring and related details.
+        validate_response: Validates the response to ensure it contains required fields and proper content.
+        _parse_plain_text_response: Fallback parser for plain text responses from Azure OpenAI.
+    """
 
-def extract_parameter_section(text: str) -> List[Dict[str, str]]:
-    """Extract parameter information from the response text."""
-    params_section = extract_section(text, "Parameters")
-    params = []
-    param_pattern = r"(\w+)\s*\(([^)]+)\):\s*(.+?)(?=\n\w+\s*\(|\Z)"
-    for match in re.finditer(param_pattern, params_section, re.DOTALL):
-        params.append({
-            "name": match.group(1),
-            "type": match.group(2).strip(),
-            "description": match.group(3).strip()
-        })
-    return params
+    def parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse the Azure OpenAI response to extract the generated docstring and related details.
 
+        Args:
+            response (str): The JSON response string to parse.
 
-def extract_return_section(text: str) -> Dict[str, str]:
-    """Extract return information from the response text."""
-    returns_section = extract_section(text, "Returns")
-    type_pattern = r"(\w+):\s*(.+)"
-    match = re.search(type_pattern, returns_section)
-    return {
-        "type": match.group(1) if match else "None",
-        "description": match.group(2).strip() if match else ""
-    }
-
-
-def extract_code_examples(text: str) -> List[str]:
-    """Extract code examples from the response text."""
-    examples_section = extract_section(text, "Examples")
-    examples = []
-    for match in re.finditer(r"```python\s*(.*?)\s*```", examples_section, re.DOTALL):
-        examples.append(match.group(1).strip())
-    return examples
-
-
-class ClaudeResponseParser:
-    """Handles response parsing and formatting."""
-
-    @staticmethod
-    def parse_function_analysis(response: str) -> Dict[str, Any]:
-        """Parse the natural language response into structured format."""
+        Returns:
+            Optional[Dict[str, Any]]: Dictionary containing parsed response data or None if parsing fails.
+        """
+        log_debug("Parsing JSON response.")
         try:
-            logger.debug(f"Parsing function analysis response: {response}")
-            # Extract key sections from the response
-            sections = {
-                'summary': extract_section(response, 'Summary'),
-                'params': extract_parameter_section(response),
-                'returns': extract_return_section(response),
-                'examples': extract_code_examples(response),
-                'classes': [],  # Ensure classes is included
-                'functions': []  # Ensure functions is included
+            response_json = json.loads(response)
+            log_info("Successfully parsed Azure OpenAI response.")
+            log_debug(f"Parsed JSON response: {response_json}")
+
+            # Validate against JSON schema
+            validate(instance=response_json, schema=JSON_SCHEMA)
+
+            # Extract fields
+            parsed_response = {
+                "docstring": response_json["docstring"].strip(),
+                "summary": response_json["summary"].strip(),
+                "changelog": response_json.get("changelog", "Initial documentation").strip(),
+                "complexity_score": response_json.get("complexity_score", 0)
             }
 
-            # Validate and format response
-            return format_response(sections)
+            return parsed_response
+
+        except json.JSONDecodeError as e:
+            log_error(f"Failed to parse response as JSON: {e}")
+            return self._parse_plain_text_response(response)
+        except ValidationError as e:
+            log_error(f"Response validation error: {e.message}")
+            log_error(f"Schema path: {' -> '.join(str(p) for p in e.schema_path)}")
+            return None
+        except Exception as e:
+            log_error(f"Unexpected error during JSON response parsing: {e}")
+            return None
+
+    def validate_response(self, response: Dict[str, Any]) -> bool:
+        """
+        Validate the response from the API to ensure it contains required fields and proper content.
+
+        Args:
+            response (Dict[str, Any]): The response from the API containing content and usage information.
+
+        Returns:
+            bool: True if the response is valid and contains all required fields with proper content.
+        """
+        try:
+            if not isinstance(response, dict) or "content" not in response:
+                log_error("Response missing basic structure")
+                return False
+
+            content = response["content"]
+
+            # Validate required fields
+            required_fields = ["docstring", "summary", "complexity_score", "changelog"]
+            missing_fields = [field for field in required_fields if field not in content]
+            if missing_fields:
+                log_error(f"Response missing required fields: {missing_fields}")
+                return False
+
+            # Validate usage information if present
+            if "usage" in response:
+                usage = response["usage"]
+                required_usage_fields = ["prompt_tokens", "completion_tokens", "total_tokens"]
+                
+                if not all(field in usage for field in required_usage_fields):
+                    log_error("Missing usage information fields")
+                    return False
+                
+                if not all(isinstance(usage[field], int) and usage[field] >= 0 
+                        for field in required_usage_fields):
+                    log_error("Invalid token count in usage information")
+                    return False
+
+                if usage["total_tokens"] != usage["prompt_tokens"] + usage["completion_tokens"]:
+                    log_error("Inconsistent token counts in usage information")
+                    return False
+
+            return True
 
         except Exception as e:
-            logger.error(f"Error parsing response: {e}")
-            return ClaudeResponseParser.get_default_response()
+            log_error(f"Error during response validation: {e}")
+            return False
 
     @staticmethod
-    def get_default_response() -> Dict[str, Any]:
-        """Return a default response in case of parsing errors."""
-        logger.debug("Returning default response due to parsing error")
-        return {
-            "summary": "Error parsing response",
-            "docstring": "Error occurred while parsing the documentation.",
-            "params": [],
-            "returns": {"type": "None", "description": ""},
-            "examples": [],
-            "classes": [],
-            "functions": []
-        }
+    def _parse_plain_text_response(text: str) -> Optional[Dict[str, Any]]:
+        """
+        Fallback parser for plain text responses from Azure OpenAI.
+        
+        Args:
+            text (str): The plain text response to parse.
+            
+        Returns:
+            Optional[Dict[str, Any]]: Parsed response data or None if parsing fails.
+        """
+        log_debug("Attempting plain text response parsing.")
+        try:
+            lines = text.strip().split('\n')
+            result = {
+                "docstring": "",
+                "summary": "",
+                "changelog": "Initial documentation",
+                "complexity_score": 0
+            }
+            current_key = None
+            buffer = []
+
+            for line in lines:
+                line = line.strip()
+                if line.endswith(':') and line[:-1].lower() in ['summary', 'changelog', 'docstring', 'complexity_score']:
+                    if current_key and buffer:
+                        content = '\n'.join(buffer).strip()
+                        if current_key == 'complexity_score':
+                            try:
+                                result[current_key] = int(content)
+                            except ValueError:
+                                result[current_key] = 0
+                        else:
+                            result[current_key] = content
+                    current_key = line[:-1].lower()
+                    buffer = []
+                elif current_key:
+                    buffer.append(line)
+
+            if current_key and buffer:
+                content = '\n'.join(buffer).strip()
+                if current_key == 'complexity_score':
+                    try:
+                        result[current_key] = int(content)
+                    except ValueError:
+                        result[current_key] = 0
+                else:
+                    result[current_key] = content
+
+            return result if result["docstring"] and result["summary"] else None
+
+        except Exception as e:
+            log_error(f"Failed to parse plain text response: {e}")
+            return None
