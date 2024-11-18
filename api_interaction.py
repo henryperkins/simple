@@ -1,258 +1,75 @@
-import os
-import re
-import time
-import json
+"""
+API Interaction Module
+
+This module handles interactions with the Azure OpenAI API, including making requests,
+handling retries, managing rate limits, and validating connections.
+"""
+
 import asyncio
-from typing import Any, Dict, Optional, Union, List, Iterable, cast, TypedDict, Literal
+import json
+from typing import List, Tuple, Optional, Dict, Any, Union, Mapping, Iterable
+from openai import AsyncAzureOpenAI
+from openai.types.chat import ChatCompletion, ChatCompletionMessageParam, Function
+from core.logger import log_info, log_error, log_debug, log_warning
+from api.token_management import TokenManager, TokenUsage
+from core.cache import Cache
+from core.config import AzureOpenAIConfig
+from core.exceptions import TooManyRetriesError
+from docstring_utils import DocstringValidator
+from core.monitoring import SystemMonitor  # Assuming this is where the monitor is defined
 
-import aiohttp
-from dotenv import load_dotenv
-from tqdm.asyncio import tqdm
+class APIInteraction:
+    """Handles interactions with the Azure OpenAI API."""
 
-from core.logger import LoggerSetup
-from utils import validate_schema
-from openai import AzureOpenAI, OpenAI
-from openai.types.chat import (
-    ChatCompletion,
-    ChatCompletionMessage,
-    ChatCompletionMessageParam,
-    ChatCompletionSystemMessageParam,
-    ChatCompletionUserMessageParam,
-    ChatCompletionFunctionMessageParam,
-)
-from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
-from openai.types.shared_params.function_definition import FunctionDefinition
-from anthropic import Anthropic
+    def __init__(
+        self, config: AzureOpenAIConfig, token_manager: TokenManager, cache: Cache, monitor: SystemMonitor
+    ):
+        """Initializes the APIInteraction with necessary components."""
+        log_debug("Initializing APIInteraction with Azure OpenAI configuration")
+        
+        # Initialize Azure OpenAI client
+        self.client = AsyncAzureOpenAI(
+            api_key=config.api_key,
+            api_version=config.api_version,
+            azure_endpoint=config.endpoint
+        )
+        
+        self.token_manager = token_manager
+        self.cache = cache
+        self.config = config
+        self.monitor = monitor
+        self.current_retry = 0
+        self.validator = DocstringValidator()  # Add validator instance
+        log_info("APIInteraction initialized successfully.")
 
-# Initialize logger
-logger = LoggerSetup.get_logger("api_interaction")
+    def _log_token_usage(self, func_name: str, token_usage: TokenUsage, response_time: float = 0.0, error: Optional[str] = None):
+        """Logs token usage for a function."""
+        log_info(f"Token usage for {func_name}: {token_usage.total_tokens} tokens used, response time: {response_time}s")
+        if error:
+            log_error(f"Error during token usage logging for {func_name}: {error}")
 
-# Load environment variables
-load_dotenv()
-
-
-class ParameterProperty(TypedDict):
-    type: str
-    description: str
-
-
-class Parameters(TypedDict):
-    type: Literal["object"]
-    properties: Dict[str, ParameterProperty]
-    required: List[str]
-
-
-class FunctionSchema(TypedDict):
-    name: str
-    description: str
-    parameters: Parameters
-
-
-def extract_section(text: str, section_name: str) -> str:
-    """Extract a section from Claude's response."""
-    pattern = rf"{section_name}:\s*(.*?)(?=\n\n|\Z)"
-    match = re.search(pattern, text, re.DOTALL)
-    return match.group(1).strip() if match else ""
-
-
-def extract_parameter_section(text: str) -> List[Dict[str, str]]:
-    """Extract parameter information from Claude's response."""
-    params_section = extract_section(text, "Parameters")
-    params = []
-    param_pattern = r"(\w+)\s*$([^)]+)$:\s*(.+?)(?=\n\w+\s*$|\Z)"
-    for match in re.finditer(param_pattern, params_section, re.DOTALL):
-        params.append({
-            "name": match.group(1),
-            "type": match.group(2).strip(),
-            "description": match.group(3).strip()
-        })
-    return params
-
-
-def extract_return_section(text: str) -> Dict[str, str]:
-    """Extract return information from Claude's response."""
-    returns_section = extract_section(text, "Returns")
-    type_pattern = r"(\w+):\s*(.+)"
-    match = re.search(type_pattern, returns_section)
-    return {
-        "type": match.group(1) if match else "None",
-        "description": match.group(2).strip() if match else ""
-    }
-
-
-def extract_code_examples(text: str) -> List[str]:
-    """Extract code examples from Claude's response."""
-    examples_section = extract_section(text, "Examples")
-    examples = []
-    for match in re.finditer(r"```python\s*(.*?)\s*```", examples_section, re.DOTALL):
-        examples.append(match.group(1).strip())
-    return examples
-
-
-def format_response(sections: Dict[str, Any]) -> Dict[str, Any]:
-    """Format parsed sections into a standardized response."""
-    logger.debug(f"Formatting response with sections: {sections}")
-    return {
-        "summary": sections.get("summary", "No summary available"),
-        "docstring": sections.get("summary", "No documentation available"),
-        "params": sections.get("params", []),
-        "returns": sections.get("returns", {"type": "None", "description": ""}),
-        "examples": sections.get("examples", []),
-        "classes": sections.get("classes", []),  # Ensure classes is included
-        "functions": sections.get("functions", [])  # Ensure functions is included
-    }
-
-
-class APIClient:
-    """Unified API client for multiple LLM providers."""
-
-    def __init__(self):
-        # Initialize API clients
-        logger.info("Initializing API clients")
-        self.azure_client = self._init_azure_client()
-        self.openai_client = self._init_openai_client()
-        self.anthropic_client = self._init_anthropic_client()
-
-        # Configuration
-        self.azure_deployment = os.getenv("DEPLOYMENT_NAME", "gpt-4")
-        self.openai_model = "gpt-4-turbo-preview"  # Updated to latest model
-        self.claude_model = "claude-3-opus-20240229"
-
-    def _init_azure_client(self) -> Optional[AzureOpenAI]:
-        """Initialize Azure OpenAI client with retry logic."""
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                if os.getenv("AZURE_OPENAI_API_KEY"):
-                    logger.debug("Initializing Azure OpenAI client")
-                    return AzureOpenAI(
-                        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-                        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "https://api.azure.com"),
-                        api_version=os.getenv("AZURE_API_VERSION", "2024-02-15-preview"),
-                        azure_deployment=os.getenv("DEPLOYMENT_NAME", "gpt-4"),
-                        azure_ad_token=os.getenv("AZURE_AD_TOKEN"),
-                        azure_ad_token_provider=None  # Add token provider if needed
-                    )
-                logger.warning("Azure OpenAI API key not found")
-                return None
-            except Exception as e:
-                logger.error(f"Error initializing Azure client: {e}")
-                if attempt == max_retries - 1:
-                    return None
-                time.sleep(2 ** attempt)  # Exponential backoff
-
-    def _init_openai_client(self) -> Optional[OpenAI]:
-        """Initialize OpenAI client."""
-        try:
-            if os.getenv("OPENAI_API_KEY"):
-                logger.debug("Initializing OpenAI client")
-                return OpenAI(
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                    base_url=os.getenv("OPENAI_API_BASE"),  # Updated from api_base
-                    timeout=60.0,
-                    max_retries=3
-                )
-            logger.warning("OpenAI API key not found")
-            return None
-        except Exception as e:
-            logger.error(f"Error initializing OpenAI client: {e}")
-            return None
-
-    def _init_anthropic_client(self) -> Optional[Anthropic]:
-        """Initialize Anthropic client."""
-        try:
-            if os.getenv("ANTHROPIC_API_KEY"):
-                logger.debug("Initializing Anthropic client")
-                return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-            logger.warning("Anthropic API key not found")
-            return None
-        except Exception as e:
-            logger.error(f"Error initializing Anthropic client: {e}")
-            return None
-
-
-class ClaudeResponseParser:
-    """Handles Claude-specific response parsing and formatting."""
-
-    @staticmethod
-    def parse_function_analysis(response: str) -> Dict[str, Any]:
-        """Parse Claude's natural language response into structured format."""
-        try:
-            logger.debug(f"Parsing function analysis response: {response}")
-            # Extract key sections from Claude's response
-            sections = {
-                'summary': extract_section(response, 'Summary'),
-                'params': extract_parameter_section(response),
-                'returns': extract_return_section(response),
-                'examples': extract_code_examples(response),
-                'classes': [],  # Ensure classes is included
-                'functions': []  # Ensure functions is included
-            }
-
-            # Validate and format response
-            return format_response(sections)
-
-        except Exception as e:
-            logger.error(f"Error parsing Claude response: {e}")
-            return ClaudeResponseParser.get_default_response()
-
-    @staticmethod
-    def get_default_response() -> Dict[str, Any]:
-        """Return a default response in case of parsing errors."""
-        logger.debug("Returning default response due to parsing error")
+    def _get_docstring_function(self) -> Function:
+        """Enhanced function schema for docstring generation."""
         return {
-            "summary": "Error parsing response",
-            "docstring": "Error occurred while parsing the documentation.",
-            "params": [],
-            "returns": {"type": "None", "description": ""},
-            "examples": [],
-            "classes": [],  # Ensure classes is included
-            "functions": []  # Ensure functions is included
-        }
-
-
-class DocumentationAnalyzer:
-    """Handles code analysis and documentation generation."""
-
-    def __init__(self, api_client: APIClient):
-        self.api_client = api_client
-        logger.info("Initializing DocumentationAnalyzer")
-        self.function_schema = self._get_function_schema()
-
-    def _get_function_schema(self) -> FunctionDefinition:
-        """Get the function schema for documentation generation."""
-        logger.debug("Retrieving function schema")
-        return {
-            "name": "generate_documentation",
-            "description": "Generates documentation for code.",
+            "name": "generate_docstring",
+            "description": "Generate a structured docstring for a function",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "summary": {
                         "type": "string",
-                        "description": "Brief summary of the code"
+                        "description": "Brief description of the function"
                     },
-                    "docstring": {
-                        "type": "string",
-                        "description": "Detailed documentation"
-                    },
-                    "params": {
+                    "parameters": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "name": {
-                                    "type": "string",
-                                    "description": "Parameter name"
-                                },
-                                "type": {
-                                    "type": "string",
-                                    "description": "Parameter type"
-                                },
-                                "description": {
-                                    "type": "string",
-                                    "description": "Parameter description"
-                                }
+                                "name": {"type": "string"},
+                                "type": {"type": "string"},
+                                "description": {"type": "string"},
+                                "optional": {"type": "boolean"},
+                                "default": {"type": ["string", "number", "boolean", "null"]}
                             },
                             "required": ["name", "type", "description"]
                         }
@@ -260,466 +77,386 @@ class DocumentationAnalyzer:
                     "returns": {
                         "type": "object",
                         "properties": {
-                            "type": {
-                                "type": "string",
-                                "description": "Return type"
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": "Return value description"
-                            }
+                            "type": {"type": "string"},
+                            "description": {"type": "string"}
                         },
                         "required": ["type", "description"]
+                    },
+                    "raises": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "exception": {"type": "string"},
+                                "description": {"type": "string"}
+                            },
+                            "required": ["exception", "description"]
+                        }
                     },
                     "examples": {
                         "type": "array",
                         "items": {
-                            "type": "string",
-                            "description": "Code example"
-                        }
-                    },
-                    "classes": {  # Ensure classes is included
-                        "type": "array",
-                        "items": {
                             "type": "object",
                             "properties": {
-                                "name": {
-                                    "type": "string",
-                                    "description": "Class name"
-                                },
-                                "docstring": {
-                                    "type": "string",
-                                    "description": "Class documentation"
-                                },
-                                "methods": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "name": {
-                                                "type": "string",
-                                                "description": "Method name"
-                                            },
-                                            "docstring": {
-                                                "type": "string",
-                                                "description": "Method documentation"
-                                            },
-                                            "params": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "name": {
-                                                            "type": "string",
-                                                            "description": "Parameter name"
-                                                        },
-                                                        "type": {
-                                                            "type": "string",
-                                                            "description": "Parameter type"
-                                                        },
-                                                        "has_type_hint": {
-                                                            "type": "boolean",
-                                                            "description": "Whether the parameter has a type hint"
-                                                        }
-                                                    },
-                                                    "required": ["name", "type", "has_type_hint"]
-                                                }
-                                            },
-                                            "returns": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "type": {
-                                                        "type": "string",
-                                                        "description": "Return type"
-                                                    },
-                                                    "has_type_hint": {
-                                                        "type": "boolean",
-                                                        "description": "Whether the return type has a type hint"
-                                                    }
-                                                },
-                                                "required": ["type", "has_type_hint"]
-                                            },
-                                            "complexity_score": {
-                                                "type": "integer",
-                                                "description": "Complexity score of the method"
-                                            },
-                                            "line_number": {
-                                                "type": "integer",
-                                                "description": "Line number where the method starts"
-                                            },
-                                            "end_line_number": {
-                                                "type": "integer",
-                                                "description": "Line number where the method ends"
-                                            },
-                                            "code": {
-                                                "type": "string",
-                                                "description": "Code of the method"
-                                            },
-                                            "is_async": {
-                                                "type": "boolean",
-                                                "description": "Whether the method is asynchronous"
-                                            },
-                                            "is_generator": {
-                                                "type": "boolean",
-                                                "description": "Whether the method is a generator"
-                                            },
-                                            "is_recursive": {
-                                                "type": "boolean",
-                                                "description": "Whether the method is recursive"
-                                            },
-                                            "summary": {
-                                                "type": "string",
-                                                "description": "Summary of the method"
-                                            },
-                                            "changelog": {
-                                                "type": "string",
-                                                "description": "Changelog of the method"
-                                            }
-                                        },
-                                        "required": ["name", "docstring", "params", "returns", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"]
-                                    }
-                                },
-                                "attributes": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "name": {
-                                                "type": "string",
-                                                "description": "Attribute name"
-                                            },
-                                            "type": {
-                                                "type": "string",
-                                                "description": "Attribute type"
-                                            },
-                                            "line_number": {
-                                                "type": "integer",
-                                                "description": "Line number where the attribute is defined"
-                                            }
-                                        },
-                                        "required": ["name", "type", "line_number"]
-                                    }
-                                },
-                                "instance_variables": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "name": {
-                                                "type": "string",
-                                                "description": "Instance variable name"
-                                            },
-                                            "line_number": {
-                                                "type": "integer",
-                                                "description": "Line number where the instance variable is defined"
-                                            }
-                                        },
-                                        "required": ["name", "line_number"]
-                                    }
-                                },
-                                "base_classes": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string",
-                                        "description": "Base class name"
-                                    }
-                                },
-                                "summary": {
-                                    "type": "string",
-                                    "description": "Summary of the class"
-                                },
-                                "changelog": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "change": {
-                                                "type": "string",
-                                                "description": "Description of the change"
-                                            },
-                                            "timestamp": {
-                                                "type": "string",
-                                                "description": "Timestamp of the change"
-                                            }
-                                        }
-                                    }
-                                }
+                                "code": {"type": "string"},
+                                "description": {"type": "string"}
                             },
-                            "required": ["name", "docstring", "methods", "attributes", "instance_variables", "base_classes", "summary", "changelog"]
-                        }
-                    },
-                    "functions": {  # Ensure functions is included
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {
-                                    "type": "string",
-                                    "description": "Function name"
-                                },
-                                "docstring": {
-                                    "type": "string",
-                                    "description": "Function documentation"
-                                },
-                                "params": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "name": {
-                                                "type": "string",
-                                                "description": "Parameter name"
-                                            },
-                                            "type": {
-                                                "type": "string",
-                                                "description": "Parameter type"
-                                            },
-                                            "has_type_hint": {
-                                                "type": "boolean",
-                                                "description": "Whether the parameter has a type hint"
-                                            }
-                                        },
-                                        "required": ["name", "type", "has_type_hint"]
-                                    }
-                                },
-                                "returns": {
-                                    "type": "object",
-                                    "properties": {
-                                        "type": {
-                                            "type": "string",
-                                            "description": "Return type"
-                                        },
-                                        "has_type_hint": {
-                                            "type": "boolean",
-                                            "description": "Whether the return type has a type hint"
-                                        }
-                                    },
-                                    "required": ["type", "has_type_hint"]
-                                },
-                                "complexity_score": {
-                                    "type": "integer",
-                                    "description": "Complexity score of the function"
-                                },
-                                "line_number": {
-                                    "type": "integer",
-                                    "description": "Line number where the function starts"
-                                },
-                                "end_line_number": {
-                                    "type": "integer",
-                                    "description": "Line number where the function ends"
-                                },
-                                "code": {
-                                    "type": "string",
-                                    "description": "Code of the function"
-                                },
-                                "is_async": {
-                                    "type": "boolean",
-                                    "description": "Whether the function is asynchronous"
-                                },
-                                "is_generator": {
-                                    "type": "boolean",
-                                    "description": "Whether the function is a generator"
-                                },
-                                "is_recursive": {
-                                    "type": "boolean",
-                                    "description": "Whether the function is recursive"
-                                },
-                                "summary": {
-                                    "type": "string",
-                                    "description": "Summary of the function"
-                                },
-                                "changelog": {
-                                    "type": "string",
-                                    "description": "Changelog of the function"
-                                }
-                            },
-                            "required": ["name", "docstring", "params", "returns", "complexity_score", "line_number", "end_line_number", "code", "is_async", "is_generator", "is_recursive", "summary", "changelog"]
+                            "required": ["code"]
                         }
                     }
                 },
-                "required": ["summary", "docstring", "params", "returns", "classes", "functions"]
+                "required": ["summary", "parameters", "returns"]
             }
         }
 
-    async def make_api_request(
+    async def get_docstring(
         self,
-        messages: List[Dict[str, str]],
-        service: str,
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        system_message: Optional[str] = None
-    ) -> Any:
-        """Make an API request to the specified service."""
-        try:
-            logger.info(f"Preparing to make API request to {service}")
-            logger.debug(f"Request parameters: temperature={temperature}, max_tokens={max_tokens}")
-            logger.debug(f"Messages: {messages}")
+        func_name: str,
+        params: List[Tuple[str, str]],
+        return_type: str,
+        complexity_score: int,
+        existing_docstring: str,
+        decorators: Optional[List[str]] = None,
+        exceptions: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Generates a docstring for a function using Azure OpenAI with token management."""
+        log_debug(f"Generating docstring for function: {func_name}")
+        
+        # Convert lists to tuples for hashable contexts
+        cache_key = f"docstring:{func_name}:{hash(tuple(params))}:{hash(return_type)}"
 
-            claude_messages = [
+        try:
+            # Check cache first
+            cached_response = await self.cache.get_cached_docstring(cache_key)
+            if cached_response:
+                log_info(f"Cache hit for function: {func_name}")
+                return json.loads(cached_response)
+
+            # Create messages
+            messages: List[ChatCompletionMessageParam] = [
                 {
-                    "role": cast(Literal["user", "assistant"], msg["role"]),
-                    "content": msg["content"]
+                    "role": "system",
+                    "content": "You are a technical documentation expert. Generate comprehensive and accurate function documentation."
+                },
+                {
+                    "role": "user",
+                    "content": self._create_prompt(
+                        func_name, params, return_type, complexity_score,
+                        existing_docstring, decorators, exceptions
+                    )
                 }
-                for msg in messages
             ]
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url=f"https://api.anthropic.com/v1/complete",
-                    json={
-                        "model": self.api_client.claude_model,
-                        "messages": claude_messages,
-                        "temperature": temperature,
-                        "max_tokens": max_tokens,
-                        "system": system_message
-                    },
-                    headers={
-                        "Authorization": f"Bearer {os.getenv('ANTHROPIC_API_KEY')}",
-                        "Content-Type": "application/json"
-                    }
-                ) as response:
-                    logger.info(f"API request to {service} completed with status {response.status}")
-                    response.raise_for_status()  # Ensure HTTP errors are raised
-                    response_data = await response.json()
-                    logger.debug(f"Response data: {response_data}")
-                    return response_data
-        except aiohttp.ClientError as e:
-            logger.error(f"HTTP error during API request to {service}: {e}")
-            raise
+            # Validate token limits before making request
+            prompt_text = json.dumps(messages)
+            is_valid, metrics, validation_message = self.token_manager.validate_request(prompt_text)
+            
+            if not is_valid:
+                log_error(f"Token validation failed: {validation_message}")
+                return None
+
+            # Optimize prompt if needed
+            optimized_messages = await self._optimize_prompt(messages, {k: int(v) for k, v in metrics.items()})
+            if optimized_messages is None:
+                return None
+
+            # Make API request with retry logic and token tracking
+            for attempt in range(self.config.max_retries):
+                try:
+                    # Get token usage before the API call
+                    token_usage_before = self.token_manager.estimate_tokens(
+                        self._create_prompt(func_name, params, return_type, complexity_score, existing_docstring, decorators, exceptions)
+                    )
+
+                    start_time = asyncio.get_event_loop().time()
+                    response = await self._make_api_request(optimized_messages, attempt)
+                    response_time = asyncio.get_event_loop().time() - start_time
+
+                    if response:
+                        # Parse and validate the response
+                        parsed_response = await self._process_response(response, {'function': func_name})
+                        if parsed_response:
+                            # Get token usage after the API call
+                            token_usage_after = self.token_manager.estimate_tokens(response.choices[0].message.content)
+                            token_usage = self.token_manager._calculate_usage(token_usage_before, token_usage_after)
+                            
+                            # Log token usage with monitoring system
+                            self._log_token_usage(func_name, token_usage, response_time)
+
+                            # Cache the successful response
+                            await self.cache.save_docstring(
+                                cache_key,
+                                parsed_response,
+                                ttl=self.config.cache_ttl
+                            )
+                            return parsed_response
+
+                except Exception as e:
+                    # Log token usage even on failure
+                    token_usage_before = self.token_manager.estimate_tokens(
+                        self._create_prompt(func_name, params, return_type, complexity_score, existing_docstring, decorators, exceptions)
+                    )
+                    token_usage = self.token_manager._calculate_usage(token_usage_before, 0)
+                    self._log_token_usage(func_name, token_usage, error=str(e))
+                    if not await self._handle_api_error(e, attempt):
+                        break
+
+            log_warning(f"Failed to generate docstring for {func_name} after {self.config.max_retries} attempts")
+            return None
+
         except Exception as e:
-            logger.error(f"Error making API request to {service}: {e}")
-            raise
+            log_error(f"Error in get_docstring for {func_name}: {e}")
+            return None
 
-
-async def analyze_function_with_openai(
-    function_details: Dict[str, Any],
-    service: str
-) -> Dict[str, Any]:
-    """
-    Analyze function and generate documentation using specified service.
-
-    Args:
-        function_details: Dictionary containing function information
-        service: Service to use ("azure", "openai", or "claude")
-
-    Returns:
-        Dictionary containing analysis results
-    """
-    # Define function_name early to avoid unbound variable issue
-    function_name = function_details.get("name", "unknown")
-
-    try:
-        api_client = APIClient()
-        analyzer = DocumentationAnalyzer(api_client)
-
-        logger.info(f"Analyzing function: {function_name} using {service}")
-
-        messages = [
-            {
-                "role": "system",
-                "content": "You are an expert code documentation generator."
-            },
-            {
-                "role": "user",
-                "content": f"""Analyze and document this function:
-                ```python
-                {function_details.get('code', '')}
-                ```
-                """
-            }
-        ]
-
-        response = await analyzer.make_api_request(messages, service)
-
-        # Handle different response formats
-        if service == "claude":
-            content = response["completion"]
-            parsed_response = ClaudeResponseParser.parse_function_analysis(content)
-        else:
-            tool_calls = response.choices[0].message.tool_calls
-            if tool_calls and tool_calls[0].function:
-                function_args = json.loads(tool_calls[0].function.arguments)
-                parsed_response = function_args
-            else:
-                logger.warning("No tool calls found in response")
-                return ClaudeResponseParser.get_default_response()
-
-        # Ensure changelog is included in the parsed response
-        if "changelog" not in parsed_response:
-            parsed_response["changelog"] = []
-
-        # Ensure classes is included in the parsed response
-        if "classes" not in parsed_response:
-            parsed_response["classes"] = []
-
-        # Validate response against schema
+    async def _optimize_prompt(
+        self, 
+        messages: List[ChatCompletionMessageParam], 
+        metrics: Mapping[str, int]
+    ) -> Optional[List[ChatCompletionMessageParam]]:
+        """Optimizes the prompt to fit within token limits."""
         try:
-            validate_schema(parsed_response)
-        except Exception as e:
-            logger.error(f"Schema validation failed: {e}")
-            return ClaudeResponseParser.get_default_response()
+            optimized_messages, token_usage = self.token_manager.optimize_prompt(
+                json.dumps(messages),
+                max_tokens=self.config.max_tokens,
+                preserve_sections=['parameters', 'returns']
+            )
+            
+            log_info(f"Optimized prompt tokens: {token_usage.prompt_tokens}")
+            return json.loads(optimized_messages)
 
-        logger.info(f"Successfully analyzed function: {function_name}")
-        return {
-            "name": function_name,
-            "complexity_score": function_details.get("complexity_score", "Unknown"),
-            "summary": parsed_response.get("summary", ""),
-            "docstring": parsed_response.get("docstring", ""),
-            "params": parsed_response.get("params", []),
-            "returns": parsed_response.get("returns", {"type": "None", "description": ""}),
-            "examples": parsed_response.get("examples", []),
-            "classes": parsed_response.get("classes", []),
-            "changelog": parsed_response.get("changelog")
+        except Exception as e:
+            log_error(f"Error optimizing prompt: {e}")
+            return None
+
+    async def _make_api_request(
+        self, 
+        messages: List[ChatCompletionMessageParam], 
+        attempt: int
+    ) -> Optional[ChatCompletion]:
+        """Makes an API request with token tracking."""
+        try:
+            log_debug(f"Making API request, attempt {attempt + 1}")
+            
+            # Pre-request token check
+            estimated_tokens = self.token_manager.estimate_tokens(json.dumps(messages))
+            if estimated_tokens > self.config.max_tokens:
+                log_warning("Estimated tokens exceed maximum limit")
+                return None
+
+            response = await self.client.chat.completions.create(
+                model=self.config.deployment_name,
+                messages=messages,
+                functions=[Function(**self._get_docstring_function())],
+                function_call={"name": "generate_docstring"},
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens
+            )
+            
+            # Track token usage
+            if response.usage:
+                self.token_manager.track_request(
+                    request_tokens=response.usage.prompt_tokens,
+                    response_tokens=response.usage.completion_tokens
+                )
+            
+            log_debug("API request successful")
+            return response
+
+        except Exception as e:
+            log_error(f"API request failed: {str(e)}")
+            raise
+
+    async def _process_response(self, response: ChatCompletion, 
+                              error_context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Process and validate API response."""
+        try:
+            if not response.choices:
+                return None
+
+            function_call = response.choices[0].message.function_call
+            if not function_call:
+                return None
+
+            parsed_args = json.loads(function_call.arguments)
+            
+            # Validate response content
+            is_valid, validation_errors = self.validator.validate_docstring(parsed_args)
+            
+            if not is_valid:
+                log_error(
+                    f"Response validation failed for {error_context['function']}: "
+                    f"{validation_errors}"
+                )
+                return None
+
+            return {
+                "content": parsed_args,
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                    "total_tokens": response.usage.total_tokens if response.usage else 0
+                }
+            }
+
+        except Exception as e:
+            log_error(f"Response processing error: {e}")
+            error_context['last_error'] = str(e)
+            return None
+
+    async def _handle_api_error(self, error: Exception, attempt: int) -> bool:
+        """Handles API errors and determines if retry is appropriate."""
+        log_warning(f"API error on attempt {attempt + 1}: {str(error)}")
+        
+        if attempt < self.config.max_retries - 1:
+            retry_delay = self.config.retry_delay * (2 ** attempt)  # Exponential backoff
+            log_info(f"Retrying in {retry_delay} seconds...")
+            await asyncio.sleep(retry_delay)
+            return True
+        return False
+
+    def _create_prompt(
+        self,
+        func_name: str,
+        params: List[Tuple[str, str]],
+        return_type: str,
+        complexity_score: int,
+        existing_docstring: str,
+        decorators: Optional[List[str]] = None,
+        exceptions: Optional[List[str]] = None,
+    ) -> str:
+        """Creates the prompt for the API request."""
+        return f"""
+Generate documentation for the following Python function:
+
+Function Name: {func_name}
+Parameters: {', '.join(f'{name}: {type_}' for name, type_ in params)}
+Return Type: {return_type}
+Decorators: {', '.join(decorators) if decorators else 'None'}
+Exceptions: {', '.join(exceptions) if exceptions else 'None'}
+Complexity Score: {complexity_score}
+Existing Docstring: {existing_docstring if existing_docstring else 'None'}
+
+Generate a comprehensive docstring that includes:
+1. A clear summary of the function's purpose
+2. Detailed parameter descriptions with types
+3. Return value description with type
+4. Usage examples
+5. Time and space complexity analysis
+6. Any relevant exceptions and their conditions
+
+Use the generate_docstring function to provide structured output.
+"""
+
+    async def validate_connection(self) -> bool:
+        """Validates the connection to Azure OpenAI service."""
+        log_debug("Validating connection to Azure OpenAI service")
+        try:
+            # Make a minimal API request to verify connection
+            response = await self.client.chat.completions.create(
+                model=self.config.deployment_name,
+                messages=[{"role": "user", "content": "Test connection"}],
+                max_tokens=1
+            )
+            log_info("Connection to Azure OpenAI API validated successfully")
+            return True
+        except Exception as e:
+            log_error(f"Connection validation failed: {str(e)}")
+            raise ConnectionError(f"Connection validation failed: {str(e)}")
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Performs a comprehensive health check of the API service."""
+        log_debug("Performing health check on Azure OpenAI service")
+        health_status = {
+            "status": "unknown",
+            "latency": None,
+            "token_usage": None,
+            "error": None
         }
 
-    except Exception as e:
-        logger.error(f"Error analyzing function {function_name}: {e}")
-        return ClaudeResponseParser.get_default_response()
+        try:
+            start_time = asyncio.get_event_loop().time()
+            
+            # Test API functionality
+            response = await self.client.chat.completions.create(
+                model=self.config.deployment_name,
+                messages=[{"role": "user", "content": "Health check"}],
+                max_tokens=10
+            )
+            
+            # Calculate latency
+            latency = asyncio.get_event_loop().time() - start_time
+            
+            health_status.update({
+                "status": "healthy",
+                "latency": round(latency, 3),
+                "token_usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                    "total_tokens": response.usage.total_tokens if response.usage else 0
+                }
+            })
+            
+            log_info("Health check passed")
+            
+        except Exception as e:
+            health_status.update({
+                "status": "unhealthy",
+                "error": str(e)
+            })
+            log_error(f"Health check failed: {e}")
+            
+        return health_status
 
+    async def close(self):
+        """Closes the API client and releases resources."""
+        log_debug("Closing API client")
+        try:
+            # Close the client session
+            await self.client.close()
+            log_info("API client closed successfully")
+        except Exception as e:
+            log_error(f"Error closing API client: {e}")
 
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
 
-class AsyncAPIClient:
-    """
-    Asynchronous API client for batch processing.
-    Useful for processing multiple functions concurrently.
-    """
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
 
-    def __init__(self, service: str):
-        self.service = service
-        self.api_client = APIClient()
-        self.analyzer = DocumentationAnalyzer(self.api_client)
-        self.semaphore = asyncio.Semaphore(5)  # Limit concurrent requests
+    def get_client_info(self) -> Dict[str, Any]:
+        """Gets information about the API client configuration."""
+        return {
+            "endpoint": self.config.endpoint,
+            "model": self.config.deployment_name,
+            "api_version": self.config.api_version,
+            "max_retries": self.config.max_retries,
+            "timeout": self.config.request_timeout,
+            "temperature": self.config.temperature,
+            "max_tokens": self.config.max_tokens
+        }
 
-    async def process_batch(
-        self,
-        functions: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Process a batch of functions concurrently.
+    async def handle_rate_limits(self, retry_after: Optional[int] = None):
+        """Handles rate limits by implementing exponential backoff."""
+        if self.current_retry >= self.config.max_retries:
+            raise TooManyRetriesError(
+                f"Maximum retry attempts ({self.config.max_retries}) exceeded"
+            )
 
-        Args:
-            functions: List of function details to process
+        wait_time = retry_after or min(
+            self.config.retry_delay * (2 ** self.current_retry),
+            self.config.request_timeout
+        )
+        
+        log_info(
+            f"Rate limit encountered. Waiting {wait_time}s "
+            f"(attempt {self.current_retry + 1}/{self.config.max_retries})"
+        )
 
-        Returns:
-            List of documentation results
-        """
-        async def process_with_semaphore(func: Dict[str, Any]) -> Dict[str, Any]:
-            async with self.semaphore:
-                return await analyze_function_with_openai(func, self.service)
+        self.current_retry += 1
+        await asyncio.sleep(wait_time)
 
-        tasks = [process_with_semaphore(func) for func in functions]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        processed_results = []
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(f"Batch processing error: {result}")
-                processed_results.append(ClaudeResponseParser.get_default_response())
-            else:
-                processed_results.append(result)
-
-        return processed_results
-
-
-# Initialize default API client
-default_api_client = APIClient()
+    def get_token_usage_stats(self) -> Dict[str, Union[int, float]]:
+        """Returns current token usage statistics."""
+        return self.token_manager.get_usage_stats()
