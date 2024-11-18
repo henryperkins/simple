@@ -1,85 +1,204 @@
-# api_client.py
+"""
+Azure OpenAI Client Module
 
-import os
-import time
-from typing import Optional
+This module provides a high-level client for interacting with Azure OpenAI
+to generate docstrings with proper async support and error handling.
+"""
 
-from dotenv import load_dotenv
+import asyncio
+from typing import List, Tuple, Optional, Dict, Any
+from openai import AsyncAzureOpenAI
+from openai import OpenAIError
+from core.cache import Cache
+from core.config import AzureOpenAIConfig
+from api.token_management import TokenManager
+from api.api_interaction import APIInteraction
+from core.logger import log_info, log_error, log_debug
+from core.exceptions import TooManyRetriesError
+from core.monitoring import SystemMonitor
 
-from core.logger import LoggerSetup
-from openai import AzureOpenAI, OpenAI
-from anthropic import Anthropic
-
-# Initialize logger
-logger = LoggerSetup.get_logger("api_client")
-
-# Load environment variables
-load_dotenv()
 
 
-class APIClient:
-    """Unified API client for multiple LLM providers."""
+class AzureOpenAIClient:
+    """
+    Client for interacting with Azure OpenAI to generate docstrings.
 
-    def __init__(self):
-        # Initialize API clients
-        logger.info("Initializing API clients")
-        self.azure_client = self._init_azure_client()
-        self.openai_client = self._init_openai_client()
-        self.anthropic_client = self._init_anthropic_client()
+    This class manages the configuration and initializes the components necessary
+    for API interaction. It provides a high-level interface for generating docstrings
+    and managing the cache.
+    """
 
-        # Configuration
-        self.azure_deployment = os.getenv("DEPLOYMENT_NAME", "gpt-4")
-        self.openai_model = "gpt-4-turbo-preview"  # Updated to latest model
-        self.claude_model = "claude-3-opus-20240229"
+    def __init__(self, config: Optional[AzureOpenAIConfig] = None):
+        """
+        Initialize the AzureOpenAIClient with necessary configuration.
 
-    def _init_azure_client(self) -> Optional[AzureOpenAI]:
-        """Initialize Azure OpenAI client with retry logic."""
-        max_retries = 3
-        for attempt in range(max_retries):
+        Args:
+            config (Optional[AzureOpenAIConfig]): Configuration instance for Azure OpenAI.
+                If not provided, will load from environment variables.
+
+        Raises:
+            ValueError: If the configuration is invalid
+        """
+        self.config = config or AzureOpenAIConfig.from_env()
+        if not self.config.validate():
+            raise ValueError("Invalid Azure OpenAI configuration")
+
+        self.token_manager = TokenManager(
+            model=self.config.model_name,
+            deployment_name=self.config.deployment_name
+        )
+        self.cache = Cache()
+        
+        # Initialize Azure OpenAI client
+        self._client = AsyncAzureOpenAI(
+            api_key=self.config.api_key,
+            api_version=self.config.api_version,
+            azure_endpoint=self.config.endpoint
+        )
+        
+        # Initialize API interaction handler
+        self.api_interaction = APIInteraction(
+            self.config,
+            self.token_manager,
+            self.cache,
+            SystemMonitor()  # Pass the SystemMonitor instance
+        )
+
+        log_info("Azure OpenAI client initialized successfully")
+
+    async def generate_docstring(
+        self,
+        func_name: str,
+        params: List[Tuple[str, str]],
+        return_type: str,
+        complexity_score: int,
+        existing_docstring: str,
+        decorators: Optional[List[str]] = None,
+        exceptions: Optional[List[str]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Generate a docstring for a function using Azure OpenAI.
+
+        Args:
+            func_name: Name of the function
+            params: List of parameter names and types
+            return_type: Return type of the function
+            complexity_score: Complexity score of the function
+            existing_docstring: Existing docstring if any
+            decorators: List of decorators
+            exceptions: List of exceptions
+
+        Returns:
+            Optional[Dict[str, Any]]: Generated docstring and metadata, or None if failed.
+                The dictionary contains:
+                - content: The generated docstring content
+                - usage: Token usage statistics
+                - metadata: Additional generation metadata
+
+        Raises:
+            TooManyRetriesError: If maximum retry attempts are exceeded
+        """
+        try:
+            log_debug(f"Generating docstring for function: {func_name}")
+            
+            response = await self.api_interaction.get_docstring(
+                func_name=func_name,
+                params=params,
+                return_type=return_type,
+                complexity_score=complexity_score,
+                existing_docstring=existing_docstring,
+                decorators=decorators,
+                exceptions=exceptions
+            )
+            
+            if response and isinstance(response, dict):
+                log_info(f"Successfully generated docstring for {func_name}")
+                return response
+                
+            log_error(f"Failed to generate docstring for {func_name}")
+            return None
+            
+        except OpenAIError as e:
+            log_error(f"OpenAI API error for {func_name}: {str(e)}")
+            return None
+        except TooManyRetriesError as e:
+            log_error(f"Max retries exceeded for {func_name}: {e}")
+            raise
+        except Exception as e:
+            log_error(f"Error generating docstring for {func_name}: {e}")
+            return None
+
+    async def batch_generate_docstrings(
+        self,
+        functions: List[Dict[str, Any]],
+        batch_size: Optional[int] = None
+    ) -> List[Optional[Dict[str, Any]]]:
+        """
+        Generate docstrings for multiple functions in batches.
+
+        Args:
+            functions: List of function metadata dictionaries, each containing:
+                - func_name: Name of the function
+                - params: List of parameter tuples (name, type)
+                - return_type: Function return type
+                - complexity_score: Function complexity score
+                - existing_docstring: Existing docstring if any
+                - decorators: Optional list of decorators
+                - exceptions: Optional list of exceptions
+            batch_size: Number of functions to process concurrently.
+                       Defaults to config setting if not specified.
+
+        Returns:
+            List[Optional[Dict[str, Any]]]: List of generated docstrings and metadata
+        """
+        batch_size = batch_size or getattr(self.config, 'batch_size', 10)
+        results = []
+        
+        for i in range(0, len(functions), batch_size):
+            batch = functions[i:i + batch_size]
             try:
-                if os.getenv("AZURE_OPENAI_API_KEY"):
-                    logger.debug("Initializing Azure OpenAI client")
-                    return AzureOpenAI(
-                        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-                        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "https://api.azure.com"),
-                        api_version=os.getenv("AZURE_API_VERSION", "2024-02-15-preview"),
-                        azure_deployment=os.getenv("DEPLOYMENT_NAME", "gpt-4"),
-                        azure_ad_token=os.getenv("AZURE_AD_TOKEN"),
-                        azure_ad_token_provider=None  # Add token provider if needed
-                    )
-                logger.warning("Azure OpenAI API key not found")
-                return None
+                log_debug(f"Processing batch {i//batch_size + 1}, size {len(batch)}")
+                
+                batch_results = await asyncio.gather(*[
+                    self.generate_docstring(**func) for func in batch
+                ], return_exceptions=True)
+                
+                for func, result in zip(batch, batch_results):
+                    if isinstance(result, Exception):
+                        log_error(f"Error processing {func.get('func_name', 'unknown')}: {result}")
+                        results.append(None)
+                    else:
+                        results.append(result)
+                
             except Exception as e:
-                logger.error(f"Error initializing Azure client: {e}")
-                if attempt == max_retries - 1:
-                    return None
-                time.sleep(2 ** attempt)  # Exponential backoff
+                log_error(f"Batch processing error: {str(e)}")
+                results.extend([None] * len(batch))
+        
+        return results
 
-    def _init_openai_client(self) -> Optional[OpenAI]:
-        """Initialize OpenAI client."""
-        try:
-            if os.getenv("OPENAI_API_KEY"):
-                logger.debug("Initializing OpenAI client")
-                return OpenAI(
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                    base_url=os.getenv("OPENAI_API_BASE"),  # Updated from api_base
-                    timeout=60.0,
-                    max_retries=3
-                )
-            logger.warning("OpenAI API key not found")
-            return None
-        except Exception as e:
-            logger.error(f"Error initializing OpenAI client: {e}")
-            return None
+    async def health_check(self) -> Dict[str, Any]:
+        """
+        Perform a health check of the Azure OpenAI service.
 
-    def _init_anthropic_client(self) -> Optional[Anthropic]:
-        """Initialize Anthropic client."""
+        Returns:
+            Dict[str, Any]: Health check results including status, latency, and metrics
+        """
+        return await self.api_interaction.health_check()
+
+    async def close(self):
+        """Close the client and release any resources."""
         try:
-            if os.getenv("ANTHROPIC_API_KEY"):
-                logger.debug("Initializing Anthropic client")
-                return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-            logger.warning("Anthropic API key not found")
-            return None
+            if self.api_interaction:
+                await self.api_interaction.close()
+            if self._client:
+                await self._client.close()
         except Exception as e:
-            logger.error(f"Error initializing Anthropic client: {e}")
-            return None
+            log_error(f"Error closing API client: {str(e)}")
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
