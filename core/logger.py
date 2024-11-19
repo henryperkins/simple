@@ -3,6 +3,22 @@ import os
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
+# Create a module-level logger
+logger = LoggerSetup.get_logger(__name__, console_logging=True)
+
+def log_info(message: str) -> None:
+    """Log an info level message."""
+    logger.info(message)
+
+def log_error(message: str) -> None:
+    """Log an error level message."""
+    logger.error(message)
+
+def log_debug(message: str) -> None:
+    """Log a debug level message."""
+    logger.debug(message)
+    
+    
 class LoggerSetup:
     @staticmethod
     def get_logger(module_name: str, console_logging: bool = False) -> logging.Logger:

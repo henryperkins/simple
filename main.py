@@ -11,7 +11,7 @@ from typing import Optional, List
 from core.logger import log_info, log_error, log_debug
 from core.config import AzureOpenAIConfig
 from core.utils import ensure_directory
-from simplified_interaction import AIInteractionHandler
+from ai_interaction import AIInteractionHandler
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
