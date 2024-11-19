@@ -15,7 +15,7 @@ from api.token_management import TokenManager, TokenUsage
 from core.cache import Cache
 from core.config import AzureOpenAIConfig
 from core.exceptions import TooManyRetriesError
-from docstring_utils import DocstringValidator
+from docs.docstring_utils import DocstringValidator
 from core.monitoring import SystemMonitor  # Assuming this is where the monitor is defined
 
 class APIInteraction:
