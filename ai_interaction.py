@@ -1,274 +1,427 @@
+# ai_interaction.py
 """
-AI Interaction Handler with proper integration of token management,
+AI Interaction Handler Module
+
+Manages interactions with AI models, including token management, caching,
 response parsing, and monitoring.
 """
 
 import asyncio
 import json
 from typing import Dict, List, Optional, Any, Tuple
-from openai import AsyncAzureOpenAI, OpenAIError
+from datetime import datetime
+from openai import AsyncAzureOpenAI
+
 from core.logger import log_info, log_error, log_debug
 from core.cache import Cache
 from core.config import AzureOpenAIConfig
-from api.token_management import TokenManager, TokenUsage
-from api.response_parser import ResponseParser
-from core.monitoring import SystemMonitor, ModelMetrics, APIMetrics
-from docs.docstring_utils import DocstringValidator
+from core.monitoring import MetricsCollector, SystemMonitor
+from core.exceptions import (
+   AIServiceError,
+   TokenLimitError,
+   ValidationError,
+   ProcessingError
+)
+from core.token_management import TokenManager
+from core.response_parser import ResponseParser
+from core.extraction_manager import ExtractionManager
+from core.docs import DocStringManager
 
 class AIInteractionHandler:
-    """Streamlined handler for AI model interactions with proper integrations."""
+   """Manages AI model interactions with integrated monitoring and caching."""
 
-    def __init__(
-        self,
-        config: AzureOpenAIConfig,
-        cache_config: Optional[Dict] = None,
-        batch_size: int = 5
-    ):
-        """Initialize the interaction handler with all necessary components."""
-        self.config = config
-        self.client = AsyncAzureOpenAI(
-            api_key=config.api_key,
-            api_version=config.api_version,
-            azure_endpoint=config.endpoint
-        )
-        
-        # Initialize all required components
-        self.token_manager = TokenManager(
-            model=config.model_name,
-            deployment_name=config.deployment_name
-        )
-        self.response_parser = ResponseParser()
-        self.monitor = SystemMonitor()
-        self.cache = Cache(**(cache_config or {}))
-        self.validator = DocstringValidator()
-        self.batch_size = batch_size
-        
-        log_info("AI Interaction Handler initialized with all components")
+   def __init__(
+       self,
+       config: AzureOpenAIConfig,
+       cache: Optional[Cache] = None,
+       batch_size: int = 5,
+       metrics_collector: Optional[MetricsCollector] = None
+   ):
+       """
+       Initialize the AI interaction handler.
 
-    async def generate_docstring(
-        self,
-        func_name: str,
-        params: List[Tuple[str, str]],
-        return_type: str,
-        complexity_score: int = 0,
-        existing_docstring: str = "",
-        decorators: Optional[List[str]] = None,
-        exceptions: Optional[List[str]] = None,
-        is_class: bool = False
-    ) -> Optional[Dict[str, Any]]:
-        """Generate a docstring using the AI model with full monitoring and token management."""
-        start_time = asyncio.get_event_loop().time()
-        
-        try:
-            # Check cache first
-            cache_key = f"docstring:{func_name}:{hash(str(params))}"
-            cached = await self.cache.get_cached_docstring(cache_key)
-            if cached:
-                self.monitor.log_cache_hit(func_name)
-                return cached
+       Args:
+           config: Configuration for Azure OpenAI
+           cache: Optional cache instance
+           batch_size: Size of batches for processing
+           metrics_collector: Optional metrics collector instance
+       """
+       self.config = config
+       self.cache = cache
+       self.batch_size = batch_size
+       
+       # Initialize components
+       self.client = AsyncAzureOpenAI(
+           api_key=config.api_key,
+           api_version=config.api_version,
+           azure_endpoint=config.endpoint
+       )
+       
+       self.token_manager = TokenManager(
+           model=config.model_name,
+           deployment_name=config.deployment_name
+       )
+       
+       self.response_parser = ResponseParser(self.token_manager)
+       self.monitor = SystemMonitor()
+       self.metrics = metrics_collector or MetricsCollector()
+       
+       log_info("AI Interaction Handler initialized")
 
-            self.monitor.log_cache_miss(func_name)
+   async def process_code(self, source_code: str) -> Tuple[str, str]:
+       """
+       Process source code to generate documentation.
+       
+       Args:
+           source_code: Source code to process
+           
+       Returns:
+           Tuple[str, str]: (updated_code, documentation)
+           
+       Raises:
+           ProcessingError: If processing fails
+       """
+       try:
+           operation_start = datetime.now()
+           
+           # Extract metadata
+           extractor = ExtractionManager()
+           metadata = extractor.extract_metadata(source_code)
+           
+           # Process functions and classes in batches
+           doc_entries = []
+           
+           # Process functions
+           for batch in self._batch_items(metadata['functions'], self.batch_size):
+               batch_results = await asyncio.gather(*[
+                   self.generate_docstring(
+                       func_name=func['name'],
+                       params=func['args'],
+                       return_type=func['return_type'],
+                       complexity_score=func.get('complexity', 0),
+                       existing_docstring=func.get('docstring', ''),
+                       decorators=func.get('decorators', []),
+                       exceptions=func.get('exceptions', [])
+                   )
+                   for func in batch
+               ], return_exceptions=True)
+               
+               for func, result in zip(batch, batch_results):
+                   if isinstance(result, Exception):
+                       log_error(f"Error processing function {func['name']}: {str(result)}")
+                       continue
+                   if result:
+                       doc_entries.append({
+                           'type': 'function',
+                           'name': func['name'],
+                           'docstring': result['docstring']
+                       })
 
-            # Create messages
-            messages = self._create_messages(
-                func_name, params, return_type, complexity_score,
-                existing_docstring, decorators, exceptions, is_class
-            )
+           # Process classes
+           for batch in self._batch_items(metadata['classes'], self.batch_size):
+               batch_results = await asyncio.gather(*[
+                   self.generate_docstring(
+                       func_name=cls['name'],
+                       params=[],
+                       return_type='None',
+                       complexity_score=cls.get('complexity', 0),
+                       existing_docstring=cls.get('docstring', ''),
+                       decorators=cls.get('decorators', []),
+                       is_class=True
+                   )
+                   for cls in batch
+               ], return_exceptions=True)
+               
+               for cls, result in zip(batch, batch_results):
+                   if isinstance(result, Exception):
+                       log_error(f"Error processing class {cls['name']}: {str(result)}")
+                       continue
+                   if result:
+                       doc_entries.append({
+                           'type': 'class',
+                           'name': cls['name'],
+                           'docstring': result['docstring']
+                       })
 
-            # Token validation and optimization
-            prompt_text = json.dumps(messages)
-            prompt_tokens = self.token_manager.estimate_tokens(prompt_text)
-            
-            # Validate token limits
-            is_valid, metrics, message = self.token_manager.validate_request(prompt_text)
-            if not is_valid:
-                log_error(f"Token validation failed for {func_name}: {message}")
-                self.monitor.log_operation_complete(func_name, 0, 0, error=message)
-                return None
+           # Process documentation
+           doc_manager = DocStringManager(source_code)
+           result = doc_manager.process_batch(doc_entries)
+           
+           # Track metrics
+           operation_time = (datetime.now() - operation_start).total_seconds()
+           self.metrics.track_operation(
+               operation_type='process_code',
+               success=bool(result),
+               duration=operation_time
+           )
+           
+           if result:
+               return result['code'], result['documentation']
+           raise ProcessingError("Failed to generate documentation")
+           
+       except Exception as e:
+           log_error(f"Error processing code: {str(e)}")
+           self.metrics.track_operation(
+               operation_type='process_code',
+               success=False,
+               error=str(e)
+           )
+           raise ProcessingError(f"Code processing failed: {str(e)}")
 
-            # Optimize if needed
-            if prompt_tokens > self.config.max_tokens * 0.8:
-                messages, token_usage = self.token_manager.optimize_prompt(
-                    prompt_text,
-                    max_tokens=self.config.max_tokens,
-                    preserve_sections=['parameters', 'returns']
-                )
-                log_info(f"Optimized prompt from {prompt_tokens} to {token_usage.prompt_tokens} tokens")
+   async def generate_docstring(
+       self,
+       func_name: str,
+       params: List[Tuple[str, str]],
+       return_type: str,
+       complexity_score: int = 0,
+       existing_docstring: str = "",
+       decorators: Optional[List[str]] = None,
+       exceptions: Optional[List[str]] = None,
+       is_class: bool = False
+   ) -> Optional[Dict[str, Any]]:
+       """
+       Generate a docstring using the AI model.
+       
+       Args:
+           func_name: Name of the function/class
+           params: List of parameter tuples (name, type)
+           return_type: Return type annotation
+           complexity_score: Code complexity score
+           existing_docstring: Existing docstring if any
+           decorators: List of decorators
+           exceptions: List of exceptions
+           is_class: Whether generating for a class
+           
+       Returns:
+           Optional[Dict[str, Any]]: Generated docstring data if successful
+       """
+       operation_start = datetime.now()
+       
+       try:
+           # Check cache first
+           if self.cache:
+               cache_key = self._generate_cache_key(
+                   func_name, params, return_type, complexity_score, is_class
+               )
+               cached = await self.cache.get_cached_docstring(cache_key)
+               if cached:
+                   self.metrics.track_cache_hit()
+                   return cached
+               self.metrics.track_cache_miss()
 
-            # Make API request with monitoring
-            response = await self._make_api_request(messages, func_name)
-            if not response:
-                return None
+           # Create messages for AI model
+           messages = self._create_messages(
+               func_name, params, return_type, complexity_score,
+               existing_docstring, decorators, exceptions, is_class
+           )
 
-            # Parse and validate response
-            parsed_response = await self._process_response(response, func_name)
-            if not parsed_response:
-                return None
+           # Validate token limits
+           prompt_text = json.dumps(messages)
+           is_valid, token_metrics = self.token_manager.validate_request(prompt_text)
+           if not is_valid:
+               raise TokenLimitError(f"Token validation failed: {token_metrics}")
 
-            # Calculate metrics
-            end_time = asyncio.get_event_loop().time()
-            response_time = end_time - start_time
+           # Make API request
+           response = await self._make_api_request(messages, func_name)
+           if not response:
+               raise AIServiceError("Empty response from AI service")
 
-            # Log metrics
-            self._log_operation_metrics(
-                func_name=func_name,
-                start_time=start_time,
-                response_time=response_time,
-                response=response,
-                parsed_response=parsed_response
-            )
+           # Parse and validate response
+           parsed_response = await self._process_response(response, func_name)
+           if not parsed_response:
+               raise ValidationError("Failed to parse AI response")
 
-            # Cache valid response
-            if parsed_response:
-                await self.cache.save_docstring(cache_key, parsed_response)
+           # Cache valid response
+           if self.cache and parsed_response:
+               await self.cache.save_docstring(cache_key, parsed_response)
 
-            return parsed_response
+           # Track metrics
+           operation_time = (datetime.now() - operation_start).total_seconds()
+           self.metrics.track_operation(
+               operation_type='generate_docstring',
+               success=True,
+               duration=operation_time
+           )
 
-        except Exception as e:
-            log_error(f"Error generating docstring for {func_name}: {str(e)}")
-            self.monitor.log_operation_complete(
-                func_name,
-                asyncio.get_event_loop().time() - start_time,
-                0,
-                error=str(e)
-            )
-            return None
+           return parsed_response
 
-    async def _make_api_request(self, messages: List[Dict[str, str]], context: str) -> Optional[Any]:
-        """Make an API request with full monitoring and token management."""
-        start_time = asyncio.get_event_loop().time()
-        
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.config.deployment_name,
-                messages=messages,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens
-            )
+       except Exception as e:
+           operation_time = (datetime.now() - operation_start).total_seconds()
+           self.metrics.track_operation(
+               operation_type='generate_docstring',
+               success=False,
+               duration=operation_time,
+               error=str(e)
+           )
+           log_error(f"Error generating docstring for {func_name}: {str(e)}")
+           raise
 
-            # Track token usage
-            if response.usage:
-                self.token_manager.track_request(
-                    response.usage.prompt_tokens,
-                    response.usage.completion_tokens
-                )
+   def _generate_cache_key(
+       self,
+       func_name: str,
+       params: List[Tuple[str, str]],
+       return_type: str,
+       complexity_score: int,
+       is_class: bool
+   ) -> str:
+       """Generate a consistent cache key."""
+       key_parts = [
+           func_name,
+           str(sorted(params)),
+           return_type,
+           str(complexity_score),
+           str(is_class)
+       ]
+       return f"docstring:{':'.join(key_parts)}"
 
-            # Log API metrics
-            self.monitor.log_api_request(APIMetrics(
-                endpoint=self.config.endpoint,
-                tokens=response.usage.total_tokens if response.usage else 0,
-                response_time=asyncio.get_event_loop().time() - start_time,
-                status="success",
-                prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
-                completion_tokens=response.usage.completion_tokens if response.usage else 0,
-                estimated_cost=self.token_manager.estimate_cost(
-                    response.usage.prompt_tokens if response.usage else 0,
-                    response.usage.completion_tokens if response.usage else 0
-                )
-            ))
+   def _create_messages(
+       self,
+       func_name: str,
+       params: List[Tuple[str, str]],
+       return_type: str,
+       complexity_score: int,
+       existing_docstring: str,
+       decorators: Optional[List[str]],
+       exceptions: Optional[List[str]],
+       is_class: bool
+   ) -> List[Dict[str, str]]:
+       """Create messages for AI model prompt."""
+       return [
+           {
+               "role": "system",
+               "content": "Generate clear, comprehensive docstrings following Google style guide."
+           },
+           {
+               "role": "user",
+               "content": json.dumps({
+                   "name": func_name,
+                   "type": "class" if is_class else "function",
+                   "parameters": [{"name": p[0], "type": p[1]} for p in params],
+                   "return_type": return_type,
+                   "complexity_score": complexity_score,
+                   "existing_docstring": existing_docstring,
+                   "decorators": decorators or [],
+                   "exceptions": exceptions or []
+               })
+           }
+       ]
 
-            return response
+   async def _make_api_request(
+       self,
+       messages: List[Dict[str, str]],
+       context: str
+   ) -> Optional[Dict[str, Any]]:
+       """Make an API request with monitoring and token management."""
+       operation_start = datetime.now()
+       
+       try:
+           response = await self.client.chat.completions.create(
+               model=self.config.deployment_name,
+               messages=messages,
+               temperature=self.config.temperature,
+               max_tokens=self.config.max_tokens
+           )
 
-        except Exception as e:
-            log_error(f"API request failed: {str(e)}")
-            self.monitor.log_api_request(APIMetrics(
-                endpoint=self.config.endpoint,
-                tokens=0,
-                response_time=asyncio.get_event_loop().time() - start_time,
-                status="error",
-                prompt_tokens=0,
-                completion_tokens=0,
-                estimated_cost=0,
-                error=str(e)
-            ))
-            return None
+           if response and response.choices:
+               # Track token usage
+               usage = response.usage
+               if usage:
+                   self.token_manager.track_request(
+                       usage.prompt_tokens,
+                       usage.completion_tokens
+                   )
 
-    async def _process_response(
-        self,
-        response: Any,
-        context: str
-    ) -> Optional[Dict[str, Any]]:
-        """Process response with response parser and validation."""
-        try:
-            # Use response parser
-            parsed_response = self.response_parser.parse_json_response(
-                response.choices[0].message.content
-            )
-            
-            if not parsed_response:
-                log_error(f"Failed to parse response for {context}")
-                return None
+               operation_time = (datetime.now() - operation_start).total_seconds()
+               self.metrics.track_operation(
+                   operation_type='api_request',
+                   success=True,
+                   duration=operation_time,
+                   tokens_used=usage.total_tokens if usage else 0
+               )
 
-            # Validate response format
-            if not self.response_parser.validate_response(parsed_response):
-                log_error(f"Invalid response format for {context}")
-                return None
+               return {
+                   "content": response.choices[0].message.content,
+                   "usage": {
+                       "prompt_tokens": usage.prompt_tokens if usage else 0,
+                       "completion_tokens": usage.completion_tokens if usage else 0,
+                       "total_tokens": usage.total_tokens if usage else 0
+                   }
+               }
 
-            # Validate docstring content
-            is_valid, validation_errors = self.validator.validate_docstring(
-                parsed_response
-            )
-            
-            if not is_valid:
-                log_error(f"Docstring validation failed for {context}: {validation_errors}")
-                return None
+           return None
 
-            return parsed_response
+       except Exception as e:
+           operation_time = (datetime.now() - operation_start).total_seconds()
+           self.metrics.track_operation(
+               operation_type='api_request',
+               success=False,
+               duration=operation_time,
+               error=str(e)
+           )
+           log_error(f"API request failed for {context}: {str(e)}")
+           raise AIServiceError(f"API request failed: {str(e)}")
 
-        except Exception as e:
-            log_error(f"Response processing error: {str(e)}")
-            return None
+   async def _process_response(
+       self,
+       response: Dict[str, Any],
+       context: str
+   ) -> Optional[Dict[str, Any]]:
+       """Process and validate AI response."""
+       try:
+           if not response.get("content"):
+               return None
 
-    def _log_operation_metrics(
-        self,
-        func_name: str,
-        start_time: float,
-        response_time: float,
-        response: Any,
-        parsed_response: Optional[Dict[str, Any]]
-    ) -> None:
-        """Log comprehensive operation metrics."""
-        # Log model metrics
-        self.monitor.log_model_metrics("azure", ModelMetrics(
-            model_type="azure",
-            operation=func_name,
-            tokens_used=response.usage.total_tokens if response.usage else 0,
-            response_time=response_time,
-            status="success" if parsed_response else "error",
-            cost=self.token_manager.estimate_cost(
-                response.usage.prompt_tokens if response.usage else 0,
-                response.usage.completion_tokens if response.usage else 0
-            )
-        ))
+           parsed_response = self.response_parser.parse_json_response(
+               response["content"]
+           )
+           
+           if not parsed_response:
+               return None
 
-        # Log operation completion
-        self.monitor.log_operation_complete(
-            func_name,
-            response_time,
-            response.usage.total_tokens if response.usage else 0
-        )
+           if not self.response_parser.validate_response(parsed_response):
+               return None
 
-    async def get_metrics_summary(self) -> Dict[str, Any]:
-        """Get comprehensive metrics summary."""
-        return {
-            "monitor_metrics": self.monitor.get_metrics_summary(),
-            "token_usage": self.token_manager.get_usage_stats(),
-            "cache_stats": await self.cache.get_stats()
-        }
+           return parsed_response
 
-    async def close(self):
-        """Close all components properly."""
-        try:
-            await self.client.close()
-            await self.cache.close()
-            log_info("AI Interaction Handler closed")
-        except Exception as e:
-            log_error(f"Error closing handler: {str(e)}")
+       except Exception as e:
+           log_error(f"Response processing error for {context}: {str(e)}")
+           return None
 
-    async def __aenter__(self):
-        """Context manager entry."""
-        return self
+   @staticmethod
+   def _batch_items(items: List[Any], batch_size: int) -> List[List[Any]]:
+       """Split items into batches."""
+       return [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        await self.close()
+   async def get_metrics_summary(self) -> Dict[str, Any]:
+       """Get comprehensive metrics summary."""
+       try:
+           cache_stats = await self.cache.get_stats() if self.cache else {}
+           
+           return {
+               "metrics": self.metrics.get_metrics(),
+               "token_usage": self.token_manager.get_usage_stats(),
+               "cache_stats": cache_stats,
+               "monitor_metrics": self.monitor.get_metrics_summary()
+           }
+       except Exception as e:
+           log_error(f"Error getting metrics summary: {str(e)}")
+           return {}
+
+   async def close(self) -> None:
+       """Close all components properly."""
+       try:
+           if self.cache:
+               await self.cache.close()
+           self.token_manager.reset_cache()
+           self.monitor.reset()
+           log_info("AI Interaction Handler closed successfully")
+       except Exception as e:
+           log_error(f"Error closing handler: {str(e)}")
+
+   async def __aenter__(self):
+       """Async context manager entry."""
+       return self
+
+   async def __aexit__(self, exc_type, exc_val, exc_tb):
+       """Async context manager exit."""
+       await self.close()

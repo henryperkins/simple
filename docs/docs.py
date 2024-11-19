@@ -1,8 +1,4 @@
-"""
-Documentation generation system for Python source code.
-Handles docstring management and coordinates with MarkdownDocumentationGenerator.
-"""
-
+# docs.py (existing implementation)
 import ast
 from typing import Optional, Dict, Any, List
 from pathlib import Path
@@ -11,34 +7,17 @@ from docstring_utils import DocstringValidator
 from core.logger import log_info, log_error, log_debug
 
 class DocStringManager:
-    """
-    Manages docstring operations and documentation generation.
-    Works with MarkdownDocumentationGenerator for output generation.
-    """
+    """Manages docstring operations and documentation generation."""
 
     def __init__(self, source_code: str):
-        """
-        Initialize with source code.
-
-        Args:
-            source_code: The source code to process
-        """
+        """Initialize with source code."""
         self.source_code = source_code
         self.tree = ast.parse(source_code)
         self.validator = DocstringValidator()
         self.changes = []
 
     def insert_docstring(self, node: ast.AST, docstring: str) -> bool:
-        """
-        Insert or update a docstring in an AST node.
-
-        Args:
-            node: The AST node to update
-            docstring: The docstring to insert
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
+        """Insert or update a docstring in an AST node."""
         try:
             if not isinstance(docstring, str):
                 log_error(f"Invalid docstring type for {getattr(node, 'name', 'unknown')}")
@@ -71,15 +50,7 @@ class DocStringManager:
             return False
 
     def update_source_code(self, documentation_entries: List[Dict]) -> str:
-        """
-        Update source code with new docstrings.
-
-        Args:
-            documentation_entries: List of documentation updates
-
-        Returns:
-            str: Updated source code
-        """
+        """Update source code with new docstrings."""
         try:
             modified = False
             for entry in documentation_entries:
@@ -108,16 +79,7 @@ class DocStringManager:
         module_path: Optional[str] = None,
         include_source: bool = True
     ) -> str:
-        """
-        Generate documentation using MarkdownDocumentationGenerator.
-
-        Args:
-            module_path: Optional path to the module file
-            include_source: Whether to include source code in documentation
-
-        Returns:
-            str: Generated documentation
-        """
+        """Generate documentation using MarkdownDocumentationGenerator."""
         try:
             generator = MarkdownDocumentationGenerator(
                 source_code=self.source_code if include_source else None,
@@ -139,17 +101,7 @@ class DocStringManager:
         entries: List[Dict],
         module_path: Optional[str] = None
     ) -> Optional[Dict[str, str]]:
-        """
-        Process a batch of documentation entries.
-
-        Args:
-            entries: List of documentation entries
-            module_path: Optional path to the module file
-
-        Returns:
-            Optional[Dict[str, str]]: Dictionary containing updated code and documentation,
-                                    or None if processing failed
-        """
+        """Process a batch of documentation entries."""
         try:
             updated_code = self.update_source_code(entries)
             documentation = self.generate_documentation(
@@ -170,15 +122,7 @@ class DocStringManager:
 
     @staticmethod
     def extract_docstring(node: ast.AST) -> Optional[str]:
-        """
-        Extract existing docstring from an AST node.
-
-        Args:
-            node: AST node to extract docstring from
-
-        Returns:
-            Optional[str]: Extracted docstring if found
-        """
+        """Extract existing docstring from an AST node."""
         try:
             return ast.get_docstring(node)
         except Exception as e:

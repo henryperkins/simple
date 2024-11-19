@@ -1,3 +1,4 @@
+# logger.py (existing implementation)
 import logging
 import os
 from datetime import datetime
@@ -26,9 +27,7 @@ class LoggerSetup:
 
     @staticmethod
     def _add_file_handler(logger: logging.Logger, module_name: str) -> None:
-        """
-        Add a file handler with a timestamped filename to the logger.
-        """
+        """Add a file handler with a timestamped filename to the logger."""
         log_dir = os.path.join("logs", module_name)
         os.makedirs(log_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -45,16 +44,14 @@ class LoggerSetup:
 
     @staticmethod
     def _add_console_handler(logger: logging.Logger) -> None:
-        """
-        Add a console handler to the logger.
-        """
+        """Add a console handler to the logger."""
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(
             logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         )
         logger.addHandler(console_handler)
 
-# Create module-level logger after class definition
+# Create module-level logger
 logger = LoggerSetup.get_logger(__name__, console_logging=True)
 
 def log_info(message: str) -> None:

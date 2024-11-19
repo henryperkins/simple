@@ -10,9 +10,8 @@ Author: Development Team
 
 import ast
 import math
-import sys
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Set
 from core.logger import log_info, log_error, log_debug
 
 class MetricsError(Exception):
@@ -109,7 +108,7 @@ class Metrics:
 
         cognitive_complexity = 0
         nesting_depth = 0
-        prev_node: Optional[ast.AST] = None
+        prev_node = None
 
         for node in ast.walk(function_node):
             if Metrics._is_nesting_construct(node):

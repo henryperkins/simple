@@ -1,19 +1,10 @@
-"""
-Response Parser Module
-
-This module provides functionality to parse and validate responses from Azure OpenAI,
-focusing on extracting docstrings, summaries, and other metadata from API responses.
-
-Version: 1.2.0
-Author: Development Team
-"""
-
+# response_parser.py (existing implementation)
 import json
 from typing import Optional, Dict, Any
 from jsonschema import validate, ValidationError
 from core.logger import log_info, log_error, log_debug
 
-# Define JSON schema for API response validation
+# Existing JSON schema
 JSON_SCHEMA = {
     "type": "object",
     "properties": {
@@ -39,65 +30,51 @@ JSON_SCHEMA = {
 }
 
 class ResponseParser:
-    """
-    Parses and validates responses from Azure OpenAI API.
+    """Parses and validates responses from Azure OpenAI API."""
 
-    Methods:
-        parse_json_response: Parses the Azure OpenAI response to extract generated docstring and related details.
-        validate_response: Validates the response to ensure it contains required fields and proper content.
-        _parse_plain_text_response: Fallback parser for plain text responses from Azure OpenAI.
-    """
+    def __init__(self, token_manager: Optional['TokenManager'] = None):
+        """Initialize the ResponseParser with an optional TokenManager."""
+        self.token_manager = token_manager
 
     def parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
-        """
-        Parse the Azure OpenAI response to extract the generated docstring and related details.
-
-        Args:
-            response (str): The JSON response string to parse.
-
-        Returns:
-            Optional[Dict[str, Any]]: Dictionary containing parsed response data or None if parsing fails.
-        """
+        """Parse the Azure OpenAI response."""
         log_debug("Parsing JSON response.")
         try:
-            response_json = json.loads(response)
-            log_info("Successfully parsed Azure OpenAI response.")
-            log_debug(f"Parsed JSON response: {response_json}")
+            # Track token usage if token manager is available
+            if self.token_manager:
+                tokens = self.token_manager.estimate_tokens(response)
+                self.token_manager.track_request(0, tokens)
+
+            # Handle both string and dict inputs
+            if isinstance(response, dict):
+                response_json = response
+            else:
+                response = response.strip()
+                if response.startswith('```') and response.endswith('```'):
+                    response = response[3:-3].strip()
+                if response.startswith('{'):
+                    response_json = json.loads(response)
+                else:
+                    return self._parse_plain_text_response(response)
 
             # Validate against JSON schema
             validate(instance=response_json, schema=JSON_SCHEMA)
+            log_debug("Response validated successfully against JSON schema.")
 
-            # Extract fields
-            parsed_response = {
+            return {
                 "docstring": response_json["docstring"].strip(),
                 "summary": response_json["summary"].strip(),
                 "changelog": response_json.get("changelog", "Initial documentation").strip(),
                 "complexity_score": response_json.get("complexity_score", 0)
             }
 
-            return parsed_response
-
-        except json.JSONDecodeError as e:
-            log_error(f"Failed to parse response as JSON: {e}")
-            return self._parse_plain_text_response(response)
-        except ValidationError as e:
-            log_error(f"Response validation error: {e.message}")
-            log_error(f"Schema path: {' -> '.join(str(p) for p in e.schema_path)}")
-            return None
-        except Exception as e:
-            log_error(f"Unexpected error during JSON response parsing: {e}")
+        except (json.JSONDecodeError, ValidationError) as e:
+            log_error(f"Response parsing/validation error: {e}")
+            log_debug(f"Invalid response content: {response}")
             return None
 
     def validate_response(self, response: Dict[str, Any]) -> bool:
-        """
-        Validate the response from the API to ensure it contains required fields and proper content.
-
-        Args:
-            response (Dict[str, Any]): The response from the API containing content and usage information.
-
-        Returns:
-            bool: True if the response is valid and contains all required fields with proper content.
-        """
+        """Validate the response from the API."""
         try:
             if not isinstance(response, dict) or "content" not in response:
                 log_error("Response missing basic structure")
@@ -138,15 +115,7 @@ class ResponseParser:
 
     @staticmethod
     def _parse_plain_text_response(text: str) -> Optional[Dict[str, Any]]:
-        """
-        Fallback parser for plain text responses from Azure OpenAI.
-        
-        Args:
-            text (str): The plain text response to parse.
-            
-        Returns:
-            Optional[Dict[str, Any]]: Parsed response data or None if parsing fails.
-        """
+        """Fallback parser for plain text responses."""
         log_debug("Attempting plain text response parsing.")
         try:
             lines = text.strip().split('\n')

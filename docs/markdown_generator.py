@@ -1,10 +1,4 @@
-"""
-Markdown documentation generator module.
-
-Generates standardized markdown documentation for Python modules
-following a consistent template format.
-"""
-
+# markdown_generator.py (existing implementation)
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import ast
@@ -16,13 +10,7 @@ class MarkdownDocumentationGenerator:
     """Generates standardized markdown documentation for Python modules."""
 
     def __init__(self, source_code: str, module_path: Optional[str] = None):
-        """
-        Initialize the markdown generator.
-
-        Args:
-            source_code: Source code to document
-            module_path: Optional path to the module file
-        """
+        """Initialize the markdown generator."""
         self.source_code = source_code
         self.module_path = Path(module_path) if module_path else Path("module.py")
         self.tree = ast.parse(source_code)
@@ -30,25 +18,24 @@ class MarkdownDocumentationGenerator:
         self.changes: List[str] = []
 
     def generate_markdown(self) -> str:
-        """
-        Generate complete markdown documentation.
-        
-        Returns:
-            str: Complete markdown documentation
-        """
-        sections = [
-            self._generate_header(),
-            self._generate_overview(),
-            self._generate_classes_section(),
-            self._generate_functions_section(),
-            self._generate_constants_section(),
-            self._generate_changes_section(),
-        ]
-        
-        if self.source_code:
-            sections.append(self._generate_source_section())
+        """Generate complete markdown documentation."""
+        try:
+            sections = [
+                self._generate_header(),
+                self._generate_overview(),
+                self._generate_classes_section(),
+                self._generate_functions_section(),
+                self._generate_constants_section(),
+                self._generate_changes_section(),
+            ]
             
-        return "\n\n".join(filter(None, sections))
+            if self.source_code:
+                sections.append(self._generate_source_section())
+                
+            return "\n\n".join(filter(None, sections))
+        except Exception as e:
+            log_error(f"Failed to generate markdown: {e}")
+            return f"# Documentation Generation Failed\n\nError: {str(e)}"
 
     def _generate_header(self) -> str:
         """Generate module header section."""
@@ -57,7 +44,6 @@ class MarkdownDocumentationGenerator:
     def _generate_overview(self) -> str:
         """Generate overview section."""
         description = self.docstring.split('\n')[0] if self.docstring else "No description available."
-        
         return f"""## Overview
 **File:** `{self.module_path}`
 **Description:** {description}"""
@@ -68,10 +54,7 @@ class MarkdownDocumentationGenerator:
         if not classes:
             return ""
 
-        # Classes overview table
-        output = """## Classes
-
-| Class | Inherits From | Complexity Score* |
+        output = """## Classes\n\n| Class | Inherits From | Complexity Score* |
 |-------|---------------|------------------|"""
 
         for cls in classes:
@@ -79,10 +62,7 @@ class MarkdownDocumentationGenerator:
             score = self._get_complexity_score(cls)
             output += f"\n| `{cls.name}` | `{bases}` | {score} |"
 
-        # Methods table
-        output += """\n\n### Class Methods
-
-| Class | Method | Parameters | Returns | Complexity Score* |
+        output += """\n\n### Class Methods\n\n| Class | Method | Parameters | Returns | Complexity Score* |
 |-------|--------|------------|---------|------------------|"""
 
         for cls in classes:
@@ -90,9 +70,7 @@ class MarkdownDocumentationGenerator:
                 params = self._format_parameters(method)
                 returns = self._get_return_annotation(method)
                 score = self._get_complexity_score(method)
-                
-                output += (f"\n| `{cls.name}` | `{method.name}` | "
-                          f"`{params}` | `{returns}` | {score} |")
+                output += f"\n| `{cls.name}` | `{method.name}` | `{params}` | `{returns}` | {score} |"
 
         return output
 
@@ -127,7 +105,6 @@ class MarkdownDocumentationGenerator:
         
         for node in ast.walk(self.tree):
             if isinstance(node, ast.AnnAssign) and isinstance(node.parent, ast.Module):
-                # Type-annotated assignments
                 if isinstance(node.target, ast.Name) and node.target.id.isupper():
                     constants.append((
                         node.target.id,
@@ -135,7 +112,6 @@ class MarkdownDocumentationGenerator:
                         ast.unparse(node.value) if node.value else "None"
                     ))
             elif isinstance(node, ast.Assign) and isinstance(node.parent, ast.Module):
-                # Regular assignments
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id.isupper():
                         try:
@@ -215,25 +191,3 @@ class MarkdownDocumentationGenerator:
         """Add a change entry to the documentation."""
         date = datetime.now().strftime('%Y-%m-%d')
         self.changes.append(f"[{date}] {description}")
-
-def generate_module_documentation(
-    source_code: str,
-    module_path: str,
-    changes: Optional[List[str]] = None
-) -> str:
-    """
-    Generate markdown documentation for a module.
-
-    Args:
-        source_code: Source code to document
-        module_path: Path to the module file
-        changes: Optional list of recent changes
-
-    Returns:
-        str: Generated markdown documentation
-    """
-    generator = MarkdownDocumentationGenerator(source_code, module_path)
-    if changes:
-        for change in changes:
-            generator.add_change(change)
-    return generator.generate_markdown()

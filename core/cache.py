@@ -1,122 +1,298 @@
+# cache.py
 """
-Simplified cache management with Redis and in-memory fallback.
+Cache module for storing and retrieving AI-generated docstrings.
+Provides Redis-based caching functionality with connection management.
 """
 
 import json
-import time
-from typing import Optional, Dict, Any
-import redis
-import asyncio
+from typing import Optional, Any, Dict, Union, Tuple
+import aioredis
+from datetime import datetime, timedelta
+from core.exceptions import CacheError
 from core.logger import log_info, log_error, log_debug
+from core.utils import generate_hash
 
 class Cache:
-    """Simple cache implementation with Redis and memory fallback."""
-    
+    """Redis-based caching system for AI-generated docstrings."""
+
     def __init__(
         self,
         host: str = "localhost",
         port: int = 6379,
         db: int = 0,
         password: Optional[str] = None,
-        ttl: int = 86400  # 24 hours
+        enabled: bool = True,
+        ttl: int = 3600,
+        prefix: str = "docstring:"
     ):
-        """Initialize cache with Redis connection."""
+        """
+        Initialize the cache with Redis connection parameters.
+
+        Args:
+            host: Redis host address
+            port: Redis port number
+            db: Redis database number
+            password: Optional Redis password
+            enabled: Whether caching is enabled
+            ttl: Time-to-live for cache entries in seconds
+            prefix: Prefix for cache keys
+        """
+        self.enabled = enabled
+        if not self.enabled:
+            log_info("Cache disabled")
+            return
+
+        self.redis_url = f"redis://{host}:{port}/{db}"
+        self.password = password
         self.ttl = ttl
-        self.memory_cache: Dict[str, Dict[str, Any]] = {}
-        self.memory_timestamps: Dict[str, float] = {}
-        
-        # Try to initialize Redis
+        self.prefix = prefix
+        self.redis: Optional[aioredis.Redis] = None
+        self._stats = {
+            'hits': 0,
+            'misses': 0,
+            'errors': 0
+        }
+        log_debug(f"Cache initialized with URL: {self.redis_url}")
+
+    async def connect(self) -> None:
+        """
+        Establish connection to Redis server.
+
+        Raises:
+            CacheError: If connection fails
+        """
+        if not self.enabled:
+            return
+
         try:
-            self.redis = redis.Redis(
-                host=host,
-                port=port,
-                db=db,
-                password=password,
+            self.redis = await aioredis.from_url(
+                self.redis_url,
+                password=self.password,
                 decode_responses=True
             )
-            self.redis.ping()
-            self.has_redis = True
-            log_info("Redis cache initialized")
+            log_info("Connected to Redis cache")
         except Exception as e:
-            log_error(f"Redis initialization failed: {e}")
-            self.has_redis = False
-            log_info("Using memory-only cache")
+            raise CacheError(f"Failed to connect to Redis: {str(e)}")
+
+    async def test_connection(self) -> bool:
+        """
+        Test Redis connection by performing a ping.
+
+        Returns:
+            bool: True if connection is successful
+
+        Raises:
+            CacheError: If connection test fails
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            if not self.redis:
+                await self.connect()
+            await self.redis.ping()
+            return True
+        except Exception as e:
+            raise CacheError(f"Redis connection test failed: {str(e)}")
 
     async def get_cached_docstring(self, key: str) -> Optional[Dict[str, Any]]:
-        """Get item from cache."""
+        """
+        Retrieve cached docstring by key.
+
+        Args:
+            key: Cache key for the docstring
+
+        Returns:
+            Optional[Dict[str, Any]]: Cached docstring data if found, None otherwise
+        """
+        if not self.enabled:
+            return None
+
         try:
-            # Try Redis first if available
-            if self.has_redis:
-                data = self.redis.get(key)
-                if data:
-                    return json.loads(data)
+            if not self.redis:
+                await self.connect()
 
-            # Fallback to memory cache
-            if key in self.memory_cache:
-                if time.time() - self.memory_timestamps[key] < self.ttl:
-                    return self.memory_cache[key]
-                else:
-                    # Clear expired entry
-                    del self.memory_cache[key]
-                    del self.memory_timestamps[key]
+            cache_key = f"{self.prefix}{key}"
+            cached_data = await self.redis.get(cache_key)
 
+            if cached_data:
+                self._stats['hits'] += 1
+                log_debug(f"Cache hit for key: {cache_key}")
+                return json.loads(cached_data)
+
+            self._stats['misses'] += 1
+            log_debug(f"Cache miss for key: {cache_key}")
             return None
 
         except Exception as e:
-            log_error(f"Cache retrieval error: {e}")
+            self._stats['errors'] += 1
+            log_error(f"Cache get error: {str(e)}")
             return None
 
-    async def save_docstring(self, key: str, data: Dict[str, Any]) -> bool:
-        """Save item to cache."""
+    async def save_docstring(
+        self,
+        key: str,
+        data: Dict[str, Any],
+        expire: Optional[int] = None
+    ) -> bool:
+        """
+        Save docstring data to cache.
+
+        Args:
+            key: Cache key for the docstring
+            data: Docstring data to cache
+            expire: Optional custom expiration time in seconds
+
+        Returns:
+            bool: True if save was successful, False otherwise
+        """
+        if not self.enabled:
+            return False
+
         try:
-            json_data = json.dumps(data)
-            
-            # Try Redis first if available
-            if self.has_redis:
-                self.redis.setex(key, self.ttl, json_data)
-                
-            # Always save to memory cache as backup
-            self.memory_cache[key] = data
-            self.memory_timestamps[key] = time.time()
-            
+            if not self.redis:
+                await self.connect()
+
+            cache_key = f"{self.prefix}{key}"
+            serialized_data = json.dumps(data)
+            expiration = expire or self.ttl
+
+            await self.redis.set(
+                cache_key,
+                serialized_data,
+                ex=expiration
+            )
+            log_debug(f"Cached data for key: {cache_key}")
             return True
 
         except Exception as e:
-            log_error(f"Cache save error: {e}")
+            self._stats['errors'] += 1
+            log_error(f"Cache save error: {str(e)}")
             return False
 
-    async def clear(self) -> None:
-        """Clear all cache entries."""
+    async def invalidate(self, key: str) -> bool:
+        """
+        Invalidate a cached entry.
+
+        Args:
+            key: Cache key to invalidate
+
+        Returns:
+            bool: True if invalidation was successful, False otherwise
+        """
+        if not self.enabled:
+            return False
+
         try:
-            if self.has_redis:
-                self.redis.flushdb()
-            self.memory_cache.clear()
-            self.memory_timestamps.clear()
-            log_info("Cache cleared")
+            if not self.redis:
+                await self.connect()
+
+            cache_key = f"{self.prefix}{key}"
+            await self.redis.delete(cache_key)
+            log_debug(f"Invalidated cache key: {cache_key}")
+            return True
+
         except Exception as e:
-            log_error(f"Cache clear error: {e}")
+            self._stats['errors'] += 1
+            log_error(f"Cache invalidation error: {str(e)}")
+            return False
 
     async def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        stats = {
-            "memory_cache_size": len(self.memory_cache),
-            "has_redis": self.has_redis
-        }
-        
-        if self.has_redis:
-            try:
-                stats["redis_keys"] = self.redis.dbsize()
-            except Exception:
-                stats["redis_keys"] = 0
+        """
+        Get cache statistics.
 
-        return stats
+        Returns:
+            Dict[str, Any]: Dictionary containing cache statistics
+        """
+        if not self.enabled:
+            return {
+                'enabled': False,
+                'stats': None
+            }
+
+        try:
+            if not self.redis:
+                await self.connect()
+
+            info = await self.redis.info()
+            return {
+                'enabled': True,
+                'stats': {
+                    'hits': self._stats['hits'],
+                    'misses': self._stats['misses'],
+                    'errors': self._stats['errors'],
+                    'hit_rate': self._calculate_hit_rate(),
+                    'memory_used': info.get('used_memory_human', 'N/A'),
+                    'connected_clients': info.get('connected_clients', 0),
+                    'uptime_seconds': info.get('uptime_in_seconds', 0)
+                }
+            }
+
+        except Exception as e:
+            log_error(f"Error getting cache stats: {str(e)}")
+            return {
+                'enabled': True,
+                'stats': self._stats
+            }
+
+    def _calculate_hit_rate(self) -> float:
+        """
+        Calculate cache hit rate.
+
+        Returns:
+            float: Cache hit rate as a percentage
+        """
+        total = self._stats['hits'] + self._stats['misses']
+        if total == 0:
+            return 0.0
+        return round((self._stats['hits'] / total) * 100, 2)
+
+    async def clear(self) -> bool:
+        """
+        Clear all cached entries with the configured prefix.
+
+        Returns:
+            bool: True if clear was successful, False otherwise
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            if not self.redis:
+                await self.connect()
+
+            # Get all keys with prefix
+            pattern = f"{self.prefix}*"
+            cursor = 0
+            while True:
+                cursor, keys = await self.redis.scan(cursor, match=pattern)
+                if keys:
+                    await self.redis.delete(*keys)
+                if cursor == 0:
+                    break
+
+            log_info("Cache cleared successfully")
+            return True
+
+        except Exception as e:
+            log_error(f"Error clearing cache: {str(e)}")
+            return False
 
     async def close(self) -> None:
-        """Close cache connections."""
-        try:
-            if self.has_redis:
-                self.redis.close()
-            self.memory_cache.clear()
-            self.memory_timestamps.clear()
-        except Exception as e:
-            log_error(f"Cache close error: {e}")
+        """Close Redis connection and perform cleanup."""
+        if self.enabled and self.redis:
+            try:
+                await self.redis.close()
+                self.redis = None
+                log_info("Redis connection closed")
+            except Exception as e:
+                log_error(f"Error closing Redis connection: {str(e)}")
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()

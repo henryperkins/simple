@@ -1,8 +1,4 @@
-"""
-Simplified Azure OpenAI API client wrapper.
-Provides basic API interaction functionality used by AIInteractionHandler.
-"""
-
+# api_client.py (existing implementation)
 from typing import Optional, Dict, Any, List
 from openai import AsyncAzureOpenAI
 from openai import OpenAIError
@@ -10,11 +6,7 @@ from core.config import AzureOpenAIConfig
 from core.logger import log_info, log_error, log_debug
 
 class AzureOpenAIClient:
-    """
-    Simple client wrapper for Azure OpenAI API interactions.
-    Handles basic communication with the API, leaving higher-level operations
-    to AIInteractionHandler.
-    """
+    """Simple client wrapper for Azure OpenAI API interactions."""
 
     def __init__(self, config: AzureOpenAIConfig):
         """Initialize with Azure OpenAI configuration."""
@@ -35,17 +27,7 @@ class AzureOpenAIClient:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
-        """
-        Generate a completion from the API.
-
-        Args:
-            messages: List of message dictionaries
-            temperature: Optional temperature override
-            max_tokens: Optional max tokens override
-
-        Returns:
-            Optional[Dict[str, Any]]: API response or None if failed
-        """
+        """Generate a completion from the API."""
         try:
             response = await self.client.chat.completions.create(
                 model=self.config.deployment_name,
@@ -70,35 +52,19 @@ class AzureOpenAIClient:
             log_error(f"Unexpected error: {str(e)}")
             return None
 
-    async def health_check(self) -> Dict[str, Any]:
-        """
-        Check API health with a simple request.
-
-        Returns:
-            Dict[str, Any]: Health check results
-        """
+    async def close(self):
+        """Close the API client."""
         try:
-            start_time = time.time()
-            response = await self.client.chat.completions.create(
-                model=self.config.deployment_name,
-                messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=5
-            )
-            latency = time.time() - start_time
-            
-            return {
-                "status": "healthy" if response else "unhealthy",
-                "latency": round(latency, 3),
-                "model": self.config.deployment_name
-            }
-        except Exception as e:
-            log_error(f"Health check failed: {str(e)}")
-            return {
-                "status": "unhealthy",
-                "error": str(e),
-                "model": self.config.deployment_name
-            }
+            await self.
+[Timestamp: 2024/11/19 08:03:53]
 
+**user**: Continue 
+[Timestamp: 2024/11/19 08:04:02]
+
+**ai**: Continuing with api_client.py:
+
+```python
+# api_client.py (continued)
     async def close(self):
         """Close the API client."""
         try:
