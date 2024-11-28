@@ -1,193 +1,155 @@
-# markdown_generator.py (existing implementation)
-from typing import List, Dict, Any, Optional
-from pathlib import Path
-import ast
+# markdown_generator.py
+"""
+Markdown Documentation Generator Module
+
+Generates formatted markdown documentation from documentation sections.
+"""
+
 from datetime import datetime
-import re
-from core.logger import log_info, log_error, log_debug
+from typing import List, Optional
+from dataclasses import dataclass
 
-class MarkdownDocumentationGenerator:
-    """Generates standardized markdown documentation for Python modules."""
+from core.logger import LoggerSetup
+from core.docstring_processor import DocumentationSection
 
-    def __init__(self, source_code: str, module_path: Optional[str] = None):
-        """Initialize the markdown generator."""
-        self.source_code = source_code
-        self.module_path = Path(module_path) if module_path else Path("module.py")
-        self.tree = ast.parse(source_code)
-        self.docstring = ast.get_docstring(self.tree) or ""
-        self.changes: List[str] = []
+logger = LoggerSetup.get_logger(__name__)
 
-    def generate_markdown(self) -> str:
-        """Generate complete markdown documentation."""
-        try:
-            sections = [
-                self._generate_header(),
-                self._generate_overview(),
-                self._generate_classes_section(),
-                self._generate_functions_section(),
-                self._generate_constants_section(),
-                self._generate_changes_section(),
-            ]
-            
-            if self.source_code:
-                sections.append(self._generate_source_section())
-                
-            return "\n\n".join(filter(None, sections))
-        except Exception as e:
-            log_error(f"Failed to generate markdown: {e}")
-            return f"# Documentation Generation Failed\n\nError: {str(e)}"
+@dataclass
+class MarkdownConfig:
+    """Configuration for markdown generation."""
+    include_toc: bool = True
+    include_timestamp: bool = True
+    code_language: str = "python"
+    heading_offset: int = 0
 
-    def _generate_header(self) -> str:
-        """Generate module header section."""
-        return f"# Module: {self.module_path.stem}"
+class MarkdownGenerator:
+    """Generates markdown documentation with consistent formatting."""
 
-    def _generate_overview(self) -> str:
-        """Generate overview section."""
-        description = self.docstring.split('\n')[0] if self.docstring else "No description available."
-        return f"""## Overview
-**File:** `{self.module_path}`
-**Description:** {description}"""
+    def __init__(self, config: Optional[MarkdownConfig] = None):
+        """
+        Initialize markdown generator with optional configuration.
 
-    def _generate_classes_section(self) -> str:
-        """Generate classes section with methods."""
-        classes = [node for node in ast.walk(self.tree) if isinstance(node, ast.ClassDef)]
-        if not classes:
-            return ""
+        Args:
+            config: Optional markdown generation configuration
+        """
+        self.config = config or MarkdownConfig()
 
-        output = """## Classes\n\n| Class | Inherits From | Complexity Score* |
-|-------|---------------|------------------|"""
+    def generate(
+        self,
+        sections: List[DocumentationSection],
+        include_source: bool = True,
+        source_code: Optional[str] = None,
+        module_path: Optional[str] = None
+    ) -> str:
+        """
+        Generate complete markdown documentation.
 
-        for cls in classes:
-            bases = ', '.join(ast.unparse(base) for base in cls.bases) or '-'
-            score = self._get_complexity_score(cls)
-            output += f"\n| `{cls.name}` | `{bases}` | {score} |"
+        Args:
+            sections: List of documentation sections
+            include_source: Whether to include source code
+            source_code: Optional source code to include
+            module_path: Optional module path to include
 
-        output += """\n\n### Class Methods\n\n| Class | Method | Parameters | Returns | Complexity Score* |
-|-------|--------|------------|---------|------------------|"""
-
-        for cls in classes:
-            for method in [n for n in cls.body if isinstance(n, ast.FunctionDef)]:
-                params = self._format_parameters(method)
-                returns = self._get_return_annotation(method)
-                score = self._get_complexity_score(method)
-                output += f"\n| `{cls.name}` | `{method.name}` | `{params}` | `{returns}` | {score} |"
-
-        return output
-
-    def _generate_functions_section(self) -> str:
-        """Generate functions section."""
-        functions = [
-            node for node in ast.walk(self.tree) 
-            if isinstance(node, ast.FunctionDef) 
-            and isinstance(node.parent, ast.Module)
-        ]
+        Returns:
+            str: Generated markdown documentation
+        """
+        md_lines = []
         
-        if not functions:
-            return ""
+        # Add header
+        if self.config.include_timestamp:
+            md_lines.extend([
+                "# Documentation",
+                "",
+                f"*Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
+                ""
+            ])
 
-        output = """## Functions
+        # Add module path if provided
+        if module_path:
+            md_lines.extend([
+                f"**Module Path:** `{module_path}`",
+                ""
+            ])
 
-| Function | Parameters | Returns | Complexity Score* |
-|----------|------------|---------|------------------|"""
+        # Generate table of contents if enabled
+        if self.config.include_toc:
+            md_lines.extend(self._generate_toc(sections))
 
-        for func in functions:
-            params = self._format_parameters(func)
-            returns = self._get_return_annotation(func)
-            score = self._get_complexity_score(func)
-            
-            output += f"\n| `{func.name}` | `{params}` | `{returns}` | {score} |"
+        # Generate section content
+        for section in sections:
+            md_lines.extend(self._generate_section(section))
 
-        return output
+        # Add source code if included
+        if include_source and source_code:
+            md_lines.extend([
+                "## Source Code",
+                "",
+                f"```{self.config.code_language}",
+                source_code,
+                "```",
+                ""
+            ])
 
-    def _generate_constants_section(self) -> str:
-        """Generate constants section."""
-        constants = []
+        return "\n".join(md_lines)
+
+    def _generate_toc(
+        self,
+        sections: List[DocumentationSection],
+        level: int = 0
+    ) -> List[str]:
+        """Generate table of contents."""
+        toc_lines = []
         
-        for node in ast.walk(self.tree):
-            if isinstance(node, ast.AnnAssign) and isinstance(node.parent, ast.Module):
-                if isinstance(node.target, ast.Name) and node.target.id.isupper():
-                    constants.append((
-                        node.target.id,
-                        ast.unparse(node.annotation),
-                        ast.unparse(node.value) if node.value else "None"
-                    ))
-            elif isinstance(node, ast.Assign) and isinstance(node.parent, ast.Module):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id.isupper():
-                        try:
-                            value = ast.unparse(node.value)
-                            type_name = type(eval(value)).__name__
-                            constants.append((target.id, type_name, value))
-                        except:
-                            constants.append((target.id, "Any", ast.unparse(node.value)))
+        if level == 0:
+            toc_lines.extend([
+                "## Table of Contents",
+                ""
+            ])
 
-        if not constants:
-            return ""
-
-        output = """## Constants and Variables
-
-| Name | Type | Value |
-|------|------|-------|"""
-
-        for name, type_name, value in constants:
-            output += f"\n| `{name}` | `{type_name}` | `{value}` |"
-
-        return output
-
-    def _generate_changes_section(self) -> str:
-        """Generate recent changes section."""
-        if not self.changes:
-            today = datetime.now().strftime('%Y-%m-%d')
-            self.changes.append(f"[{today}] Initial documentation generated")
-
-        return "## Recent Changes\n" + "\n".join(f"- {change}" for change in self.changes)
-
-    def _generate_source_section(self) -> str:
-        """Generate source code section."""
-        return f"""## Source Code
-```python
-{self.source_code}
-```"""
-
-    def _format_parameters(self, node: ast.FunctionDef) -> str:
-        """Format function parameters with types."""
-        params = []
-        
-        for arg in node.args.args:
-            if arg.arg == 'self':
-                continue
-                
-            param_str = arg.arg
-            if arg.annotation:
-                param_str += f": {ast.unparse(arg.annotation)}"
-            elif arg in node.args.defaults:
-                # Has default value
-                default_idx = len(node.args.args) - len(node.args.defaults)
-                if arg_idx := node.args.args.index(arg) >= default_idx:
-                    default = ast.unparse(node.args.defaults[arg_idx - default_idx])
-                    param_str += f" = {default}"
-                    
-            params.append(param_str)
+        for section in sections:
+            indent = "    " * level
+            link = self._create_link(section.title)
+            toc_lines.append(f"{indent}- [{section.title}](#{link})")
             
-        return ", ".join(params)
+            if section.subsections:
+                toc_lines.extend(self._generate_toc(section.subsections, level + 1))
 
-    def _get_return_annotation(self, node: ast.FunctionDef) -> str:
-        """Get function return type annotation."""
-        if node.returns:
-            return ast.unparse(node.returns)
-        return "None"
+        if level == 0:
+            toc_lines.append("")
 
-    def _get_complexity_score(self, node: ast.AST) -> str:
-        """Get complexity score from docstring or calculate it."""
-        docstring = ast.get_docstring(node)
-        if docstring:
-            match = re.search(r'Complexity Score:\s*(\d+)', docstring)
-            if match:
-                score = int(match.group(1))
-                return f"{score} ⚠️" if score > 10 else str(score)
-        return "-"
+        return toc_lines
 
-    def add_change(self, description: str):
-        """Add a change entry to the documentation."""
-        date = datetime.now().strftime('%Y-%m-%d')
-        self.changes.append(f"[{date}] {description}")
+    def _generate_section(
+        self,
+        section: DocumentationSection,
+        level: int = 2
+    ) -> List[str]:
+        """Generate markdown for a documentation section."""
+        md_lines = []
+        
+        # Add section header
+        header_level = min(level + self.config.heading_offset, 6)
+        md_lines.extend([
+            f"{'#' * header_level} {section.title}",
+            ""
+        ])
+
+        # Add section content
+        if section.content:
+            md_lines.extend([
+                section.content,
+                ""
+            ])
+
+        # Add subsections
+        if section.subsections:
+            for subsection in section.subsections:
+                if subsection:  # Skip None subsections
+                    md_lines.extend(self._generate_section(subsection, level + 1))
+
+        return md_lines
+
+    @staticmethod
+    def _create_link(title: str) -> str:
+        """Create markdown link from title."""
+        return title.lower().replace(' ', '-').replace(':', '').replace('_', '-')

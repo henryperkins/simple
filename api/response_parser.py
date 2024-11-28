@@ -1,162 +1,196 @@
-# response_parser.py (existing implementation)
+"""
+Response Parser Module
+
+Handles parsing and validation of Azure OpenAI API responses.
+Ensures consistent and reliable output formatting.
+"""
+
 import json
 from typing import Optional, Dict, Any
 from jsonschema import validate, ValidationError
-from core.logger import log_info, log_error, log_debug
 
-# Existing JSON schema
-JSON_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "docstring": {
-            "type": "string",
-            "minLength": 1
-        },
-        "summary": {
-            "type": "string",
-            "minLength": 1
-        },
-        "changelog": {
-            "type": "string"
-        },
-        "complexity_score": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100
-        }
-    },
-    "required": ["docstring", "summary"],
-    "additionalProperties": False
-}
+from core.logger import LoggerSetup
+
+logger = LoggerSetup.get_logger(__name__)
 
 class ResponseParser:
-    """Parses and validates responses from Azure OpenAI API."""
+    """Parses and validates Azure OpenAI API responses."""
 
-    def __init__(self, token_manager: Optional['TokenManager'] = None):
-        """Initialize the ResponseParser with an optional TokenManager."""
-        self.token_manager = token_manager
-
-    def parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
-        """Parse the Azure OpenAI response."""
-        log_debug("Parsing JSON response.")
-        try:
-            # Track token usage if token manager is available
-            if self.token_manager:
-                tokens = self.token_manager.estimate_tokens(response)
-                self.token_manager.track_request(0, tokens)
-
-            # Handle both string and dict inputs
-            if isinstance(response, dict):
-                response_json = response
-            else:
-                response = response.strip()
-                if response.startswith('```') and response.endswith('```'):
-                    response = response[3:-3].strip()
-                if response.startswith('{'):
-                    response_json = json.loads(response)
-                else:
-                    return self._parse_plain_text_response(response)
-
-            # Validate against JSON schema
-            validate(instance=response_json, schema=JSON_SCHEMA)
-            log_debug("Response validated successfully against JSON schema.")
-
-            return {
-                "docstring": response_json["docstring"].strip(),
-                "summary": response_json["summary"].strip(),
-                "changelog": response_json.get("changelog", "Initial documentation").strip(),
-                "complexity_score": response_json.get("complexity_score", 0)
+    # Define response schema
+    RESPONSE_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "documentation": {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string"},
+                    "description": {"type": "string"},
+                    "parameters": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "type": {"type": "string"},
+                                "description": {"type": "string"}
+                            },
+                            "required": ["name", "type", "description"]
+                        }
+                    },
+                    "returns": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string"},
+                            "description": {"type": "string"}
+                        },
+                        "required": ["type", "description"]
+                    }
+                },
+                "required": ["summary", "description"]
             }
+        },
+        "required": ["documentation"]
+    }
 
-        except (json.JSONDecodeError, ValidationError) as e:
-            log_error(f"Response parsing/validation error: {e}")
-            log_debug(f"Invalid response content: {response}")
+    def __init__(self):
+        """Initialize response parser."""
+        self._validation_cache = {}
+        logger.info("Response parser initialized")
+
+    async def parse_response(
+        self,
+        response: str,
+        expected_format: str = 'json'
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Parse and validate API response.
+
+        Args:
+            response: Raw API response
+            expected_format: Expected response format ('json' or 'markdown')
+
+        Returns:
+            Optional[Dict[str, Any]]: Parsed response
+        """
+        try:
+            if expected_format == 'json':
+                return await self._parse_json_response(response)
+            return await self._parse_markdown_response(response)
+        except Exception as e:
+            logger.error(f"Error parsing response: {e}")
             return None
 
-    def validate_response(self, response: Dict[str, Any]) -> bool:
-        """Validate the response from the API."""
+    async def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """Parse JSON response."""
         try:
-            if not isinstance(response, dict) or "content" not in response:
-                log_error("Response missing basic structure")
-                return False
+            # Handle potential markdown code blocks
+            response = response.strip()
+            if response.startswith('```json'):
+                response = response[7:]
+            if response.endswith('```'):
+                response = response[:-3]
 
-            content = response["content"]
+            # Parse JSON
+            data = json.loads(response.strip())
+            
+            # Validate against schema
+            if not self._validate_response(data):
+                logger.error("Response validation failed")
+                return None
 
-            # Validate required fields
-            required_fields = ["docstring", "summary", "complexity_score", "changelog"]
-            missing_fields = [field for field in required_fields if field not in content]
-            if missing_fields:
-                log_error(f"Response missing required fields: {missing_fields}")
-                return False
+            return data
 
-            # Validate usage information if present
-            if "usage" in response:
-                usage = response["usage"]
-                required_usage_fields = ["prompt_tokens", "completion_tokens", "total_tokens"]
-                
-                if not all(field in usage for field in required_usage_fields):
-                    log_error("Missing usage information fields")
-                    return False
-                
-                if not all(isinstance(usage[field], int) and usage[field] >= 0 
-                        for field in required_usage_fields):
-                    log_error("Invalid token count in usage information")
-                    return False
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error parsing JSON response: {e}")
+            return None
 
-                if usage["total_tokens"] != usage["prompt_tokens"] + usage["completion_tokens"]:
-                    log_error("Inconsistent token counts in usage information")
-                    return False
-
-            return True
+    async def _parse_markdown_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """Parse markdown response into structured format."""
+        try:
+            sections = self._split_markdown_sections(response)
+            
+            return {
+                'documentation': {
+                    'summary': sections.get('summary', ''),
+                    'description': sections.get('description', ''),
+                    'parameters': self._parse_parameters(sections.get('parameters', '')),
+                    'returns': self._parse_returns(sections.get('returns', ''))
+                }
+            }
 
         except Exception as e:
-            log_error(f"Error during response validation: {e}")
+            logger.error(f"Error parsing markdown response: {e}")
+            return None
+
+    def _validate_response(self, data: Dict[str, Any]) -> bool:
+        """Validate response against schema."""
+        try:
+            validate(instance=data, schema=self.RESPONSE_SCHEMA)
+            return True
+        except ValidationError as e:
+            logger.error(f"Validation error: {e}")
             return False
 
-    @staticmethod
-    def _parse_plain_text_response(text: str) -> Optional[Dict[str, Any]]:
-        """Fallback parser for plain text responses."""
-        log_debug("Attempting plain text response parsing.")
-        try:
-            lines = text.strip().split('\n')
-            result = {
-                "docstring": "",
-                "summary": "",
-                "changelog": "Initial documentation",
-                "complexity_score": 0
+    def _split_markdown_sections(self, markdown: str) -> Dict[str, str]:
+        """Split markdown into sections."""
+        sections = {}
+        current_section = 'description'
+        current_content = []
+
+        for line in markdown.split('\n'):
+            if line.startswith('#'):
+                # Save previous section
+                if current_content:
+                    sections[current_section] = '\n'.join(current_content).strip()
+                    current_content = []
+
+                # Update current section
+                section_name = line.lstrip('#').strip().lower()
+                current_section = section_name
+            else:
+                current_content.append(line)
+
+        # Save final section
+        if current_content:
+            sections[current_section] = '\n'.join(current_content).strip()
+
+        return sections
+
+    def _parse_parameters(self, params_text: str) -> List[Dict[str, str]]:
+        """Parse parameter section from markdown."""
+        params = []
+        current_param = None
+
+        for line in params_text.split('\n'):
+            line = line.strip()
+            if line.startswith('- ') or line.startswith('* '):
+                # New parameter
+                if ':' in line:
+                    name, rest = line[2:].split(':', 1)
+                    current_param = {
+                        'name': name.strip(),
+                        'type': 'Any',
+                        'description': rest.strip()
+                    }
+                    params.append(current_param)
+            elif current_param and line:
+                # Continue previous parameter description
+                current_param['description'] += ' ' + line
+
+        return params
+
+    def _parse_returns(self, returns_text: str) -> Dict[str, str]:
+        """Parse returns section from markdown."""
+        if ':' in returns_text:
+            type_str, description = returns_text.split(':', 1)
+            return {
+                'type': type_str.strip(),
+                'description': description.strip()
             }
-            current_key = None
-            buffer = []
-
-            for line in lines:
-                line = line.strip()
-                if line.endswith(':') and line[:-1].lower() in ['summary', 'changelog', 'docstring', 'complexity_score']:
-                    if current_key and buffer:
-                        content = '\n'.join(buffer).strip()
-                        if current_key == 'complexity_score':
-                            try:
-                                result[current_key] = int(content)
-                            except ValueError:
-                                result[current_key] = 0
-                        else:
-                            result[current_key] = content
-                    current_key = line[:-1].lower()
-                    buffer = []
-                elif current_key:
-                    buffer.append(line)
-
-            if current_key and buffer:
-                content = '\n'.join(buffer).strip()
-                if current_key == 'complexity_score':
-                    try:
-                        result[current_key] = int(content)
-                    except ValueError:
-                        result[current_key] = 0
-                else:
-                    result[current_key] = content
-
-            return result if result["docstring"] and result["summary"] else None
-
-        except Exception as e:
-            log_error(f"Failed to parse plain text response: {e}")
-            return None
+        return {
+            'type': 'None',
+            'description': returns_text.strip() or 'No return value.'
+        }

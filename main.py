@@ -1,241 +1,268 @@
-# main.py
 """
-Main module for docstring generation workflow.
-Handles file processing, caching, and documentation generation.
+Main Application Module
+
+Orchestrates the documentation generation process using Azure OpenAI,
+handling configuration, initialization, and cleanup of components.
 """
 
-import argparse
 import asyncio
 import sys
+import os
 from pathlib import Path
-from typing import List
-
-from core.ai_interaction import AIInteractionHandler
+from typing import Optional, List, Tuple
+import argparse
+from dotenv import load_dotenv
+from core.logger import LoggerSetup
 from core.cache import Cache
+from core.monitoring import MetricsCollector
 from core.config import AzureOpenAIConfig
-from core.logger import log_info, log_error, log_debug
-from core.utils import ensure_directory
-from core.exceptions import CacheError, DocumentationError
+from api.token_management import TokenManager
+from ai_interaction import AIInteractionHandler
+from exceptions import (
+    ConfigurationError,
+    ProcessingError,
+    ValidationError
+)
 
-async def process_file(
-    file_path: Path,
-    handler: AIInteractionHandler,
-    output_dir: Path
-) -> bool:
+load_dotenv()
+# Initialize logger and load configuration
+logger = LoggerSetup.get_logger(__name__)
+config = AzureOpenAIConfig.from_env()
+
+class DocumentationGenerator:
     """
-    Process a single Python file to generate documentation.
+    Main application class for generating documentation using Azure OpenAI.
 
-    Args:
-        file_path (Path): Path to the Python file to process
-        handler (AIInteractionHandler): Handler instance for AI interactions
-        output_dir (Path): Directory to save processed files and documentation
-
-    Returns:
-        bool: True if processing was successful, False otherwise
+    Handles initialization of components, processing of source files,
+    and cleanup of resources.
     """
-    try:
-        log_debug(f"Processing file: {file_path}")
-        source_code = file_path.read_text(encoding='utf-8')
-        
-        # Process code and generate documentation
-        updated_code, documentation = await handler.process_code(source_code)
 
-        if documentation:
-            # Ensure output directory exists
-            ensure_directory(str(output_dir))
-            
-            # Save processed files
-            output_path = output_dir / file_path.name
-            doc_path = output_dir / f"{file_path.stem}_docs.md"
-            
-            output_path.write_text(updated_code, encoding='utf-8')
+    def __init__(self):
+        """Initialize the documentation generator."""
+        self.cache = None
+        self.metrics = None
+        self.token_manager = None
+        self.ai_handler = None
+
+    async def initialize(self) -> None:
+        """
+        Initialize all components needed for documentation generation.
+
+        Raises:
+            ConfigurationError: If component initialization fails
+        """
+        try:
+            # Initialize cache if enabled
+            if config.cache_enabled:
+                self.cache = Cache(
+                    host=config.redis_host,
+                    port=config.redis_port,
+                    db=config.redis_db,
+                    password=config.redis_password,
+                    enabled=config.cache_enabled
+                )
+                logger.info("Cache initialized successfully")
+
+            # Initialize metrics collector
+            self.metrics = MetricsCollector()
+            logger.info("Metrics collector initialized")
+
+            # Initialize token manager
+            self.token_manager = TokenManager(
+                model=config.model_name,
+                deployment_name=config.deployment_name
+            )
+            logger.info("Token manager initialized")
+
+            # Initialize AI interaction handler
+            self.ai_handler = AIInteractionHandler(
+                cache=self.cache,
+                metrics_collector=self.metrics,
+                token_manager=self.token_manager
+            )
+            logger.info("AI interaction handler initialized")
+
+        except Exception as e:
+            logger.error(f"Initialization failed: {str(e)}")
+            raise ConfigurationError(f"Failed to initialize components: {str(e)}")
+
+    async def cleanup(self) -> None:
+        """Cleanup and close all components."""
+        try:
+            if self.ai_handler:
+                await self.ai_handler.close()
+            if self.cache:
+                await self.cache.close()
+            if self.metrics:
+                await self.metrics.close()
+            logger.info("Cleanup completed successfully")
+        except Exception as e:
+            logger.error(f"Cleanup failed: {str(e)}")
+
+    async def process_file(
+        self,
+        file_path: Path
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Process a single Python file for documentation generation.
+
+        Args:
+            file_path (Path): Path to the Python file
+
+        Returns:
+            Tuple[Optional[str], Optional[str]]: Updated code and documentation
+
+        Raises:
+            ProcessingError: If file processing fails
+        """
+        try:
+            if not file_path.exists():
+                raise ValidationError(f"File not found: {file_path}")
+
+            # Read source code
+            source_code = file_path.read_text(encoding='utf-8')
+            if not source_code.strip():
+                raise ValidationError(f"Empty file: {file_path}")
+
+            # Generate cache key
+            cache_key = f"doc:{file_path.stem}:{hash(source_code)}"
+
+            # Process code
+            updated_code, documentation = await self.ai_handler.process_code(
+                source_code,
+                cache_key
+            )
+
+            return updated_code, documentation
+
+        except ValidationError as ve:
+            logger.error(f"Validation error for file {file_path}: {str(ve)}")
+            raise ve
+        except ProcessingError as pe:
+            logger.error(f"Processing error for file {file_path}: {str(pe)}")
+            raise pe
+        except Exception as e:
+            logger.error(f"Unexpected error processing file {file_path}: {str(e)}")
+            raise ProcessingError(f"File processing failed: {str(e)}")
+
+    async def save_results(
+        self,
+        file_path: Path,
+        updated_code: str,
+        documentation: str
+    ) -> None:
+        """
+        Save processing results to files.
+
+        Args:
+            file_path (Path): Original file path
+            updated_code (str): Updated source code
+            documentation (str): Generated documentation
+        """
+        try:
+            # Save updated code
+            file_path.write_text(updated_code, encoding='utf-8')
+
+            # Save documentation to markdown file
+            doc_path = file_path.with_suffix('.md')
             doc_path.write_text(documentation, encoding='utf-8')
-            
-            log_info(f"Successfully processed {file_path}")
-            return True
-        else:
-            log_error(f"Failed to generate documentation for {file_path}")
-            return False
 
-    except DocumentationError as e:
-        log_error(f"Documentation error for {file_path}: {str(e)}")
-        return False
-    except Exception as e:
-        log_error(f"Error processing {file_path}: {str(e)}")
-        return False
+            logger.info(f"Results saved for {file_path}")
 
-async def process_directory(
-    directory: Path,
-    handler: AIInteractionHandler,
-    output_dir: Path
-) -> int:
+        except Exception as e:
+            logger.error(f"Failed to save results for {file_path}: {str(e)}")
+            raise ProcessingError(f"Failed to save results: {str(e)}")
+
+    async def process_files(self, file_paths: List[Path]) -> None:
+        """
+        Process multiple Python files for documentation generation.
+
+        Args:
+            file_paths (List[Path]): List of file paths to process
+        """
+        for file_path in file_paths:
+            try:
+                logger.info(f"Processing file: {file_path}")
+
+                updated_code, documentation = await self.process_file(file_path)
+
+                if updated_code and documentation:
+                    await self.save_results(
+                        file_path,
+                        updated_code,
+                        documentation
+                    )
+                    logger.info(f"Successfully processed {file_path}")
+                else:
+                    logger.warning(f"No results generated for {file_path}")
+
+            except ValidationError as ve:
+                logger.error(f"Validation error for file {file_path}: {str(ve)}")
+            except ProcessingError as pe:
+                logger.error(f"Processing error for file {file_path}: {str(pe)}")
+            except Exception as e:
+                logger.error(f"Failed to process file {file_path}: {str(e)}")
+
+async def main(args: argparse.Namespace) -> int:
     """
-    Process all Python files in a directory concurrently.
+    Main application entry point.
 
     Args:
-        directory (Path): Directory containing Python files
-        handler (AIInteractionHandler): Handler instance for AI interactions
-        output_dir (Path): Directory to save processed files and documentation
+        args (argparse.Namespace): Command line arguments
 
     Returns:
-        int: Number of successfully processed files
+        int: Exit code (0 for success, non-zero for failure)
     """
+    generator = DocumentationGenerator()
+
     try:
-        # Create tasks for all Python files
-        tasks = [
-            process_file(file_path, handler, output_dir)
-            for file_path in directory.rglob("*.py")
-        ]
-        
-        if not tasks:
-            log_error(f"No Python files found in {directory}")
-            return 0
+        # Initialize components
+        await generator.initialize()
 
-        # Process files concurrently
-        results: List[bool] = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Count successful operations (excluding exceptions)
-        success_count = sum(1 for result in results if isinstance(result, bool) and result)
-        
-        # Log any exceptions that occurred
-        for result in results:
-            if isinstance(result, Exception):
-                log_error(f"Error during batch processing: {str(result)}")
-        
-        return success_count
+        # Process input files
+        file_paths = [Path(f) for f in args.files]
+        await generator.process_files(file_paths)
 
-    except Exception as e:
-        log_error(f"Error processing directory {directory}: {str(e)}")
+        logger.info("Documentation generation completed successfully")
         return 0
 
-async def run_workflow(args: argparse.Namespace) -> None:
-    """
-    Run the docstring generation workflow.
-
-    Args:
-        args (argparse.Namespace): Parsed command line arguments
-    """
-    source_path = Path(args.source_path)
-    output_dir = Path(args.output_dir)
-    
-    try:
-        # Initialize configuration
-        config = AzureOpenAIConfig.from_env()
-        
-        # Prepare cache configuration
-        cache_config = {
-            'host': args.redis_host,
-            'port': args.redis_port,
-            'db': args.redis_db,
-            'password': args.redis_password,
-            'enabled': args.enable_cache
-        }
-
-        # Initialize AI interaction handler with cache config
-        async with AIInteractionHandler(
-            config=config,
-            cache=Cache(**cache_config) if args.enable_cache else None,
-            batch_size=config.batch_size
-        ) as handler:
-            if source_path.is_file():
-                success = await process_file(source_path, handler, output_dir)
-                if not success:
-                    log_error(f"Failed to process file: {source_path}")
-                    
-            elif source_path.is_dir():
-                processed_count = await process_directory(source_path, handler, output_dir)
-                log_info(f"Successfully processed {processed_count} files")
-                
-            else:
-                log_error(f"Invalid source path: {source_path}")
-                return
-
-            # Log final metrics
-            metrics = await handler.get_metrics_summary()
-            log_info(f"Final metrics: {metrics}")
-
-    except CacheError as e:
-        log_error(f"Cache error: {e}")
+    except ConfigurationError as ce:
+        logger.error(f"Configuration error: {str(ce)}")
+        return 1
     except Exception as e:
-        log_error(f"Workflow error: {str(e)}")
-        raise
+        logger.error(f"Documentation generation failed: {str(e)}")
+        return 1
+
+    finally:
+        await generator.cleanup()
+
 
 def parse_arguments() -> argparse.Namespace:
     """
     Parse command line arguments.
 
     Returns:
-        argparse.Namespace: Parsed command line arguments
+        argparse.Namespace: Parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description="Generate docstrings for Python code using AI."
-    )
-    
-    # Required arguments
-    parser.add_argument(
-        "source_path",
-        help="Path to the Python file or directory to process"
+        description="Generate documentation for Python files using Azure OpenAI"
     )
     parser.add_argument(
-        "output_dir",
-        help="Directory to save the processed files and documentation"
+        'files',
+        nargs='+',
+        help='Python files to process'
     )
-    
-    # Cache configuration
-    cache_group = parser.add_argument_group('Cache Configuration')
-    cache_group.add_argument(
-        "--enable-cache",
-        action="store_true",
-        help="Enable Redis caching"
-    )
-    cache_group.add_argument(
-        "--redis-host",
-        default="localhost",
-        help="Redis host address (default: localhost)"
-    )
-    cache_group.add_argument(
-        "--redis-port",
-        type=int,
-        default=6379,
-        help="Redis port number (default: 6379)"
-    )
-    cache_group.add_argument(
-        "--redis-db",
-        type=int,
-        default=0,
-        help="Redis database number (default: 0)"
-    )
-    cache_group.add_argument(
-        "--redis-password",
-        help="Redis password (optional)"
-    )
-    
-    # Processing options
-    process_group = parser.add_argument_group('Processing Options')
-    process_group.add_argument(
-        "--batch-size",
-        type=int,
-        default=5,
-        help="Number of files to process in parallel (default: 5)"
-    )
-    
     return parser.parse_args()
 
-def main():
-    """Main entry point for the docstring generation tool."""
-    args = parse_arguments()
-    
-    try:
-        asyncio.run(run_workflow(args))
-        log_info("Workflow completed successfully")
-        
-    except KeyboardInterrupt:
-        log_info("Operation cancelled by user")
-        sys.exit(1)
-        
-    except Exception as e:
-        log_error(f"Workflow failed: {str(e)}")
-        sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    try:
+        args = parse_arguments()
+        exit_code = asyncio.run(main(args))
+        sys.exit(exit_code)
+    except KeyboardInterrupt:
+        logger.info("Operation cancelled by user")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        sys.exit(1)

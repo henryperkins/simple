@@ -12,3 +12,4 @@ extract/__pycache__/
 /.github
 /venv
 /core/__pycache__
+/pip

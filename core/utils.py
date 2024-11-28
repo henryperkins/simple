@@ -6,8 +6,9 @@ import json
 import asyncio
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from core.logger import log_info, log_error, log_debug
+from core.logger import LoggerSetup, log_debug, log_info, log_error
 
+logger = LoggerSetup.get_logger(__name__)
 
 def generate_hash(content: str) -> str:
     """
@@ -24,6 +25,35 @@ def generate_hash(content: str) -> str:
     log_debug(f"Generated hash: {hash_value}")
     return hash_value
 
+def get_annotation(node: ast.AST) -> str:
+    """
+    Get the annotation of an AST node.
+
+    Args:
+        node (ast.AST): The AST node from which to extract the annotation.
+
+    Returns:
+        str: The extracted annotation, or "Any" if no specific annotation is found.
+    """
+    try:
+        if node is None:
+            return "Any"
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Constant):
+            return str(node.value)
+        if isinstance(node, ast.Attribute):
+            return f"{get_annotation(node.value)}.{node.attr}"
+        if isinstance(node, ast.Subscript):
+            return f"{get_annotation(node.value)}[{get_annotation(node.slice)}]"
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            left = get_annotation(node.left)
+            right = get_annotation(node.right)
+            return f"Union[{left}, {right}]"
+        return "Any"
+    except Exception as e:
+        logger.error(f"Error processing annotation: {e}")
+        return "Any"
 
 def handle_exceptions(log_func):
     """
@@ -31,13 +61,15 @@ def handle_exceptions(log_func):
 
     Args:
         log_func (callable): The logging function to use for error messages.
+
+    Returns:
+        function: A wrapped function that logs exceptions.
     """
     def decorator(func):
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                # Attempt to retrieve the node from args or kwargs
                 node = kwargs.get('node', None)
                 if not node and args:
                     node = next((arg for arg in args if isinstance(arg, ast.AST)), None)
@@ -48,8 +80,7 @@ def handle_exceptions(log_func):
         return wrapper
     return decorator
 
-
-async def load_json_file(filepath: str, max_retries: int = 3) -> Dict:
+async def load_json_file(filepath: str, max_retries: int = 3) -> Dict[str, Any]:
     """
     Load and parse a JSON file with a retry mechanism.
 
@@ -58,7 +89,7 @@ async def load_json_file(filepath: str, max_retries: int = 3) -> Dict:
         max_retries (int): Maximum number of retry attempts.
 
     Returns:
-        Dict: Parsed JSON data.
+        Dict[str, Any]: Parsed JSON data.
 
     Raises:
         FileNotFoundError: If the file doesn't exist.
@@ -82,13 +113,10 @@ async def load_json_file(filepath: str, max_retries: int = 3) -> Dict:
             log_error(f"Unexpected error loading JSON file {filepath}: {e}")
             if attempt == max_retries - 1:
                 raise
-        # Exponential backoff before retrying
         await asyncio.sleep(2 ** attempt)
-
-    # If all retries fail, log an error and return an empty dictionary
+    
     log_error(f"Failed to load JSON file after {max_retries} attempts: {filepath}")
     return {}
-
 
 def ensure_directory(directory_path: str) -> None:
     """
@@ -100,7 +128,6 @@ def ensure_directory(directory_path: str) -> None:
     log_debug(f"Ensuring directory exists: {directory_path}")
     os.makedirs(directory_path, exist_ok=True)
     log_info(f"Directory ensured: {directory_path}")
-
 
 def validate_file_path(filepath: str, extension: str = '.py') -> bool:
     """
@@ -114,9 +141,11 @@ def validate_file_path(filepath: str, extension: str = '.py') -> bool:
         bool: True if the file path is valid, False otherwise.
     """
     is_valid = os.path.isfile(filepath) and filepath.endswith(extension)
-    log_debug(f"File path validation for '{filepath}' with extension '{extension}': {is_valid}")
+    log_debug(
+        f"File path validation for '{filepath}' with extension '{extension}': "
+        f"{is_valid}"
+    )
     return is_valid
-
 
 def create_error_result(error_type: str, error_message: str) -> Dict[str, str]:
     """
@@ -137,7 +166,6 @@ def create_error_result(error_type: str, error_message: str) -> Dict[str, str]:
     log_debug(f"Created error result: {error_result}")
     return error_result
 
-
 def add_parent_info(tree: ast.AST) -> None:
     """
     Add parent node information to each node in an AST.
@@ -153,7 +181,6 @@ def add_parent_info(tree: ast.AST) -> None:
         for child in ast.iter_child_nodes(parent):
             setattr(child, 'parent', parent)
     log_info("Parent information added to AST nodes.")
-
 
 def get_file_stats(filepath: str) -> Dict[str, Any]:
     """
@@ -177,7 +204,6 @@ def get_file_stats(filepath: str) -> Dict[str, Any]:
     log_info(f"File statistics for '{filepath}': {file_stats}")
     return file_stats
 
-
 def filter_files(
     directory: str,
     pattern: str = '*.py',
@@ -194,7 +220,9 @@ def filter_files(
     Returns:
         List[str]: List of file paths that match the criteria.
     """
-    log_debug(f"Filtering files in directory '{directory}' with pattern '{pattern}'.")
+    log_debug(
+        f"Filtering files in directory '{directory}' with pattern '{pattern}'."
+    )
     exclude_patterns = exclude_patterns or []
     matches = []
     for root, _, filenames in os.walk(directory):
@@ -206,35 +234,33 @@ def filter_files(
     log_info(f"Filtered files: {matches}")
     return matches
 
-
-def get_all_files(directory, exclude_dirs=None):
+def get_all_files(directory: str, exclude_dirs: Optional[List[str]] = None) -> List[str]:
     """
     Traverse the given directory recursively and collect paths to all Python files,
     while excluding any directories specified in the `exclude_dirs` list.
 
     Args:
         directory (str): The root directory to search for Python files.
-        exclude_dirs (list, optional): A list of directory names to exclude from the search.
-            Defaults to None, which means no directories are excluded.
+        exclude_dirs (Optional[List[str]]): A list of directory names to exclude from the search.
 
     Returns:
-        list: A list of file paths to Python files found in the directory, excluding specified directories.
+        List[str]: A list of file paths to Python files found in the directory, excluding specified directories.
 
     Raises:
         ValueError: If the provided directory does not exist or is not accessible.
     """
     if not os.path.isdir(directory):
-        raise ValueError(f"The directory {directory} does not exist or is not accessible.")
+        raise ValueError(
+            f"The directory {directory} does not exist or is not accessible."
+        )
 
     if exclude_dirs is None:
         exclude_dirs = []
 
     python_files = []
     for dirpath, dirnames, filenames in os.walk(directory):
-        # Exclude specified directories
         dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
 
-        # Collect Python files
         for filename in filenames:
             if filename.endswith('.py'):
                 python_files.append(os.path.join(dirpath, filename))

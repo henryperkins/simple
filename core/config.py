@@ -1,117 +1,140 @@
-"""
-Configuration Module for AI Model Integrations
-
-This module centralizes all configuration settings for various AI services.
-"""
-
 import os
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
-from dotenv import load_dotenv
-import logging
-from pathlib import Path
+from typing import Dict, Any
+from core.logger import LoggerSetup
 
-# Load environment variables
-load_dotenv()
+# Configure logging
+logger = LoggerSetup.get_logger(__name__)
 
 @dataclass
-class AIModelConfig:
-    """Base configuration for all AI models."""
-    model_type: str
-    max_tokens: int = field(default=4000)
+class AzureOpenAIConfig:
+    """Configuration settings for Azure OpenAI service."""
+
+    # Base configuration
+    model_type: str = field(default="azure")
+    max_tokens: int = field(default=1000)
     temperature: float = field(default=0.7)
     request_timeout: int = field(default=30)
     max_retries: int = field(default=3)
     retry_delay: int = field(default=2)
+    cache_enabled: bool = field(default=False)
 
-    def validate(self) -> bool:
-        """Validate base configuration settings."""
-        try:
-            if not isinstance(self.max_tokens, int) or self.max_tokens <= 0:
-                logging.error("Invalid max_tokens value")
-                return False
-            if not isinstance(self.temperature, float) or not 0 <= self.temperature <= 1:
-                logging.error("Invalid temperature value")
-                return False
-            if not isinstance(self.request_timeout, int) or self.request_timeout <= 0:
-                logging.error("Invalid request_timeout value")
-                return False
-            return True
-        except Exception as e:
-            logging.error(f"Configuration validation error: {e}")
-            return False
-
-@dataclass
-class AzureOpenAIConfig(AIModelConfig):
-    """Configuration settings for Azure OpenAI."""
+    # Azure-specific configuration
     endpoint: str = field(default="")
     api_key: str = field(default="")
     api_version: str = field(default="2024-02-15-preview")
     deployment_name: str = field(default="")
     model_name: str = field(default="gpt-4")
-    cache_enabled: bool = field(default=True)
-    cache_ttl: int = field(default=3600)
+
+    # Additional Azure-specific parameters
     max_tokens_per_minute: int = field(default=150000)
     token_buffer: int = field(default=100)
-    docstring_functions: Dict[str, Any] = field(default_factory=dict)
+    batch_size: int = field(default=5)
+
+    # Logging configuration
+    log_level: str = field(default="DEBUG")
+    log_format: str = field(
+        default="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    log_directory: str = field(default="logs")
+
+    # Redis connection parameters
+    redis_host: str = field(
+        default_factory=lambda: os.getenv("REDIS_HOST", "localhost")
+    )
+    redis_port: int = field(
+        default_factory=lambda: int(os.getenv("REDIS_PORT", "6379"))
+    )
+    redis_db: int = field(
+        default_factory=lambda: int(os.getenv("REDIS_DB", "0"))
+    )
+    redis_password: str = field(
+        default_factory=lambda: os.getenv("REDIS_PASSWORD", "")
+    )
+
+    # Model limits and pricing (if applicable)
+    model_limits: Dict[str, Any] = field(default_factory=lambda: {
+        "gpt-4": {
+            "max_tokens": 8192,
+            "cost_per_1k_prompt": 0.03,
+            "cost_per_1k_completion": 0.06,
+            "chunk_size": 6144
+        },
+        # Add other models as needed
+    })
 
     @classmethod
     def from_env(cls) -> "AzureOpenAIConfig":
-        """Create configuration from environment variables."""
+        """Create an instance of AzureOpenAIConfig from environment variables."""
         try:
             config = cls(
                 model_type="azure",
                 endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
                 api_key=os.getenv("AZURE_OPENAI_KEY", ""),
-                api_version=os.getenv("AZURE_OPENAI_VERSION", "2024-02-15-preview"),
                 deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
+                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
                 model_name=os.getenv("MODEL_NAME", "gpt-4"),
-                max_tokens=int(os.getenv("MAX_TOKENS", "4000")),
+                max_tokens=int(os.getenv("MAX_TOKENS", "1000")),
                 temperature=float(os.getenv("TEMPERATURE", "0.7")),
+                request_timeout=int(os.getenv("REQUEST_TIMEOUT", "30")),
                 max_retries=int(os.getenv("MAX_RETRIES", "3")),
                 retry_delay=int(os.getenv("RETRY_DELAY", "2")),
-                request_timeout=int(os.getenv("REQUEST_TIMEOUT", "30")),
+                cache_enabled=os.getenv("CACHE_ENABLED", "False").lower() in ("true", "1"),
                 max_tokens_per_minute=int(os.getenv("MAX_TOKENS_PER_MINUTE", "150000")),
                 token_buffer=int(os.getenv("TOKEN_BUFFER", "100")),
-                cache_enabled=os.getenv("CACHE_ENABLED", "true").lower() == "true",
-                cache_ttl=int(os.getenv("CACHE_TTL", "3600"))
+                batch_size=int(os.getenv("BATCH_SIZE", "5")),
+                log_level=os.getenv("LOG_LEVEL", "DEBUG"),
+                log_format=os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
+                log_directory=os.getenv("LOG_DIRECTORY", "logs"),
+                redis_host=os.getenv("REDIS_HOST", "localhost"),
+                redis_port=int(os.getenv("REDIS_PORT", "6379")),
+                redis_db=int(os.getenv("REDIS_DB", "0")),
+                redis_password=os.getenv("REDIS_PASSWORD", "")
             )
-            
+
+            # Validate configuration
             if not config.validate():
-                raise ValueError("Invalid configuration values")
+                raise ValueError("Invalid Azure OpenAI configuration")
+
+            logger.debug("Successfully loaded Azure OpenAI configuration")
             return config
-            
+
         except Exception as e:
-            logging.error(f"Error creating configuration from environment: {e}")
+            logger.error(f"Error creating Azure OpenAI configuration: {e}")
             raise
 
     def validate(self) -> bool:
-        """Validate Azure OpenAI configuration settings."""
-        try:
-            if not super().validate():
-                return False
-                
-            if not self.endpoint or not self.api_key or not self.deployment_name:
-                logging.error("Missing required Azure OpenAI credentials")
-                return False
-                
-            if not isinstance(self.max_tokens_per_minute, int) or self.max_tokens_per_minute <= 0:
-                logging.error("Invalid max_tokens_per_minute value")
-                return False
-                
-            if not isinstance(self.cache_ttl, int) or self.cache_ttl <= 0:
-                logging.error("Invalid cache_ttl value")
-                return False
-                
-            return True
-            
-        except Exception as e:
-            logging.error(f"Azure configuration validation error: {e}")
+        """Validate the Azure OpenAI configuration settings."""
+        if not self.model_type:
+            logger.error("Model type is required")
             return False
 
+        if not isinstance(self.max_tokens, int) or self.max_tokens <= 0:
+            logger.error("Invalid max_tokens value")
+            return False
+
+        if not isinstance(self.temperature, float) or not (0 <= self.temperature <= 1):
+            logger.error("Invalid temperature value")
+            return False
+
+        if not self.endpoint:
+            logger.error("Missing Azure OpenAI endpoint")
+            return False
+
+        if not self.api_key:
+            logger.error("Missing Azure OpenAI API key")
+            return False
+
+        if not self.deployment_name:
+            logger.error("Missing Azure OpenAI deployment name")
+            return False
+
+        return True
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to dictionary."""
+        """Convert configuration settings to a dictionary."""
         return {
+            "model_type": self.model_type,
             "endpoint": self.endpoint,
             "api_version": self.api_version,
             "deployment_name": self.deployment_name,
@@ -120,175 +143,17 @@ class AzureOpenAIConfig(AIModelConfig):
             "temperature": self.temperature,
             "request_timeout": self.request_timeout,
             "max_retries": self.max_retries,
+            "retry_delay": self.retry_delay,
             "cache_enabled": self.cache_enabled,
-            "cache_ttl": self.cache_ttl,
-            "max_tokens_per_minute": self.max_tokens_per_minute
+            "max_tokens_per_minute": self.max_tokens_per_minute,
+            "token_buffer": self.token_buffer,
+            "batch_size": self.batch_size,
+            "log_level": self.log_level,
+            "log_format": self.log_format,
+            "log_directory": self.log_directory,
+            "redis_host": self.redis_host,
+            "redis_port": self.redis_port,
+            "redis_db": self.redis_db,
+            "redis_password": self.redis_password,
+            "model_limits": self.model_limits
         }
-
-@dataclass
-class OpenAIConfig(AIModelConfig):
-    """Configuration for OpenAI API."""
-    api_key: str = field(default="")
-    organization_id: Optional[str] = field(default=None)
-    model_name: str = field(default="gpt-4")
-
-    @classmethod
-    def from_env(cls) -> "OpenAIConfig":
-        """Create configuration from environment variables."""
-        try:
-            return cls(
-                model_type="openai",
-                api_key=os.getenv("OPENAI_API_KEY", ""),
-                organization_id=os.getenv("OPENAI_ORG_ID"),
-                model_name=os.getenv("OPENAI_MODEL_NAME", "gpt-4"),
-                max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "4096")),
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-                request_timeout=int(os.getenv("OPENAI_TIMEOUT", "30")),
-                max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "3")),
-                retry_delay=int(os.getenv("OPENAI_RETRY_DELAY", "2"))
-            )
-        except Exception as e:
-            logging.error(f"Error creating OpenAI configuration: {e}")
-            raise
-
-    def validate(self) -> bool:
-        """Validate OpenAI configuration settings."""
-        if not super().validate():
-            return False
-        return bool(self.api_key)
-
-@dataclass
-class ClaudeConfig(AIModelConfig):
-    """Configuration for Claude API."""
-    api_key: str = field(default="")
-    model_name: str = field(default="claude-3-opus-20240229")
-
-    @classmethod
-    def from_env(cls) -> "ClaudeConfig":
-        """Create configuration from environment variables."""
-        try:
-            return cls(
-                model_type="claude",
-                api_key=os.getenv("CLAUDE_API_KEY", ""),
-                model_name=os.getenv("CLAUDE_MODEL_NAME", "claude-3-opus-20240229"),
-                max_tokens=int(os.getenv("CLAUDE_MAX_TOKENS", "100000")),
-                temperature=float(os.getenv("CLAUDE_TEMPERATURE", "0.7")),
-                request_timeout=int(os.getenv("CLAUDE_TIMEOUT", "30")),
-                max_retries=int(os.getenv("CLAUDE_MAX_RETRIES", "3")),
-                retry_delay=int(os.getenv("CLAUDE_RETRY_DELAY", "2"))
-            )
-        except Exception as e:
-            logging.error(f"Error creating Claude configuration: {e}")
-            raise
-
-    def validate(self) -> bool:
-        """Validate Claude configuration settings."""
-        if not super().validate():
-            return False
-        return bool(self.api_key)
-
-@dataclass
-class GeminiConfig(AIModelConfig):
-    """Configuration for Google Gemini API."""
-    api_key: str = field(default="")
-    project_id: Optional[str] = field(default=None)
-    model_name: str = field(default="gemini-pro")
-
-    @classmethod
-    def from_env(cls) -> "GeminiConfig":
-        """Create configuration from environment variables."""
-        try:
-            return cls(
-                model_type="gemini",
-                api_key=os.getenv("GOOGLE_API_KEY", ""),
-                project_id=os.getenv("GOOGLE_PROJECT_ID"),
-                model_name=os.getenv("GEMINI_MODEL_NAME", "gemini-pro"),
-                max_tokens=int(os.getenv("GEMINI_MAX_TOKENS", "2048")),
-                temperature=float(os.getenv("GEMINI_TEMPERATURE", "0.7")),
-                request_timeout=int(os.getenv("GEMINI_TIMEOUT", "30")),
-                max_retries=int(os.getenv("GEMINI_MAX_RETRIES", "3")),
-                retry_delay=int(os.getenv("GEMINI_RETRY_DELAY", "2"))
-            )
-        except Exception as e:
-            logging.error(f"Error creating Gemini configuration: {e}")
-            raise
-
-    def validate(self) -> bool:
-        """Validate Gemini configuration settings."""
-        if not super().validate():
-            return False
-        return bool(self.api_key)
-
-def load_config(model_type: str) -> AIModelConfig:
-    """
-    Load configuration for specified model type.
-
-    Args:
-        model_type (str): Type of model to load configuration for
-            ('azure', 'openai', 'claude', 'gemini')
-
-    Returns:
-        AIModelConfig: Configuration instance for specified model type
-
-    Raises:
-        ValueError: If invalid model type specified
-    """
-    try:
-        config_map = {
-            'azure': AzureOpenAIConfig.from_env,
-            'openai': OpenAIConfig.from_env,
-            'claude': ClaudeConfig.from_env,
-            'gemini': GeminiConfig.from_env
-        }
-
-        if model_type not in config_map:
-            raise ValueError(f"Invalid model type: {model_type}")
-
-        config = config_map[model_type]()
-        if not config.validate():
-            raise ValueError(f"Invalid configuration for {model_type}")
-
-        logging.info(f"Successfully loaded configuration for {model_type}")
-        return config
-
-    except Exception as e:
-        logging.error(f"Error loading configuration for {model_type}: {e}")
-        raise
-
-def get_default_config() -> AIModelConfig:
-    """
-    Get default configuration based on environment settings.
-
-    Returns:
-        AIModelConfig: Default configuration instance
-    """
-    try:
-        default_model = os.getenv("DEFAULT_MODEL", "azure")
-        return load_config(default_model)
-    except Exception as e:
-        logging.error(f"Error loading default configuration: {e}")
-        raise
-
-# Create default configuration instances
-try:
-    azure_config = AzureOpenAIConfig.from_env()
-    openai_config = OpenAIConfig.from_env()
-    claude_config = ClaudeConfig.from_env()
-    gemini_config = GeminiConfig.from_env()
-except ValueError as err:
-    logging.error(f"Failed to create configuration: {err}")
-
-# Export default configurations
-__all__ = [
-    'AIModelConfig',
-    'AzureOpenAIConfig',
-    'OpenAIConfig',
-    'ClaudeConfig',
-    'GeminiConfig',
-    'load_config',
-    'get_default_config',
-    'azure_config',
-    'openai_config',
-    'claude_config',
-    'gemini_config'
-]

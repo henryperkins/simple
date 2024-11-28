@@ -1,124 +1,103 @@
-"""
-Function Extraction Module
-
-This module provides functionality to extract function definitions and their metadata
-from Python source code. It uses the Abstract Syntax Tree (AST) to analyze source code
-and extract relevant information such as parameters, return types, and docstrings.
-
-Version: 1.0.1
-Author: Development Team
-"""
-
-import ast
-from typing import List, Dict, Any, Optional, Tuple
-from core.logger import log_info, log_error, log_debug
-from extract.base import BaseExtractor
-from core.utils import handle_exceptions  # Import the decorator from utils
-
-
-class FunctionExtractor(BaseExtractor):
-    """
-    Extract function definitions and their metadata from Python source code.
-
-    Inherits from BaseExtractor and provides methods to extract detailed information
-    about functions, including parameters, return types, and docstrings.
-    """
-
-    @handle_exceptions(log_error)
-    def extract_functions(
-        self, source_code: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Extract all function definitions and their metadata from the source code.
-
-        Parameters:
-        source_code (str): The source code to analyze.
-
-        Returns:
-        list: A list of dictionaries containing function metadata.
-        """
-        if source_code:
-            log_debug("Initializing FunctionExtractor with new source code.")
-            self.__init__(source_code)
-
-        log_debug("Starting extraction of function definitions.")
-        functions = []
-        for node in ast.walk(self.tree):
-            if isinstance(node, ast.FunctionDef):
-                function_info = self.extract_details(node)
-                if function_info:
-                    functions.append(function_info)
-                    log_info(f"Extracted function '{node.name}' with metadata.")
-
-        log_debug(f"Total functions extracted: {len(functions)}")
-        return functions
-
-    @handle_exceptions(log_error)
-    def extract_details(self, node: ast.AST) -> Dict[str, Any]:
-        """
-        Extract details from a function definition node.
-
-        Args:
-            node (ast.AST): The AST node to extract details from.
-
-        Returns:
-            dict: A dictionary containing function details.
-        """
-        if not isinstance(node, ast.FunctionDef):
-            raise ValueError(f"Expected FunctionDef node, got {type(node).__name__}")
-
-        log_debug(f"Extracting details for function: {node.name}")
-
-        details = self._extract_common_details(node)
-        details.update(
-            {
-                "args": self.extract_parameters(node),
-                "return_type": self.extract_return_type(node),
-                "decorators": self._extract_decorators(node),
-                "exceptions": self._detect_exceptions(node),
-                "body_summary": self.get_body_summary(node),
-            }
-        )
-        log_debug(f"Successfully extracted details for function {node.name}")
-        return details
-
-    def extract_parameters(self, node: ast.FunctionDef) -> List[Tuple[str, str]]:
-        """
-        Extract parameters with type annotations and default values.
-
-        Args:
-            node (ast.FunctionDef): The function node to extract parameters from.
-
-        Returns:
-            list: A list of tuples containing parameter names and types.
-        """
-        parameters = []
-        for arg in node.args.args:
-            param_name = arg.arg
-            param_type = self._get_type_annotation(arg)
-            parameters.append((param_name, param_type))
-        return parameters
-
-    def extract_return_type(self, node: ast.FunctionDef) -> str:
-        """
-        Extract return type annotation from a function.
-
-        Args:
-            node (ast.FunctionDef): The function node to extract return type from.
-
-        Returns:
-            str: The return type annotation.
-        """
-        return ast.unparse(node.returns) if node.returns else "Any"
-
-    def get_body_summary(self, node: ast.FunctionDef) -> str:
-        """
-        Generate a summary of the function body.
-
-        Args:
-            node (ast.FunctionDef): The function node to summarize.
-
-        Returns:
-            str: A summary of the function body.
-        """
-        return " ".join(ast.unparse(stmt) for stmt in node.body[:3]) + "..."
+"""  
+Function Extraction Module  
+  
+Extracts function definitions and their metadata from Python source code.  
+"""  
+  
+import ast  
+from typing import List, Dict, Any  
+from core.logger import LoggerSetup  
+from extract.base import BaseExtractor  
+from core.utils import handle_exceptions  
+from extract.ast_analysis import ASTAnalyzer  
+  
+logger = LoggerSetup.get_logger(__name__)  
+  
+class FunctionExtractor(BaseExtractor):  
+    """  
+    Extract function definitions and their metadata from Python source code.  
+    """  
+  
+    def __init__(self, source_code: str):  
+        super().__init__(source_code)  
+        self.analyzer = ASTAnalyzer()  
+  
+    @handle_exceptions(logger.error)  
+    def extract_functions(self) -> List[Dict[str, Any]]:  
+        """Extract all function definitions and their metadata from the source code."""  
+        logger.debug("Extracting function definitions.")  
+        functions = []  
+        for node in self.analyzer.extract_functions(self.tree):  
+            logger.debug(f"Processing function: {node.name}")  
+            function_info = self.extract_details(node)  
+            if function_info:  
+                functions.append(function_info)  
+                logger.info(f"Extracted function '{node.name}' with metadata.")  
+        logger.debug(f"Total functions extracted: {len(functions)}")  
+        return functions  
+  
+    @handle_exceptions(logger.error)  
+    def extract_details(self, node: ast.FunctionDef) -> Dict[str, Any]:  
+        """Extract details from a function definition node."""  
+        logger.debug(f"Extracting details for function: {node.name}")  
+        details = self._extract_common_details(node)  
+        details.update({  
+            "args": [  
+                {  
+                    "name": arg.arg,  
+                    "type": self.analyzer.get_annotation(arg.annotation),  
+                    "default": self._get_default_value(arg)  
+                }  
+                for arg in node.args.args  
+            ],  
+            "return_type": self.analyzer.get_annotation(node.returns),  
+            "decorators": self._extract_decorators(node),  
+            "exceptions": self._detect_exceptions(node),  
+            "body_summary": self.get_body_summary(node),  
+        })  
+  
+        # Include inter-module context if needed  
+        details["external_calls"] = self._detect_external_calls(node)  
+  
+        return details  
+  
+    def get_body_summary(self, node: ast.FunctionDef) -> str:  
+        """Generate a summary of the function body."""  
+        logger.debug(f"Generating body summary for function: {node.name}")  
+        body_statements = node.body[:3]  
+        summary = "\n".join(ast.unparse(stmt) for stmt in body_statements) + "\n..."  
+        return summary  
+  
+    def _get_default_value(self, arg: ast.arg) -> Optional[str]:  
+        """Get the default value of a function argument if it exists."""  
+        defaults = self.tree.body[0].args.defaults if isinstance(self.tree.body[0], ast.FunctionDef) else []  
+        if defaults:  
+            index = self.tree.body[0].args.args.index(arg) - (len(self.tree.body[0].args.args) - len(defaults))  
+            if index >= 0:  
+                default_value = ast.unparse(defaults[index])  
+                return default_value  
+        return None  
+  
+    def _detect_external_calls(self, node: ast.FunctionDef) -> List[str]:  
+        """Detect external function or method calls within a function."""  
+        logger.debug(f"Detecting external calls in function: {node.name}")  
+        external_calls = []  
+        for child in ast.walk(node):  
+            if isinstance(child, ast.Call):  
+                func_name = self._get_call_name(child.func)  
+                if func_name:  
+                    external_calls.append(func_name)  
+        logger.debug(f"External calls detected: {external_calls}")  
+        return external_calls  
+  
+    def _get_call_name(self, node: ast.AST) -> Optional[str]:  
+        """Get the full name of a function or method call."""  
+        if isinstance(node, ast.Name):  
+            return node.id  
+        elif isinstance(node, ast.Attribute):  
+            value = self._get_call_name(node.value)  
+            if value:  
+                return f"{value}.{node.attr}"  
+            else:  
+                return node.attr  
+        return None  

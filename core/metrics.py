@@ -10,9 +10,12 @@ Author: Development Team
 
 import ast
 import math
+import sys
 from collections import defaultdict
 from typing import Dict, List, Set
-from core.logger import log_info, log_error, log_debug
+from core.logger import LoggerSetup, log_debug, log_info, log_error
+
+logger = LoggerSetup.get_logger(__name__)
 
 class MetricsError(Exception):
     """Base exception for metrics calculation errors."""
@@ -44,43 +47,28 @@ class Metrics:
         Returns:
             int: The cyclomatic complexity of the function.
         """
-        log_debug(f"Calculating cyclomatic complexity for function: {function_node.name}")
+        log_debug(f"Calculating cyclomatic complexity for function: {getattr(function_node, 'name', 'unknown')}")
         if not isinstance(function_node, ast.FunctionDef):
-            log_error("Provided node is not a function definition.")
+            log_error(f"Provided node is not a function definition: {ast.dump(function_node)}")
             return 0
 
         complexity = 1  # Start with 1 for the function itself
+
         decision_points = (
-            ast.If,
-            ast.For,
-            ast.While,
-            ast.And,
-            ast.Or,
-            ast.ExceptHandler,
-            ast.With,
-            ast.Try,
-            ast.BoolOp,
-            ast.Lambda,
-            ast.ListComp,
-            ast.DictComp,
-            ast.SetComp,
-            ast.GeneratorExp,
-            ast.IfExp,
-            ast.Match  # For Python 3.10+
+            ast.If, ast.For, ast.While, ast.And, ast.Or, ast.ExceptHandler,
+            ast.With, ast.Try, ast.BoolOp, ast.Lambda, ast.ListComp, ast.DictComp,
+            ast.SetComp, ast.GeneratorExp, ast.IfExp, ast.Match  # For Python 3.10+
         )
 
         for node in ast.walk(function_node):
             if isinstance(node, decision_points):
                 if isinstance(node, ast.BoolOp):
-                    # Each boolean operation (and/or) counts as a separate decision point
                     complexity += len(node.values) - 1
                     log_debug(f"Incremented complexity for BoolOp with {len(node.values) - 1} decision points: {ast.dump(node)}")
                 elif isinstance(node, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp)):
-                    # Comprehensions have their own decision points
                     complexity += 1
                     log_debug(f"Incremented complexity for comprehension: {ast.dump(node)}")
                 elif isinstance(node, ast.Match):
-                    # Each case in a match statement is a decision point
                     complexity += len(node.cases)
                     log_debug(f"Incremented complexity for Match with {len(node.cases)} cases: {ast.dump(node)}")
                 else:
@@ -96,14 +84,14 @@ class Metrics:
         Calculate the cognitive complexity of a function.
 
         Parameters:
-        function_node (ast.FunctionDef): The AST node representing the function.
+            function_node (ast.FunctionDef): The AST node representing the function.
 
         Returns:
-        int: The cognitive complexity of the function.
+            int: The cognitive complexity of the function.
         """
-        log_debug(f"Calculating cognitive complexity for function: {function_node.name}")
+        log_debug(f"Calculating cognitive complexity for function: {getattr(function_node, 'name', 'unknown')}")
         if not isinstance(function_node, ast.FunctionDef):
-            log_error("Provided node is not a function definition.")
+            log_error(f"Provided node is not a function definition: {ast.dump(function_node)}")
             return 0
 
         cognitive_complexity = 0
@@ -135,7 +123,7 @@ class Metrics:
         """
         log_debug("Calculating overall complexity.")
         if not isinstance(node, ast.FunctionDef):
-            log_error("Provided node is not a function definition.")
+            log_error(f"Provided node is not a function definition: {ast.dump(node)}")
             return 0
         cyclomatic_complexity = self.calculate_cyclomatic_complexity(node)
         cognitive_complexity = self.calculate_cognitive_complexity(node)
@@ -146,10 +134,10 @@ class Metrics:
     def calculate_maintainability_index(self, node: ast.AST) -> float:
         """
         Calculate maintainability index based on various metrics.
-        
+
         Args:
             node (ast.AST): AST node to analyze
-            
+
         Returns:
             float: Maintainability index score (0-100)
         """
@@ -158,15 +146,15 @@ class Metrics:
             halstead = self.calculate_halstead_metrics(node)
             complexity = self.calculate_complexity(node)
             sloc = self._count_source_lines(node)
-            
+
             # Calculate Maintainability Index
             volume = halstead['program_volume']
             mi = 171 - 5.2 * math.log(volume) - 0.23 * complexity - 16.2 * math.log(sloc)
             mi = max(0, min(100, mi))  # Normalize to 0-100
-            
+
             log_info(f"Calculated maintainability index is {mi}")
             return round(mi, 2)
-            
+
         except Exception as e:
             log_error(f"Error calculating maintainability index: {e}")
             return 0.0
@@ -188,11 +176,15 @@ class Metrics:
         operand_count = 0
 
         # Define operator and operand types
-        operator_nodes = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow, ast.LShift, ast.RShift,
-                          ast.BitOr, ast.BitXor, ast.BitAnd, ast.FloorDiv, ast.And, ast.Or, ast.Not, ast.Invert,
-                          ast.UAdd, ast.USub, ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Is, ast.IsNot,
-                          ast.In, ast.NotIn, ast.Call, ast.Attribute, ast.Subscript, ast.Index, ast.Slice)
-        operand_nodes = (ast.Num, ast.Str, ast.Bytes, ast.Name, ast.List, ast.Tuple, ast.Set, ast.Dict, ast.Constant)
+        operator_nodes = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow,
+                          ast.LShift, ast.RShift, ast.BitOr, ast.BitXor, ast.BitAnd,
+                          ast.FloorDiv, ast.And, ast.Or, ast.Not, ast.Invert,
+                          ast.UAdd, ast.USub, ast.Eq, ast.NotEq, ast.Lt, ast.LtE,
+                          ast.Gt, ast.GtE, ast.Is, ast.IsNot, ast.In, ast.NotIn,
+                          ast.Call, ast.Attribute, ast.Subscript, ast.Index, ast.Slice)
+
+        operand_nodes = (ast.Num, ast.Str, ast.Bytes, ast.Name, ast.List, ast.Tuple,
+                         ast.Set, ast.Dict, ast.Constant)
 
         for n in ast.walk(node):
             if isinstance(n, operator_nodes):
@@ -221,10 +213,10 @@ class Metrics:
     def _count_source_lines(self, node: ast.AST) -> int:
         """
         Count source lines of code (excluding comments and blank lines).
-        
+
         Args:
             node (ast.AST): AST node to analyze
-            
+
         Returns:
             int: Number of source code lines
         """
@@ -245,10 +237,10 @@ class Metrics:
         Determine if a node represents a decision point for cyclomatic complexity.
 
         Parameters:
-        node (ast.AST): The AST node to check.
+            node (ast.AST): The AST node to check.
 
         Returns:
-        bool: True if the node is a decision point, False otherwise.
+            bool: True if the node is a decision point, False otherwise.
         """
         decision_point = isinstance(node, (ast.If, ast.For, ast.While, ast.And, ast.Or, ast.Try, ast.With, ast.ExceptHandler))
         log_debug(f"Node {ast.dump(node)} is {'a' if decision_point else 'not a'} decision point.")
@@ -260,10 +252,10 @@ class Metrics:
         Determine if a node represents a nesting construct for cognitive complexity.
 
         Parameters:
-        node (ast.AST): The AST node to check.
+            node (ast.AST): The AST node to check.
 
         Returns:
-        bool: True if the node is a nesting construct, False otherwise.
+            bool: True if the node is a nesting construct, False otherwise.
         """
         nesting_construct = isinstance(node, (ast.If, ast.For, ast.While, ast.Try, ast.ExceptHandler, ast.With, ast.Lambda, ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp))
         log_debug(f"Node {ast.dump(node)} is {'a' if nesting_construct else 'not a'} nesting construct.")
@@ -275,23 +267,25 @@ class Metrics:
         Determine if a node should increment cognitive complexity.
 
         Parameters:
-        node (ast.AST): The current AST node.
-        prev_node (ast.AST): The previous AST node.
+            node (ast.AST): The current AST node.
+            prev_node (ast.AST): The previous AST node.
 
         Returns:
-        bool: True if the node should increment complexity, False otherwise.
+            bool: True if the node should increment complexity, False otherwise.
         """
-        increment = isinstance(node, (ast.BoolOp, ast.Compare)) and not isinstance(prev_node, (ast.BoolOp, ast.Compare)) or isinstance(node, (ast.Continue, ast.Break, ast.Raise, ast.Return))
+        increment = (isinstance(node, (ast.BoolOp, ast.Compare))
+                     and not isinstance(prev_node, (ast.BoolOp, ast.Compare))
+                     or isinstance(node, (ast.Continue, ast.Break, ast.Raise, ast.Return)))
         log_debug(f"Node {ast.dump(node)} {'increments' if increment else 'does not increment'} complexity.")
         return increment
 
     def analyze_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:
         """
         Analyze module dependencies and imports.
-        
+
         Args:
             node (ast.AST): AST node to analyze
-            
+
         Returns:
             Dict[str, Set[str]]: Dictionary of module dependencies
         """
@@ -301,7 +295,7 @@ class Metrics:
             'third_party': set(),
             'local': set()
         }
-        
+
         try:
             for subnode in ast.walk(node):
                 if isinstance(subnode, (ast.Import, ast.ImportFrom)):

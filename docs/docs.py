@@ -1,130 +1,229 @@
-# docs.py (existing implementation)
+# docs.py
+"""
+Documentation Management Module
+
+Handles docstring operations and documentation generation with improved structure
+and centralized processing.
+"""
+
 import ast
 from typing import Optional, Dict, Any, List
 from pathlib import Path
-from markdown_generator import MarkdownDocumentationGenerator
-from docstring_utils import DocstringValidator
-from core.logger import log_info, log_error, log_debug
+from dataclasses import dataclass
+
+from core.logger import LoggerSetup, log_debug, log_error, log_info
+from core.docstring_processor import DocstringProcessor, DocstringData, DocumentationSection
+from docs.markdown_generator import MarkdownGenerator
+
+logger = LoggerSetup.get_logger(__name__)
+
+class ValidationError(Exception):
+    """Custom exception for validation errors."""
+    def __init__(self, message: str, errors: List[str]):
+        super().__init__(message)
+        self.errors = errors
+
+class DocumentationError(Exception):
+    """Custom exception for documentation generation errors."""
+    def __init__(self, message: str, details: Dict[str, Any]):
+        super().__init__(message)
+        self.details = details
+
+@dataclass
+class DocumentationContext:
+    """Holds context for documentation generation."""
+    source_code: str
+    module_path: Optional[str] = None
+    include_source: bool = True
+    metadata: Optional[Dict[str, Any]] = None
 
 class DocStringManager:
     """Manages docstring operations and documentation generation."""
 
-    def __init__(self, source_code: str):
-        """Initialize with source code."""
-        self.source_code = source_code
-        self.tree = ast.parse(source_code)
-        self.validator = DocstringValidator()
-        self.changes = []
+    def __init__(self, context: DocumentationContext, cache: Optional[Any] = None):
+        """
+        Initialize DocStringManager with context and optional cache.
 
-    def insert_docstring(self, node: ast.AST, docstring: str) -> bool:
-        """Insert or update a docstring in an AST node."""
+        Args:
+            context: Documentation generation context
+            cache: Optional cache implementation
+        """
+        self.context = context
+        self.tree = ast.parse(context.source_code)
+        self.processor = DocstringProcessor()
+        self.cache = cache
+        self.changes: List[str] = []
+        self.markdown_generator = MarkdownGenerator()
+
+    async def process_docstring(
+        self,
+        node: ast.AST,
+        docstring_data: DocstringData
+    ) -> bool:
+        """
+        Process and insert a docstring for an AST node.
+
+        Args:
+            node: AST node to process
+            docstring_data: Structured docstring data
+
+        Returns:
+            bool: Success status of the operation
+
+        Raises:
+            ValidationError: If docstring validation fails
+            DocumentationError: If docstring insertion fails
+        """
         try:
-            if not isinstance(docstring, str):
-                log_error(f"Invalid docstring type for {getattr(node, 'name', 'unknown')}")
-                return False
+            cache_key = f"validation:{hash(str(docstring_data))}"
+            
+            # Check cache
+            if self.cache:
+                cached_result = await self.cache.get_cached_docstring(cache_key)
+                if cached_result:
+                    return await self._handle_cached_result(node, cached_result)
 
             # Validate docstring
-            is_valid, errors = self.validator.validate_docstring({
-                'docstring': docstring,
-                'summary': docstring.split('\n')[0],
-                'parameters': [],
-                'returns': {'type': 'None', 'description': 'No return value.'}
-            })
-
+            is_valid, errors = self.processor.validate(docstring_data)
             if not is_valid:
-                log_error(f"Docstring validation failed: {errors}")
-                return False
+                raise ValidationError("Docstring validation failed", errors)
 
-            # Insert docstring node
-            node.body.insert(0, ast.Expr(value=ast.Constant(value=docstring)))
-            
-            # Record change
-            node_name = getattr(node, 'name', 'unknown')
-            self.changes.append(f"Updated docstring for {node_name}")
-            log_info(f"Inserted docstring for {node_name}")
-            
-            return True
+            # Format and insert
+            docstring = self.processor.format(docstring_data)
+            if self.processor.insert(node, docstring):
+                node_name = getattr(node, 'name', 'unknown')
+                self.changes.append(f"Updated docstring for {node_name}")
+                
+                # Cache successful result
+                if self.cache:
+                    await self.cache.save_docstring(cache_key, {
+                        'docstring': docstring,
+                        'valid': True
+                    })
+                
+                return True
 
-        except Exception as e:
-            log_error(f"Failed to insert docstring: {e}")
             return False
 
-    def update_source_code(self, documentation_entries: List[Dict]) -> str:
-        """Update source code with new docstrings."""
-        try:
-            modified = False
-            for entry in documentation_entries:
-                node_type = entry.get('type', 'function')
-                name = entry.get('name')
-                docstring = entry.get('docstring')
-
-                if not all([name, docstring]):
-                    continue
-
-                # Find and update matching nodes
-                for node in ast.walk(self.tree):
-                    if (isinstance(node, (ast.FunctionDef if node_type == 'function' else ast.ClassDef)) 
-                            and node.name == name):
-                        if self.insert_docstring(node, docstring):
-                            modified = True
-
-            return ast.unparse(self.tree) if modified else self.source_code
-
+        except ValidationError as e:
+            log_error(f"Docstring validation failed: {e.errors}")
+            raise
         except Exception as e:
-            log_error(f"Failed to update source code: {e}")
-            return self.source_code
-
-    def generate_documentation(
-        self,
-        module_path: Optional[str] = None,
-        include_source: bool = True
-    ) -> str:
-        """Generate documentation using MarkdownDocumentationGenerator."""
-        try:
-            generator = MarkdownDocumentationGenerator(
-                source_code=self.source_code if include_source else None,
-                module_path=module_path
+            log_error(f"Failed to process docstring: {e}")
+            raise DocumentationError(
+                "Failed to process docstring",
+                {'node': getattr(node, 'name', 'unknown'), 'error': str(e)}
             )
 
-            # Add recorded changes
-            for change in self.changes:
-                generator.add_change(change)
+    async def generate_documentation(self) -> str:
+        """
+        Generate complete documentation for the current context.
 
-            return generator.generate_markdown()
+        Returns:
+            str: Generated documentation in markdown format
+
+        Raises:
+            DocumentationError: If documentation generation fails
+        """
+        try:
+            # Prepare documentation sections
+            sections = []
+            
+            # Module documentation
+            if self.context.metadata:
+                sections.append(self._create_module_section())
+
+            # Classes documentation
+            class_nodes = [n for n in ast.walk(self.tree) 
+                         if isinstance(n, ast.ClassDef)]
+            for node in class_nodes:
+                sections.append(await self._create_class_section(node))
+
+            # Functions documentation
+            function_nodes = [n for n in ast.walk(self.tree) 
+                            if isinstance(n, ast.FunctionDef)]
+            for node in function_nodes:
+                sections.append(await self._create_function_section(node))
+
+            # Generate markdown
+            return self.markdown_generator.generate(
+                sections,
+                include_source=self.context.include_source,
+                source_code=self.context.source_code if self.context.include_source else None,
+                module_path=self.context.module_path
+            )
 
         except Exception as e:
             log_error(f"Failed to generate documentation: {e}")
-            return f"# Documentation Generation Failed\n\nError: {str(e)}"
-
-    def process_batch(
-        self,
-        entries: List[Dict],
-        module_path: Optional[str] = None
-    ) -> Optional[Dict[str, str]]:
-        """Process a batch of documentation entries."""
-        try:
-            updated_code = self.update_source_code(entries)
-            documentation = self.generate_documentation(
-                module_path=module_path,
-                include_source=True
+            raise DocumentationError(
+                "Documentation generation failed",
+                {'error': str(e)}
             )
 
-            if updated_code and documentation:
-                return {
-                    "code": updated_code,
-                    "documentation": documentation
-                }
-            return None
+    def _create_module_section(self) -> DocumentationSection:
+        """Create module-level documentation section."""
+        return DocumentationSection(
+            title="Module Overview",
+            content=self.context.metadata.get('description', ''),
+            subsections=[
+                DocumentationSection(
+                    title="Module Information",
+                    content=f"Path: {self.context.module_path}\n"
+                           f"Last Modified: {self.context.metadata.get('last_modified', 'Unknown')}"
+                )
+            ]
+        )
 
-        except Exception as e:
-            log_error(f"Batch processing failed: {e}")
-            return None
+    async def _create_class_section(self, node: ast.ClassDef) -> DocumentationSection:
+        """Create class documentation section."""
+        docstring_data = self.processor.parse(ast.get_docstring(node) or '')
+        
+        methods_sections = []
+        for method in [n for n in node.body if isinstance(n, ast.FunctionDef)]:
+            methods_sections.append(await self._create_function_section(method))
 
-    @staticmethod
-    def extract_docstring(node: ast.AST) -> Optional[str]:
-        """Extract existing docstring from an AST node."""
-        try:
-            return ast.get_docstring(node)
-        except Exception as e:
-            log_error(f"Failed to extract docstring: {e}")
-            return None
+        return DocumentationSection(
+            title=f"Class: {node.name}",
+            content=docstring_data.description,
+            subsections=[
+                DocumentationSection(
+                    title="Methods",
+                    content="",
+                    subsections=methods_sections
+                )
+            ]
+        )
+
+    async def _create_function_section(
+        self,
+        node: ast.FunctionDef
+    ) -> DocumentationSection:
+        """Create function documentation section."""
+        docstring_data = self.processor.parse(ast.get_docstring(node) or '')
+        
+        return DocumentationSection(
+            title=f"{'Method' if self._is_method(node) else 'Function'}: {node.name}",
+            content=self.processor.format(docstring_data),
+            subsections=[
+                DocumentationSection(
+                    title="Source",
+                    content=f"```python\n{ast.unparse(node)}\n```"
+                ) if self.context.include_source else None
+            ]
+        )
+
+    def _is_method(self, node: ast.FunctionDef) -> bool:
+        """Check if a function node is a method."""
+        return any(isinstance(parent, ast.ClassDef) 
+                  for parent in ast.walk(self.tree) 
+                  if hasattr(parent, 'body') and node in parent.body)
+
+    async def _handle_cached_result(
+        self,
+        node: ast.AST,
+        cached_result: Dict[str, Any]
+    ) -> bool:
+        """Handle cached docstring result."""
+        if cached_result.get('valid'):
+            return self.processor.insert(node, cached_result['docstring'])
+        return False

@@ -1,19 +1,22 @@
-# cache.py
 """
 Cache module for storing and retrieving AI-generated docstrings.
 Provides Redis-based caching functionality with connection management.
 """
 
 import json
-from typing import Optional, Any, Dict, Union, Tuple
-import aioredis
-from datetime import datetime, timedelta
-from core.exceptions import CacheError
-from core.logger import log_info, log_error, log_debug
-from core.utils import generate_hash
+import atexit
+from typing import Optional, Any, Dict
+from redis.asyncio import Redis
+from exceptions import CacheError
+from core.logger import LoggerSetup
+
+# Initialize logger
+logger = LoggerSetup.get_logger(__name__)
 
 class Cache:
     """Redis-based caching system for AI-generated docstrings."""
+
+    _instances = set()
 
     def __init__(
         self,
@@ -24,109 +27,118 @@ class Cache:
         enabled: bool = True,
         ttl: int = 3600,
         prefix: str = "docstring:"
-    ):
+    ) -> None:
         """
         Initialize the cache with Redis connection parameters.
 
         Args:
-            host: Redis host address
-            port: Redis port number
-            db: Redis database number
-            password: Optional Redis password
-            enabled: Whether caching is enabled
-            ttl: Time-to-live for cache entries in seconds
-            prefix: Prefix for cache keys
+            host (str): Redis server host.
+            port (int): Redis server port.
+            db (int): Redis database number.
+            password (Optional[str]): Password for Redis server.
+            enabled (bool): Enable or disable the cache.
+            ttl (int): Time-to-live for cache entries in seconds.
+            prefix (str): Prefix for cache keys.
         """
         self.enabled = enabled
-        if not self.enabled:
-            log_info("Cache disabled")
-            return
-
-        self.redis_url = f"redis://{host}:{port}/{db}"
+        self.host = host
+        self.port = port
+        self.db = db
         self.password = password
         self.ttl = ttl
         self.prefix = prefix
-        self.redis: Optional[aioredis.Redis] = None
+        self._redis: Optional[Redis] = None
         self._stats = {
             'hits': 0,
             'misses': 0,
             'errors': 0
         }
-        log_debug(f"Cache initialized with URL: {self.redis_url}")
+        # Register this instance for cleanup
+        Cache._instances.add(self)
 
-    async def connect(self) -> None:
+    @classmethod
+    async def create(cls, **kwargs) -> 'Cache':
         """
-        Establish connection to Redis server.
+        Create and initialize a new Cache instance.
 
-        Raises:
-            CacheError: If connection fails
+        Returns:
+            Cache: An initialized Cache instance.
         """
-        if not self.enabled:
-            return
+        cache = cls(**kwargs)
+        if cache.enabled:
+            await cache._initialize_connection()
+        return cache
 
+    async def _initialize_connection(self) -> None:
+        """Initialize Redis connection."""
         try:
-            self.redis = await aioredis.from_url(
-                self.redis_url,
+            self._redis = Redis(
+                host=self.host,
+                port=self.port,
+                db=self.db,
                 password=self.password,
                 decode_responses=True
             )
-            log_info("Connected to Redis cache")
+            if await self._redis.ping():
+                logger.info("Successfully connected to Redis")
+            else:
+                raise CacheError("Redis ping failed")
         except Exception as e:
+            self._redis = None
+            logger.error(f"Failed to connect to Redis: {str(e)}")
             raise CacheError(f"Failed to connect to Redis: {str(e)}")
 
-    async def test_connection(self) -> bool:
+    async def is_connected(self) -> bool:
         """
-        Test Redis connection by performing a ping.
+        Check if Redis connection is active.
 
         Returns:
-            bool: True if connection is successful
-
-        Raises:
-            CacheError: If connection test fails
+            bool: True if connected, False otherwise.
         """
-        if not self.enabled:
+        if not self.enabled or self._redis is None:
             return False
-
         try:
-            if not self.redis:
-                await self.connect()
-            await self.redis.ping()
-            return True
+            return await self._redis.ping()
         except Exception as e:
-            raise CacheError(f"Redis connection test failed: {str(e)}")
+            logger.error(f"Error checking Redis connection: {str(e)}")
+            return False
 
     async def get_cached_docstring(self, key: str) -> Optional[Dict[str, Any]]:
         """
         Retrieve cached docstring by key.
 
         Args:
-            key: Cache key for the docstring
+            key (str): The cache key to retrieve.
 
         Returns:
-            Optional[Dict[str, Any]]: Cached docstring data if found, None otherwise
+            Optional[Dict[str, Any]]: Cached data if available, otherwise None.
         """
         if not self.enabled:
             return None
 
         try:
-            if not self.redis:
-                await self.connect()
+            if not self._redis:
+                await self._initialize_connection()
 
             cache_key = f"{self.prefix}{key}"
-            cached_data = await self.redis.get(cache_key)
+            cached_data = await self._redis.get(cache_key)
 
             if cached_data:
                 self._stats['hits'] += 1
-                log_debug(f"Cache hit for key: {cache_key}")
+                logger.debug(f"Cache hit for key: {cache_key}")
                 return json.loads(cached_data)
 
             self._stats['misses'] += 1
-            log_debug(f"Cache miss for key: {cache_key}")
+            logger.debug(f"Cache miss for key: {cache_key}")
             return None
 
+        except CacheError as e:
+            self._stats['errors'] += 1
+            logger.error(f"Cache get error: {str(e)}")
+            return None
         except Exception as e:
             self._stats['errors'] += 1
-            log_error(f"Cache get error: {str(e)}")
+            logger.error(f"Unexpected error in cache get: {str(e)}")
             return None
 
     async def save_docstring(
@@ -139,35 +151,35 @@ class Cache:
         Save docstring data to cache.
 
         Args:
-            key: Cache key for the docstring
-            data: Docstring data to cache
-            expire: Optional custom expiration time in seconds
+            key (str): The cache key.
+            data (Dict[str, Any]): The data to cache.
+            expire (Optional[int]): Optional expiration time in seconds.
 
         Returns:
-            bool: True if save was successful, False otherwise
+            bool: True on success, False on failure.
         """
         if not self.enabled:
             return False
 
         try:
-            if not self.redis:
-                await self.connect()
+            if not self._redis:
+                await self._initialize_connection()
 
             cache_key = f"{self.prefix}{key}"
             serialized_data = json.dumps(data)
             expiration = expire or self.ttl
 
-            await self.redis.set(
+            await self._redis.set(
                 cache_key,
                 serialized_data,
                 ex=expiration
             )
-            log_debug(f"Cached data for key: {cache_key}")
+            logger.debug(f"Cached data for key: {cache_key}")
             return True
 
         except Exception as e:
             self._stats['errors'] += 1
-            log_error(f"Cache save error: {str(e)}")
+            logger.error(f"Cache save error: {str(e)}")
             return False
 
     async def invalidate(self, key: str) -> bool:
@@ -175,46 +187,46 @@ class Cache:
         Invalidate a cached entry.
 
         Args:
-            key: Cache key to invalidate
+            key (str): The cache key to invalidate.
 
         Returns:
-            bool: True if invalidation was successful, False otherwise
+            bool: True on success, False on failure.
         """
         if not self.enabled:
             return False
 
         try:
-            if not self.redis:
-                await self.connect()
+            if not self._redis:
+                await self._initialize_connection()
 
             cache_key = f"{self.prefix}{key}"
-            await self.redis.delete(cache_key)
-            log_debug(f"Invalidated cache key: {cache_key}")
+            await self._redis.delete(cache_key)
+            logger.debug(f"Invalidated cache key: {cache_key}")
             return True
 
         except Exception as e:
             self._stats['errors'] += 1
-            log_error(f"Cache invalidation error: {str(e)}")
+            logger.error(f"Cache invalidation error: {str(e)}")
             return False
 
     async def get_stats(self) -> Dict[str, Any]:
         """
-        Get cache statistics.
+        Get cache statistics including hit rate and Redis info.
 
         Returns:
-            Dict[str, Any]: Dictionary containing cache statistics
+            Dict[str, Any]: Cache statistics and information.
         """
         if not self.enabled:
-            return {
-                'enabled': False,
-                'stats': None
-            }
+            return {'enabled': False, 'stats': None}
 
         try:
-            if not self.redis:
-                await self.connect()
+            if not self._redis:
+                await self._initialize_connection()
 
-            info = await self.redis.info()
+            if not await self.is_connected():
+                raise CacheError("Redis connection not available")
+
+            info = await self._redis.info()
             return {
                 'enabled': True,
                 'stats': {
@@ -229,18 +241,24 @@ class Cache:
             }
 
         except Exception as e:
-            log_error(f"Error getting cache stats: {str(e)}")
+            self._stats['errors'] += 1
+            logger.error(f"Error getting cache stats: {str(e)}")
             return {
                 'enabled': True,
-                'stats': self._stats
+                'stats': {
+                    'hits': self._stats['hits'],
+                    'misses': self._stats['misses'],
+                    'errors': self._stats['errors'],
+                    'hit_rate': self._calculate_hit_rate()
+                }
             }
 
     def _calculate_hit_rate(self) -> float:
         """
-        Calculate cache hit rate.
+        Calculate the cache hit rate.
 
         Returns:
-            float: Cache hit rate as a percentage
+            float: The hit rate as a percentage.
         """
         total = self._stats['hits'] + self._stats['misses']
         if total == 0:
@@ -252,47 +270,76 @@ class Cache:
         Clear all cached entries with the configured prefix.
 
         Returns:
-            bool: True if clear was successful, False otherwise
+            bool: True on success, False on failure.
         """
         if not self.enabled:
             return False
 
         try:
-            if not self.redis:
-                await self.connect()
+            if not self._redis:
+                await self._initialize_connection()
 
-            # Get all keys with prefix
             pattern = f"{self.prefix}*"
             cursor = 0
             while True:
-                cursor, keys = await self.redis.scan(cursor, match=pattern)
+                cursor, keys = await self._redis.scan(cursor, match=pattern)
                 if keys:
-                    await self.redis.delete(*keys)
+                    await self._redis.delete(*keys)
                 if cursor == 0:
                     break
 
-            log_info("Cache cleared successfully")
+            logger.info("Cache cleared successfully")
             return True
 
         except Exception as e:
-            log_error(f"Error clearing cache: {str(e)}")
+            self._stats['errors'] += 1
+            logger.error(f"Error clearing cache: {str(e)}")
             return False
 
-    async def close(self) -> None:
-        """Close Redis connection and perform cleanup."""
-        if self.enabled and self.redis:
-            try:
-                await self.redis.close()
-                self.redis = None
-                log_info("Redis connection closed")
-            except Exception as e:
-                log_error(f"Error closing Redis connection: {str(e)}")
+    def sync_close(self) -> None:
+        """
+        Synchronous cleanup for shutdown.
 
-    async def __aenter__(self):
+        Properly disconnects from Redis if enabled and connected.
+        """
+        if self.enabled and self._redis:
+            try:
+                self._redis.connection_pool.disconnect()
+                self._redis = None
+                logger.info("Redis connection closed synchronously")
+            except Exception as e:
+                logger.error(f"Error in sync close: {str(e)}")
+
+    async def close(self) -> None:
+        """
+        Close Redis connection and perform cleanup.
+
+        Ensures that the Redis connection is properly closed asynchronously.
+        """
+        if self.enabled and self._redis:
+            try:
+                await self._redis.close()
+                self._redis = None
+                logger.info("Redis connection closed")
+            except Exception as e:
+                self._stats['errors'] += 1
+                logger.error(f"Error closing Redis connection: {str(e)}")
+            finally:
+                Cache._instances.discard(self)
+
+    async def __aenter__(self) -> "Cache":
         """Async context manager entry."""
-        await self.connect()
+        await self._initialize_connection()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.close()
+
+def cleanup_redis() -> None:
+    """Synchronous cleanup of all Redis connections at exit."""
+    for cache in Cache._instances:
+        cache.sync_close()
+
+# Register cleanup handler
+atexit.register(cleanup_redis)

@@ -1,46 +1,76 @@
-"""
-Custom Exceptions Module
-
-This module defines custom exceptions used in the project.
-
-Version: 1.0.0
-Author: Development Team
-"""
-
-class TooManyRetriesError(Exception):
-    """Exception raised when the maximum number of retries is exceeded."""
-    def __init__(self, message: str = "Maximum retry attempts exceeded"):
+class WorkflowError(Exception):
+    """Base exception class for workflow-related errors."""
+    
+    def __init__(self, message: str, *args, **kwargs):
         self.message = message
-        super().__init__(self.message)
-        
-class DocumentationError(Exception):
-    """Base class for documentation-related errors."""
+        super().__init__(message, *args, **kwargs)
+
+# exceptions.py  
+  
+class ConfigurationError(Exception):  
+    """Exception raised for errors in the configuration."""  
+    pass  
+  
+class ProcessingError(Exception):  
+    """Exception raised for errors during processing."""  
+    pass  
+  
+class ValidationError(Exception):  
+    """Exception raised for validation errors."""  
+    pass  
+  
+class APIError(Exception):  
+    """Exception raised for API-related errors."""  
+    pass  
+  
+class CacheError(Exception):  
+    """Exception raised for cache-related errors."""  
+    pass  
+  
+class TokenLimitError(Exception):  
+    """Exception raised when token limits are exceeded."""  
+    pass  
+
+class ConfigurationError(WorkflowError):
+    """Raised when there are configuration-related issues."""
     pass
 
-class ValidationError(DocumentationError):
-    """Raised when documentation validation fails."""
+
+class AIInteractionError(WorkflowError):
+    """Raised when there are issues with AI service interactions."""
     pass
 
-class ExtractionError(DocumentationError):
-    """Raised when code extraction fails."""
+
+class CacheError(WorkflowError):
+    """Raised when there are caching-related issues."""
     pass
 
-class AIGenerationError(DocumentationError):
-    """Raised when AI generation fails."""
-    pass
-    
-class CacheError(Exception):
-    """Exception raised for cache-related errors."""
-    pass
-    
-class AIServiceError(Exception):
-    """Base exception for AI service errors."""
+
+class DocumentationError(WorkflowError):
+    """Raised when there are documentation generation issues."""
     pass
 
-class ValidationError(AIServiceError):
-    """Validation related errors."""
+
+class AIServiceError(WorkflowError):
+    """Raised when there are issues with the AI service."""
     pass
 
-class ProcessingError(AIServiceError):
-    """Processing related errors."""
+
+class TokenLimitError(WorkflowError):
+    """Raised when token limits are exceeded."""
+    pass
+
+
+class ValidationError(WorkflowError):
+    """Raised when validation fails."""
+    pass
+
+
+class ProcessingError(WorkflowError):
+    """Raised when processing fails."""
+    pass
+
+
+class TooManyRetriesError(WorkflowError):
+    """Raised when too many retries have been attempted."""
     pass
