@@ -26,7 +26,12 @@ class APIError(Exception):
 class CacheError(Exception):  
     """Exception raised for cache-related errors."""  
     pass  
-  
+
+class ExtractionError(Exception):
+
+    """Exception raised when code extraction fails."""
+
+    pass  
 class TokenLimitError(Exception):  
     """Exception raised when token limits are exceeded."""  
     pass  

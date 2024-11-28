@@ -1,265 +1,316 @@
-# core/docstring_processor.py
 """
 Core docstring processing module with integrated metrics and extraction capabilities.
 """
 
 import ast
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
+from jsonschema import validate, ValidationError
 from core.logger import LoggerSetup
 from core.metrics import Metrics
-from extract.ast_analysis import ASTAnalyzer
+from core.code_extraction import CodeExtractor, ExtractedFunction, ExtractedClass
 
 logger = LoggerSetup.get_logger(__name__)
 
+# Schemas
+GOOGLE_STYLE_DOCSTRING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "description": {"type": "string"},
+        "params": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "type": {"type": "string"},
+                    "description": {"type": "string"}
+                },
+                "required": ["name", "type", "description"]
+            }
+        },
+        "returns": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string"},
+                "description": {"type": "string"}
+            },
+            "required": ["type", "description"]
+        },
+        "raises": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "exception": {"type": "string"},
+                    "description": {"type": "string"}
+                },
+                "required": ["exception", "description"]
+            }
+        }
+    },
+    "required": ["description", "params", "returns", "raises"]
+}
+
+EXTRACT_INFORMATION_TOOL = {
+    "name": "extract_information",
+    "description": "Extracts information from functions, classes, methods, and docstrings.",
+    "strict": True,
+    "parameters": {
+        "type": "object",
+        "required": [
+            "source_code",
+            "include_docstrings",
+            "include_methods",
+            "include_classes"
+        ],
+        "properties": {
+            "source_code": {
+                "type": "string",
+                "description": "The source code from which to extract information."
+            },
+            "include_docstrings": {
+                "type": "boolean",
+                "description": "Flag to include/exclude docstrings in the extraction process."
+            },
+            "include_methods": {
+                "type": "boolean",
+                "description": "Flag to include/exclude methods in the extraction process."
+            },
+            "include_classes": {
+                "type": "boolean",
+                "description": "Flag to include classes in the extraction process."
+            },
+            "documentation_style": {
+                "type": "string",
+                "description": "The style of the documentation to extract.",
+                "enum": ["google", "numpy", "rst"],
+                "default": "google"
+            },
+            "output_format": {
+                "type": "string",
+                "description": "The desired format for the extracted information.",
+                "enum": ["plain", "json", "markdown"],
+                "default": "json"
+            }
+        },
+        "additionalProperties": False
+    }
+}
+
+# Docstring and Metrics Data Classes
 @dataclass
 class DocstringMetrics:
-    """Metrics for docstring quality and complexity."""
+    """Metrics for evaluating the quality and complexity of docstrings."""
     length: int
     sections_count: int
     args_count: int
     cognitive_complexity: float
     completeness_score: float
 
+
 @dataclass
 class DocstringData:
-    """Enhanced docstring data with metrics."""
+    """Represents parsed docstring data with associated metrics."""
     summary: str
     description: str
-    args: List[Dict[str, str]]
-    returns: Dict[str, str]
-    raises: Optional[List[Dict[str, str]]] = None
+    args: List[Dict[str, Optional[str]]]
+    returns: Dict[str, Optional[str]]
+    raises: Optional[List[Dict[str, Optional[str]]]] = None
     metrics: Optional[DocstringMetrics] = None
     extraction_context: Optional[Dict[str, Any]] = None
 
-class DocstringProcessor:
-    """Enhanced docstring processor with metrics and extraction integration."""
 
-    def __init__(self):
+@dataclass
+class DocumentationSection:
+    """Represents a section of documentation."""
+    title: str
+    content: str
+    subsections: Optional[List['DocumentationSection']] = None
+
+
+class DocstringProcessor:
+    """Processor for handling docstrings with integrated metrics and extraction capabilities."""
+
+    def __init__(self) -> None:
+        """Initialize the DocstringProcessor with a metrics calculator and code extractor."""
         self.metrics_calculator = Metrics()
-        self.ast_analyzer = ASTAnalyzer()
-        self.min_length = {
+        self.code_extractor = CodeExtractor()
+        self.min_length: Dict[str, int] = {
             'summary': 10,
             'description': 10
         }
 
-    def process_node(
-        self,
-        node: ast.AST,
-        source_code: str
-    ) -> DocstringData:
+    def process_node(self, node: ast.AST, source_code: str) -> DocstringData:
         """
         Process an AST node to extract and analyze docstring information.
 
         Args:
-            node: AST node to process
-            source_code: Original source code for context
+            node (ast.AST): The AST node representing a function or class.
+            source_code (str): The source code containing the node.
 
         Returns:
-            DocstringData: Processed docstring data with metrics
+            DocstringData: The processed docstring data with metrics and context.
         """
-        # Extract existing docstring and context
-        existing_docstring = ast.get_docstring(node) or ''
-        extraction_context = self._extract_context(node, source_code)
-        
-        # Parse docstring
-        docstring_data = self.parse(existing_docstring)
-        
-        # Calculate metrics
-        metrics = self._calculate_metrics(docstring_data, node)
-        
-        # Enhance docstring data with context and metrics
-        docstring_data.metrics = metrics
-        docstring_data.extraction_context = extraction_context
-        
-        return docstring_data
-
-    def _extract_context(
-        self,
-        node: ast.AST,
-        source_code: str
-    ) -> Dict[str, Any]:
-        """Extract context information for the node."""
-        context = {}
-        
-        if isinstance(node, ast.FunctionDef):
-            context.update({
-                'type': 'function',
-                'name': node.name,
-                'args': self._extract_function_args(node),
-                'returns': self.ast_analyzer.get_annotation(node.returns),
-                'complexity': self.metrics_calculator.calculate_complexity(node),
-                'source': ast.unparse(node)
-            })
+        try:
+            extraction_result = self.code_extractor.extract_code(source_code)
             
-        elif isinstance(node, ast.ClassDef):
-            context.update({
-                'type': 'class',
-                'name': node.name,
-                'bases': [self.ast_analyzer.get_annotation(base) for base in node.bases],
-                'methods': self._extract_class_methods(node),
-                'source': ast.unparse(node)
-            })
+            extracted_info = None
+            if isinstance(node, ast.ClassDef):
+                extracted_info = next((c for c in extraction_result.classes if c.name == node.name), None)
+            elif isinstance(node, ast.FunctionDef):
+                extracted_info = next((f for f in extraction_result.functions if f.name == node.name), None)
+
+            docstring_data = self.parse(ast.get_docstring(node) or '')
+            docstring_data.extraction_context = self._convert_extracted_info(extracted_info)
+            docstring_data.metrics = self._convert_to_docstring_metrics(extracted_info.metrics if extracted_info else {})
             
-        return context
+            return docstring_data
+        except Exception as e:
+            logger.error(f"Error processing node: {e}")
+            return DocstringData("", "", [], {}, [])
 
-    def _extract_function_args(
-        self,
-        node: ast.FunctionDef
-    ) -> List[Dict[str, str]]:
-        """Extract function arguments with type annotations."""
-        args = []
-        for arg in node.args.args:
-            args.append({
-                'name': arg.arg,
-                'type': self.ast_analyzer.get_annotation(arg.annotation),
-                'default': self._get_default_value(arg, node)
-            })
-        return args
-
-    def _extract_class_methods(
-        self,
-        node: ast.ClassDef
-    ) -> List[Dict[str, Any]]:
-        """Extract class methods with their signatures."""
-        methods = []
-        for method in [n for n in node.body if isinstance(n, ast.FunctionDef)]:
-            methods.append({
-                'name': method.name,
-                'args': self._extract_function_args(method),
-                'returns': self.ast_analyzer.get_annotation(method.returns),
-                'is_property': any(isinstance(d, ast.Name) and d.id == 'property'
-                                 for d in method.decorator_list)
-            })
-        return methods
-
-    def _calculate_metrics(
-        self,
-        docstring_data: DocstringData,
-        node: ast.AST
-    ) -> DocstringMetrics:
-        """Calculate comprehensive metrics for the docstring."""
-        # Basic metrics
-        length = len(docstring_data.summary) + len(docstring_data.description)
-        sections_count = sum(1 for x in [
-            docstring_data.summary,
-            docstring_data.description,
-            docstring_data.args,
-            docstring_data.returns,
-            docstring_data.raises
-        ] if x)
-        args_count = len(docstring_data.args)
-
-        # Calculate cognitive complexity
-        if isinstance(node, ast.FunctionDef):
-            cognitive_complexity = self.metrics_calculator.calculate_cognitive_complexity(node)
-        else:
-            cognitive_complexity = 0.0
-
-        # Calculate completeness score
-        completeness_score = self._calculate_completeness(docstring_data, node)
-
-        return DocstringMetrics(
-            length=length,
-            sections_count=sections_count,
-            args_count=args_count,
-            cognitive_complexity=cognitive_complexity,
-            completeness_score=completeness_score
-        )
-
-    def _calculate_completeness(
-        self,
-        docstring_data: DocstringData,
-        node: ast.AST
-    ) -> float:
-        """Calculate docstring completeness score."""
-        score = 0.0
-        total_checks = 0
-
-        # Check summary
-        if len(docstring_data.summary) >= self.min_length['summary']:
-            score += 1
-        total_checks += 1
-
-        # Check description
-        if len(docstring_data.description) >= self.min_length['description']:
-            score += 1
-        total_checks += 1
-
-        # Check arguments documentation
-        if isinstance(node, ast.FunctionDef):
-            actual_args = {arg.arg for arg in node.args.args}
-            documented_args = {arg['name'] for arg in docstring_data.args}
-            
-            if actual_args == documented_args:
-                score += 1
-            total_checks += 1
-
-            # Check return value documentation
-            if node.returns and docstring_data.returns['type'] != 'None':
-                score += 1
-            total_checks += 1
-
-        return (score / total_checks) * 100 if total_checks > 0 else 0.0
-
-    def validate(
-        self,
-        data: DocstringData,
-        context: Optional[Dict[str, Any]] = None
-    ) -> Tuple[bool, List[str]]:
+    def _convert_extracted_info(self, extracted_info: Union[ExtractedFunction, ExtractedClass, None]) -> Dict[str, Any]:
         """
-        Validate docstring with enhanced context awareness.
+        Convert extracted information into a context dictionary.
 
         Args:
-            data: Docstring data to validate
-            context: Optional extraction context for additional validation
+            extracted_info (Union[ExtractedFunction, ExtractedClass, None]): The extracted function or class information.
 
         Returns:
-            Tuple of validation status and error messages
+            Dict[str, Any]: A dictionary containing the context of the extracted information.
         """
-        errors = []
+        if not extracted_info:
+            return {}
         
-        # Basic validation
-        if len(data.summary.strip()) < self.min_length['summary']:
-            errors.append("Summary too short")
-            
-        # Context-aware validation
-        if context:
-            if context['type'] == 'function':
-                # Validate function arguments
-                actual_args = {arg['name'] for arg in context['args']}
-                documented_args = {arg['name'] for arg in data.args}
-                
-                missing_args = actual_args - documented_args
-                if missing_args:
-                    errors.append(f"Missing documentation for arguments: {missing_args}")
-                
-                extra_args = documented_args - actual_args
-                if extra_args:
-                    errors.append(f"Documentation for non-existent arguments: {extra_args}")
-                
-                # Validate return type
-                if context['returns'] != 'None' and not data.returns['type']:
-                    errors.append("Missing return value documentation")
+        if isinstance(extracted_info, ExtractedFunction):
+            return {
+                'type': 'function',
+                'name': extracted_info.name,
+                'args': [vars(arg) for arg in extracted_info.args],
+                'returns': extracted_info.return_type,
+                'is_method': extracted_info.is_method,
+                'is_async': extracted_info.is_async,
+                'metrics': extracted_info.metrics
+            }
+        elif isinstance(extracted_info, ExtractedClass):
+            return {
+                'type': 'class',
+                'name': extracted_info.name,
+                'bases': extracted_info.bases,
+                'methods': [vars(method) for method in extracted_info.methods],
+                'attributes': extracted_info.attributes,
+                'metrics': extracted_info.metrics
+            }
+        return {}
 
-        return len(errors) == 0, errors
+    def _convert_to_docstring_metrics(self, metrics: Dict[str, Any]) -> DocstringMetrics:
+        """
+        Convert metrics from CodeExtractor to DocstringMetrics.
 
-    def _get_default_value(
-        self,
-        arg: ast.arg,
-        func_node: ast.FunctionDef
-    ) -> Optional[str]:
-        """Get default value for a function argument."""
+        Args:
+            metrics (Dict[str, Any]): The metrics dictionary from CodeExtractor.
+
+        Returns:
+            DocstringMetrics: The converted docstring metrics.
+        """
+        return DocstringMetrics(
+            length=metrics.get('total_lines', 0),
+            sections_count=len(metrics.get('sections', [])),
+            args_count=metrics.get('parameter_count', 0),
+            cognitive_complexity=metrics.get('cognitive_complexity', 0.0),
+            completeness_score=metrics.get('maintainability_index', 0.0) / 100
+        )
+
+    def parse(self, docstring: str) -> DocstringData:
+        """
+        Parse a raw docstring into a structured format.
+
+        Args:
+            docstring (str): The raw docstring text.
+
+        Returns:
+            DocstringData: The parsed docstring data.
+        """
         try:
-            defaults = func_node.args.defaults
-            if defaults:
-                args = func_node.args.args
-                default_index = len(args) - len(defaults)
-                arg_index = args.index(arg)
-                
-                if arg_index >= default_index:
-                    default_node = defaults[arg_index - default_index]
-                    return ast.unparse(default_node)
+            if not docstring.strip():
+                return DocstringData("", "", [], {}, [])
+
+            # Example heuristic parsing (extendable with AI tools or regex)
+            summary = docstring.split("\n\n")[0].strip()  # First paragraph is the summary
+            description = "\n\n".join(docstring.split("\n\n")[1:]).strip()  # Rest is the description
+
+            # Parse structured sections
+            args, returns, raises = [], {}, []
+            if "Args:" in docstring:
+                args = self._parse_args_section(docstring)
+
+            if "Returns:" in docstring:
+                returns = self._parse_returns_section(docstring)
+
+            if "Raises:" in docstring:
+                raises = self._parse_raises_section(docstring)
+
+            return DocstringData(summary, description, args, returns, raises)
         except Exception as e:
-            logger.error(f"Error getting default value: {e}")
-        return None
+            logger.error(f"Error parsing docstring: {e}")
+            return DocstringData("", "", [], {}, [])
+
+    def format(self, docstring_data: DocstringData) -> str:
+        """
+        Format structured docstring data into a docstring string.
+
+        Args:
+            docstring_data (DocstringData): The structured docstring data.
+
+        Returns:
+            str: The formatted docstring.
+        """
+        docstring_lines = [docstring_data.summary, "", docstring_data.description]
+
+        if docstring_data.args:
+            docstring_lines.append("Args:")
+            for arg in docstring_data.args:
+                docstring_lines.append(
+                    f"    {arg['name']} ({arg.get('type', 'Any')}): {arg.get('description', '')}"
+                )
+
+        if docstring_data.returns:
+            docstring_lines.append("")
+            docstring_lines.append("Returns:")
+            docstring_lines.append(
+                f"    {docstring_data.returns['type']}: {docstring_data.returns['description']}"
+            )
+
+        if docstring_data.raises:
+            docstring_lines.append("")
+            docstring_lines.append("Raises:")
+            for exc in docstring_data.raises:
+                docstring_lines.append(
+                    f"    {exc['exception']}: {exc['description']}"
+                )
+
+        return "\n".join(docstring_lines)
+
+    def insert(self, node: ast.AST, docstring: str) -> bool:
+        """
+        Insert a docstring into an AST node.
+
+        Args:
+            node (ast.AST): The AST node to insert the docstring into.
+            docstring (str): The docstring to insert.
+
+        Returns:
+            bool: True if insertion was successful, False otherwise.
+        """
+        try:
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                docstring_node = ast.Expr(value=ast.Constant(value=docstring))
+                node.body.insert(0, docstring_node)  # Add docstring as the first body element
+                return True
+            else:
+                logger.warning(f"Cannot insert docstring into node type: {type(node).__name__}")
+                return False
+        except Exception as e:
+            logger.error(f"Error inserting docstring: {e}")
+            return False

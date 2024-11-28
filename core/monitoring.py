@@ -22,7 +22,14 @@ class MetricsCollector:
         """Initialize the MetricsCollector with an empty metrics store."""
         self.metrics_store: List[Dict[str, Any]] = []
 
-    def track_operation(self, operation_type: str, success: bool, duration: float, usage: Dict[str, Any] = None, error: str = None):
+    async def track_operation(
+        self, 
+        operation_type: str, 
+        success: bool, 
+        duration: float, 
+        usage: Dict[str, Any] = None, 
+        error: str = None
+    ):
         """
         Track an operation's metrics.
 
@@ -38,10 +45,11 @@ class MetricsCollector:
             'success': success,
             'duration': duration,
             'usage': usage or {},
-            'error': error
+            'error': error,
+            'timestamp': datetime.now().isoformat()
         }
         self.metrics_store.append(metric)
-        print(f"Tracked metrics: {metric}")
+        logger.debug(f"Tracked metrics: {metric}")
 
     def get_metrics(self) -> List[Dict[str, Any]]:
         """Retrieve all collected metrics."""
@@ -50,6 +58,16 @@ class MetricsCollector:
     def clear_metrics(self):
         """Clear all collected metrics."""
         self.metrics_store.clear()
+        
+    async def close(self):
+        """Cleanup and close the metrics collector."""
+        try:
+            # Save any pending metrics or perform cleanup
+            self.clear_metrics()
+            logger.info("MetricsCollector closed successfully")
+        except Exception as e:
+            logger.error(f"Error closing MetricsCollector: {e}")
+            raise
         
 class SystemMonitor:
     """Monitors system resources and performance metrics."""

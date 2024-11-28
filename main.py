@@ -4,30 +4,29 @@ Main Application Module
 Orchestrates the documentation generation process using Azure OpenAI,
 handling configuration, initialization, and cleanup of components.
 """
-
+from dotenv import load_dotenv
+load_dotenv()
 import asyncio
 import sys
-import os
 from pathlib import Path
 from typing import Optional, List, Tuple
 import argparse
-from dotenv import load_dotenv
+
 from core.logger import LoggerSetup
 from core.cache import Cache
 from core.monitoring import MetricsCollector
 from core.config import AzureOpenAIConfig
 from api.token_management import TokenManager
 from ai_interaction import AIInteractionHandler
+from repository_handler import RepositoryHandler
 from exceptions import (
     ConfigurationError,
     ProcessingError,
     ValidationError
 )
 
-load_dotenv()
 # Initialize logger and load configuration
 logger = LoggerSetup.get_logger(__name__)
-config = AzureOpenAIConfig.from_env()
 
 class DocumentationGenerator:
     """
@@ -43,6 +42,7 @@ class DocumentationGenerator:
         self.metrics = None
         self.token_manager = None
         self.ai_handler = None
+        self.config = AzureOpenAIConfig.from_env()
 
     async def initialize(self) -> None:
         """
@@ -53,13 +53,13 @@ class DocumentationGenerator:
         """
         try:
             # Initialize cache if enabled
-            if config.cache_enabled:
+            if self.config.cache_enabled:
                 self.cache = Cache(
-                    host=config.redis_host,
-                    port=config.redis_port,
-                    db=config.redis_db,
-                    password=config.redis_password,
-                    enabled=config.cache_enabled
+                    host=self.config.redis_host,
+                    port=self.config.redis_port,
+                    db=self.config.redis_db,
+                    password=self.config.redis_password,
+                    enabled=self.config.cache_enabled
                 )
                 logger.info("Cache initialized successfully")
 
@@ -69,8 +69,9 @@ class DocumentationGenerator:
 
             # Initialize token manager
             self.token_manager = TokenManager(
-                model=config.model_name,
-                deployment_name=config.deployment_name
+                model=self.config.model_name,
+                deployment_name=self.config.deployment_name,
+                config=self.config
             )
             logger.info("Token manager initialized")
 
@@ -78,7 +79,8 @@ class DocumentationGenerator:
             self.ai_handler = AIInteractionHandler(
                 cache=self.cache,
                 metrics_collector=self.metrics,
-                token_manager=self.token_manager
+                token_manager=self.token_manager,
+                config=self.config  # Pass the config here
             )
             logger.info("AI interaction handler initialized")
 
@@ -99,10 +101,7 @@ class DocumentationGenerator:
         except Exception as e:
             logger.error(f"Cleanup failed: {str(e)}")
 
-    async def process_file(
-        self,
-        file_path: Path
-    ) -> Tuple[Optional[str], Optional[str]]:
+    async def process_file(self, file_path: Path) -> Tuple[Optional[str], Optional[str]]:
         """
         Process a single Python file for documentation generation.
 
@@ -130,27 +129,22 @@ class DocumentationGenerator:
             # Process code
             updated_code, documentation = await self.ai_handler.process_code(
                 source_code,
-                cache_key
+                cache_key=cache_key
             )
 
             return updated_code, documentation
 
         except ValidationError as ve:
             logger.error(f"Validation error for file {file_path}: {str(ve)}")
-            raise ve
+            raise
         except ProcessingError as pe:
             logger.error(f"Processing error for file {file_path}: {str(pe)}")
-            raise pe
+            raise
         except Exception as e:
             logger.error(f"Unexpected error processing file {file_path}: {str(e)}")
             raise ProcessingError(f"File processing failed: {str(e)}")
 
-    async def save_results(
-        self,
-        file_path: Path,
-        updated_code: str,
-        documentation: str
-    ) -> None:
+    async def save_results(self, file_path: Path, updated_code: str, documentation: str) -> None:
         """
         Save processing results to files.
 
@@ -187,11 +181,7 @@ class DocumentationGenerator:
                 updated_code, documentation = await self.process_file(file_path)
 
                 if updated_code and documentation:
-                    await self.save_results(
-                        file_path,
-                        updated_code,
-                        documentation
-                    )
+                    await self.save_results(file_path, updated_code, documentation)
                     logger.info(f"Successfully processed {file_path}")
                 else:
                     logger.warning(f"No results generated for {file_path}")
@@ -203,9 +193,51 @@ class DocumentationGenerator:
             except Exception as e:
                 logger.error(f"Failed to process file {file_path}: {str(e)}")
 
+async def process_repository(args: argparse.Namespace) -> int:
+    """
+    Process repository for documentation generation.
+
+    Args:
+        args (argparse.Namespace): Command line arguments
+
+    Returns:
+        int: Exit code (0 for success, non-zero for failure)
+    """
+    repo_handler = RepositoryHandler()
+    generator = DocumentationGenerator()
+
+    try:
+        # Initialize components
+        await generator.initialize()
+
+        # Clone repository
+        repo_path = repo_handler.clone_repository(args.repository)
+        logger.info(f"Repository cloned to: {repo_path}")
+
+        # Get Python files
+        python_files = repo_handler.get_python_files()
+        if not python_files:
+            logger.warning("No Python files found in repository")
+            return 0
+
+        # Process files
+        await generator.process_files([Path(f) for f in python_files])
+        logger.info("Documentation generation completed successfully")
+        return 0
+
+    except ConfigurationError as ce:
+        logger.error(f"Configuration error: {str(ce)}")
+        return 1
+    except Exception as e:
+        logger.error(f"Documentation generation failed: {str(e)}")
+        return 1
+    finally:
+        await generator.cleanup()
+        repo_handler.cleanup()
+
 async def main(args: argparse.Namespace) -> int:
     """
-    Main application entry point.
+    Main application entry point for processing local files.
 
     Args:
         args (argparse.Namespace): Command line arguments
@@ -232,10 +264,8 @@ async def main(args: argparse.Namespace) -> int:
     except Exception as e:
         logger.error(f"Documentation generation failed: {str(e)}")
         return 1
-
     finally:
         await generator.cleanup()
-
 
 def parse_arguments() -> argparse.Namespace:
     """
@@ -248,17 +278,27 @@ def parse_arguments() -> argparse.Namespace:
         description="Generate documentation for Python files using Azure OpenAI"
     )
     parser.add_argument(
-        'files',
-        nargs='+',
-        help='Python files to process'
+        '--repository',
+        type=str,
+        help='URL of the git repository to process'
+    )
+    parser.add_argument(
+        '--files',
+        nargs='*',
+        help='Python files to process (alternative to repository)'
     )
     return parser.parse_args()
-
 
 if __name__ == "__main__":
     try:
         args = parse_arguments()
-        exit_code = asyncio.run(main(args))
+        if args.repository:
+            exit_code = asyncio.run(process_repository(args))
+        elif args.files:
+            exit_code = asyncio.run(main(args))
+        else:
+            logger.error("Either --repository or --files must be specified")
+            exit_code = 1
         sys.exit(exit_code)
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")

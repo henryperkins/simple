@@ -15,68 +15,62 @@ from core.config import AzureOpenAIConfig
 
 # Initialize logger and config
 logger = LoggerSetup.get_logger(__name__)
-config = AzureOpenAIConfig.from_env()
+#  config = AzureOpenAIConfig.from_env()
 
 
-@dataclass
-class TokenUsage:
-    """Token usage statistics and cost calculation."""
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-    estimated_cost: float
+@dataclass  
+class TokenUsage:  
+    """Token usage statistics and cost calculation."""  
+    prompt_tokens: int  
+    completion_tokens: int  
+    total_tokens: int  
+    estimated_cost: float  
 
 
-class TokenManager:
-    """
-    Manages token counting, optimization, and cost calculation for Azure OpenAI
-    API requests. Handles different models and their token limits and pricing.
-    """
-
-    def __init__(
-        self,
-        model: str = "gpt-4",
-        deployment_name: Optional[str] = None
-    ):
-        """
-        Initialize TokenManager with model configuration.
-        
-        Args:
-            model (str): The model name to use for token management
-            deployment_name (Optional[str]): Azure deployment name if different from model
-        """
-        self.model = self._get_model_name(deployment_name, model)
-        self.deployment_name = deployment_name
-
-        try:
-            self.encoding = tiktoken.encoding_for_model(self.model)
-        except KeyError:
-            self.encoding = tiktoken.get_encoding("cl100k_base")
-            
-        self.model_config = config.model_limits.get(
-            self.model, config.model_limits["gpt-4"]
-        )
-        logger.debug(
-            f"TokenManager initialized for model: {self.model}, "
-            f"deployment: {deployment_name}"
-        )
-
-        self.total_prompt_tokens = 0
-        self.total_completion_tokens = 0
+class TokenManager:  
+    """  
+    Manages token counting, optimization, and cost calculation for Azure OpenAI  
+    API requests. Handles different models and their token limits and pricing.  
+    """  
+  
+    def __init__(  
+        self,  
+        model: str = "gpt-4",  
+        deployment_name: Optional[str] = None,  
+        config: Optional[AzureOpenAIConfig] = None  
+    ):  
+        """  
+        Initialize TokenManager with model configuration.  
+  
+        Args:  
+            model (str): The model name to use for token management  
+            deployment_name (Optional[str]): Azure deployment name if different from model  
+            config (Optional[AzureOpenAIConfig]): Configuration object  
+        """  
+        self.config = config or AzureOpenAIConfig.from_env()  
+        self.model = self._get_model_name(deployment_name, model)  
+        self.deployment_name = deployment_name  
+  
+        try:  
+            self.encoding = tiktoken.encoding_for_model(self.model)  
+        except KeyError:  
+            self.encoding = tiktoken.get_encoding("cl100k_base")  
+  
+        self.model_config = self.config.model_limits.get(  
+            self.model, self.config.model_limits["gpt-4"]  
+        )  
+        logger.debug(  
+            f"TokenManager initialized for model: {self.model}, "  
+            f"deployment: {deployment_name}"  
+        )  
+  
+        self.total_prompt_tokens = 0  
+        self.total_completion_tokens = 0  
 
     def _get_model_name(self, deployment_name: Optional[str], default_model: str) -> str:
-        """
-        Get the appropriate model name based on deployment name or default model.
-        
-        Args:
-            deployment_name (Optional[str]): The deployment name
-            default_model (str): The default model name
-            
-        Returns:
-            str: The resolved model name
-        """
+        """Get the appropriate model name based on deployment name or default model."""
         if deployment_name:
-            return config.model_limits.get(deployment_name, default_model)
+            return self.config.model_limits.get(deployment_name, default_model)
         return default_model
 
     @lru_cache(maxsize=1024)

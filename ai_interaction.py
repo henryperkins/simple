@@ -9,8 +9,8 @@ from datetime import datetime
 from typing import Optional, Tuple, Dict, Any, List
 import json
 from dataclasses import dataclass
-
-from core.logger import LoggerSetup, log_error, log_info, log_debug
+import ast
+from core.logger import LoggerSetup, log_info
 from core.cache import Cache
 from core.monitoring import MetricsCollector
 from core.config import AzureOpenAIConfig
@@ -20,7 +20,7 @@ from core.docstring_processor import (
     DocstringMetrics
 )
 from api.token_management import TokenManager
-from api.api_client import AzureOpenAIClient
+from api.api_client import APIClient
 from exceptions import ValidationError, ProcessingError, CacheError
 
 logger = LoggerSetup.get_logger(__name__)
@@ -46,20 +46,20 @@ class AIInteractionHandler:
         self,
         cache: Optional[Cache] = None,
         metrics_collector: Optional[MetricsCollector] = None,
-        token_manager: Optional[TokenManager] = None
+        token_manager: Optional[TokenManager] = None,
+        config: Optional[AzureOpenAIConfig] = None
     ):
         """Initialize the AI Interaction Handler."""
         try:
+            self.config = config or AzureOpenAIConfig.from_env()
             self.cache = cache
             self.metrics = metrics_collector
             self.token_manager = token_manager or TokenManager(
-                model=config.model_name,
-                deployment_name=config.deployment_name
+                model=self.config.model_name,
+                deployment_name=self.config.deployment_name,
+                config=self.config
             )
-            self.client = AzureOpenAIClient(
-                token_manager=self.token_manager,
-                metrics_collector=metrics_collector
-            )
+            self.client = APIClient()
             self.docstring_processor = DocstringProcessor()
             self._initialize_tools()
             logger.info("AI Interaction Handler initialized successfully")
@@ -94,18 +94,15 @@ class AIInteractionHandler:
                                     "name": {"type": "string"},
                                     "type": {"type": "string"},
                                     "description": {"type": "string"}
-                                },
-                                "required": ["name", "type", "description"]
-                            },
-                            "description": "List of arguments with their types and descriptions"
+                                }
+                            }
                         },
                         "returns": {
                             "type": "object",
                             "properties": {
                                 "type": {"type": "string"},
                                 "description": {"type": "string"}
-                            },
-                            "required": ["type", "description"]
+                            }
                         },
                         "raises": {
                             "type": "array",
@@ -115,128 +112,13 @@ class AIInteractionHandler:
                                     "type": {"type": "string"},
                                     "description": {"type": "string"}
                                 }
-                            },
-                            "description": "List of exceptions that may be raised"
+                            }
                         }
                     },
-                    "required": ["summary", "description", "args", "returns"]
+                    "required": ["summary", "description"]
                 }
             }
         }
-
-    def _create_documentation_prompt(
-        self,
-        source_code: str,
-        metadata: Dict[str, Any],
-        node: Optional[ast.AST] = None
-    ) -> str:
-        """
-        Create a dynamic prompt based on the code and metadata.
-
-        Args:
-            source_code: Source code to document
-            metadata: Code metadata
-            node: Optional AST node for context
-
-        Returns:
-            str: Generated prompt
-        """
-        docstring_data = None
-        if node:
-            docstring_data = self.docstring_processor.process_node(node, source_code)
-
-        prompt_parts = [
-            "Generate comprehensive documentation for the following Python code.",
-            "\nCode Analysis:",
-            f"- Complexity Metrics:\n{self._format_metrics(metadata)}",
-        ]
-
-        if docstring_data and docstring_data.metrics:
-            prompt_parts.append(
-                f"- Docstring Metrics:\n{self._format_docstring_metrics(docstring_data.metrics)}"
-            )
-
-        if docstring_data and docstring_data.extraction_context:
-            prompt_parts.append(
-                f"\nCode Context:\n{self._format_context(docstring_data.extraction_context)}"
-            )
-
-        if metadata.get('docstring'):
-            prompt_parts.append(f"\nExisting Documentation:\n{metadata['docstring']}")
-
-        if metadata.get('class_info'):
-            prompt_parts.append(
-                f"\nClass Information:\n{self._format_class_info(metadata['class_info'])}"
-            )
-
-        prompt_parts.extend([
-            "\nRequirements:",
-            "- Follow Google Style Python docstring format",
-            "- Include comprehensive parameter descriptions",
-            "- Document return values and types",
-            "- List possible exceptions",
-            "- Add usage examples for complex functionality",
-            f"\nSource Code:\n{source_code}",
-            "\nProvide the documentation in a structured format using the specified function schema."
-        ])
-
-        return "\n".join(prompt_parts)
-
-    def _format_metrics(self, metadata: Dict[str, Any]) -> str:
-        """Format code metrics into a string."""
-        lines = []
-        for func in metadata.get('functions', []):
-            metrics = func.get('metrics', {})
-            lines.append(
-                f"Function {func['name']}:\n"
-                f"  - Cyclomatic Complexity: {metrics.get('cyclomatic_complexity')}\n"
-                f"  - Cognitive Complexity: {metrics.get('cognitive_complexity')}\n"
-                f"  - Maintainability Index: {metrics.get('maintainability_index')}"
-            )
-        return '\n'.join(lines)
-
-    def _format_docstring_metrics(self, metrics: DocstringMetrics) -> str:
-        """Format docstring metrics into a string."""
-        return (
-            f"  Completeness: {metrics.completeness_score:.1f}%\n"
-            f"  Cognitive Complexity: {metrics.cognitive_complexity:.1f}\n"
-            f"  Sections: {metrics.sections_count}\n"
-            f"  Arguments Documented: {metrics.args_count}"
-        )
-
-    def _format_context(self, context: Dict[str, Any]) -> str:
-        """Format extraction context into a string."""
-        if context.get('type') == 'function':
-            return (
-                f"Function: {context['name']}\n"
-                f"Arguments: {self._format_args(context['args'])}\n"
-                f"Returns: {context['returns']}\n"
-                f"Complexity: {context['complexity']}"
-            )
-        elif context.get('type') == 'class':
-            return (
-                f"Class: {context['name']}\n"
-                f"Bases: {', '.join(context['bases'])}\n"
-                f"Methods: {len(context['methods'])}"
-            )
-        return str(context)
-
-    def _format_args(self, args: List[Dict[str, str]]) -> str:
-        """Format function arguments into a string."""
-        return ', '.join(
-            f"{arg['name']}: {arg['type']}"
-            + (f" = {arg['default']}" if arg.get('default') else "")
-            for arg in args
-        )
-
-    def _format_class_info(self, class_info: Dict[str, Any]) -> str:
-        """Format class information into a string."""
-        info_parts = [
-            f"Class Name: {class_info.get('name', 'Unknown')}",
-            f"Base Classes: {', '.join(class_info.get('bases', []))}",
-            f"Methods: {len(class_info.get('methods', []))}"
-        ]
-        return '\n'.join(info_parts)
 
     async def _generate_documentation(
         self,
@@ -251,71 +133,213 @@ class AIInteractionHandler:
 
             response, usage = await self.client.process_request(
                 prompt=prompt,
-                temperature=config.temperature,
-                max_tokens=config.max_tokens,
+                temperature=0.3,  # Lower temperature for more consistent output
+                max_tokens=2000,  # Increase max tokens for longer documentation
                 tools=[self.docstring_tool],
                 tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
             )
 
             if not response:
+                logger.error("No response received from API")
                 return None
 
             processing_time = (datetime.now() - start_time).total_seconds()
 
-            if response.get("tool_calls"):
-                tool_call = response["tool_calls"][0]
-                if tool_call.function.name == "generate_docstring":
-                    try:
-                        docstring_data = DocstringData(**json.loads(tool_call.function.arguments))
-                        
-                        # Validate using docstring processor
-                        is_valid, errors = self.docstring_processor.validate(
-                            docstring_data,
-                            docstring_data.extraction_context
-                        )
-                        if not is_valid:
-                            raise ProcessingError(f"Invalid documentation: {errors}")
+            # Extract the function call data from the response
+            function_data = None
+            if "tool_calls" in response:
+                tool_calls = response.get("tool_calls", [])
+                if tool_calls:
+                    function_data = tool_calls[0].get("function", {})
+            elif "function_call" in response:
+                function_data = {
+                    "name": response["function_call"].get("name"),
+                    "arguments": response["function_call"].get("arguments")
+                }
+            elif "message" in response and "function_call" in response.get("message", {}):
+                function_data = response["message"]["function_call"]
+            elif "choices" in response and response["choices"]:
+                choice = response["choices"][0]
+                if "message" in choice and "function_call" in choice["message"]:
+                    function_data = choice["message"]["function_call"]
 
-                        # Calculate metrics if node is provided
-                        metrics = None
-                        if node:
-                            metrics = self.docstring_processor._calculate_metrics(docstring_data, node)
+            if not function_data:
+                logger.error("No function call data found in response")
+                logger.debug(f"Response structure: {json.dumps(response, indent=2)}")
+                # Fallback to direct message content if available
+                if "content" in response.get("message", {}):
+                    # Create a basic docstring structure
+                    docstring_data = {
+                        "summary": response["message"]["content"][:100],
+                        "description": response["message"]["content"],
+                        "args": [],
+                        "returns": {"type": "None", "description": "None"}
+                    }
+                    return ProcessingResult(
+                        content=self._format_docstring(docstring_data),
+                        usage=usage or {},
+                        processing_time=processing_time
+                    )
+                return None
 
-                        return ProcessingResult(
-                            content=self.docstring_processor.format(docstring_data),
-                            usage=usage or {},
-                            metrics=metrics,
-                            processing_time=processing_time
-                        )
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse function call response: {e}")
-                        raise ProcessingError("Invalid JSON in function response")
+            function_name = function_data.get("name")
+            function_args = function_data.get("arguments", "{}")
 
-            raise ProcessingError("No valid function call response received")
+            if function_name == "generate_docstring":
+                try:
+                    # Handle case where arguments might be a string or already parsed
+                    if isinstance(function_args, str):
+                        docstring_data = json.loads(function_args)
+                    else:
+                        docstring_data = function_args
+
+                    # Ensure required fields exist
+                    if "summary" not in docstring_data:
+                        docstring_data["summary"] = ""
+                    if "description" not in docstring_data:
+                        docstring_data["description"] = docstring_data.get("summary", "")
+
+                    return ProcessingResult(
+                        content=self._format_docstring(docstring_data),
+                        usage=usage or {},
+                        processing_time=processing_time
+                    )
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse function arguments: {e}")
+                    logger.debug(f"Raw arguments: {function_args}")
+                    raise ProcessingError("Invalid JSON in function response")
+
+            raise ProcessingError(f"Unexpected function name: {function_name}")
 
         except Exception as e:
             logger.error(f"Documentation generation failed: {str(e)}")
             raise ProcessingError(f"Failed to generate documentation: {str(e)}")
 
-    async def process_code(
-        self,
-        source_code: str,
-        node: Optional[ast.AST] = None,
-        cache_key: Optional[str] = None
-    ) -> Tuple[str, str]:
+    def _create_documentation_prompt(self, source_code: str, metadata: Dict[str, Any], node: Optional[ast.AST] = None) -> str:
+        """Create a dynamic prompt for documentation generation."""
+        prompt = [
+            "You are a highly skilled Python documentation expert. Your task is to generate comprehensive documentation for the following Python code.",
+            "Please analyze the code carefully and provide detailed documentation using the generate_docstring function.",
+            "",
+            "Follow these requirements:",
+            "1. Provide a clear, concise summary of the code's purpose",
+            "2. Write a detailed description explaining how it works",
+            "3. Document all parameters with accurate types and descriptions",
+            "4. Include return value documentation if applicable",
+            "5. List any exceptions that may be raised",
+            "6. Keep descriptions practical and implementation-focused",
+            "",
+            "The documentation should follow Python's Google-style format.",
+            "",
+            "Here's the code to document:",
+            "```python",
+            source_code,
+            "```",
+            "",
+            "Respond using the generate_docstring function to provide the documentation."
+        ]
+        
+        return "\n".join(prompt)
+
+    def _format_docstring(self, data: Dict[str, Any]) -> str:
+        """Format the docstring data into a string."""
+        docstring_lines = []
+        
+        # Add summary
+        if data.get("summary"):
+            docstring_lines.append(data["summary"])
+            docstring_lines.append("")
+        
+        # Add description
+        if data.get("description"):
+            docstring_lines.append(data["description"])
+            docstring_lines.append("")
+        
+        # Add arguments
+        if data.get("args"):
+            docstring_lines.append("Args:")
+            for arg in data["args"]:
+                docstring_lines.append(f"    {arg['name']} ({arg.get('type', 'Any')}): {arg.get('description', '')}")
+            docstring_lines.append("")
+        
+        # Add returns
+        if data.get("returns"):
+            docstring_lines.append("Returns:")
+            docstring_lines.append(f"    {data['returns'].get('type', 'Any')}: {data['returns'].get('description', '')}")
+            docstring_lines.append("")
+        
+        # Add raises
+        if data.get("raises"):
+            docstring_lines.append("Raises:")
+            for exc in data["raises"]:
+                docstring_lines.append(f"    {exc.get('type', 'Exception')}: {exc.get('description', '')}")
+        
+        return "\n".join(docstring_lines).strip()
+    
+    async def _check_cache(self, cache_key: str) -> Optional[Tuple[str, str]]:
         """
-        Process source code to generate and embed documentation.
+        Check if result is available in cache.
 
         Args:
-            source_code: Source code to process
-            node: Optional AST node for context
-            cache_key: Optional cache key
+            cache_key: The cache key to check
 
         Returns:
-            Tuple[str, str]: Updated code and documentation
+            Optional[Tuple[str, str]]: Cached code and documentation if available
         """
-        operation_start = datetime.now()
+        try:
+            if not self.cache:
+                return None
+                
+            logger.debug(f"Checking cache for key: {cache_key}")
+            cached_data = await self.cache.get_cached_docstring(cache_key)
+            
+            if cached_data and isinstance(cached_data, dict):
+                code = cached_data.get('code')
+                docs = cached_data.get('docs')
+                if code and docs:
+                    logger.info(f"Cache hit for key: {cache_key}")
+                    return code, docs
+                
+            logger.debug(f"Cache miss for key: {cache_key}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Cache check failed: {str(e)}")
+            raise CacheError(f"Failed to check cache: {str(e)}")
 
+    async def _cache_result(
+        self,
+        cache_key: str,
+        code: str,
+        documentation: str
+    ) -> None:
+        """
+        Cache the processing result.
+
+        Args:
+            cache_key: The cache key
+            code: The processed code
+            documentation: The generated documentation
+        """
+        try:
+            if not self.cache:
+                return
+                
+            await self.cache.save_docstring(
+                cache_key,
+                {
+                    'code': code,
+                    'docs': documentation
+                }
+            )
+            logger.debug(f"Cached result for key: {cache_key}")
+            
+        except Exception as e:
+            logger.error(f"Failed to cache result: {str(e)}")
+            logger.warning("Continuing without caching")
+            
+    async def process_code(self, source_code: str, cache_key: Optional[str] = None) -> Tuple[str, str]:
+        """Process source code to generate documentation."""
         try:
             if not source_code or not source_code.strip():
                 raise ValidationError("Empty source code provided")
@@ -329,129 +353,56 @@ class AIInteractionHandler:
                 except CacheError as e:
                     logger.warning(f"Cache error, proceeding without cache: {str(e)}")
 
-            # Extract metadata
-            metadata = self.docstring_processor.process_node(
-                node or ast.parse(source_code),
-                source_code
-            ).extraction_context
-
             # Generate documentation
-            result = await self._generate_documentation(source_code, metadata, node)
+            result = await self._generate_documentation(source_code, {})
             if not result or not result.content:
                 raise ProcessingError("Documentation generation failed")
 
             # Update code with documentation
-            updated_code = await self._update_code(source_code, result.content)
-            if not updated_code:
-                raise ProcessingError("Code update failed")
+            updated_code = f'"""\n{result.content}\n"""\n\n{source_code}'
 
             # Cache result if enabled
             if self.cache and cache_key:
                 await self._cache_result(cache_key, updated_code, result.content)
 
-            # Track metrics
-            await self._track_metrics(operation_start, True, result.usage)
-
             return updated_code, result.content
 
         except Exception as e:
-            await self._track_error("ProcessingError", e, operation_start)
             logger.error(f"Process code failed: {str(e)}")
             raise
+        
+    def cleanup(self) -> None:
+        """Clean up temporary directory."""
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            try:
+                # Remove read-only attribute from Git files
+                for root, dirs, files in os.walk(self.temp_dir):
+                    for d in dirs:
+                        os.chmod(os.path.join(root, d), 0o777)
+                    for f in files:
+                        os.chmod(os.path.join(root, f), 0o777)
+                
+                shutil.rmtree(self.temp_dir, onerror=self._handle_remove_error)
+                logger.info(f"Cleaned up temporary directory: {self.temp_dir}")
+            except Exception as e:
+                logger.error(f"Error cleaning up directory: {e}")
 
-    async def _update_code(self, source_code: str, documentation: str) -> Optional[str]:
-        """Update source code with generated documentation."""
+    def _handle_remove_error(self, func, path, exc_info):
+        """
+        Error handler for shutil.rmtree.
+        
+        Args:
+            func: The function that failed
+            path: The path being processed
+            exc_info: Exception information
+        """
         try:
-            return f'"""\n{documentation}\n"""\n\n{source_code}'
+            os.chmod(path, 0o777)
+            func(path)
         except Exception as e:
-            logger.error(f"Code update failed: {str(e)}")
-            raise ProcessingError(f"Failed to update code: {str(e)}")
-
-    async def _cache_result(
-        self,
-        cache_key: str,
-        code: str,
-        documentation: str
-    ) -> None:
-        """Cache the processing result."""
-        try:
-            await self.cache.save_docstring(
-                cache_key,
-                {
-                    'code': code,
-                    'docs': documentation
-                }
-            )
-            logger.debug(f"Cached result for key: {cache_key}")
-        except Exception as e:
-            logger.error(f"Caching failed: {str(e)}")
-
-    async def _track_metrics(
-        self,
-        start_time: datetime,
-        success: bool,
-        usage: Dict[str, Any]
-    ) -> None:
-        """Track operation metrics."""
-        if self.metrics:
-            duration = (datetime.now() - start_time).total_seconds()
-            await self.metrics.track_operation(
-                operation_type='documentation_generation',
-                success=success,
-                duration=duration,
-                usage=usage
-            )
-        log_info(f"Operation metrics: success={success}, duration={duration}, usage={usage}")
-
-    async def _track_error(
-        self,
-        error_type: str,
-        error: Exception,
-        start_time: datetime
-    ) -> None:
-        """Track and log error metrics."""
-        if self.metrics:
-            duration = (datetime.now() - start_time).total_seconds()
-            await self.metrics.track_operation(
-                operation_type='documentation_generation',
-                success=False,
-                duration=duration,
-                error=f"{error_type}: {str(error)}"
-            )
-
-    async def _check_cache(
-        self,
-        cache_key: str
-    ) -> Optional[Tuple[str, str]]:
-        """Check if the result is cached."""
-        try:
-            cached_data = await self.cache.get_cached_docstring(cache_key)
-            if cached_data:
-                logger.debug(f"Cache hit for key: {cache_key}")
-                return cached_data['code'], cached_data['docs']
-            logger.debug(f"Cache miss for key: {cache_key}")
-            return None
-        except Exception as e:
-            logger.error(f"Error checking cache: {str(e)}")
-            raise CacheError(f"Cache check failed: {str(e)}")
-
-    async def close(self) -> None:
-        """Close the AI interaction handler and cleanup resources."""
-        try:
+            logger.warning(f"Failed to remove {path}: {e}")
+            
+    async def close(self):
+        """Close the AI interaction handler."""
+        if self.client:
             await self.client.close()
-            logger.info("AI Interaction Handler closed successfully")
-        except Exception as e:
-            logger.error(f"Error closing AI handler: {str(e)}")
-
-    async def __aenter__(self) -> 'AIInteractionHandler':
-        """Async context manager entry."""
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: Optional[type],
-        exc_val: Optional[Exception],
-        exc_tb: Optional[Any]
-    ) -> None:
-        """Async context manager exit."""
-        await self.close()
