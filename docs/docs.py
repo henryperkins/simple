@@ -13,21 +13,40 @@ from dataclasses import dataclass
 
 from core.logger import LoggerSetup, log_debug, log_error, log_info
 from core.docstring_processor import DocstringProcessor, DocstringData, DocumentationSection
-from docs.markdown_generator import MarkdownGenerator
+from markdown_generator import MarkdownGenerator
 
 logger = LoggerSetup.get_logger(__name__)
 
+
 class ValidationError(Exception):
     """Custom exception for validation errors."""
-    def __init__(self, message: str, errors: List[str]):
+
+    def __init__(self, message: str, errors: List[str]) -> None:
+        """
+        Initialize ValidationError with a message and list of errors.
+
+        Args:
+            message (str): Error message.
+            errors (List[str]): List of validation errors.
+        """
         super().__init__(message)
         self.errors = errors
 
+
 class DocumentationError(Exception):
     """Custom exception for documentation generation errors."""
-    def __init__(self, message: str, details: Dict[str, Any]):
+
+    def __init__(self, message: str, details: Dict[str, Any]) -> None:
+        """
+        Initialize DocumentationError with a message and error details.
+
+        Args:
+            message (str): Error message.
+            details (Dict[str, Any]): Additional error details.
+        """
         super().__init__(message)
         self.details = details
+
 
 @dataclass
 class DocumentationContext:
@@ -37,19 +56,20 @@ class DocumentationContext:
     include_source: bool = True
     metadata: Optional[Dict[str, Any]] = None
 
+
 class DocStringManager:
     """Manages docstring operations and documentation generation."""
 
-    def __init__(self, context: DocumentationContext, cache: Optional[Any] = None):
+    def __init__(self, context: DocumentationContext, cache: Optional[Any] = None) -> None:
         """
         Initialize DocStringManager with context and optional cache.
 
         Args:
-            context: Documentation generation context
-            cache: Optional cache implementation
+            context (DocumentationContext): Documentation generation context.
+            cache (Optional[Any]): Optional cache implementation.
         """
         self.context = context
-        self.tree = ast.parse(context.source_code)
+        self.tree: ast.Module = ast.parse(context.source_code)
         self.processor = DocstringProcessor()
         self.cache = cache
         self.changes: List[str] = []
@@ -64,19 +84,19 @@ class DocStringManager:
         Process and insert a docstring for an AST node.
 
         Args:
-            node: AST node to process
-            docstring_data: Structured docstring data
+            node (ast.AST): AST node to process.
+            docstring_data (DocstringData): Structured docstring data.
 
         Returns:
-            bool: Success status of the operation
+            bool: Success status of the operation.
 
         Raises:
-            ValidationError: If docstring validation fails
-            DocumentationError: If docstring insertion fails
+            ValidationError: If docstring validation fails.
+            DocumentationError: If docstring insertion fails.
         """
         try:
             cache_key = f"validation:{hash(str(docstring_data))}"
-            
+
             # Check cache
             if self.cache:
                 cached_result = await self.cache.get_cached_docstring(cache_key)
@@ -93,14 +113,14 @@ class DocStringManager:
             if self.processor.insert(node, docstring):
                 node_name = getattr(node, 'name', 'unknown')
                 self.changes.append(f"Updated docstring for {node_name}")
-                
+
                 # Cache successful result
                 if self.cache:
                     await self.cache.save_docstring(cache_key, {
                         'docstring': docstring,
                         'valid': True
                     })
-                
+
                 return True
 
             return False
@@ -120,30 +140,31 @@ class DocStringManager:
         Generate complete documentation for the current context.
 
         Returns:
-            str: Generated documentation in markdown format
+            str: Generated documentation in markdown format.
 
         Raises:
-            DocumentationError: If documentation generation fails
+            DocumentationError: If documentation generation fails.
         """
         try:
             # Prepare documentation sections
-            sections = []
-            
+            sections: List[DocumentationSection] = []
+
             # Module documentation
             if self.context.metadata:
                 sections.append(self._create_module_section())
 
             # Classes documentation
-            class_nodes = [n for n in ast.walk(self.tree) 
-                         if isinstance(n, ast.ClassDef)]
+            class_nodes = [n for n in ast.walk(self.tree)
+                           if isinstance(n, ast.ClassDef)]
             for node in class_nodes:
                 sections.append(await self._create_class_section(node))
 
             # Functions documentation
-            function_nodes = [n for n in ast.walk(self.tree) 
-                            if isinstance(n, ast.FunctionDef)]
+            function_nodes = [n for n in ast.walk(self.tree)
+                              if isinstance(n, ast.FunctionDef)]
             for node in function_nodes:
-                sections.append(await self._create_function_section(node))
+                if not self._is_method(node):
+                    sections.append(await self._create_function_section(node))
 
             # Generate markdown
             return self.markdown_generator.generate(
@@ -161,7 +182,12 @@ class DocStringManager:
             )
 
     def _create_module_section(self) -> DocumentationSection:
-        """Create module-level documentation section."""
+        """
+        Create module-level documentation section.
+
+        Returns:
+            DocumentationSection: Module documentation section.
+        """
         return DocumentationSection(
             title="Module Overview",
             content=self.context.metadata.get('description', ''),
@@ -169,16 +195,24 @@ class DocStringManager:
                 DocumentationSection(
                     title="Module Information",
                     content=f"Path: {self.context.module_path}\n"
-                           f"Last Modified: {self.context.metadata.get('last_modified', 'Unknown')}"
+                            f"Last Modified: {self.context.metadata.get('last_modified', 'Unknown')}"
                 )
             ]
         )
 
     async def _create_class_section(self, node: ast.ClassDef) -> DocumentationSection:
-        """Create class documentation section."""
+        """
+        Create class documentation section.
+
+        Args:
+            node (ast.ClassDef): Class definition node.
+
+        Returns:
+            DocumentationSection: Class documentation section.
+        """
         docstring_data = self.processor.parse(ast.get_docstring(node) or '')
-        
-        methods_sections = []
+
+        methods_sections: List[DocumentationSection] = []
         for method in [n for n in node.body if isinstance(n, ast.FunctionDef)]:
             methods_sections.append(await self._create_function_section(method))
 
@@ -198,9 +232,17 @@ class DocStringManager:
         self,
         node: ast.FunctionDef
     ) -> DocumentationSection:
-        """Create function documentation section."""
+        """
+        Create function documentation section.
+
+        Args:
+            node (ast.FunctionDef): Function definition node.
+
+        Returns:
+            DocumentationSection: Function documentation section.
+        """
         docstring_data = self.processor.parse(ast.get_docstring(node) or '')
-        
+
         return DocumentationSection(
             title=f"{'Method' if self._is_method(node) else 'Function'}: {node.name}",
             content=self.processor.format(docstring_data),
@@ -213,17 +255,35 @@ class DocStringManager:
         )
 
     def _is_method(self, node: ast.FunctionDef) -> bool:
-        """Check if a function node is a method."""
-        return any(isinstance(parent, ast.ClassDef) 
-                  for parent in ast.walk(self.tree) 
-                  if hasattr(parent, 'body') and node in parent.body)
+        """
+        Check if a function node is a method.
+
+        Args:
+            node (ast.FunctionDef): Function node to check.
+
+        Returns:
+            bool: True if the function is a method of a class, False otherwise.
+        """
+        return any(
+            isinstance(parent, ast.ClassDef) and node in parent.body
+            for parent in ast.walk(self.tree)
+        )
 
     async def _handle_cached_result(
         self,
         node: ast.AST,
         cached_result: Dict[str, Any]
     ) -> bool:
-        """Handle cached docstring result."""
+        """
+        Handle cached docstring result.
+
+        Args:
+            node (ast.AST): AST node to insert docstring into.
+            cached_result (Dict[str, Any]): Cached docstring result.
+
+        Returns:
+            bool: True if insertion was successful, False otherwise.
+        """
         if cached_result.get('valid'):
             return self.processor.insert(node, cached_result['docstring'])
         return False
