@@ -3,9 +3,8 @@ Core docstring processing module with integrated metrics and extraction capabili
 """
 
 import ast
-from typing import Dict, List, Optional, Any, Union
+from typing import List, Dict, Any, Optional, Union
 from dataclasses import dataclass
-from jsonschema import validate, ValidationError
 from core.logger import LoggerSetup
 from core.metrics import Metrics
 from core.code_extraction import CodeExtractor, ExtractedFunction, ExtractedClass
@@ -255,6 +254,79 @@ class DocstringProcessor:
         except Exception as e:
             logger.error(f"Error parsing docstring: {e}")
             return DocstringData("", "", [], {}, [])
+
+    def _parse_args_section(self, docstring: str) -> List[Dict[str, str]]:
+        """
+        Parse the Args section of a docstring.
+        
+        Args:
+            docstring (str): The full docstring text
+            
+        Returns:
+            List[Dict[str, str]]: List of argument dictionaries with 'name', 'type', and 'description'
+        """
+        args = []
+        try:
+            # Extract the Args section
+            args_section = docstring.split("Args:")[1].split("\n\n")[0]
+            
+            # Process each argument line
+            for line in args_section.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # Expected format: arg_name (arg_type): description
+                if ":" in line:
+                    arg_parts = line.split(":", 1)
+                    name_type = arg_parts[0].strip()
+                    description = arg_parts[1].strip()
+                    
+                    # Extract type if present
+                    if "(" in name_type and ")" in name_type:
+                        name = name_type.split("(")[0].strip()
+                        arg_type = name_type.split("(")[1].split(")")[0].strip()
+                    else:
+                        name = name_type
+                        arg_type = "Any"
+                        
+                    args.append({
+                        "name": name,
+                        "type": arg_type,
+                        "description": description
+                    })
+        except Exception as e:
+            logger.warning(f"Error parsing args section: {e}")
+            
+        return args
+
+    def _parse_returns_section(self, docstring: str) -> Dict[str, str]:
+        """Parse the Returns section of a docstring."""
+        try:
+            returns_section = docstring.split("Returns:")[1].split("\n\n")[0].strip()
+            if "(" in returns_section and ")" in returns_section:
+                return_type = returns_section.split("(")[1].split(")")[0].strip()
+                description = returns_section.split(")")[1].strip(": ")
+            else:
+                return_type = "Any"
+                description = returns_section
+            return {"type": return_type, "description": description}
+        except Exception as e:
+            logger.warning(f"Error parsing returns section: {e}")
+            return {"type": "Any", "description": ""}
+
+    def _parse_raises_section(self, docstring: str) -> List[str]:
+        """Parse the Raises section of a docstring."""
+        raises = []
+        try:
+            raises_section = docstring.split("Raises:")[1].split("\n\n")[0]
+            for line in raises_section.split("\n"):
+                line = line.strip()
+                if line:
+                    raises.append(line)
+        except Exception as e:
+            logger.warning(f"Error parsing raises section: {e}")
+        return raises
 
     def format(self, docstring_data: DocstringData) -> str:
         """

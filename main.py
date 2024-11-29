@@ -25,7 +25,6 @@ from exceptions import (
     ValidationError
 )
 
-# Load environment variables
 load_dotenv()
 
 # Debug: Print the Azure OpenAI endpoint to verify it's loaded correctly
