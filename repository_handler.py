@@ -3,6 +3,9 @@ Repository handling module for cloning and managing git repositories.
 """
 
 import os
+import stat
+import time
+import sys
 import shutil
 import tempfile
 from pathlib import Path
@@ -101,13 +104,40 @@ class RepositoryHandler:
         return content, relative_path
 
     def cleanup(self) -> None:
-        """Clean up temporary directory."""
-        if self.temp_dir and os.path.exists(self.temp_dir):
-            try:
-                shutil.rmtree(self.temp_dir)
-                logger.info(f"Cleaned up temporary directory: {self.temp_dir}")
-            except Exception as e:
-                logger.error(f"Error cleaning up directory: {e}")
+        """Clean up temporary repository files."""
+        if self.repo_path:
+            self._cleanup_git_directory(Path(self.repo_path))
+            self.repo_path = None
+
+    def _cleanup_git_directory(self, path: Path) -> None:
+        """Safely clean up a Git repository directory."""
+        try:
+            # Kill any running Git processes
+            if sys.platform == 'win32':
+                os.system('taskkill /F /IM git.exe 2>NUL')
+            
+            # Add delay to ensure process termination
+            time.sleep(1)
+            
+            # Remove read-only attributes recursively
+            def remove_readonly(func, path, _):
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+                
+            # Attempt cleanup with retry
+            for attempt in range(3):
+                try:
+                    if path.exists():
+                        shutil.rmtree(path, onerror=remove_readonly)
+                    break
+                except PermissionError:
+                    if attempt < 2:
+                        time.sleep(2)
+                    else:
+                        logger.warning(f"Could not remove directory: {path}")
+                        
+        except Exception as e:
+            logger.error(f"Error during cleanup: {str(e)}")
 
     def _is_valid_git_url(self, url: str) -> bool:
         """

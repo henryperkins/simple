@@ -4,14 +4,14 @@ Main Application Module
 Orchestrates the documentation generation process using Azure OpenAI,
 handling configuration, initialization, and cleanup of components.
 """
-from dotenv import load_dotenv
-load_dotenv()
+import os
 import asyncio
 import sys
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict, Any
 import argparse
 import ast
+from dotenv import load_dotenv
 from core.logger import LoggerSetup
 from core.cache import Cache
 from core.monitoring import MetricsCollector
@@ -25,8 +25,15 @@ from exceptions import (
     ValidationError
 )
 
+# Load environment variables
+load_dotenv()
+
+# Debug: Print the Azure OpenAI endpoint to verify it's loaded correctly
+print("Azure OpenAI Endpoint:", os.getenv("AZURE_OPENAI_ENDPOINT"))
+
 # Initialize logger and load configuration
 logger = LoggerSetup.get_logger(__name__)
+
 
 class DocumentationGenerator:
     """
@@ -86,7 +93,9 @@ class DocumentationGenerator:
 
         except Exception as e:
             logger.error(f"Initialization failed: {str(e)}")
-            raise ConfigurationError(f"Failed to initialize components: {str(e)}")
+            raise ConfigurationError(
+                f"Failed to initialize components: {str(e)}"
+            )
 
     async def cleanup(self) -> None:
         """Cleanup and close all components."""
@@ -162,7 +171,6 @@ class DocumentationGenerator:
         if metadata is None:
             metadata = {}
             
-        node_type = type(node).__name__
         node_name = getattr(node, 'name', 'unknown')
         
         template = [
@@ -240,6 +248,7 @@ class DocumentationGenerator:
             except Exception as e:
                 logger.error(f"Failed to process file {file_path}: {str(e)}")
 
+
 async def process_repository(args: argparse.Namespace) -> int:
     """
     Process repository for documentation generation.
@@ -282,6 +291,7 @@ async def process_repository(args: argparse.Namespace) -> int:
         await generator.cleanup()
         repo_handler.cleanup()
 
+
 async def main(args: argparse.Namespace) -> int:
     """
     Main application entry point for processing local files.
@@ -314,6 +324,7 @@ async def main(args: argparse.Namespace) -> int:
     finally:
         await generator.cleanup()
 
+
 def parse_arguments() -> argparse.Namespace:
     """
     Parse command line arguments.
@@ -335,6 +346,7 @@ def parse_arguments() -> argparse.Namespace:
         help='Python files to process (alternative to repository)'
     )
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     try:
