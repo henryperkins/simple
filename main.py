@@ -148,17 +148,20 @@ class DocumentationGenerator:
             logger.error(f"Unexpected error processing file {file_path}: {str(e)}")
             raise ProcessingError(f"File processing failed: {str(e)}")
 
-    def _create_test_template(self, node: ast.AST, metadata: Dict[str, Any]) -> str:
+    def _create_test_template(self, node: ast.AST, metadata: Dict[str, Any] = None) -> str:
         """
         Create a test template for the given node.
         
         Args:
             node: AST node to generate test template for
-            metadata: Additional metadata about the node
+            metadata: Additional metadata about the node (default: None)
             
         Returns:
             str: Generated test template
         """
+        if metadata is None:
+            metadata = {}
+            
         node_type = type(node).__name__
         node_name = getattr(node, 'name', 'unknown')
         
@@ -167,7 +170,7 @@ class DocumentationGenerator:
             "    # Setup",
             "    # TODO: Initialize test data and dependencies",
             "",
-            "    # Exercise",
+            "    # Exercise", 
             f"    # TODO: Call {node_name} with test inputs",
             "",
             "    # Verify",
@@ -187,6 +190,7 @@ class DocumentationGenerator:
             ])
             
         return "\n    ".join(template)
+
     async def save_results(self, file_path: Path, updated_code: str, documentation: str) -> None:
         """
         Save processing results to files.
