@@ -22,6 +22,7 @@ from core.docstring_processor import (
 from api.token_management import TokenManager
 from api.api_client import APIClient
 from exceptions import ValidationError, ProcessingError, CacheError
+from docs.markdown_generator import MarkdownGenerator, MarkdownConfig
 
 logger = LoggerSetup.get_logger(__name__)
 config = AzureOpenAIConfig.from_env()
@@ -61,6 +62,7 @@ class AIInteractionHandler:
             )
             self.client = APIClient()
             self.docstring_processor = DocstringProcessor()
+            self.markdown_generator = MarkdownGenerator(MarkdownConfig())
             self._initialize_tools()
             logger.info("AI Interaction Handler initialized successfully")
 
@@ -402,6 +404,750 @@ class AIInteractionHandler:
         """Close the AI interaction handler."""
         if self.client:
             await self.client.close()
+
+    async def generate_markdown_documentation(
+        self,
+        source_code: str,
+        metadata: Dict[str, Any],
+        node: Optional[ast.AST] = None
+    ) -> Optional[ProcessingResult]:
+        """Generate markdown documentation using Azure OpenAI with function calling."""
+        try:
+            prompt = self._create_documentation_prompt(source_code, metadata, node)
+            start_time = datetime.now()
+
+            response, usage = await self.client.process_request(
+                prompt=prompt,
+                temperature=0.3,  # Lower temperature for more consistent output
+                max_tokens=2000,  # Increase max tokens for longer documentation
+                tools=[self.docstring_tool],
+                tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
+            )
+
+            if not response:
+                logger.error("No response received from API")
+                return None
+
+            processing_time = (datetime.now() - start_time).total_seconds()
+
+            # Extract message content from various response formats
+            message_content = None
+            if isinstance(response, dict):
+                # Direct message format
+                message_content = response.get("content")
+                
+                # Check in message object
+                if not message_content and "message" in response:
+                    message_content = response["message"].get("content")
+                
+                # Check in choices array
+                if not message_content and "choices" in response and response["choices"]:
+                    choice = response["choices"][0]
+                    if isinstance(choice, dict):
+                        if "message" in choice:
+                            message_content = choice["message"].get("content")
+                        else:
+                            message_content = choice.get("content")
+
+            # Create docstring data structure
+            docstring_data = {
+                "summary": message_content[:100] if message_content else "Generated documentation",
+                "description": message_content if message_content else source_code,
+                "args": [],
+                "returns": {"type": "Any", "description": "Documentation generation result"}
+            }
+
+            # Try to extract function call data if available
+            function_data = None
+            if "tool_calls" in response:
+                tool_calls = response.get("tool_calls", [])
+                if tool_calls:
+                    function_data = tool_calls[0].get("function", {})
+            elif "function_call" in response:
+                function_data = {
+                    'name': response["function_call"].get("name"),
+                    'arguments': response["function_call"].get("arguments")
+                }
+            elif "message" in response and "function_call" in response.get("message", {}):
+                function_data = response["message"]["function_call"]
+            elif "choices" in response and response["choices"]:
+                choice = response["choices"][0]
+                if "message" in choice and "function_call" in choice["message"]:
+                    function_data = choice["message"]["function_call"]
+
+            # Process function data if available
+            if function_data and function_data.get("arguments"):
+                try:
+                    if isinstance(function_data["arguments"], str):
+                        parsed_args = json.loads(function_data["arguments"])
+                    else:
+                        parsed_args = function_data["arguments"]
+                    docstring_data.update(parsed_args)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Could not parse function arguments: {e}")
+
+            # Return processed result
+            return ProcessingResult(
+                content=self._format_docstring(docstring_data),
+                usage=usage or {},
+                processing_time=processing_time
+            )
+        except Exception as e:
+            logger.error(f"Documentation generation failed: {str(e)}")
+            raise ProcessingError(f"Failed to generate documentation: {str(e)}")
+
+    async def process_code_with_markdown(self, source_code: str, cache_key: Optional[str] = None) -> Tuple[str, str]:
+        """Process source code to generate markdown documentation."""
+        try:
+            if not source_code or not source_code.strip():
+                raise ValidationError("Empty source code provided")
+
+            # Check cache if enabled
+            if self.cache and cache_key:
+                try:
+                    cached_result = await self._check_cache(cache_key)
+                    if cached_result:
+                        return cached_result
+                except CacheError as e:
+                    logger.warning(f"Cache error, proceeding without cache: {str(e)}")
+
+            # Generate documentation
+            result = await self.generate_markdown_documentation(source_code, {})
+            if not result or not result.content:
+                raise ProcessingError("Documentation generation failed")
+
+            # Update code with documentation
+            updated_code = f'"""\n{result.content}\n"""\n\n{source_code}'
+
+            # Cache result if enabled
+            if self.cache and cache_key:
+                await self._cache_result(cache_key, updated_code, result.content)
+
+            return updated_code, result.content
+
+        except Exception as e:
+            logger.error(f"Process code failed: {str(e)}")
+            raise
+
+    async def generate_markdown_documentation(
+        self,
+        source_code: str,
+        metadata: Dict[str, Any],
+        node: Optional[ast.AST] = None
+    ) -> Optional[ProcessingResult]:
+        """Generate markdown documentation using Azure OpenAI with function calling."""
+        try:
+            prompt = self._create_documentation_prompt(source_code, metadata, node)
+            start_time = datetime.now()
+
+            response, usage = await self.client.process_request(
+                prompt=prompt,
+                temperature=0.3,  # Lower temperature for more consistent output
+                max_tokens=2000,  # Increase max tokens for longer documentation
+                tools=[self.docstring_tool],
+                tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
+            )
+
+            if not response:
+                logger.error("No response received from API")
+                return None
+
+            processing_time = (datetime.now() - start_time).total_seconds()
+
+            # Extract message content from various response formats
+            message_content = None
+            if isinstance(response, dict):
+                # Direct message format
+                message_content = response.get("content")
+                
+                # Check in message object
+                if not message_content and "message" in response:
+                    message_content = response["message"].get("content")
+                
+                # Check in choices array
+                if not message_content and "choices" in response and response["choices"]:
+                    choice = response["choices"][0]
+                    if isinstance(choice, dict):
+                        if "message" in choice:
+                            message_content = choice["message"].get("content")
+                        else:
+                            message_content = choice.get("content")
+
+            # Create docstring data structure
+            docstring_data = {
+                "summary": message_content[:100] if message_content else "Generated documentation",
+                "description": message_content if message_content else source_code,
+                "args": [],
+                "returns": {"type": "Any", "description": "Documentation generation result"}
+            }
+
+            # Try to extract function call data if available
+            function_data = None
+            if "tool_calls" in response:
+                tool_calls = response.get("tool_calls", [])
+                if tool_calls:
+                    function_data = tool_calls[0].get("function", {})
+            elif "function_call" in response:
+                function_data = {
+                    'name': response["function_call"].get("name"),
+                    'arguments': response["function_call"].get("arguments")
+                }
+            elif "message" in response and "function_call" in response.get("message", {}):
+                function_data = response["message"]["function_call"]
+            elif "choices" in response and response["choices"]:
+                choice = response["choices"][0]
+                if "message" in choice and "function_call" in choice["message"]:
+                    function_data = choice["message"]["function_call"]
+
+            # Process function data if available
+            if function_data and function_data.get("arguments"):
+                try:
+                    if isinstance(function_data["arguments"], str):
+                        parsed_args = json.loads(function_data["arguments"])
+                    else:
+                        parsed_args = function_data["arguments"]
+                    docstring_data.update(parsed_args)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Could not parse function arguments: {e}")
+
+            # Return processed result
+            return ProcessingResult(
+                content=self._format_docstring(docstring_data),
+                usage=usage or {},
+                processing_time=processing_time
+            )
+        except Exception as e:
+            logger.error(f"Documentation generation failed: {str(e)}")
+            raise ProcessingError(f"Failed to generate documentation: {str(e)}")
+
+    async def process_code_with_markdown(self, source_code: str, cache_key: Optional[str] = None) -> Tuple[str, str]:
+        """Process source code to generate markdown documentation."""
+        try:
+            if not source_code or not source_code.strip():
+                raise ValidationError("Empty source code provided")
+
+            # Check cache if enabled
+            if self.cache and cache_key:
+                try:
+                    cached_result = await self._check_cache(cache_key)
+                    if cached_result:
+                        return cached_result
+                except CacheError as e:
+                    logger.warning(f"Cache error, proceeding without cache: {str(e)}")
+
+            # Generate documentation
+            result = await self.generate_markdown_documentation(source_code, {})
+            if not result or not result.content:
+                raise ProcessingError("Documentation generation failed")
+
+            # Update code with documentation
+            updated_code = f'"""\n{result.content}\n"""\n\n{source_code}'
+
+            # Cache result if enabled
+            if self.cache and cache_key:
+                await self._cache_result(cache_key, updated_code, result.content)
+
+            return updated_code, result.content
+
+        except Exception as e:
+            logger.error(f"Process code failed: {str(e)}")
+            raise
+
+    async def generate_markdown_documentation(
+        self,
+        source_code: str,
+        metadata: Dict[str, Any],
+        node: Optional[ast.AST] = None
+    ) -> Optional[ProcessingResult]:
+        """Generate markdown documentation using Azure OpenAI with function calling."""
+        try:
+            prompt = self._create_documentation_prompt(source_code, metadata, node)
+            start_time = datetime.now()
+
+            response, usage = await self.client.process_request(
+                prompt=prompt,
+                temperature=0.3,  # Lower temperature for more consistent output
+                max_tokens=2000,  # Increase max tokens for longer documentation
+                tools=[self.docstring_tool],
+                tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
+            )
+
+            if not response:
+                logger.error("No response received from API")
+                return None
+
+            processing_time = (datetime.now() - start_time).total_seconds()
+
+            # Extract message content from various response formats
+            message_content = None
+            if isinstance(response, dict):
+                # Direct message format
+                message_content = response.get("content")
+                
+                # Check in message object
+                if not message_content and "message" in response:
+                    message_content = response["message"].get("content")
+                
+                # Check in choices array
+                if not message_content and "choices" in response and response["choices"]:
+                    choice = response["choices"][0]
+                    if isinstance(choice, dict):
+                        if "message" in choice:
+                            message_content = choice["message"].get("content")
+                        else:
+                            message_content = choice.get("content")
+
+            # Create docstring data structure
+            docstring_data = {
+                "summary": message_content[:100] if message_content else "Generated documentation",
+                "description": message_content if message_content else source_code,
+                "args": [],
+                "returns": {"type": "Any", "description": "Documentation generation result"}
+            }
+
+            # Try to extract function call data if available
+            function_data = None
+            if "tool_calls" in response:
+                tool_calls = response.get("tool_calls", [])
+                if tool_calls:
+                    function_data = tool_calls[0].get("function", {})
+            elif "function_call" in response:
+                function_data = {
+                    'name': response["function_call"].get("name"),
+                    'arguments': response["function_call"].get("arguments")
+                }
+            elif "message" in response and "function_call" in response.get("message", {}):
+                function_data = response["message"]["function_call"]
+            elif "choices" in response and response["choices"]:
+                choice = response["choices"][0]
+                if "message" in choice and "function_call" in choice["message"]:
+                    function_data = choice["message"]["function_call"]
+
+            # Process function data if available
+            if function_data and function_data.get("arguments"):
+                try:
+                    if isinstance(function_data["arguments"], str):
+                        parsed_args = json.loads(function_data["arguments"])
+                    else:
+                        parsed_args = function_data["arguments"]
+                    docstring_data.update(parsed_args)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Could not parse function arguments: {e}")
+
+            # Return processed result
+            return ProcessingResult(
+                content=self._format_docstring(docstring_data),
+                usage=usage or {},
+                processing_time=processing_time
+            )
+        except Exception as e:
+            logger.error(f"Documentation generation failed: {str(e)}")
+            raise ProcessingError(f"Failed to generate documentation: {str(e)}")
+
+    async def process_code_with_markdown(self, source_code: str, cache_key: Optional[str] = None) -> Tuple[str, str]:
+        """Process source code to generate markdown documentation."""
+        try:
+            if not source_code or not source_code.strip():
+                raise ValidationError("Empty source code provided")
+
+            # Check cache if enabled
+            if self.cache and cache_key:
+                try:
+                    cached_result = await self._check_cache(cache_key)
+                    if cached_result:
+                        return cached_result
+                except CacheError as e:
+                    logger.warning(f"Cache error, proceeding without cache: {str(e)}")
+
+            # Generate documentation
+            result = await self.generate_markdown_documentation(source_code, {})
+            if not result or not result.content:
+                raise ProcessingError("Documentation generation failed")
+
+            # Update code with documentation
+            updated_code = f'"""\n{result.content}\n"""\n\n{source_code}'
+
+            # Cache result if enabled
+            if self.cache and cache_key:
+                await self._cache_result(cache_key, updated_code, result.content)
+
+            return updated_code, result.content
+
+        except Exception as e:
+            logger.error(f"Process code failed: {str(e)}")
+            raise
+
+    async def generate_markdown_documentation(
+        self,
+        source_code: str,
+        metadata: Dict[str, Any],
+        node: Optional[ast.AST] = None
+    ) -> Optional[ProcessingResult]:
+        """Generate markdown documentation using Azure OpenAI with function calling."""
+        try:
+            prompt = self._create_documentation_prompt(source_code, metadata, node)
+            start_time = datetime.now()
+
+            response, usage = await self.client.process_request(
+                prompt=prompt,
+                temperature=0.3,  # Lower temperature for more consistent output
+                max_tokens=2000,  # Increase max tokens for longer documentation
+                tools=[self.docstring_tool],
+                tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
+            )
+
+            if not response:
+                logger.error("No response received from API")
+                return None
+
+            processing_time = (datetime.now() - start_time).total_seconds()
+
+            # Extract message content from various response formats
+            message_content = None
+            if isinstance(response, dict):
+                # Direct message format
+                message_content = response.get("content")
+                
+                # Check in message object
+                if not message_content and "message" in response:
+                    message_content = response["message"].get("content")
+                
+                # Check in choices array
+                if not message_content and "choices" in response and response["choices"]:
+                    choice = response["choices"][0]
+                    if isinstance(choice, dict):
+                        if "message" in choice:
+                            message_content = choice["message"].get("content")
+                        else:
+                            message_content = choice.get("content")
+
+            # Create docstring data structure
+            docstring_data = {
+                "summary": message_content[:100] if message_content else "Generated documentation",
+                "description": message_content if message_content else source_code,
+                "args": [],
+                "returns": {"type": "Any", "description": "Documentation generation result"}
+            }
+
+            # Try to extract function call data if available
+            function_data = None
+            if "tool_calls" in response:
+                tool_calls = response.get("tool_calls", [])
+                if tool_calls:
+                    function_data = tool_calls[0].get("function", {})
+            elif "function_call" in response:
+                function_data = {
+                    'name': response["function_call"].get("name"),
+                    'arguments': response["function_call"].get("arguments")
+                }
+            elif "message" in response and "function_call" in response.get("message", {}):
+                function_data = response["message"]["function_call"]
+            elif "choices" in response and response["choices"]:
+                choice = response["choices"][0]
+                if "message" in choice and "function_call" in choice["message"]:
+                    function_data = choice["message"]["function_call"]
+
+            # Process function data if available
+            if function_data and function_data.get("arguments"):
+                try:
+                    if isinstance(function_data["arguments"], str):
+                        parsed_args = json.loads(function_data["arguments"])
+                    else:
+                        parsed_args = function_data["arguments"]
+                    docstring_data.update(parsed_args)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Could not parse function arguments: {e}")
+
+            # Return processed result
+            return ProcessingResult(
+                content=self._format_docstring(docstring_data),
+                usage=usage or {},
+                processing_time=processing_time
+            )
+        except Exception as e:
+            logger.error(f"Documentation generation failed: {str(e)}")
+            raise ProcessingError(f"Failed to generate documentation: {str(e)}")
+
+    async def process_code_with_markdown(self, source_code: str, cache_key: Optional[str] = None) -> Tuple[str, str]:
+        """Process source code to generate markdown documentation."""
+        try:
+            if not source_code or not source_code.strip():
+                raise ValidationError("Empty source code provided")
+
+            # Check cache if enabled
+            if self.cache and cache_key:
+                try:
+                    cached_result = await self._check_cache(cache_key)
+                    if cached_result:
+                        return cached_result
+                except CacheError as e:
+                    logger.warning(f"Cache error, proceeding without cache: {str(e)}")
+
+            # Generate documentation
+            result = await self.generate_markdown_documentation(source_code, {})
+            if not result or not result.content:
+                raise ProcessingError("Documentation generation failed")
+
+            # Update code with documentation
+            updated_code = f'"""\n{result.content}\n"""\n\n{source_code}'
+
+            # Cache result if enabled
+            if self.cache and cache_key:
+                await self._cache_result(cache_key, updated_code, result.content)
+
+            return updated_code, result.content
+
+        except Exception as e:
+            logger.error(f"Process code failed: {str(e)}")
+            raise
+
+    async def generate_markdown_documentation(
+        self,
+        source_code: str,
+        metadata: Dict[str, Any],
+        node: Optional[ast.AST] = None
+    ) -> Optional[ProcessingResult]:
+        """Generate markdown documentation using Azure OpenAI with function calling."""
+        try:
+            prompt = self._create_documentation_prompt(source_code, metadata, node)
+            start_time = datetime.now()
+
+            response, usage = await self.client.process_request(
+                prompt=prompt,
+                temperature=0.3,  # Lower temperature for more consistent output
+                max_tokens=2000,  # Increase max tokens for longer documentation
+                tools=[self.docstring_tool],
+                tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
+            )
+
+            if not response:
+                logger.error("No response received from API")
+                return None
+
+            processing_time = (datetime.now() - start_time).total_seconds()
+
+            # Extract message content from various response formats
+            message_content = None
+            if isinstance(response, dict):
+                # Direct message format
+                message_content = response.get("content")
+                
+                # Check in message object
+                if not message_content and "message" in response:
+                    message_content = response["message"].get("content")
+                
+                # Check in choices array
+                if not message_content and "choices" in response and response["choices"]:
+                    choice = response["choices"][0]
+                    if isinstance(choice, dict):
+                        if "message" in choice:
+                            message_content = choice["message"].get("content")
+                        else:
+                            message_content = choice.get("content")
+
+            # Create docstring data structure
+            docstring_data = {
+                "summary": message_content[:100] if message_content else "Generated documentation",
+                "description": message_content if message_content else source_code,
+                "args": [],
+                "returns": {"type": "Any", "description": "Documentation generation result"}
+            }
+
+            # Try to extract function call data if available
+            function_data = None
+            if "tool_calls" in response:
+                tool_calls = response.get("tool_calls", [])
+                if tool_calls:
+                    function_data = tool_calls[0].get("function", {})
+            elif "function_call" in response:
+                function_data = {
+                    'name': response["function_call"].get("name"),
+                    'arguments': response["function_call"].get("arguments")
+                }
+            elif "message" in response and "function_call" in response.get("message", {}):
+                function_data = response["message"]["function_call"]
+            elif "choices" in response and response["choices"]:
+                choice = response["choices"][0]
+                if "message" in choice and "function_call" in choice["message"]:
+                    function_data = choice["message"]["function_call"]
+
+            # Process function data if available
+            if function_data and function_data.get("arguments"):
+                try:
+                    if isinstance(function_data["arguments"], str):
+                        parsed_args = json.loads(function_data["arguments"])
+                    else:
+                        parsed_args = function_data["arguments"]
+                    docstring_data.update(parsed_args)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Could not parse function arguments: {e}")
+
+            # Return processed result
+            return ProcessingResult(
+                content=self._format_docstring(docstring_data),
+                usage=usage or {},
+                processing_time=processing_time
+            )
+        except Exception as e:
+            logger.error(f"Documentation generation failed: {str(e)}")
+            raise ProcessingError(f"Failed to generate documentation: {str(e)}")
+
+    async def process_code_with_markdown(self, source_code: str, cache_key: Optional[str] = None) -> Tuple[str, str]:
+        """Process source code to generate markdown documentation."""
+        try:
+            if not source_code or not source_code.strip():
+                raise ValidationError("Empty source code provided")
+
+            # Check cache if enabled
+            if self.cache and cache_key:
+                try:
+                    cached_result = await self._check_cache(cache_key)
+                    if cached_result:
+                        return cached_result
+                except CacheError as e:
+                    logger.warning(f"Cache error, proceeding without cache: {str(e)}")
+
+            # Generate documentation
+            result = await self.generate_markdown_documentation(source_code, {})
+            if not result or not result.content:
+                raise ProcessingError("Documentation generation failed")
+
+            # Update code with documentation
+            updated_code = f'"""\n{result.content}\n"""\n\n{source_code}'
+
+            # Cache result if enabled
+            if self.cache and cache_key:
+                await self._cache_result(cache_key, updated_code, result.content)
+
+            return updated_code, result.content
+
+        except Exception as e:
+            logger.error(f"Process code failed: {str(e)}")
+            raise
+
+    async def generate_markdown_documentation(
+        self,
+        source_code: str,
+        metadata: Dict[str, Any],
+        node: Optional[ast.AST] = None
+    ) -> Optional[ProcessingResult]:
+        """Generate markdown documentation using Azure OpenAI with function calling."""
+        try:
+            prompt = self._create_documentation_prompt(source_code, metadata, node)
+            start_time = datetime.now()
+
+            response, usage = await self.client.process_request(
+                prompt=prompt,
+                temperature=0.3,  # Lower temperature for more consistent output
+                max_tokens=2000,  # Increase max tokens for longer documentation
+                tools=[self.docstring_tool],
+                tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
+            )
+
+            if not response:
+                logger.error("No response received from API")
+                return None
+
+            processing_time = (datetime.now() - start_time).total_seconds()
+
+            # Extract message content from various response formats
+            message_content = None
+            if isinstance(response, dict):
+                # Direct message format
+                message_content = response.get("content")
+                
+                # Check in message object
+                if not message_content and "message" in response:
+                    message_content = response["message"].get("content")
+                
+                # Check in choices array
+                if not message_content and "choices" in response and response["choices"]:
+                    choice = response["choices"][0]
+                    if isinstance(choice, dict):
+                        if "message" in choice:
+                            message_content = choice["message"].get("content")
+                        else:
+                            message_content = choice.get("content")
+
+            # Create docstring data structure
+            docstring_data = {
+                "summary": message_content[:100] if message_content else "Generated documentation",
+                "description": message_content if message_content else source_code,
+                "args": [],
+                "returns": {"type": "Any", "description": "Documentation generation result"}
+            }
+
+            # Try to extract function call data if available
+            function_data = None
+            if "tool_calls" in response:
+                tool_calls = response.get("tool_calls", [])
+                if tool_calls:
+                    function_data = tool_calls[0].get("function", {})
+            elif "function_call" in response:
+                function_data = {
+                    'name': response["function_call"].get("name"),
+                    'arguments': response["function_call"].get("arguments")
+                }
+            elif "message" in response and "function_call" in response.get("message", {}):
+                function_data = response["message"]["function_call"]
+            elif "choices" in response and response["choices"]:
+                choice = response["choices"][0]
+                if "message" in choice and "function_call" in choice["message"]:
+                    function_data = choice["message"]["function_call"]
+
+            # Process function data if available
+            if function_data and function_data.get("arguments"):
+                try:
+                    if isinstance(function_data["arguments"], str):
+                        parsed_args = json.loads(function_data["arguments"])
+                    else:
+                        parsed_args = function_data["arguments"]
+                    docstring_data.update(parsed_args)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Could not parse function arguments: {e}")
+
+            # Return processed result
+            return ProcessingResult(
+                content=self._format_docstring(docstring_data),
+                usage=usage or {},
+                processing_time=processing_time
+            )
+        except Exception as e:
+            logger.error(f"Documentation generation failed: {str(e)}")
+            raise ProcessingError(f"Failed to generate documentation: {str(e)}")
+
+    async def process_code_with_markdown(self, source_code: str, cache_key: Optional[str] = None) -> Tuple[str, str]:
+        """Process source code to generate markdown documentation."""
+        try:
+            if not source_code or not source_code.strip():
+                raise ValidationError("Empty source code provided")
+
+            # Check cache if enabled
+            if self.cache and cache_key:
+                try:
+                    cached_result = await self._check_cache(cache_key)
+                    if cached_result:
+                        return cached_result
+                except CacheError as e:
+                    logger.warning(f"Cache error, proceeding without cache: {str(e)}")
+
+            # Generate documentation
+            result = await self.generate_markdown_documentation(source_code, {})
+            if not result or not result.content:
+                raise ProcessingError("Documentation generation failed")
+
+            # Update code with documentation
+            updated_code = f'"""\n{result.content}\n"""\n\n{source_code}'
+
+            # Cache result if enabled
+            if self.cache and cache_key:
+                await self._cache_result(cache_key, updated_code, result.content)
+
+            return updated_code, result.content
+
+        except Exception as e:
+            logger.error(f"Process code failed: {str(e)}")
+            raise
 
     async def generate_markdown_documentation(
         self,

@@ -217,3 +217,70 @@ class MarkdownGenerator:
                 sections.append(section)  
   
         return self.generate(sections, include_source=self.config.include_source, source_code=source_code)  
+  
+    def generate_markdown_documentation(self, module_name: str, module_path: str, description: str, classes: List[Dict[str, Any]], functions: List[Dict[str, Any]], constants: List[Dict[str, Any]], recent_changes: List[str], source_code: str) -> str:
+        """
+        Generate markdown documentation using the specified template.
+
+        Args:
+            module_name (str): The name of the module.
+            module_path (str): The path to the module file.
+            description (str): Brief description of the module.
+            classes (List[Dict[str, Any]]): List of class information.
+            functions (List[Dict[str, Any]]): List of function information.
+            constants (List[Dict[str, Any]]): List of constant and variable information.
+            recent_changes (List[str]): List of recent changes.
+            source_code (str): The source code of the module.
+
+        Returns:
+            str: Generated markdown documentation.
+        """
+        md_lines: List[str] = []
+
+        # Module header
+        md_lines.append(f"# Module: {module_name}\n")
+        md_lines.append("## Overview")
+        md_lines.append(f"**File:** `{module_path}`")
+        md_lines.append(f"**Description:** {description}\n")
+
+        # Classes section
+        md_lines.append("## Classes\n")
+        md_lines.append("| Class | Inherits From | Complexity Score* |")
+        md_lines.append("|-------|---------------|------------------|")
+        for cls in classes:
+            md_lines.append(f"| `{cls['name']}` | `{cls['inherits_from']}` | {cls['complexity_score']} |")
+
+        # Class methods section
+        md_lines.append("\n### Class Methods\n")
+        md_lines.append("| Class | Method | Parameters | Returns | Complexity Score* |")
+        md_lines.append("|-------|--------|------------|---------|------------------|")
+        for cls in classes:
+            for method in cls['methods']:
+                md_lines.append(f"| `{cls['name']}` | `{method['name']}` | `{method['parameters']}` | `{method['returns']}` | {method['complexity_score']} |")
+
+        # Functions section
+        md_lines.append("\n## Functions\n")
+        md_lines.append("| Function | Parameters | Returns | Complexity Score* |")
+        md_lines.append("|----------|------------|---------|------------------|")
+        for func in functions:
+            md_lines.append(f"| `{func['name']}` | `{func['parameters']}` | `{func['returns']}` | {func['complexity_score']} |")
+
+        # Constants and Variables section
+        md_lines.append("\n## Constants and Variables\n")
+        md_lines.append("| Name | Type | Value |")
+        md_lines.append("|------|------|-------|")
+        for const in constants:
+            md_lines.append(f"| `{const['name']}` | `{const['type']}` | `{const['value']}` |")
+
+        # Recent Changes section
+        md_lines.append("\n## Recent Changes")
+        for change in recent_changes:
+            md_lines.append(f"- {change}")
+
+        # Source Code section
+        md_lines.append("\n## Source Code")
+        md_lines.append(f"```{self.config.code_language}")
+        md_lines.append(source_code)
+        md_lines.append("```")
+
+        return "\n".join(md_lines).strip()

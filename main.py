@@ -209,11 +209,15 @@ class DocumentationGenerator:
             documentation (str): Generated documentation
         """
         try:
+            # Ensure the output directory exists
+            output_dir = Path(self.config.output_directory)
+            output_dir.mkdir(parents=True, exist_ok=True)
+
             # Save updated code
             file_path.write_text(updated_code, encoding='utf-8')
 
-            # Save documentation to markdown file
-            doc_path = file_path.with_suffix('.md')
+            # Save documentation to markdown file in the output directory
+            doc_path = output_dir / f"{file_path.stem}.md"
             doc_path.write_text(documentation, encoding='utf-8')
 
             logger.info(f"Results saved for {file_path}")
