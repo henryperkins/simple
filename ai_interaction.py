@@ -145,7 +145,34 @@ class AIInteractionHandler:
 
             processing_time = (datetime.now() - start_time).total_seconds()
 
-            # Extract the function call data from the response
+            # Extract message content from various response formats
+            message_content = None
+            if isinstance(response, dict):
+                # Direct message format
+                message_content = response.get("content")
+                
+                # Check in message object
+                if not message_content and "message" in response:
+                    message_content = response["message"].get("content")
+                
+                # Check in choices array
+                if not message_content and "choices" in response and response["choices"]:
+                    choice = response["choices"][0]
+                    if isinstance(choice, dict):
+                        if "message" in choice:
+                            message_content = choice["message"].get("content")
+                        else:
+                            message_content = choice.get("content")
+
+            # Create docstring data structure
+            docstring_data = {
+                "summary": message_content[:100] if message_content else "Generated documentation",
+                "description": message_content if message_content else source_code,
+                "args": [],
+                "returns": {"type": "Any", "description": "Documentation generation result"}
+            }
+
+            # Try to extract function call data if available
             function_data = None
             if "tool_calls" in response:
                 tool_calls = response.get("tool_calls", [])
@@ -153,8 +180,8 @@ class AIInteractionHandler:
                     function_data = tool_calls[0].get("function", {})
             elif "function_call" in response:
                 function_data = {
-                    "name": response["function_call"].get("name"),
-                    "arguments": response["function_call"].get("arguments")
+                    'name': response["function_call"].get("name"),
+                    'arguments': response["function_call"].get("arguments")
                 }
             elif "message" in response and "function_call" in response.get("message", {}):
                 function_data = response["message"]["function_call"]
@@ -163,54 +190,23 @@ class AIInteractionHandler:
                 if "message" in choice and "function_call" in choice["message"]:
                     function_data = choice["message"]["function_call"]
 
-            if not function_data:
-                logger.error("No function call data found in response")
-                logger.debug(f"Response structure: {json.dumps(response, indent=2)}")
-                # Fallback to direct message content if available
-                if "content" in response.get("message", {}):
-                    # Create a basic docstring structure
-                    docstring_data = {
-                        "summary": response["message"]["content"][:100],
-                        "description": response["message"]["content"],
-                        "args": [],
-                        "returns": {"type": "None", "description": "None"}
-                    }
-                    return ProcessingResult(
-                        content=self._format_docstring(docstring_data),
-                        usage=usage or {},
-                        processing_time=processing_time
-                    )
-                return None
-
-            function_name = function_data.get("name")
-            function_args = function_data.get("arguments", "{}")
-
-            if function_name == "generate_docstring":
+            # Process function data if available
+            if function_data and function_data.get("arguments"):
                 try:
-                    # Handle case where arguments might be a string or already parsed
-                    if isinstance(function_args, str):
-                        docstring_data = json.loads(function_args)
+                    if isinstance(function_data["arguments"], str):
+                        parsed_args = json.loads(function_data["arguments"])
                     else:
-                        docstring_data = function_args
+                        parsed_args = function_data["arguments"]
+                    docstring_data.update(parsed_args)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Could not parse function arguments: {e}")
 
-                    # Ensure required fields exist
-                    if "summary" not in docstring_data:
-                        docstring_data["summary"] = ""
-                    if "description" not in docstring_data:
-                        docstring_data["description"] = docstring_data.get("summary", "")
-
-                    return ProcessingResult(
-                        content=self._format_docstring(docstring_data),
-                        usage=usage or {},
-                        processing_time=processing_time
-                    )
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse function arguments: {e}")
-                    logger.debug(f"Raw arguments: {function_args}")
-                    raise ProcessingError("Invalid JSON in function response")
-
-            raise ProcessingError(f"Unexpected function name: {function_name}")
-
+            # Return processed result
+            return ProcessingResult(
+                content=self._format_docstring(docstring_data),
+                usage=usage or {},
+                processing_time=processing_time
+            )
         except Exception as e:
             logger.error(f"Documentation generation failed: {str(e)}")
             raise ProcessingError(f"Failed to generate documentation: {str(e)}")

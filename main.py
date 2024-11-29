@@ -9,9 +9,9 @@ load_dotenv()
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Any
 import argparse
-
+import ast
 from core.logger import LoggerSetup
 from core.cache import Cache
 from core.monitoring import MetricsCollector
@@ -121,8 +121,12 @@ class DocumentationGenerator:
             # Read source code
             source_code = file_path.read_text(encoding='utf-8')
             if not source_code.strip():
-                raise ValidationError(f"Empty file: {file_path}")
-
+                # For test files, create a basic template if empty
+                if 'tests' in str(file_path) and str(file_path).endswith('.py'):
+                    source_code = self._create_test_template(file_path)
+                else:
+                    raise ValidationError(f"Empty file: {file_path}")
+                
             # Generate cache key
             cache_key = f"doc:{file_path.stem}:{hash(source_code)}"
 
@@ -144,6 +148,45 @@ class DocumentationGenerator:
             logger.error(f"Unexpected error processing file {file_path}: {str(e)}")
             raise ProcessingError(f"File processing failed: {str(e)}")
 
+    def _create_test_template(self, node: ast.AST, metadata: Dict[str, Any]) -> str:
+        """
+        Create a test template for the given node.
+        
+        Args:
+            node: AST node to generate test template for
+            metadata: Additional metadata about the node
+            
+        Returns:
+            str: Generated test template
+        """
+        node_type = type(node).__name__
+        node_name = getattr(node, 'name', 'unknown')
+        
+        template = [
+            f"def test_{node_name.lower()}():",
+            "    # Setup",
+            "    # TODO: Initialize test data and dependencies",
+            "",
+            "    # Exercise",
+            f"    # TODO: Call {node_name} with test inputs",
+            "",
+            "    # Verify",
+            "    # TODO: Add assertions to verify expected behavior",
+            "",
+            "    # Cleanup",
+            "    # TODO: Clean up any test resources"
+        ]
+        
+        if isinstance(node, ast.ClassDef):
+            template.extend([
+                "",
+                "    # Additional test cases:",
+                f"    # TODO: Add edge cases for {node_name}",
+                "    # TODO: Add error condition tests",
+                "    # TODO: Add integration tests if needed"
+            ])
+            
+        return "\n    ".join(template)
     async def save_results(self, file_path: Path, updated_code: str, documentation: str) -> None:
         """
         Save processing results to files.
