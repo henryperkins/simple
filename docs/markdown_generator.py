@@ -5,13 +5,14 @@ Generates formatted markdown documentation from documentation sections.
 """  
   
 from datetime import datetime  
-from typing import List, Optional  
+from typing import List, Optional, Dict, Any  
 from dataclasses import dataclass  
 import unicodedata  
 import re  
+import ast  
   
 from core.logger import LoggerSetup  
-from core.docstring_processor import DocumentationSection  
+from core.docstring_processor import DocumentationSection, DocstringProcessor, DocstringData  
   
 logger = LoggerSetup.get_logger(__name__)  
   
@@ -24,6 +25,7 @@ class MarkdownConfig:
     code_language: str = "python"  
     heading_offset: int = 0  
     max_heading_level: int = 6  # Prevent headings beyond h6  
+    include_source: bool = False  # Add this line to include source code snippets
   
   
 class MarkdownGenerator:  
@@ -188,3 +190,30 @@ class MarkdownGenerator:
         # Strip leading and trailing dashes  
         normalized_title = normalized_title.strip('-')  
         return normalized_title  
+  
+    def generate_markdown_from_docstrings(self, source_code: str, metadata: Dict[str, Any], node: Optional[ast.AST] = None) -> str:  
+        """  
+        Generate markdown documentation from docstrings and AST information.  
+  
+        Args:  
+            source_code (str): The source code to document.  
+            metadata (Dict[str, Any]): Additional metadata for documentation.  
+            node (Optional[ast.AST]): Optional AST node for context.  
+  
+        Returns:  
+            str: Generated markdown documentation.  
+        """  
+        processor = DocstringProcessor()  
+        tree = ast.parse(source_code)  
+        sections = []  
+  
+        for child in ast.iter_child_nodes(tree):  
+            if isinstance(child, (ast.FunctionDef, ast.ClassDef)):  
+                docstring_data = processor.process_node(child, source_code)  
+                section = DocumentationSection(  
+                    title=child.name,  
+                    content=processor.format(docstring_data)  
+                )  
+                sections.append(section)  
+  
+        return self.generate(sections, include_source=self.config.include_source, source_code=source_code)  

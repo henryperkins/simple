@@ -314,3 +314,79 @@ class DocstringProcessor:
         except Exception as e:
             logger.error(f"Error inserting docstring: {e}")
             return False
+
+    def validate_docstring(self, docstring: str) -> bool:
+        """
+        Validate a docstring against the Google style schema.
+
+        Args:
+            docstring (str): The docstring to validate.
+
+        Returns:
+            bool: True if the docstring is valid, False otherwise.
+        """
+        try:
+            docstring_data = self.parse(docstring)
+            validate(instance=docstring_data, schema=GOOGLE_STYLE_DOCSTRING_SCHEMA)
+            return True
+        except ValidationError as e:
+            logger.error(f"Docstring validation error: {e}")
+            return False
+
+    def generate_markdown(self, source_code: str) -> str:
+        """
+        Generate markdown documentation from source code.
+
+        Args:
+            source_code (str): The source code to document.
+
+        Returns:
+            str: The generated markdown documentation.
+        """
+        try:
+            extraction_result = self.code_extractor.extract_code(source_code)
+            sections = []
+
+            if extraction_result.module_docstring:
+                sections.append(DocumentationSection(
+                    title="Module Docstring",
+                    content=extraction_result.module_docstring
+                ))
+
+            for cls in extraction_result.classes:
+                sections.append(DocumentationSection(
+                    title=f"Class: {cls.name}",
+                    content=self.format(self.parse(cls.docstring or ''))
+                ))
+
+            for func in extraction_result.functions:
+                sections.append(DocumentationSection(
+                    title=f"Function: {func.name}",
+                    content=self.format(self.parse(func.docstring or ''))
+                ))
+
+            markdown_content = self._generate_markdown_content(sections)
+            return markdown_content
+        except Exception as e:
+            logger.error(f"Error generating markdown: {e}")
+            return ""
+
+    def _generate_markdown_content(self, sections: List[DocumentationSection]) -> str:
+        """
+        Generate markdown content from documentation sections.
+
+        Args:
+            sections (List[DocumentationSection]): The documentation sections.
+
+        Returns:
+            str: The generated markdown content.
+        """
+        markdown_lines = []
+        for section in sections:
+            markdown_lines.append(f"# {section.title}\n")
+            markdown_lines.append(f"{section.content}\n")
+            if section.subsections:
+                for subsection in section.subsections:
+                    markdown_lines.append(f"## {subsection.title}\n")
+                    markdown_lines.append(f"{subsection.content}\n")
+        return "\n".join(markdown_lines)

@@ -308,3 +308,85 @@ class Cache:
     async def __aexit__(self, exc_type, exc_val, exc_tb):  
         """Async context manager exit."""  
         await self.close()  
+
+    async def cache_markdown_documentation(
+        self,
+        key: str,
+        markdown: str,
+        expire: Optional[int] = None
+    ) -> bool:
+        """
+        Cache markdown documentation.
+
+        Args:
+            key (str): The cache key.
+            markdown (str): The markdown documentation to cache.
+            expire (Optional[int]): Optional expiration time in seconds.
+
+        Returns:
+            bool: True on success, False on failure.
+        """
+        if not self.enabled:
+            return False
+
+        if not self._redis:
+            await self._initialize_connection()
+
+        if not self._redis:
+            self._stats['errors'] += 1
+            return False
+
+        cache_key = f"{self.prefix}{key}"
+        expiration = expire or self.ttl
+
+        try:
+            await self._redis.set(
+                cache_key,
+                markdown,
+                ex=expiration
+            )
+            logger.debug(f"Cached markdown documentation for key: {cache_key}")
+            return True
+
+        except Exception as e:
+            self._stats['errors'] += 1
+            logger.error(f"Cache save error for key {cache_key}: {e}")
+            return False
+
+    async def get_cached_markdown(self, key: str) -> Optional[str]:
+        """
+        Retrieve cached markdown documentation by key.
+
+        Args:
+            key (str): The cache key to retrieve.
+
+        Returns:
+            Optional[str]: Cached markdown documentation if available, otherwise None.
+        """
+        if not self.enabled:
+            return None
+
+        if not self._redis:
+            await self._initialize_connection()
+
+        if not self._redis:
+            self._stats['errors'] += 1
+            return None
+
+        cache_key = f"{self.prefix}{key}"
+        try:
+            cached_data = await self._redis.get(cache_key)
+
+            if cached_data:
+                self._stats['hits'] += 1
+                logger.debug(f"Cache hit for key: {cache_key}")
+                return cached_data
+
+            self._stats['misses'] += 1
+            logger.debug(f"Cache miss for key: {cache_key}")
+            return None
+
+        except Exception as e:
+            self._stats['errors'] += 1
+            logger.error(f"Cache get error for key {cache_key}: {e}")
+            return None

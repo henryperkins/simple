@@ -66,7 +66,7 @@ class ExtractedFunction(ExtractedElement):
 class ExtractionResult:
     """Contains the complete extraction results."""
     classes: List['ExtractedClass'] = field(default_factory=list)
-    functions: List[ExtractedFunction] = field(default_factory=list)
+    functions: List[ExtractedFunction] = field(default_factory.list)
     module_docstring: Optional[str] = None
     imports: Dict[str, Set[str]] = field(default_factory=dict)
     constants: List[Dict[str, Any]] = field(default_factory=list)

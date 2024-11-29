@@ -287,3 +287,48 @@ class DocStringManager:
         if cached_result.get('valid'):
             return self.processor.insert(node, cached_result['docstring'])
         return False
+
+    async def generate_markdown_documentation(self) -> str:
+        """
+        Generate markdown documentation for the current context.
+
+        Returns:
+            str: Generated markdown documentation.
+
+        Raises:
+            DocumentationError: If markdown documentation generation fails.
+        """
+        try:
+            # Prepare documentation sections
+            sections: List[DocumentationSection] = []
+
+            # Module documentation
+            if self.context.metadata:
+                sections.append(self._create_module_section())
+
+            # Classes documentation
+            class_nodes = [n for n in ast.walk(self.tree)
+                           if isinstance(n, ast.ClassDef)]
+            for node in class_nodes:
+                sections.append(await self._create_class_section(node))
+
+            # Functions documentation
+            function_nodes = [n for n in ast.walk(self.tree)
+                              if isinstance(n, ast.FunctionDef)]
+            for node in function_nodes:
+                if not self._is_method(node):
+                    sections.append(await self._create_function_section(node))
+
+            # Generate markdown
+            return self.markdown_generator.generate_markdown_from_docstrings(
+                self.context.source_code,
+                self.context.metadata or {},
+                self.tree
+            )
+
+        except Exception as e:
+            log_error(f"Failed to generate markdown documentation: {e}")
+            raise DocumentationError(
+                "Markdown documentation generation failed",
+                {'error': str(e)}
+            )

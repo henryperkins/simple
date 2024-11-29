@@ -69,6 +69,32 @@ class MetricsCollector:
             logger.error(f"Error closing MetricsCollector: {e}")
             raise
         
+    async def track_documentation_generation(
+        self, 
+        operation_type: str, 
+        success: bool, 
+        duration: float, 
+        usage: Dict[str, Any] = None, 
+        error: str = None
+    ):
+        """
+        Track metrics related to documentation generation.
+
+        Args:
+            operation_type (str): The type of operation being tracked.
+            success (bool): Whether the operation was successful.
+            duration (float): The duration of the operation in seconds.
+            usage (Dict[str, Any], optional): Additional usage metrics.
+            error (str, optional): Error message if the operation failed.
+        """
+        await self.track_operation(
+            operation_type=operation_type,
+            success=success,
+            duration=duration,
+            usage=usage,
+            error=error
+        )
+        
 class SystemMonitor:
     """Monitors system resources and performance metrics."""
 

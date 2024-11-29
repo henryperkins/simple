@@ -140,7 +140,7 @@ class DocumentationGenerator:
             cache_key = f"doc:{file_path.stem}:{hash(source_code)}"
 
             # Process code
-            updated_code, documentation = await self.ai_handler.process_code(
+            updated_code, documentation = await self.ai_handler.process_code_with_markdown(
                 source_code,
                 cache_key=cache_key
             )
@@ -289,7 +289,6 @@ async def process_repository(args: argparse.Namespace) -> int:
         return 1
     finally:
         await generator.cleanup()
-        repo_handler.cleanup()
 
 
 async def main(args: argparse.Namespace) -> int:
