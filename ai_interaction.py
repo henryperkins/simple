@@ -3,27 +3,32 @@
 """
 AI Interaction Handler Module
 
-Manages interactions with Azure OpenAI API for docstring generation, handling
-token management, caching, and response processing with structured JSON outputs.
+Manages interactions with Azure OpenAI API for docstring generation, handling token management,
+caching, and response processing with structured JSON outputs.
 """
 
 import asyncio
 import json
+from datetime import datetime
 from typing import Optional, Tuple, Dict, Any
 import ast
 from dataclasses import dataclass
 import openai
+from openai import APIError
+from jsonschema import validate, ValidationError as JsonValidationError
 from core.logger import LoggerSetup
 from core.cache import Cache
-from core.metrics_collector import MetricsCollector
+from core.monitoring import MetricsCollector
 from core.config import AzureOpenAIConfig
 from core.docstring_processor import DocstringProcessor, DocstringData
 from core.code_extraction import CodeExtractor
+from docs.docs import DocStringManager
 from api.token_management import TokenManager
 from api.api_client import APIClient
-from jsonschema import validate  # Importing validate for JSON schema validation
+from exceptions import ValidationError
 
 logger = LoggerSetup.get_logger(__name__)
+
 
 @dataclass
 class ProcessingResult:
@@ -35,44 +40,113 @@ class ProcessingResult:
     processing_time: float = 0.0
 
 
+@dataclass
+class DocstringData:
+    """Data structure for holding docstring information."""
+    summary: str
+    description: str
+    args: list
+    returns: dict
+    raises: list
+    complexity: int
+
+
 DOCSTRING_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "summary": {"type": "string"},
-        "description": {"type": "string"},
-        "args": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "type": {"type": "string"},
-                    "description": {"type": "string"}
-                },
-                "required": ["name", "type", "description"]
-            }
-        },
-        "returns": {
-            "type": "object",
-            "properties": {
-                "type": {"type": "string"},
-                "description": {"type": "string"}
+    "name": "google_style_docstring",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "summary": {
+                "type": "string",
+                "description": "A brief summary of the method or function."
             },
-            "required": ["type", "description"]
-        },
-        "raises": {
-            "type": "array",
-            "items": {
+            "description": {
+                "type": "string",
+                "description": "Detailed description of the method or function."
+            },
+            "args": {
+                "type": "array",
+                "description": "A list of arguments for the method or function.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "The name of the argument."
+                        },
+                        "type": {
+                            "type": "string",
+                            "description": "The data type of the argument."
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "A brief description of the argument."
+                        }
+                    },
+                    "required": [
+                        "name",
+                        "type",
+                        "description"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "returns": {
                 "type": "object",
+                "description": "Details about the return value of the method or function.",
                 "properties": {
-                    "exception": {"type": "string"},
-                    "description": {"type": "string"}
+                    "type": {
+                        "type": "string",
+                        "description": "The data type of the return value."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "A brief description of the return value."
+                    }
                 },
-                "required": ["exception", "description"]
+                "required": [
+                    "type",
+                    "description"
+                ],
+                "additionalProperties": false
+            },
+            "raises": {
+                "type": "array",
+                "description": "A list of exceptions that may be raised by the method or function.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "exception": {
+                            "type": "string",
+                            "description": "The name of the exception that may be raised."
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "A brief description of the circumstances under which the exception is raised."
+                        }
+                    },
+                    "required": [
+                        "exception",
+                        "description"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "complexity": {
+                "type": "integer",
+                "description": "McCabe complexity score"
             }
-        }
-    },
-    "required": ["summary", "description", "args", "returns"]
+        },
+        "required": [
+            "summary",
+            "description",
+            "args",
+            "returns",
+            "raises",
+            "complexity"
+        ],
+        "additionalProperties": false
+    }
 }
 
 
@@ -129,30 +203,16 @@ class AIInteractionHandler:
 
     async def process_code(self, source_code: str, cache_key: Optional[str] = None) -> Optional[Tuple[str, str]]:
         """Process source code to generate docstrings."""
-        operation_start = datetime.now()
-
         try:
-            if not source_code.strip():
-                logger.error("Empty source code provided")
-                return None
-
-            # Check cache if enabled
-            if self.cache and cache_key:
-                try:
-                    cached_result = await self.cache.get_cached_docstring(cache_key)
-                    if cached_result and isinstance(cached_result, dict):
-                        return cached_result.get('code', ''), cached_result.get('docs', '')
-                except Exception as e:
-                    logger.warning("Cache error: %s", str(e))
-
             # Validate token usage
             valid, metrics, message = await self.token_manager.validate_request(source_code)
             if not valid:
-                logger.error("Token validation failed: %s", message)
+                logger.error(f"Token validation failed: {message}")
                 return None
 
             # Initialize module state
             self._current_module_tree = ast.parse(source_code)
+            self._current_module_docs = {}
             self._current_module = type('Module', (), {
                 '__name__': cache_key.split(':')[1] if cache_key else 'unknown',
                 '__doc__': ast.get_docstring(self._current_module_tree) or '',
@@ -161,23 +221,18 @@ class AIInteractionHandler:
             })
             
             # Generate module documentation
-            module_docs = await self._generate_documentation(
-                source_code=source_code,
-                metadata={},
-                node=self._current_module_tree
-            )
-            
-            if not module_docs or not module_docs.content:
+            module_docs = await self._generate_documentation(source_code, {}, self._current_module_tree)
+            if not module_docs:
                 logger.error("Documentation generation failed")
                 return None
 
-            # Update code with docstrings
+            # Process classes and functions
             for node in ast.walk(self._current_module_tree):
                 if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
                     element_docs = await self._generate_documentation(
-                        source_code=ast.unparse(node),
-                        metadata={"element_type": type(node).__name__},
-                        node=node
+                        ast.unparse(node), 
+                        {"element_type": type(node).__name__}, 
+                        node
                     )
                     if element_docs:
                         self._insert_docstring(node, element_docs.content)
@@ -185,31 +240,24 @@ class AIInteractionHandler:
             # Generate final output
             updated_code = ast.unparse(self._current_module_tree)
 
-            # Cache result
+            # Cache results
             if self.cache and cache_key:
                 await self._cache_result(cache_key, updated_code, module_docs.content)
 
-            # Track usage
+            # Track token usage
             self.token_manager.track_request(metrics['prompt_tokens'], metrics['max_completion_tokens'])
-            
+            logger.info(f"Tokens used: {metrics['prompt_tokens']} prompt, {metrics['max_completion_tokens']} completion")
+
             return updated_code, module_docs.content
 
         except Exception as e:
-            logger.error("Process code failed: %s", str(e))
+            logger.error(f"Process code failed: {e}")
             return None
 
-    async def _generate_documentation(
-        self, 
-        source_code: str, 
-        metadata: Dict[str, Any], 
-        node: Optional[ast.AST] = None
-    ) -> Optional[ProcessingResult]:
+    async def _generate_documentation(self, source_code: str, metadata: Dict[str, Any], node: Optional[ast.AST] = None) -> Optional[ProcessingResult]:
         """Generate documentation using Azure OpenAI."""
         try:
-            # Create prompt
             prompt = self._create_function_calling_prompt(source_code, metadata, node)
-            
-            # Get API response
             response, usage = await self.client.process_request(
                 prompt=prompt,
                 temperature=0.3,
@@ -218,46 +266,36 @@ class AIInteractionHandler:
                 tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
             )
             
-            if not response or not response.choices:
-                logger.error("Empty response from API")
+            if not response:
                 return None
                 
-            # Extract and validate response
-            tool_call = response.choices[0].message.tool_calls[0].function
-            response_data = json.loads(tool_call.arguments)
-            validate(instance=response_data, schema=DOCSTRING_SCHEMA)
-            
-            # Create docstring
-            docstring_data = DocstringData(**response_data)
-            
-            # Add metrics
-            complexity = None
-            if node and self.metrics_collector:
-                complexity = self.metrics_collector.calculate_complexity(node)
-                docstring_data.set_complexity(complexity)
-                    
-            # Format docstring
-            formatted_docstring = self.docstring_processor.format(
-                docstring_data,
-                complexity_score=complexity
-            )
+            message = response.choices[0].message
+            if message.tool_calls and message.tool_calls[0].function:
+                function_args = message.tool_calls[0].function.arguments
+                response_data = json.loads(function_args)
 
-            return ProcessingResult(
-                content=formatted_docstring,
-                usage=usage,
-                metrics={
-                    'complexity': complexity,
-                    'tokens': usage,
-                    'context': metadata
-                } if self.metrics_collector else {},
-                cached=False,
-                processing_time=0.0
-            )
+                if node and self.metrics_collector:
+                    complexity = self.metrics_collector.calculate_complexity(node)
+                    response_data["complexity"] = complexity  # Assign complexity directly
 
+                validate(instance=response_data, schema=DOCSTRING_SCHEMA["schema"])  # Correct schema used here
+                docstring_data = DocstringData(**response_data)
+                formatted_docstring = self.docstring_processor.format(docstring_data)
+
+                # Track token usage
+                self.token_manager.track_request(usage['prompt_tokens'], usage['completion_tokens'])
+                logger.info(f"Tokens used: {usage['prompt_tokens']} prompt, {usage['completion_tokens']} completion")
+                
+                return ProcessingResult(
+                    content=formatted_docstring,
+                    usage=usage or {},
+                    processing_time=0.0
+                )
+                
         except Exception as e:
-            logger.error("Error during generation: %s", str(e))
+            logger.error(f"Error during generation: {e}")
             return None
-    
+
     def _initialize_tools(self) -> None:
         """Initialize the function tools for structured output."""
         self.docstring_function = {
@@ -309,9 +347,13 @@ class AIInteractionHandler:
                                 "required": ["exception", "description"]
                             },
                             "description": "A list of exceptions that may be raised, each with a type and description."
+                        },
+                        "complexity": {
+                            "type": "integer",
+                            "description": "McCabe complexity score"
                         }
                     },
-                    "required": ["summary", "description", "args", "returns", "raises"]
+                    "required": ["summary", "description", "args", "returns", "raises", "complexity"]
                 }
             }
         }
@@ -328,11 +370,6 @@ class AIInteractionHandler:
         Returns:
             str: The generated prompt for function calling.
         """
-        extraction_data = self.code_extractor.extract_code(source_code)
-        complexity_info = self._format_complexity_info(extraction_data)
-        dependencies_info = self._format_dependencies_info(extraction_data)
-        type_info = self._format_type_info(extraction_data)
-        
         prompt = (
             "You are a highly skilled Python documentation expert. Generate comprehensive "
             "documentation following these specific requirements:\n\n"
@@ -350,101 +387,26 @@ class AIInteractionHandler:
             "- Describe return values\n"
             "- Document exceptions/errors\n"
             "- Include complexity metrics\n\n"
-            "3. CODE CONTEXT:\n"
-            f"{complexity_info}\n"
-            f"{dependencies_info}\n"
-            f"{type_info}\n\n"
-            "4. SPECIFIC REQUIREMENTS:\n"
-            "- Use exact parameter names and types from the code\n"
-            "- Include all type hints in documentation\n"
-            "- Document class inheritance where applicable\n"
-            "- Note async/generator functions appropriately\n"
-            "- Include property decorators in documentation\n\n"
+            "3. Generate a JSON object with the following structure:\n"
+            "{\n"
+            "  'summary': '<summary>',\n"
+            "  'description': '<detailed_description>',\n"
+            "  'args': [{\n"
+            "    'name': '<arg_name>',\n"
+            "    'type': '<arg_type>',\n"
+            "    'description': '<arg_description>'\n"
+            "  }, ...],\n"
+            "  'returns': { 'type': '<return_type>', 'description': '<return_description>' },\n"
+            "  'raises': [{\n"
+            "    'exception': '<exception_name>',\n"
+            "    'description': '<exception_description>'\n"
+            "  }, ...],\n"
+            "  'complexity': <complexity_score>\n"
+            "}\n\n"
             "The code to document is:\n"
             "```python\n"
             f"{source_code}\n"
             "```\n"
-        )
-        return prompt
-
-    def _format_complexity_info(self, extraction_data: Any) -> str:
-        """
-        Format complexity information for the prompt.
-
-        Args:
-            extraction_data (Any): Data extracted from the code for complexity analysis.
-
-        Returns:
-            str: Formatted complexity information.
-        """
-        complexity_lines = ["Complexity Information:"]
-        for cls in extraction_data.classes:
-            score = cls.metrics.get('complexity', 0)
-            complexity_lines.append(f"- Class '{cls.name}' complexity: {score}")
-            for method in cls.methods:
-                m_score = method.metrics.get('complexity', 0)
-                complexity_lines.append(f"  - Method '{method.name}' complexity: {m_score}")
-        for func in extraction_data.functions:
-            score = func.metrics.get('complexity', 0)
-            complexity_lines.append(f"- Function '{func.name}' complexity: {score}")
-        return "\n".join(complexity_lines)
-
-    def _format_dependencies_info(self, extraction_data: Any) -> str:
-        """
-        Format dependency information for the prompt.
-
-        Args:
-            extraction_data (Any): Data extracted from the code for dependency analysis.
-
-        Returns:
-            str: Formatted dependency information.
-        """
-        dep_lines = ["Dependencies:"]
-        for name, deps in extraction_data.imports.items():
-            dep_lines.append(f"- {name}: {', '.join(deps)}")
-        return "\n".join(dep_lines)
-
-    def _format_type_info(self, extraction_data: Any) -> str:
-        """
-        Format type information for the prompt.
-
-        Args:
-            extraction_data (Any): Data extracted from the code for type analysis.
-
-        Returns:
-            str: Formatted type information.
-        """
-        type_lines = ["Type Information:"]
-        for cls in extraction_data.classes:
-            type_lines.append(f"Class '{cls.name}':")
-            for attr in cls.attributes:
-                type_lines.append(f"- {attr['name']}: {attr['type']}")
-            for method in cls.methods:
-                args_info = [f"{arg.name}: {arg.type_hint}" for arg in method.args]
-                type_lines.append(f"- Method '{method.name}({', '.join(args_info)}) -> {method.return_type}'")
-        for func in extraction_data.functions:
-            args_info = [f"{arg.name}: {arg.type_hint}" for arg in func.args]
-            type_lines.append(f"Function '{func.name}({', '.join(args_info)}) -> {func.return_type}'")
-        return "\n".join(type_lines)
-
-    def _create_refinement_prompt(self, original_prompt: str, error_message: str, previous_response: dict) -> str:
-        """
-        Create a refinement prompt, handling previous responses and errors.
-
-        Args:
-            original_prompt (str): The original prompt used for function calling.
-            error_message (str): Error message to include in the refinement prompt.
-            previous_response (dict): Previous response data to include in the prompt.
-
-        Returns:
-            str: The refined prompt for further attempts.
-        """
-        formatted_response = json.dumps(previous_response, indent=4) if previous_response else ""
-        prompt = (
-            f"{error_message}\n\n"
-            + "Previous Response (if any):\n"
-            + f"```json\n{formatted_response}\n```\n\n"
-            + original_prompt
         )
         return prompt
 
@@ -461,28 +423,18 @@ class AIInteractionHandler:
 
         docstring_node = ast.Expr(value=ast.Constant(value=docstring))
 
-        if (node.body and isinstance(node.body[0], ast.Expr) and 
-                isinstance(node.body[0].value, ast.Constant) and 
-                isinstance(node.body[0].value.value, str)):
-            node.body.pop(0)
+        if node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant):
+            node.body[0] = docstring_node
+        else:
+            node.body.insert(0, docstring_node)
 
-        node.body.insert(0, docstring_node)
-
-    async def _cache_result(self, cache_key: str, code: str, documentation: str) -> None:
-        """
-        Cache the processing result.
-
-        Args:
-            cache_key (str): The key to use for caching.
-            code (str): The processed code.
-            documentation (str): The generated documentation.
-        """
+    async def _cache_result(self, cache_key: str, updated_code: str, module_docs: str) -> None:
+        """Cache the result of the code processing."""
+        if not self.cache:
+            return
         try:
-            if self.cache:
-                await self.cache.save_docstring(
-                    cache_key,
-                    {'code': code, 'docs': documentation}
-                )
+            await self.cache.store(cache_key, {"updated_code": updated_code, "module_docs": module_docs})
+            logger.info(f"Cached result for key: {cache_key}")
         except Exception as e:
             logger.error(f"Failed to cache result: {e}")
 
