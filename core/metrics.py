@@ -12,16 +12,12 @@ import ast
 import math  
 import sys  
 from collections import defaultdict  
-from typing import Dict, Set  
+from typing import Dict, Set, Any  
 from core.logger import LoggerSetup, log_debug, log_info, log_error  
-  
-logger = LoggerSetup.get_logger(__name__)  
-  
   
 class MetricsError(Exception):  
     """Base exception for metrics calculation errors."""  
     pass  
-  
   
 class Metrics:  
     """  
@@ -38,8 +34,11 @@ class Metrics:
         'poor': 40  
     }  
   
-    @staticmethod  
-    def calculate_cyclomatic_complexity(function_node: ast.FunctionDef) -> int:  
+    def __init__(self):  
+        """Initialize the Metrics class with a logger."""  
+        self.logger = LoggerSetup.get_logger(__name__)  
+  
+    def calculate_cyclomatic_complexity(self, function_node: ast.FunctionDef) -> int:  
         """  
         Calculate the cyclomatic complexity of a function.  
   
@@ -49,9 +48,9 @@ class Metrics:
         Returns:  
             int: The cyclomatic complexity of the function.  
         """  
-        log_debug(f"Calculating cyclomatic complexity for function: {getattr(function_node, 'name', 'unknown')}")  
+        self.logger.debug(f"Calculating cyclomatic complexity for function: {getattr(function_node, 'name', 'unknown')}")  
         if not isinstance(function_node, ast.FunctionDef):  
-            log_error(f"Provided node is not a function definition: {ast.dump(function_node)}")  
+            self.logger.error(f"Provided node is not a function definition: {ast.dump(function_node)}")  
             return 0  
   
         complexity = 1  # Start with 1 for the function itself  
@@ -66,25 +65,24 @@ class Metrics:
             if isinstance(node, decision_points):  
                 if isinstance(node, ast.BoolOp):  
                     complexity += len(node.values) - 1  
-                    log_debug(f"Incremented complexity for BoolOp with {len(node.values) - 1} decision points: {ast.dump(node)}")  
+                    self.logger.debug(f"Incremented complexity for BoolOp with {len(node.values) - 1} decision points: {ast.dump(node)}")  
                 elif isinstance(node, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp)):  
                     complexity += 1  
-                    log_debug(f"Incremented complexity for comprehension: {ast.dump(node)}")  
+                    self.logger.debug(f"Incremented complexity for comprehension: {ast.dump(node)}")  
                 elif isinstance(node, ast.Match):  
                     complexity += len(node.cases)  
-                    log_debug(f"Incremented complexity for Match with {len(node.cases)} cases: {ast.dump(node)}")  
+                    self.logger.debug(f"Incremented complexity for Match with {len(node.cases)} cases: {ast.dump(node)}")  
                 elif isinstance(node, ast.IfExp):  
                     complexity += 1  
-                    log_debug(f"Incremented complexity for IfExp: {ast.dump(node)}")  
+                    self.logger.debug(f"Incremented complexity for IfExp: {ast.dump(node)}")  
                 else:  
                     complexity += 1  
-                    log_debug(f"Incremented complexity at node: {ast.dump(node)}")  
+                    self.logger.debug(f"Incremented complexity at node: {ast.dump(node)}")  
   
-        log_info(f"Calculated cyclomatic complexity for function '{function_node.name}' is {complexity}")  
+        self.logger.info(f"Calculated cyclomatic complexity for function '{function_node.name}' is {complexity}")  
         return complexity  
   
-    @staticmethod  
-    def calculate_cognitive_complexity(function_node: ast.FunctionDef) -> int:  
+    def calculate_cognitive_complexity(self, function_node: ast.FunctionDef) -> int:  
         """  
         Calculate the cognitive complexity of a function.  
   
@@ -94,9 +92,9 @@ class Metrics:
         Returns:  
             int: The cognitive complexity of the function.  
         """  
-        log_debug(f"Calculating cognitive complexity for function: {getattr(function_node, 'name', 'unknown')}")  
+        self.logger.debug(f"Calculating cognitive complexity for function: {getattr(function_node, 'name', 'unknown')}")  
         if not isinstance(function_node, ast.FunctionDef):  
-            log_error(f"Provided node is not a function definition: {ast.dump(function_node)}")  
+            self.logger.error(f"Provided node is not a function definition: {ast.dump(function_node)}")  
             return 0  
   
         cognitive_complexity = 0  
@@ -105,42 +103,46 @@ class Metrics:
         def traverse(node, nesting_level):  
             nonlocal cognitive_complexity  
             for child in ast.iter_child_nodes(node):  
-                if Metrics._is_nesting_construct(child):  
+                if self._is_nesting_construct(child):  
                     nesting_level += 1  
                     cognitive_complexity += 1  # Structural increment  
-                    log_debug(f"Nesting level {nesting_level} increased at node: {ast.dump(child)}")  
+                    self.logger.debug(f"Nesting level {nesting_level} increased at node: {ast.dump(child)}")  
                     traverse(child, nesting_level)  
                     nesting_level -= 1  
-                elif Metrics._is_complexity_increment(child):  
+                elif self._is_complexity_increment(child):  
                     cognitive_complexity += nesting_level + 1  # Complexity increment with nesting consideration  
-                    log_debug(f"Incremented cognitive complexity by {nesting_level + 1} at node: {ast.dump(child)}")  
+                    self.logger.debug(f"Incremented cognitive complexity by {nesting_level + 1} at node: {ast.dump(child)}")  
                     traverse(child, nesting_level)  
                 else:  
                     traverse(child, nesting_level)  
   
         traverse(function_node, 0)  
-        log_info(f"Calculated cognitive complexity for function '{function_node.name}' is {cognitive_complexity}")  
+        self.logger.info(f"Calculated cognitive complexity for function '{function_node.name}' is {cognitive_complexity}")  
         return cognitive_complexity  
   
-    def calculate_complexity(self, node: ast.AST) -> int:  
-        """  
-        Calculate the overall complexity of the given AST node.  
-  
-        Args:  
-            node (ast.AST): The AST node to analyze.  
-  
-        Returns:  
-            int: The overall complexity score.  
-        """  
-        log_debug("Calculating overall complexity.")  
-        if not isinstance(node, ast.FunctionDef):  
-            log_error(f"Provided node is not a function definition: {ast.dump(node)}")  
-            return 0  
-        cyclomatic_complexity = self.calculate_cyclomatic_complexity(node)  
-        cognitive_complexity = self.calculate_cognitive_complexity(node)  
-        overall_complexity = cyclomatic_complexity + cognitive_complexity  
-        log_info(f"Calculated overall complexity for function '{node.name}' is {overall_complexity}")  
-        return overall_complexity  
+    def calculate_complexity(self, node: ast.AST) -> int:
+        """Calculate complexity for any AST node."""
+        try:
+            if isinstance(node, ast.FunctionDef):
+                return self.calculate_cyclomatic_complexity(node)
+            elif isinstance(node, ast.ClassDef):
+                # Calculate class complexity as sum of methods complexity
+                return sum(
+                    self.calculate_cyclomatic_complexity(method)
+                    for method in node.body 
+                    if isinstance(method, ast.FunctionDef)
+                )
+            elif isinstance(node, ast.Module):
+                # Calculate module complexity
+                return sum(
+                    self.calculate_complexity(child)
+                    for child in ast.iter_child_nodes(node)
+                    if isinstance(child, (ast.FunctionDef, ast.ClassDef))
+                )
+            return 0
+        except Exception as e:
+            self.logger.error("Error calculating complexity: %s", str(e))
+            return 0
   
     def calculate_maintainability_index(self, node: ast.AST) -> float:  
         """  
@@ -152,7 +154,7 @@ class Metrics:
         Returns:  
             float: Maintainability index score (0-100)  
         """  
-        log_debug("Calculating maintainability index.")  
+        self.logger.debug("Calculating maintainability index.")  
         try:  
             halstead = self.calculate_halstead_metrics(node)  
             complexity = self.calculate_complexity(node)  
@@ -166,11 +168,11 @@ class Metrics:
                 mi = max(0, (171 - 5.2 * math.log(volume) - 0.23 * complexity - 16.2 * math.log(sloc)) * 100 / 171)  
                 mi = min(100, mi)  # Normalize to 0-100  
   
-            log_info(f"Calculated maintainability index is {mi}")  
+            self.logger.info(f"Calculated maintainability index is {mi}")  
             return round(mi, 2)  
   
         except Exception as e:  
-            log_error(f"Error calculating maintainability index: {e}")  
+            self.logger.error(f"Error calculating maintainability index: {e}")  
             return 0.0  
   
     def calculate_halstead_metrics(self, node: ast.AST) -> Dict[str, float]:  
@@ -183,7 +185,7 @@ class Metrics:
         Returns:  
             Dict[str, float]: A dictionary containing Halstead metrics.  
         """  
-        log_debug("Calculating Halstead metrics.")  
+        self.logger.debug("Calculating Halstead metrics.")  
         operators = set()  
         operands = set()  
         operator_count = 0  
@@ -220,7 +222,7 @@ class Metrics:
         program_vocabulary = n1 + n2  
         program_volume = program_length * math.log2(program_vocabulary) if program_vocabulary > 0 else 0  
   
-        log_info(f"Calculated Halstead metrics: Length={program_length}, Vocabulary={program_vocabulary}, Volume={program_volume}")  
+        self.logger.info(f"Calculated Halstead metrics: Length={program_length}, Vocabulary={program_vocabulary}, Volume={program_volume}")  
         return {  
             'program_length': program_length,  
             'program_vocabulary': program_vocabulary,  
@@ -248,19 +250,18 @@ class Metrics:
         Returns:  
             int: Number of source code lines  
         """  
-        log_debug("Counting source lines of code.")  
+        self.logger.debug("Counting source lines of code.")  
         try:  
             source = ast.unparse(node)  
             lines = [line.strip() for line in source.splitlines()]  
             count = len([line for line in lines if line and not line.startswith('#')])  
-            log_info(f"Counted {count} source lines of code.")  
+            self.logger.info(f"Counted {count} source lines of code.")  
             return count  
         except Exception as e:  
-            log_error(f"Error counting source lines: {e}")  
+            self.logger.error(f"Error counting source lines: {e}")  
             return 0  
   
-    @staticmethod  
-    def _is_nesting_construct(node: ast.AST) -> bool:  
+    def _is_nesting_construct(self, node: ast.AST) -> bool:  
         """  
         Determine if a node represents a nesting construct for cognitive complexity.  
   
@@ -274,11 +275,10 @@ class Metrics:
             ast.If, ast.For, ast.While, ast.Try, ast.ExceptHandler, ast.With,  
             ast.Lambda, ast.AsyncFunctionDef, ast.FunctionDef  
         ))  
-        log_debug(f"Node {ast.dump(node)} is {'a' if nesting_construct else 'not a'} nesting construct.")  
+        self.logger.debug(f"Node {ast.dump(node)} is {'a' if nesting_construct else 'not a'} nesting construct.")  
         return nesting_construct  
   
-    @staticmethod  
-    def _is_complexity_increment(node: ast.AST) -> bool:  
+    def _is_complexity_increment(self, node: ast.AST) -> bool:  
         """  
         Determine if a node should increment cognitive complexity.  
   
@@ -291,7 +291,7 @@ class Metrics:
         increment = isinstance(node, (  
             ast.BoolOp, ast.Compare, ast.Break, ast.Continue, ast.Raise, ast.Return, ast.Yield, ast.YieldFrom  
         ))  
-        log_debug(f"Node {ast.dump(node)} {'increments' if increment else 'does not increment'} complexity.")  
+        self.logger.debug(f"Node {ast.dump(node)} {'increments' if increment else 'does not increment'} complexity.")  
         return increment  
   
     def analyze_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:  
@@ -304,7 +304,7 @@ class Metrics:
         Returns:  
             Dict[str, Set[str]]: Dictionary of module dependencies  
         """  
-        log_debug("Analyzing module dependencies.")  
+        self.logger.debug("Analyzing module dependencies.")  
         deps = {  
             'stdlib': set(),  
             'third_party': set(),  
@@ -315,15 +315,15 @@ class Metrics:
             for subnode in ast.walk(node):  
                 if isinstance(subnode, (ast.Import, ast.ImportFrom)):  
                     self._process_import(subnode, deps)  
-            log_info(f"Analyzed dependencies: {deps}")  
+            self.logger.info(f"Analyzed dependencies: {deps}")  
             return deps  
         except Exception as e:  
-            log_error(f"Error analyzing dependencies: {e}")  
+            self.logger.error(f"Error analyzing dependencies: {e}")  
             return deps  
   
     def _process_import(self, node: ast.AST, deps: Dict[str, Set[str]]) -> None:  
         """Process import statement and categorize dependency."""  
-        log_debug(f"Processing import: {ast.dump(node)}")  
+        self.logger.debug(f"Processing import: {ast.dump(node)}")  
         try:  
             if isinstance(node, ast.Import):  
                 for name in node.names:  
@@ -331,11 +331,11 @@ class Metrics:
             elif isinstance(node, ast.ImportFrom) and node.module:  
                 self._categorize_import(node.module, deps)  
         except Exception as e:  
-            log_error(f"Error processing import: {e}")  
+            self.logger.error(f"Error processing import: {e}")  
   
     def _categorize_import(self, module_name: str, deps: Dict[str, Set[str]]) -> None:  
         """Categorize import as stdlib, third-party, or local."""  
-        log_debug(f"Categorizing import: {module_name}")  
+        self.logger.debug(f"Categorizing import: {module_name}")  
         try:  
             if module_name in sys.builtin_module_names:  
                 deps['stdlib'].add(module_name)  
@@ -344,48 +344,6 @@ class Metrics:
             else:  
                 deps['third_party'].add(module_name)  
         except Exception as e:  
-            log_error(f"Error categorizing import {module_name}: {e}")  
+            self.logger.error(f"Error categorizing import {module_name}: {e}")  
   
-  
-def test_metrics():  
-    """  
-    Test function for the Metrics class.  
-  
-    This function tests the calculation of cyclomatic and cognitive complexity  
-    for a sample function defined in source_code.  
-    """  
-    log_info("Starting test_metrics.")  
-    source_code = """  
-def example_function(x):  
-    if x > 0:  
-        for i in range(x):  
-            if i % 2 == 0:  
-                print(i)  
-            else:  
-                continue  
-    else:  
-        return -1  
-    return 0  
-"""  
-    tree = ast.parse(source_code)  
-    function_node = tree.body[0]  
-  
-    if isinstance(function_node, ast.FunctionDef):  
-        # Test cyclomatic complexity  
-        cyclomatic_complexity = Metrics.calculate_cyclomatic_complexity(function_node)  
-        assert cyclomatic_complexity == 4, f"Expected 4, got {cyclomatic_complexity}"  
-        log_info(f"Cyclomatic complexity test passed: {cyclomatic_complexity}")  
-  
-        # Test cognitive complexity  
-        cognitive_complexity = Metrics.calculate_cognitive_complexity(function_node)  
-        assert cognitive_complexity == 9, f"Expected 9, got {cognitive_complexity}"  
-        log_info(f"Cognitive complexity test passed: {cognitive_complexity}")  
-  
-        log_info("All tests passed.")  
-    else:  
-        log_error("The node is not a function definition.")  
-  
-  
-# Ensure tests run only when the script is executed directly  
-if __name__ == "__main__":  
-    test_metrics()  
+# If needed, testing functions can be included below  

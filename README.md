@@ -27,7 +27,7 @@ from simple_extract import Extractor
 extractor = Extractor(source='data_source')
 
 # Perform extraction
-data = extractor.extract()
+data = extractor.extract_code()
 
 # Process the extracted data
 print(data)
