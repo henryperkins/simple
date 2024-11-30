@@ -18,8 +18,8 @@ from core.monitoring import MetricsCollector
 from core.config import AzureOpenAIConfig
 from api.token_management import TokenManager
 from ai_interaction import AIInteractionHandler
-from docs.docs import DocumentationContext, DocStringManager
-from docs.markdown_generator import MarkdownGenerator, MarkdownConfig
+from core.docs import DocumentationContext, DocStringManager
+from core.markdown_generator import MarkdownGenerator, MarkdownConfig
 from repository_handler import RepositoryHandler
 from exceptions import (
     ConfigurationError,

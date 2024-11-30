@@ -20,7 +20,7 @@ from core.monitoring import MetricsCollector
 from core.config import AzureOpenAIConfig
 from core.docstring_processor import DocstringProcessor, DocstringData
 from core.code_extraction import CodeExtractor
-from docs.docs import DocStringManager
+from core.docs import DocStringManager
 from api.token_management import TokenManager
 from api.api_client import APIClient
 from exceptions import ValidationError
