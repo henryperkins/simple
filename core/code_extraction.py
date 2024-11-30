@@ -3,22 +3,49 @@ code_extraction.py - Unified code extraction module
   
 Provides comprehensive code analysis and extraction functionality for Python  
 source code, including class and function extraction, metrics calculation, and  
-dependency analysis.  
-"""  
-import sys
-import importlib.util  
+dependency analysis. 
+"""
 import ast
-from pathlib import Path  # Add Path import
-from dataclasses import dataclass, field  
-from typing import Dict, Any, List, Optional, Set, Union
-from typing_extensions import TypedDict  # For Python <3.8
-from core.logger import LoggerSetup  
-from core.metrics import Metrics  
+import sys
+import importlib
+import importlib.util
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Set, Union, Tuple
+from typing_extensions import TypedDict
+
+# Keep existing imports
+from core.logger import LoggerSetup
+from core.metrics import Metrics
 from exceptions import ExtractionError
 
-class ExtractionError(Exception):  
-    """Custom exception for extraction errors."""  
-    pass
+# Define TypedDict classes
+class ParameterDict(TypedDict):
+    name: str
+    type: str
+    description: str
+    optional: bool
+    default_value: Optional[str]
+
+@dataclass
+class ExtractedArgument:
+    """Represents a function argument."""
+    name: str
+    type_hint: Optional[str] = None
+    default_value: Optional[str] = None
+    is_required: bool = True
+
+@dataclass
+class ExtractionContext:
+    """Context for extraction operations."""
+    file_path: Optional[str] = None
+    module_name: Optional[str] = None
+    import_context: Optional[Dict[str, Set[str]]] = None
+    metrics_enabled: bool = True
+    include_source: bool = True
+    max_line_length: int = 100
+    include_private: bool = False
+    include_metrics: bool = True
 
 @dataclass
 class DocstringParameter(TypedDict):
@@ -28,26 +55,6 @@ class DocstringParameter(TypedDict):
     description: str
     optional: bool = False
     default_value: Optional[str] = None
-
-@dataclass  
-class ExtractionContext:  
-    """Context for extraction operations."""  
-    file_path: Optional[str] = None  
-    module_name: Optional[str] = None  
-    import_context: Optional[Dict[str, Set[str]]] = None  
-    metrics_enabled: bool = True  
-    include_source: bool = True  
-    max_line_length: int = 100  
-    include_private: bool = False  
-    include_metrics: bool = True  
-  
-@dataclass  
-class ExtractedArgument:  
-    """Represents a function argument."""  
-    name: str  
-    type_hint: Optional[str] = None  
-    default_value: Optional[str] = None  
-    is_required: bool = True  
   
 @dataclass  
 class ExtractedElement:  
@@ -174,20 +181,94 @@ class CodeExtractor:
                             continue
                             
                         try:
+                            # Process the function node
                             extracted_function = self._process_function(node)
                             functions.append(extracted_function)
-                            self.logger.debug(f"Extracted function: {extracted_function.name}")
+                            self.logger.debug(f"Extracted function: {node.name}")
                         except Exception as e:
-                            error_msg = f"Failed to extract function {node.name}: {str(e)}"
-                            self.logger.error(error_msg)
-                            self.errors.append(error_msg)
+                            self.logger.error(f"Failed to extract function {node.name}: {str(e)}")
+                            self.errors.append(f"Failed to extract function {node.name}: {str(e)}")
 
             return functions
 
         except Exception as e:
             self.logger.error(f"Error extracting functions: {str(e)}")
             return functions
-  
+
+    def _calculate_function_metrics(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> Dict[str, Any]:
+        """Calculate metrics for a function."""
+        if not self.context.metrics_enabled:
+            return {}
+
+        return {
+            'cyclomatic_complexity': self.metrics_calculator.calculate_cyclomatic_complexity(node),
+            'cognitive_complexity': self.metrics_calculator.calculate_cognitive_complexity(node),
+            'maintainability_index': self.metrics_calculator.calculate_maintainability_index(node),
+            'parameter_count': len(node.args.args),
+            'return_complexity': self._calculate_return_complexity(node),
+            'is_async': isinstance(node, ast.AsyncFunctionDef)
+        }
+
+    def _get_function_args(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[ExtractedArgument]:
+        """Extract function arguments."""
+        args = []
+        try:
+            for arg in node.args.args:
+                arg_info = ExtractedArgument(
+                    name=arg.arg,
+                    type_hint=self._get_name(arg.annotation) if arg.annotation else None,
+                    default_value=None,  # Will be updated below
+                    is_required=True  # Will be updated below
+                )
+                args.append(arg_info)
+
+            # Handle default values
+            defaults = node.args.defaults
+            if defaults:
+                default_offset = len(args) - len(defaults)
+                for i, default in enumerate(defaults):
+                    arg_index = default_offset + i
+                    args[arg_index].default_value = ast.unparse(default)
+                    args[arg_index].is_required = False
+
+            return args
+        except Exception as e:
+            self.logger.error(f"Error extracting function arguments: {str(e)}")
+            return []
+        
+    def _get_name(self, node: Optional[ast.AST]) -> str:
+        """Get string representation of a name node.
+        
+        Args:
+            node: AST node to extract name from
+            
+        Returns:
+            str: String representation of the name
+        """
+        try:
+            if node is None:
+                return 'Any'
+                
+            if isinstance(node, ast.Name):
+                return node.id
+                
+            elif isinstance(node, ast.Attribute):
+                return f"{self._get_name(node.value)}.{node.attr}"
+                
+            elif isinstance(node, ast.Constant):  # Use ast.Constant for literals
+                return str(node.value)
+                
+            elif isinstance(node, ast.Subscript):
+                value = self._get_name(node.value)
+                slice_value = self._get_name(node.slice)
+                return f"{value}[{slice_value}]"
+                
+            return ast.unparse(node)
+            
+        except Exception as e:
+            self.logger.error(f"Error getting name from node: {e}")
+            return 'Any'
+        
     def _extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:  
         """Extract variables from the AST."""  
         variables = []  
@@ -219,7 +300,7 @@ class CodeExtractor:
             metrics=metrics,  
             dependencies=self._extract_dependencies(node),  
             bases=self._extract_bases(node),  
-            methods=[self._process_function(n) for n in node.body if isinstance(n, ast.FunctionDef)],  
+            methods=[self._process_function(n) for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))],  # Include AsyncFunctionDef
             attributes=self._extract_attributes(node),  
             is_exception=self._is_exception_class(node),  
             decorators=self._extract_decorators(node),  
@@ -241,7 +322,7 @@ class CodeExtractor:
                 source=ast.unparse(node) if self.context.include_source else None,
                 metrics=metrics,
                 dependencies=self._extract_dependencies(node),
-                args=self._extract_arguments(node),
+                args=self._get_function_args(node),
                 return_type=self._get_return_type(node),
                 is_method=self._is_method(node),
                 is_async=isinstance(node, ast.AsyncFunctionDef),
@@ -295,7 +376,7 @@ class CodeExtractor:
         try:
             complexity = self.metrics_calculator.calculate_complexity(node)
             return {
-                'method_count': len([n for n in node.body if isinstance(n, ast.FunctionDef)]),
+                'method_count': len([n for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]), # Include AsyncFunctionDef
                 'complexity': complexity,
                 'maintainability': self.metrics_calculator.calculate_maintainability_index(node),
                 'inheritance_depth': self._calculate_inheritance_depth(node)
@@ -303,19 +384,6 @@ class CodeExtractor:
         except Exception as e:
             self.logger.error("Error calculating class metrics: %s", str(e))
             return {'error': str(e)}
-  
-    def _calculate_function_metrics(self, node: ast.FunctionDef) -> Dict[str, Any]:  
-        """Calculate metrics for a function."""  
-        if not self.context.metrics_enabled:  
-            return {}  
-  
-        return {  
-            'cyclomatic_complexity': self.metrics_calculator.calculate_cyclomatic_complexity(node),  
-            'cognitive_complexity': self.metrics_calculator.calculate_cognitive_complexity(node),  
-            'maintainability_index': self.metrics_calculator.calculate_maintainability_index(node),  
-            'parameter_count': len(node.args.args),  
-            'return_complexity': self._calculate_return_complexity(node)  
-        }  
   
     def _calculate_module_metrics(self, tree: ast.AST) -> Dict[str, Any]:  
         """Calculate module-level metrics."""  
@@ -329,26 +397,8 @@ class CodeExtractor:
             'halstead': self.metrics_calculator.calculate_halstead_metrics(tree)  
         }  
   
-    # Helper methods  
-  
-    def _extract_arguments(self, node: ast.FunctionDef) -> List[ExtractedArgument]:  
-        """Extract and process function arguments."""  
-        args = []  
-        defaults = node.args.defaults  
-        default_offset = len(node.args.args) - len(defaults)  
-  
-        for i, arg in enumerate(node.args.args):  
-            default_index = i - default_offset  
-            default_value = None if default_index < 0 else ast.unparse(defaults[default_index])  
-  
-            args.append(ExtractedArgument(  
-                name=arg.arg,  
-                type_hint=ast.unparse(arg.annotation) if arg.annotation else None,  
-                default_value=default_value,  
-                is_required=default_index < 0  
-            ))  
-        return args  
-  
+    # ... (rest of the code)
+
     def _extract_bases(self, node: ast.ClassDef) -> List[str]:  
         """Extract base classes."""  
         return [ast.unparse(base) for base in node.bases]  
@@ -375,7 +425,7 @@ class CodeExtractor:
   
     def _extract_instance_attributes(self, node: ast.ClassDef) -> List[Dict[str, Any]]:  
         """Extract instance attributes from __init__ method."""  
-        init_method = next((m for m in node.body if isinstance(m, ast.FunctionDef) and m.name == '__init__'), None)  
+        init_method = next((m for m in node.body if isinstance(m, ast.FunctionDef) and m.name == '__init__'), None)  # Look for __init__
         if not init_method:  
             return []  
   
@@ -398,7 +448,7 @@ class CodeExtractor:
                 return ast.unparse(keyword.value)  
         return None  
   
-    def _extract_raises(self, node: ast.FunctionDef) -> List[str]:  
+    def _extract_raises(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[str]:
         """Extract raised exceptions from function body."""  
         raises = set()  
         for child in ast.walk(node):  
@@ -442,7 +492,7 @@ class CodeExtractor:
                         constants.append({  
                             'name': target.id,  
                             'value': value,  
-                            'type': type(ast.literal_eval(node.value)).__name__ if isinstance(node.value, ast.Constant) else None  
+                            'type': type(ast.literal_eval(node.value)).__name__ if isinstance(node.value, ast.Constant) else None # ast.Constant for literals
                         })  
                         self.logger.debug(f"Extracted constant: {target.id}")  
         return constants  
@@ -488,14 +538,14 @@ class CodeExtractor:
             if hasattr(parent, 'body') and node in parent.body  
         )  
   
-    def _is_generator(self, node: ast.FunctionDef) -> bool:  
+    def _is_generator(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:
         """Check if a function is a generator."""  
         for child in ast.walk(node):  
             if isinstance(child, (ast.Yield, ast.YieldFrom)):  
                 return True  
         return False  
   
-    def _is_property(self, node: ast.FunctionDef) -> bool:  
+    def _is_property(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:
         """Check if a function is a property."""  
         return any(  
             isinstance(decorator, ast.Name) and decorator.id == 'property'  
@@ -509,13 +559,13 @@ class CodeExtractor:
             for base in node.bases  
         )  
   
-    def _get_return_type(self, node: ast.FunctionDef) -> Optional[str]:  
+    def _get_return_type(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> Optional[str]:
         """Get the return type annotation if present."""  
         if node.returns:  
             return ast.unparse(node.returns)  
         return None  
   
-    def _get_body_summary(self, node: ast.FunctionDef) -> str:  
+    def _get_body_summary(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> str:
         """Generate a summary of the function body."""  
         body_lines = ast.unparse(node).split('\n')[1:]  # Skip the definition line  
         if len(body_lines) > 5:  
@@ -533,31 +583,37 @@ class CodeExtractor:
             warnings.append("Low maintainability index")  
         return warnings  
   
-    def _calculate_inheritance_depth(self, node: ast.ClassDef) -> int:  
-        """Calculate the inheritance depth of a class."""  
-        depth = 0  
-        bases = node.bases  
-  
-        while bases:  
-            depth += 1  
-            new_bases = []  
-            for base in bases:  
-                if isinstance(base, ast.Name):  
-                    base_name = base.id  
-                    resolved_base = self._resolve_base_class(base_name)  
-                    if resolved_base:  
-                        new_bases.extend(resolved_base.bases)  
-                elif isinstance(base, ast.Attribute):  
-                    try:  
-                        base_name = ast.unparse(base)  
-                        resolved_base = self._resolve_base_class(base_name)  
-                        if resolved_base:  
-                            new_bases.extend(resolved_base.bases)  
-                    except Exception as e:  
-                        self.logger.error(f"Failed to resolve base class {base}: {e}")  
-            bases = new_bases  
-  
-        return depth  
+    def _calculate_inheritance_depth(self, node: ast.ClassDef) -> int:
+        """Calculate the inheritance depth of a class."""
+        try:
+            depth = 0
+            bases = node.bases
+
+            while bases:
+                depth += 1
+                new_bases = []
+                for base in bases:
+                    if isinstance(base, ast.Name):
+                        # For simple base class names
+                        base_class = self._resolve_base_class(base.id)
+                        if base_class and base_class.bases:
+                            new_bases.extend(base_class.bases)
+                    elif isinstance(base, ast.Attribute):
+                        # For qualified base class names (module.Class)
+                        try:
+                            module_part = self._get_name(base.value)
+                            base_class = self._resolve_base_class(f"{module_part}.{base.attr}")
+                            if base_class and base_class.bases:
+                                new_bases.extend(base_class.bases)
+                        except Exception as e:
+                            self.logger.debug(f"Could not resolve qualified base class: {e}")
+                bases = new_bases
+
+            return depth
+
+        except Exception as e:
+            self.logger.error(f"Error calculating inheritance depth: {e}")
+            return 0
   
     def _resolve_base_class(self, base_name: str) -> Optional[ast.ClassDef]:  
         """Resolve a base class from the current module or imports."""  
@@ -589,55 +645,24 @@ class CodeExtractor:
     def _resolve_external_class(self, module_name: str, class_name: str) -> Optional[ast.ClassDef]:
         """Resolve a class from an external module."""
         try:
-            # Handle local module imports first
-            module_path = None
-            module_source = None
-
-            if module_name.startswith(('api', 'core', 'extract')):
-                base_path = Path(__file__).parent.parent
-                module_path = base_path / module_name.replace('.', '/')
-                if not module_path.with_suffix('.py').exists():
-                    self.logger.error("Module %s not found at %s", module_name, module_path)
-                    return None
-                    
+            # Check if module can be imported
+            spec = importlib.util.find_spec(module_name)
+            if spec and spec.origin:
                 try:
-                    with open(module_path.with_suffix('.py'), 'r', encoding='utf-8') as f:
+                    with open(spec.origin, 'r', encoding='utf-8') as f:
                         module_source = f.read()
-                except IOError as e:
-                    self.logger.error("Failed to read module %s: %s", module_name, e)
-                    return None
-            else:
-                # Standard module import
-                try:
-                    module_spec = importlib.util.find_spec(module_name)
-                    if not module_spec or not module_spec.origin:
-                        self.logger.error("Module %s not found in sys.path", module_name)
-                        return None
-
-                    with open(module_spec.origin, 'r', encoding='utf-8') as f:
-                        module_source = f.read()
-                except Exception as e:
-                    self.logger.error("Failed to read module %s: %s", module_name, e)
-                    return None
-
-            if module_source:
-                try:
-                    module_ast = ast.parse(module_source)
-                    for node in ast.walk(module_ast):
+                    tree = ast.parse(module_source)
+                    for node in ast.walk(tree):
                         if isinstance(node, ast.ClassDef) and node.name == class_name:
                             return node
-                    self.logger.error("Class %s not found in module %s", class_name, module_name)
-                except SyntaxError as e:
-                    self.logger.error("Syntax error parsing module %s: %s", module_name, e)
-
+                except Exception as e:
+                    self.logger.debug(f"Could not resolve class {class_name} from {module_name}: {e}")
             return None
-
         except Exception as e:
-            self.logger.error("Failed to resolve class %s from module %s: %s", 
-                            class_name, module_name, e)
+            self.logger.error(f"Failed to resolve class {class_name} from {module_name}: {e}")
             return None
   
-    def _calculate_return_complexity(self, node: ast.FunctionDef) -> int:  
+    def _calculate_return_complexity(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:  
         """Calculate the complexity of return statements."""  
         return_count = sum(1 for _ in ast.walk(node) if isinstance(_, ast.Return))  
         return return_count  
@@ -652,4 +677,4 @@ class CodeExtractor:
         """Extract decorators from a function or class."""  
         decorators = [ast.unparse(decorator) for decorator in node.decorator_list]  
         self.logger.debug(f"Extracted decorators for {node.name}: {decorators}")  
-        return decorators  
+        return decorators

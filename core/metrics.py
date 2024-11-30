@@ -12,7 +12,7 @@ import ast
 import math  
 import sys  
 from collections import defaultdict  
-from typing import Dict, Set, Any  
+from typing import Dict, Set, Any, Union
 from core.logger import LoggerSetup, log_debug, log_info, log_error  
   
 class MetricsError(Exception):  
@@ -38,49 +38,25 @@ class Metrics:
         """Initialize the Metrics class with a logger."""  
         self.logger = LoggerSetup.get_logger(__name__)  
   
-    def calculate_cyclomatic_complexity(self, function_node: ast.FunctionDef) -> int:  
-        """  
-        Calculate the cyclomatic complexity of a function.  
-  
-        Parameters:  
-            function_node (ast.FunctionDef): The AST node representing the function.  
-  
-        Returns:  
-            int: The cyclomatic complexity of the function.  
-        """  
-        self.logger.debug(f"Calculating cyclomatic complexity for function: {getattr(function_node, 'name', 'unknown')}")  
-        if not isinstance(function_node, ast.FunctionDef):  
-            self.logger.error(f"Provided node is not a function definition: {ast.dump(function_node)}")  
-            return 0  
-  
-        complexity = 1  # Start with 1 for the function itself  
-  
-        decision_points = (  
-            ast.If, ast.For, ast.While, ast.And, ast.Or, ast.ExceptHandler,  
-            ast.With, ast.Try, ast.BoolOp, ast.Lambda, ast.ListComp, ast.DictComp,  
-            ast.SetComp, ast.GeneratorExp, ast.IfExp, ast.Match  # For Python 3.10+  
-        )  
-  
-        for node in ast.walk(function_node):  
-            if isinstance(node, decision_points):  
-                if isinstance(node, ast.BoolOp):  
-                    complexity += len(node.values) - 1  
-                    self.logger.debug(f"Incremented complexity for BoolOp with {len(node.values) - 1} decision points: {ast.dump(node)}")  
-                elif isinstance(node, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp)):  
-                    complexity += 1  
-                    self.logger.debug(f"Incremented complexity for comprehension: {ast.dump(node)}")  
-                elif isinstance(node, ast.Match):  
-                    complexity += len(node.cases)  
-                    self.logger.debug(f"Incremented complexity for Match with {len(node.cases)} cases: {ast.dump(node)}")  
-                elif isinstance(node, ast.IfExp):  
-                    complexity += 1  
-                    self.logger.debug(f"Incremented complexity for IfExp: {ast.dump(node)}")  
-                else:  
-                    complexity += 1  
-                    self.logger.debug(f"Incremented complexity at node: {ast.dump(node)}")  
-  
-        self.logger.info(f"Calculated cyclomatic complexity for function '{function_node.name}' is {complexity}")  
-        return complexity  
+    def calculate_cyclomatic_complexity(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
+        """Calculate cyclomatic complexity for a function."""
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self.logger.error("Provided node is not a function definition: %s", ast.dump(node))
+            return 0
+
+        complexity = 1  # Start with 1 for the function itself
+
+        decision_points = (
+            ast.If, ast.For, ast.AsyncFor, ast.While, ast.And, ast.Or,
+            ast.ExceptHandler, ast.With, ast.AsyncWith, ast.Try,
+            ast.BoolOp, ast.Lambda
+        )
+
+        for child in ast.walk(node):
+            if isinstance(child, decision_points):
+                complexity += 1
+
+        return complexity
   
     def calculate_cognitive_complexity(self, function_node: ast.FunctionDef) -> int:  
         """  
@@ -123,21 +99,22 @@ class Metrics:
     def calculate_complexity(self, node: ast.AST) -> int:
         """Calculate complexity for any AST node."""
         try:
-            if isinstance(node, ast.FunctionDef):
+            # Handle async and regular functions
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 return self.calculate_cyclomatic_complexity(node)
             elif isinstance(node, ast.ClassDef):
                 # Calculate class complexity as sum of methods complexity
                 return sum(
                     self.calculate_cyclomatic_complexity(method)
                     for method in node.body 
-                    if isinstance(method, ast.FunctionDef)
+                    if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
                 )
             elif isinstance(node, ast.Module):
                 # Calculate module complexity
                 return sum(
                     self.calculate_complexity(child)
                     for child in ast.iter_child_nodes(node)
-                    if isinstance(child, (ast.FunctionDef, ast.ClassDef))
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
                 )
             return 0
         except Exception as e:
