@@ -13,10 +13,12 @@ import tiktoken
 
 from core.logger import LoggerSetup
 from core.config import AzureOpenAIConfig
-from core.monitoring import MetricsCollector  # Import MetricsCollector
+from core.metrics_collector import MetricsCollector
+
 
 # Initialize logger
 logger = LoggerSetup.get_logger(__name__)
+
 
 @dataclass
 class TokenUsage:
@@ -25,6 +27,7 @@ class TokenUsage:
     completion_tokens: int
     total_tokens: int
     estimated_cost: float
+
 
 class TokenManager:
     """
@@ -44,9 +47,12 @@ class TokenManager:
 
         Args:
             model (str): The model name to use for token management.
-            deployment_name (Optional[str]): Azure deployment name if different from model.
+            deployment_name (Optional[str]): Azure deployment name if different
+                                             from model.
             config (Optional[AzureOpenAIConfig]): Configuration object.
-            metrics_collector (Optional[MetricsCollector]): Metrics collector for tracking operations.
+            metrics_collector (Optional[MetricsCollector]): Metrics collector
+                                                            for tracking
+                                                            operations.
         """
         self.config = config or AzureOpenAIConfig.from_env()
         self.model = self._get_model_name(deployment_name, model)
@@ -58,19 +64,24 @@ class TokenManager:
         except KeyError:
             self.encoding = tiktoken.get_encoding("cl100k_base")
 
-        self.model_config = self.config.model_limits.get(self.model, self.config.model_limits["gpt-4"])
-        logger.debug(f"TokenManager initialized for model: {self.model}, deployment: {deployment_name}")
+        self.model_config = self.config.model_limits.get(
+            self.model, self.config.model_limits["gpt-4"]
+        )
+        logger.debug(f"TokenManager initialized for model: {self.model}, "
+                     f"deployment: {deployment_name}")
 
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
 
-    def _get_model_name(self, deployment_name: Optional[str], default_model: str) -> str:
+    def _get_model_name(self, deployment_name: Optional[str],
+                        default_model: str) -> str:
         """
         Get the model name based on deployment name or default model.
 
         Args:
             deployment_name (Optional[str]): Deployment name to check.
-            default_model (str): Default model name to use if deployment name is not found.
+            default_model (str): Default model name to use if deployment name
+                                 is not found.
 
         Returns:
             str: The model name to use.
@@ -108,14 +119,18 @@ class TokenManager:
 
         Args:
             prompt (str): The prompt text to validate.
-            max_completion_tokens (Optional[int]): Maximum allowed completion tokens.
+            max_completion_tokens (Optional[int]): Maximum allowed completion
+                                                   tokens.
 
         Returns:
-            Tuple[bool, Dict[str, Union[int, float]], str]: Validation result, metrics, and message.
+            Tuple[bool, Dict[str, Union[int, float]], str]: Validation result,
+            metrics, and message.
         """
         try:
             prompt_tokens = self.estimate_tokens(prompt)
-            max_completion = max_completion_tokens or (self.model_config["chunk_size"] - prompt_tokens)
+            max_completion = max_completion_tokens or (
+                self.model_config["chunk_size"] - prompt_tokens
+            )
             total_tokens = prompt_tokens + max_completion
 
             metrics = {
@@ -129,7 +144,8 @@ class TokenManager:
             if total_tokens > self.model_config["chunk_size"]:
                 chunks = self.chunk_text(prompt)
                 if len(chunks) > 1:
-                    message = f"Input split into {len(chunks)} chunks due to token limit"
+                    message = (f"Input split into {len(chunks)} chunks due to "
+                               "token limit")
                     logger.info(message)
                     return True, metrics, message
 
@@ -188,9 +204,23 @@ class TokenManager:
             TokenUsage: Token usage statistics including cost.
         """
         total_tokens = prompt_tokens + completion_tokens
-        prompt_cost = (prompt_tokens / 1000) * self.model_config.get("cached_cost_per_1k_prompt", self.model_config["cost_per_1k_prompt"]) if cached else (prompt_tokens / 1000) * self.model_config["cost_per_1k_prompt"]
-        completion_cost = (completion_tokens / 1000) * self.model_config.get("cached_cost_per_1k_completion", self.model_config["cost_per_1k_completion"]) if cached else (completion_tokens / 1000) * self.model_config["cost_per_1k_completion"]
-        return TokenUsage(prompt_tokens, completion_tokens, total_tokens, prompt_cost + completion_cost)
+        prompt_cost = (
+            (prompt_tokens / 1000) *
+            self.model_config.get("cached_cost_per_1k_prompt",
+                                  self.model_config["cost_per_1k_prompt"])
+            if cached else
+            (prompt_tokens / 1000) * self.model_config["cost_per_1k_prompt"]
+        )
+        completion_cost = (
+            (completion_tokens / 1000) *
+            self.model_config.get("cached_cost_per_1k_completion",
+                                  self.model_config["cost_per_1k_completion"])
+            if cached else
+            (completion_tokens / 1000) *
+            self.model_config["cost_per_1k_completion"]
+        )
+        return TokenUsage(prompt_tokens, completion_tokens, total_tokens,
+                          prompt_cost + completion_cost)
 
     def track_request(self, request_tokens: int, response_tokens: int) -> None:
         """
@@ -203,11 +233,16 @@ class TokenManager:
         try:
             self.total_prompt_tokens += request_tokens
             self.total_completion_tokens += response_tokens
-            logger.debug(f"Tracked request: {request_tokens} prompt, {response_tokens} completion tokens")
+            logger.debug(f"Tracked request: {request_tokens} prompt, "
+                         f"{response_tokens} completion tokens")
 
             if self.metrics_collector:
-                usage = {"prompt_tokens": request_tokens, "completion_tokens": response_tokens}
-                asyncio.create_task(self.metrics_collector.track_operation("token_usage", True, 0, usage))
+                usage = {"prompt_tokens": request_tokens,
+                         "completion_tokens": response_tokens}
+                asyncio.create_task(
+                    self.metrics_collector.track_operation("token_usage",
+                                                           True, 0, usage)
+                )
 
         except Exception as e:
             logger.error(f"Error tracking request: {e}")
@@ -220,7 +255,8 @@ class TokenManager:
         Returns:
             Dict[str, int]: Total prompt and completion tokens.
         """
-        return {"total_prompt_tokens": self.total_prompt_tokens, "total_completion_tokens": self.total_completion_tokens}
+        return {"total_prompt_tokens": self.total_prompt_tokens,
+                "total_completion_tokens": self.total_completion_tokens}
 
     def get_model_limits(self) -> Dict[str, int]:
         """
@@ -234,11 +270,13 @@ class TokenManager:
                 "max_tokens": self.model_config["max_tokens"],
                 "chunk_size": self.model_config["chunk_size"],
                 "max_prompt_tokens": self.model_config["chunk_size"],
-                "max_completion_tokens": self.model_config["max_tokens"] - self.model_config["chunk_size"],
+                "max_completion_tokens": (self.model_config["max_tokens"] -
+                                          self.model_config["chunk_size"]),
             }
         except Exception as e:
             logger.error(f"Error getting model limits: {e}")
-            return {"max_tokens": 0, "chunk_size": 0, "max_prompt_tokens": 0, "max_completion_tokens": 0}
+            return {"max_tokens": 0, "chunk_size": 0, "max_prompt_tokens": 0,
+                    "max_completion_tokens": 0}
 
     def get_token_costs(self, cached: bool = False) -> Dict[str, float]:
         """
@@ -253,12 +291,15 @@ class TokenManager:
         try:
             if cached and "cached_cost_per_1k_prompt" in self.model_config:
                 return {
-                    "prompt_cost_per_1k": self.model_config["cached_cost_per_1k_prompt"],
-                    "completion_cost_per_1k": self.model_config["cached_cost_per_1k_completion"],
+                    "prompt_cost_per_1k": self.model_config[
+                        "cached_cost_per_1k_prompt"],
+                    "completion_cost_per_1k": self.model_config[
+                        "cached_cost_per_1k_completion"],
                 }
             return {
                 "prompt_cost_per_1k": self.model_config["cost_per_1k_prompt"],
-                "completion_cost_per_1k": self.model_config["cost_per_1k_completion"],
+                "completion_cost_per_1k": self.model_config[
+                    "cost_per_1k_completion"],
             }
         except Exception as e:
             logger.error(f"Error getting token costs: {e}")
@@ -284,6 +325,7 @@ def estimate_tokens(text: str, model: str = "gpt-4") -> int:
     """
     manager = TokenManager(model=model)
     return manager.estimate_tokens(text)
+
 
 def chunk_text(text: str, model: str = "gpt-4") -> List[str]:
     """

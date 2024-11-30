@@ -3,29 +3,25 @@
 """
 AI Interaction Handler Module
 
-Manages interactions with Azure OpenAI API for docstring generation, handling token management,
-caching, and response processing with structured JSON outputs.
+Manages interactions with Azure OpenAI API for docstring generation, handling
+token management, caching, and response processing with structured JSON outputs.
 """
 
 import asyncio
 import json
-from datetime import datetime
 from typing import Optional, Tuple, Dict, Any
 import ast
 from dataclasses import dataclass
 import openai
-from openai import APIError
-from jsonschema import validate, ValidationError as JsonValidationError
 from core.logger import LoggerSetup
 from core.cache import Cache
-from core.monitoring import MetricsCollector
+from core.metrics_collector import MetricsCollector
 from core.config import AzureOpenAIConfig
 from core.docstring_processor import DocstringProcessor, DocstringData
 from core.code_extraction import CodeExtractor
-from docs.docs import DocStringManager
 from api.token_management import TokenManager
 from api.api_client import APIClient
-from exceptions import ValidationError
+from jsonschema import validate  # Importing validate for JSON schema validation
 
 logger = LoggerSetup.get_logger(__name__)
 
@@ -133,16 +129,30 @@ class AIInteractionHandler:
 
     async def process_code(self, source_code: str, cache_key: Optional[str] = None) -> Optional[Tuple[str, str]]:
         """Process source code to generate docstrings."""
+        operation_start = datetime.now()
+
         try:
+            if not source_code.strip():
+                logger.error("Empty source code provided")
+                return None
+
+            # Check cache if enabled
+            if self.cache and cache_key:
+                try:
+                    cached_result = await self.cache.get_cached_docstring(cache_key)
+                    if cached_result and isinstance(cached_result, dict):
+                        return cached_result.get('code', ''), cached_result.get('docs', '')
+                except Exception as e:
+                    logger.warning("Cache error: %s", str(e))
+
             # Validate token usage
             valid, metrics, message = await self.token_manager.validate_request(source_code)
             if not valid:
-                logger.error(f"Token validation failed: {message}")
+                logger.error("Token validation failed: %s", message)
                 return None
 
             # Initialize module state
             self._current_module_tree = ast.parse(source_code)
-            self._current_module_docs = {}
             self._current_module = type('Module', (), {
                 '__name__': cache_key.split(':')[1] if cache_key else 'unknown',
                 '__doc__': ast.get_docstring(self._current_module_tree) or '',
@@ -151,18 +161,23 @@ class AIInteractionHandler:
             })
             
             # Generate module documentation
-            module_docs = await self._generate_documentation(source_code, {}, self._current_module_tree)
-            if not module_docs:
+            module_docs = await self._generate_documentation(
+                source_code=source_code,
+                metadata={},
+                node=self._current_module_tree
+            )
+            
+            if not module_docs or not module_docs.content:
                 logger.error("Documentation generation failed")
                 return None
 
-            # Process classes and functions
+            # Update code with docstrings
             for node in ast.walk(self._current_module_tree):
                 if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
                     element_docs = await self._generate_documentation(
-                        ast.unparse(node), 
-                        {"element_type": type(node).__name__}, 
-                        node
+                        source_code=ast.unparse(node),
+                        metadata={"element_type": type(node).__name__},
+                        node=node
                     )
                     if element_docs:
                         self._insert_docstring(node, element_docs.content)
@@ -170,24 +185,31 @@ class AIInteractionHandler:
             # Generate final output
             updated_code = ast.unparse(self._current_module_tree)
 
-            # Cache results
+            # Cache result
             if self.cache and cache_key:
                 await self._cache_result(cache_key, updated_code, module_docs.content)
 
-            # Track token usage
+            # Track usage
             self.token_manager.track_request(metrics['prompt_tokens'], metrics['max_completion_tokens'])
-            logger.info(f"Tokens used: {metrics['prompt_tokens']} prompt, {metrics['max_completion_tokens']} completion")
-
+            
             return updated_code, module_docs.content
 
         except Exception as e:
-            logger.error(f"Process code failed: {e}")
+            logger.error("Process code failed: %s", str(e))
             return None
 
-    async def _generate_documentation(self, source_code: str, metadata: Dict[str, Any], node: Optional[ast.AST] = None) -> Optional[ProcessingResult]:
+    async def _generate_documentation(
+        self, 
+        source_code: str, 
+        metadata: Dict[str, Any], 
+        node: Optional[ast.AST] = None
+    ) -> Optional[ProcessingResult]:
         """Generate documentation using Azure OpenAI."""
         try:
+            # Create prompt
             prompt = self._create_function_calling_prompt(source_code, metadata, node)
+            
+            # Get API response
             response, usage = await self.client.process_request(
                 prompt=prompt,
                 temperature=0.3,
@@ -196,40 +218,46 @@ class AIInteractionHandler:
                 tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
             )
             
-            if not response:
+            if not response or not response.choices:
+                logger.error("Empty response from API")
                 return None
                 
-            message = response.choices[0].message
-            if message.tool_calls and message.tool_calls[0].function:
-                function_args = message.tool_calls[0].function.arguments
-                response_data = json.loads(function_args)
-                validate(instance=response_data, schema=DOCSTRING_SCHEMA)
-                docstring_data = DocstringData(**response_data)
-                
-                # Add complexity if node provided
-                if node and self.metrics_collector:
-                    complexity = self.metrics_collector.calculate_complexity(node)
-                    docstring_data.set_complexity(complexity)
-                    asyncio.create_task(self.metrics_collector.track_operation(
-                        "docstring_generation", True, 0, usage  # Track usage data
-                    ))
+            # Extract and validate response
+            tool_call = response.choices[0].message.tool_calls[0].function
+            response_data = json.loads(tool_call.arguments)
+            validate(instance=response_data, schema=DOCSTRING_SCHEMA)
+            
+            # Create docstring
+            docstring_data = DocstringData(**response_data)
+            
+            # Add metrics
+            complexity = None
+            if node and self.metrics_collector:
+                complexity = self.metrics_collector.calculate_complexity(node)
+                docstring_data.set_complexity(complexity)
+                    
+            # Format docstring
+            formatted_docstring = self.docstring_processor.format(
+                docstring_data,
+                complexity_score=complexity
+            )
 
-                formatted_docstring = self.docstring_processor.format(docstring_data)
-                
-                # Track token usage
-                self.token_manager.track_request(usage['prompt_tokens'], usage['completion_tokens'])
-                logger.info(f"Tokens used: {usage['prompt_tokens']} prompt, {usage['completion_tokens']} completion")
-                
-                return ProcessingResult(
-                    content=formatted_docstring,
-                    usage=usage or {},
-                    processing_time=0.0
-                )
-                
+            return ProcessingResult(
+                content=formatted_docstring,
+                usage=usage,
+                metrics={
+                    'complexity': complexity,
+                    'tokens': usage,
+                    'context': metadata
+                } if self.metrics_collector else {},
+                cached=False,
+                processing_time=0.0
+            )
+
         except Exception as e:
-            logger.error(f"Error during generation: {e}")
+            logger.error("Error during generation: %s", str(e))
             return None
-
+    
     def _initialize_tools(self) -> None:
         """Initialize the function tools for structured output."""
         self.docstring_function = {
@@ -467,8 +495,7 @@ class AIInteractionHandler:
                 await self.cache.close()
             if self.metrics_collector:
                 await self.metrics_collector.close()
-            if self.token_manager:
-                await self.token_manager.close()
+            # Removed the call to close on TokenManager
         except Exception as e:
             logger.error(f"Error closing AI handler: {e}")
             raise

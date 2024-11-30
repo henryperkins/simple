@@ -1,8 +1,9 @@
 """
 Docstring Processing Module
 
-Handles parsing, validation, and formatting of docstrings with integrated metrics,
-extraction capabilities, and improved structure.
+This module handles the parsing, validation, and formatting of docstrings.
+It integrates metrics calculation and code extraction to provide a comprehensive
+analysis of docstrings within Python code.
 """
 
 import ast
@@ -25,10 +26,10 @@ class DocstringData:
     raises: List[Dict[str, Any]]
     metrics: Optional['DocstringMetrics'] = None
     extraction_context: Optional[Dict[str, Any]] = None
-    complexity: Optional[int] = None  # Add optional complexity field
+    complexity: Optional[int] = None
 
     def set_complexity(self, score: int) -> None:
-        """Set complexity score."""
+        """Set the complexity score for the docstring."""
         self.complexity = score
 
 @dataclass
@@ -55,7 +56,7 @@ class DocstringProcessor:
     Integrates metrics calculation and code extraction.
     """
 
-    def __init__(self, min_length: Optional[Dict[str, int]] = None):
+    def __init__(self, min_length: Optional[Dict[str, int]] = None) -> None:
         """
         Initialize DocstringProcessor with optional minimum length requirements.
 
@@ -222,7 +223,8 @@ class DocstringProcessor:
             docstring_data (DocstringData): The docstring data to validate.
 
         Returns:
-            Tuple[bool, List[str]]: Validation result and list of errors.
+            Tuple[bool, List[str]]: A tuple containing a boolean indicating validation success,
+            and a list of error messages if validation fails.
         """
         errors = []
         if len(docstring_data.summary) < self.min_length['summary']:
@@ -237,7 +239,16 @@ class DocstringProcessor:
         return is_valid, errors
 
     def format(self, docstring_data: DocstringData, complexity_score: Optional[int] = None) -> str:
-        """Format structured docstring data into a docstring string with complexity score."""
+        """
+        Format structured docstring data into a formatted docstring string.
+
+        Args:
+            docstring_data (DocstringData): The structured docstring data to format.
+            complexity_score (Optional[int]): An optional complexity score to include in the docstring.
+
+        Returns:
+            str: The formatted docstring.
+        """
         docstring_lines = []
 
         # Add summary if present
@@ -285,7 +296,16 @@ class DocstringProcessor:
         return "\n".join(docstring_lines).strip()
 
     def _format_module_docstring(self, docstring_data: DocstringData, complexity_metrics: Dict[str, Any]) -> str:
-        """Format module-level docstring with complexity scores."""
+        """
+        Format module-level docstring with complexity scores.
+
+        Args:
+            docstring_data (DocstringData): The structured docstring data for the module.
+            complexity_metrics (Dict[str, Any]): Complexity metrics to include in the docstring.
+
+        Returns:
+            str: The formatted module-level docstring.
+        """
         docstring_lines = []
 
         # Add summary and description

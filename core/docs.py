@@ -68,19 +68,15 @@ class DocStringManager:
         self._add_parents(self.tree)
 
     async def generate_documentation(self) -> str:
-        """
-        Generate complete documentation for the current context.
-
-        Returns:
-            str: The generated documentation in markdown format.
-
-        Raises:
-            DocumentationError: If documentation generation fails.
-        """
+        """Generate complete documentation."""
         try:
             extraction_result = self.code_extractor.extract_code(self.context.source_code)
+            
+            # Get AI-generated docs from metadata
+            ai_docs = self.context.metadata.get('ai_generated', '')
+            
             sections = [
-                self._create_module_section(),
+                self._create_module_section(ai_docs),  # Pass AI docs
                 self._create_overview_section(),
                 self._create_classes_section(extraction_result.classes),
                 self._create_class_methods_section(extraction_result.classes),
@@ -88,21 +84,19 @@ class DocStringManager:
                 self._create_constants_section(extraction_result.constants),
                 self._create_source_code_section(extraction_result.metrics)
             ]
+            
             return self.markdown_generator.generate(sections, self.context.module_path)
+            
         except Exception as e:
-            logger.error(f"Failed to generate documentation: {e}")
+            logger.error("Failed to generate documentation: %s", str(e))
             raise DocumentationError("Documentation generation failed", {'error': str(e)})
 
-    def _create_module_section(self) -> DocumentationSection:
-        """
-        Create module section.
-
-        Returns:
-            DocumentationSection: The module section of the documentation.
-        """
-        module_name = self.context.module_path.stem if self.context.module_path else 'Unknown Module'
-        return DocumentationSection(title=f"Module: {module_name}", content="")
-
+    def _create_module_section(self, ai_docs: str) -> DocumentationSection:
+        """Create module section with AI-generated documentation."""
+        return DocumentationSection(
+            title="Module Documentation",
+            content=ai_docs or "No documentation available."
+        )
     def _create_overview_section(self) -> DocumentationSection:
         """
         Create overview section.

@@ -15,12 +15,13 @@ load_dotenv()
 
 from core.logger import LoggerSetup
 from core.cache import Cache
-from core.monitoring import MetricsCollector, SystemMonitor  # Import SystemMonitor
+from core.monitoring import SystemMonitor
+from core.metrics_collector import MetricsCollector
 from core.config import AzureOpenAIConfig
 from api.token_management import TokenManager
 from ai_interaction import AIInteractionHandler
-from docs.docs import DocumentationContext, DocStringManager
-from docs.markdown_generator import MarkdownGenerator, MarkdownConfig
+from core.docs import DocumentationContext, DocStringManager
+from core.markdown_generator import MarkdownGenerator, MarkdownConfig
 from repository_handler import RepositoryHandler
 from exceptions import (
     ConfigurationError,
