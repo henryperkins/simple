@@ -1,190 +1,177 @@
-"""  
-Markdown Documentation Generator Module  
-  
-Generates formatted markdown documentation from documentation sections.  
-"""  
-  
-from datetime import datetime  
-from typing import List, Optional  
-from dataclasses import dataclass  
-import unicodedata  
-import re  
-  
-from core.logger import LoggerSetup  
-from core.docstring_processor import DocumentationSection  
-  
-logger = LoggerSetup.get_logger(__name__)  
-  
-  
-@dataclass  
-class MarkdownConfig:  
-    """Configuration for markdown generation."""  
-    include_toc: bool = True  
-    include_timestamp: bool = True  
-    code_language: str = "python"  
-    heading_offset: int = 0  
-    max_heading_level: int = 6  # Prevent headings beyond h6  
-  
-  
-class MarkdownGenerator:  
-    """Generates markdown documentation with consistent formatting."""  
-  
-    def __init__(self, config: Optional[MarkdownConfig] = None) -> None:  
-        """  
-        Initialize markdown generator with optional configuration.  
-  
-        Args:  
-            config (Optional[MarkdownConfig]): Optional markdown generation configuration.  
-        """  
-        self.config = config or MarkdownConfig()  
-  
-    def generate(  
-        self,  
-        sections: List[DocumentationSection],  
-        include_source: bool = True,  
-        source_code: Optional[str] = None,  
-        module_path: Optional[str] = None  
-    ) -> str:  
-        """  
-        Generate complete markdown documentation.  
-  
-        Args:  
-            sections (List[DocumentationSection]): List of documentation sections.  
-            include_source (bool): Whether to include source code.  
-            source_code (Optional[str]): Optional source code to include.  
-            module_path (Optional[str]): Optional module path to include.  
-  
-        Returns:  
-            str: Generated markdown documentation.  
-        """  
-        md_lines: List[str] = []  
-  
-        if self.config.include_timestamp or module_path:  
-            md_lines.append("# Documentation\n")  
-  
-        # Add timestamp and module path if provided  
-        if self.config.include_timestamp:  
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  
-            md_lines.append(f"*Generated on: {timestamp}*")  
-  
-        if module_path:  
-            md_lines.append(f"**Module Path:** `{module_path}`")  
-  
-        if (self.config.include_timestamp or module_path):  
-            md_lines.append("")  # Add empty line after header info  
-  
-        # Generate table of contents if enabled  
-        if self.config.include_toc:  
-            md_lines.extend(self._generate_toc(sections))  
-  
-        # Generate section content  
-        for section in sections:  
-            md_lines.extend(self._generate_section(section))  
-  
-        # Add source code if included  
-        if include_source and source_code:  
-            md_lines.extend([  
-                "## Source Code\n",  
-                f"```{self.config.code_language}",  
-                source_code,  
-                "```",  
-                ""  
-            ])  
-  
-        return "\n".join(md_lines).strip()  
-  
-    def _generate_toc(  
-        self,  
-        sections: List[DocumentationSection],  
-        level: int = 0  
-    ) -> List[str]:  
-        """  
-        Generate table of contents.  
-  
-        Args:  
-            sections (List[DocumentationSection]): List of documentation sections.  
-            level (int): Current indentation level.  
-  
-        Returns:  
-            List[str]: List of markdown lines for the TOC.  
-        """  
-        toc_lines: List[str] = []  
-  
-        if level == 0:  
-            toc_lines.append("## Table of Contents\n")  
-  
-        for section in sections:  
-            if not section.title:  
-                continue  # Skip sections without a title  
-  
-            indent = "    " * level  
-            link = self._create_link(section.title)  
-            toc_lines.append(f"{indent}- [{section.title}](#{link})")  
-  
-            if section.subsections:  
-                toc_lines.extend(self._generate_toc(section.subsections, level + 1))  
-  
-        if level == 0:  
-            toc_lines.append("")  # Add empty line after TOC  
-  
-        return toc_lines  
-  
-    def _generate_section(  
-        self,  
-        section: DocumentationSection,  
-        level: int = 2  
-    ) -> List[str]:  
-        """  
-        Generate markdown for a documentation section.  
-  
-        Args:  
-            section (DocumentationSection): The documentation section.  
-            level (int): Current heading level.  
-  
-        Returns:  
-            List[str]: List of markdown lines for the section.  
-        """  
-        md_lines: List[str] = []  
-        if not section.title and not section.content:  
-            return md_lines  # Return empty list if there's no content  
-  
-        # Calculate heading level without exceeding max_heading_level  
-        header_level = min(level + self.config.heading_offset, self.config.max_heading_level)  
-        header_prefix = '#' * header_level  
-  
-        if section.title:  
-            md_lines.append(f"{header_prefix} {section.title}\n")  
-  
-        if section.content:  
-            md_lines.append(f"{section.content}\n")  
-  
-        # Add subsections recursively  
-        for subsection in section.subsections or []:  
-            md_lines.extend(self._generate_section(subsection, level + 1))  
-  
-        return md_lines  
-  
-    @staticmethod  
-    def _create_link(title: str) -> str:  
-        """  
-        Create markdown link from title compatible with GitHub Flavored Markdown.  
-  
-        Args:  
-            title (str): Section title.  
-  
-        Returns:  
-            str: Link anchor compatible with markdown.  
-        """  
-        # Normalize the title  
-        normalized_title = unicodedata.normalize('NFKD', title)  
-        # Convert to lowercase  
-        normalized_title = normalized_title.lower()  
-        # Remove invalid characters  
-        normalized_title = re.sub(r'[^\w\- ]+', '', normalized_title)  
-        # Replace spaces with dashes  
-        normalized_title = normalized_title.replace(' ', '-')  
-        # Remove multiple consecutive dashes  
-        normalized_title = re.sub(r'-{2,}', '-', normalized_title)  
-        # Strip leading and trailing dashes  
-        normalized_title = normalized_title.strip('-')  
-        return normalized_title  
+"""
+Markdown Documentation Generator Module
+
+Generates formatted markdown documentation from documentation sections.
+"""
+
+from datetime import datetime
+from typing import List, Optional
+from dataclasses import dataclass
+import unicodedata
+import re
+from pathlib import Path
+
+from core.logger import LoggerSetup
+from core.docstring_processor import DocumentationSection
+
+logger = LoggerSetup.get_logger(__name__)
+
+@dataclass
+class MarkdownConfig:
+    """Configuration for markdown generation.
+
+    Attributes:
+        include_toc (bool): Whether to include a table of contents.
+        include_timestamp (bool): Whether to include a timestamp in the documentation.
+        code_language (str): The programming language for syntax highlighting in code blocks.
+        heading_offset (int): Offset for heading levels in the documentation.
+        max_heading_level (int): Maximum heading level allowed (default is 6).
+        include_source (bool): Option to include source code snippets in the documentation.
+    """
+    include_toc: bool = True
+    include_timestamp: bool = True
+    code_language: str = "python"
+    heading_offset: int = 0
+    max_heading_level: int = 6
+    include_source: bool = True
+
+class MarkdownGenerator:
+    """Generates markdown documentation with consistent formatting."""
+
+    def __init__(self, config: Optional[MarkdownConfig] = None):
+        """Initialize the markdown generator with optional configuration."""
+        self.config = config or MarkdownConfig()
+
+    def generate(self, sections: List[DocumentationSection], module_path: Optional[Path] = None) -> str:
+        """Generate complete markdown documentation following the template structure."""
+        module_name = module_path.stem if module_path else "Unknown Module"
+        
+        sections = [
+            self._generate_header(module_name),
+            self._generate_overview(module_path, sections),
+            self._generate_classes_section(sections),
+            self._generate_class_methods_section(sections),
+            self._generate_functions_section(sections),
+            self._generate_constants_section(sections),
+            self._generate_changes_section(sections),
+            self._generate_source_section(sections)
+        ]
+        
+        return "\n".join(filter(None, sections))
+
+    def _generate_header(self, module_name: str) -> str:
+        """Generate the module header."""
+        return f"# Module: {module_name}\n"
+
+    def _generate_overview(self, module_path: Optional[Path], sections: List[DocumentationSection]) -> str:
+        """Generate the overview section."""
+        overview_section = next((s for s in sections if s.title == "Overview"), None)
+        description = overview_section.content if overview_section else "No description available."
+        
+        return "\n".join([
+            "## Overview",
+            f"**File:** `{str(module_path) if module_path else 'Unknown'}`",
+            f"**Description:** {description}",
+            ""
+        ])
+
+    def _generate_classes_section(self, sections: List[DocumentationSection]) -> str:
+        """Generate the classes section."""
+        classes_section = next((s for s in sections if s.title == "Classes"), None)
+        if not classes_section:
+            return ""
+
+        lines = [
+            "## Classes",
+            "| Class | Inherits From | Complexity Score* |",
+            "|-------|---------------|-------------------|"
+        ]
+
+        if hasattr(classes_section, 'tables'):
+            lines.extend(classes_section.tables)
+
+        return "\n".join(lines) + "\n"
+
+    def _generate_class_methods_section(self, sections: List[DocumentationSection]) -> str:
+        """Generate the class methods section."""
+        methods_section = next((s for s in sections if s.title == "Class Methods"), None)
+        if not methods_section:
+            return ""
+
+        lines = [
+            "### Class Methods",
+            "| Class | Method | Parameters | Returns | Complexity Score* |",
+            "|-------|--------|------------|---------|-------------------|"
+        ]
+
+        if hasattr(methods_section, 'tables'):
+            lines.extend(methods_section.tables)
+
+        return "\n".join(lines) + "\n"
+
+    def _generate_functions_section(self, sections: List[DocumentationSection]) -> str:
+        """Generate the functions section."""
+        functions_section = next((s for s in sections if s.title == "Functions"), None)
+        if not functions_section:
+            return ""
+
+        lines = [
+            "## Functions",
+            "| Function | Parameters | Returns | Complexity Score* |",
+            "|----------|------------|---------|-------------------|"
+        ]
+
+        if hasattr(functions_section, 'tables'):
+            lines.extend(functions_section.tables)
+
+        return "\n".join(lines) + "\n"
+
+    def _generate_constants_section(self, sections: List[DocumentationSection]) -> str:
+        """Generate the constants and variables section."""
+        constants_section = next((s for s in sections if s.title == "Constants and Variables"), None)
+        if not constants_section:
+            return ""
+
+        lines = [
+            "## Constants and Variables",
+            "| Name | Type | Value |",
+            "|------|------|--------|"
+        ]
+
+        if hasattr(constants_section, 'tables'):
+            lines.extend(constants_section.tables)
+
+        return "\n".join(lines) + "\n"
+
+    def _generate_changes_section(self, sections: List[DocumentationSection]) -> str:
+        """Generate the recent changes section."""
+        changes_section = next((s for s in sections if s.title == "Recent Changes"), None)
+        content = []
+        
+        if changes_section and changes_section.content:
+            content = [
+                "## Recent Changes",
+                changes_section.content,
+                ""
+            ]
+        else:
+            content = [
+                "## Recent Changes",
+                "- No recent changes recorded.",
+                ""
+            ]
+
+        return "\n".join(content)
+
+    def _generate_source_section(self, sections: List[DocumentationSection]) -> str:
+        """Generate the source code section."""
+        source_section = next((s for s in sections if s.title == "Source Code"), None)
+        if not source_section or not source_section.source_code:
+            return ""
+
+        return "\n".join([
+            "## Source Code",
+            "```python",
+            source_section.source_code,
+            "```"
+        ])

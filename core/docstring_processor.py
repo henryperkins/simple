@@ -1,183 +1,123 @@
 """
-Core docstring processing module with integrated metrics and extraction capabilities.
+Docstring Processing Module
+
+Handles parsing, validation, and formatting of docstrings with integrated metrics,
+extraction capabilities, and improved structure.
 """
 
 import ast
-from typing import List, Dict, Any, Optional, Union
-from dataclasses import dataclass
+import logging
+from typing import Optional, Dict, Any, List, Tuple, Union
+from dataclasses import dataclass, field
 from core.logger import LoggerSetup
 from core.metrics import Metrics
 from core.code_extraction import CodeExtractor, ExtractedFunction, ExtractedClass
 
 logger = LoggerSetup.get_logger(__name__)
 
-# Schemas
-GOOGLE_STYLE_DOCSTRING_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "description": {"type": "string"},
-        "params": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "type": {"type": "string"},
-                    "description": {"type": "string"}
-                },
-                "required": ["name", "type", "description"]
-            }
-        },
-        "returns": {
-            "type": "object",
-            "properties": {
-                "type": {"type": "string"},
-                "description": {"type": "string"}
-            },
-            "required": ["type", "description"]
-        },
-        "raises": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "exception": {"type": "string"},
-                    "description": {"type": "string"}
-                },
-                "required": ["exception", "description"]
-            }
-        }
-    },
-    "required": ["description", "params", "returns", "raises"]
-}
+@dataclass
+class DocstringData:
+    """Structured representation of a docstring."""
+    summary: str
+    description: str
+    args: List[Dict[str, Any]]
+    returns: Dict[str, Any]
+    raises: List[Dict[str, Any]]
+    metrics: Optional['DocstringMetrics'] = None
+    extraction_context: Optional[Dict[str, Any]] = None
+    complexity: Optional[int] = None  # Add optional complexity field
 
-EXTRACT_INFORMATION_TOOL = {
-    "name": "extract_information",
-    "description": "Extracts information from functions, classes, methods, and docstrings.",
-    "strict": True,
-    "parameters": {
-        "type": "object",
-        "required": [
-            "source_code",
-            "include_docstrings",
-            "include_methods",
-            "include_classes"
-        ],
-        "properties": {
-            "source_code": {
-                "type": "string",
-                "description": "The source code from which to extract information."
-            },
-            "include_docstrings": {
-                "type": "boolean",
-                "description": "Flag to include/exclude docstrings in the extraction process."
-            },
-            "include_methods": {
-                "type": "boolean",
-                "description": "Flag to include/exclude methods in the extraction process."
-            },
-            "include_classes": {
-                "type": "boolean",
-                "description": "Flag to include classes in the extraction process."
-            },
-            "documentation_style": {
-                "type": "string",
-                "description": "The style of the documentation to extract.",
-                "enum": ["google", "numpy", "rst"],
-                "default": "google"
-            },
-            "output_format": {
-                "type": "string",
-                "description": "The desired format for the extracted information.",
-                "enum": ["plain", "json", "markdown"],
-                "default": "json"
-            }
-        },
-        "additionalProperties": False
-    }
-}
+    def set_complexity(self, score: int) -> None:
+        """Set complexity score."""
+        self.complexity = score
 
-# Docstring and Metrics Data Classes
 @dataclass
 class DocstringMetrics:
-    """Metrics for evaluating the quality and complexity of docstrings."""
+    """Metrics related to a docstring."""
     length: int
     sections_count: int
     args_count: int
     cognitive_complexity: float
     completeness_score: float
 
-
-@dataclass
-class DocstringData:
-    """Represents parsed docstring data with associated metrics."""
-    summary: str
-    description: str
-    args: List[Dict[str, Optional[str]]]
-    returns: Dict[str, Optional[str]]
-    raises: Optional[List[Dict[str, Optional[str]]]] = None
-    metrics: Optional[DocstringMetrics] = None
-    extraction_context: Optional[Dict[str, Any]] = None
-
-
 @dataclass
 class DocumentationSection:
     """Represents a section of documentation."""
     title: str
     content: str
-    subsections: Optional[List['DocumentationSection']] = None
-
+    subsections: Optional[List['DocumentationSection']] = field(default_factory=list)
+    source_code: Optional[str] = None
+    tables: Optional[List[str]] = field(default_factory=list)
 
 class DocstringProcessor:
-    """Processor for handling docstrings with integrated metrics and extraction capabilities."""
+    """
+    Processes docstrings by parsing, validating, and formatting them.
+    Integrates metrics calculation and code extraction.
+    """
 
-    def __init__(self) -> None:
-        """Initialize the DocstringProcessor with a metrics calculator and code extractor."""
-        self.metrics_calculator = Metrics()
-        self.code_extractor = CodeExtractor()
-        self.min_length: Dict[str, int] = {
-            'summary': 10,
-            'description': 10
-        }
-
-    def process_node(self, node: ast.AST, source_code: str) -> DocstringData:
+    def __init__(self, min_length: Optional[Dict[str, int]] = None):
         """
-        Process an AST node to extract and analyze docstring information.
+        Initialize DocstringProcessor with optional minimum length requirements.
 
         Args:
-            node (ast.AST): The AST node representing a function or class.
+            min_length (Optional[Dict[str, int]]): Minimum length requirements for docstring sections.
+        """
+        self.min_length = min_length or {
+            'summary': 10,
+            'description': 20
+        }
+        self.metrics_calculator = Metrics()
+        self.code_extractor = CodeExtractor()
+
+    def extract(self, node: ast.AST, source_code: str) -> DocstringData:
+        """
+        Extract and process the docstring from an AST node, including metrics and extraction context.
+
+        Args:
+            node (ast.AST): The AST node to extract the docstring from.
             source_code (str): The source code containing the node.
 
         Returns:
-            DocstringData: The processed docstring data with metrics and context.
+            DocstringData: The extracted and processed docstring data.
         """
         try:
+            raw_docstring = ast.get_docstring(node) or ""
+            docstring_data = self.parse(raw_docstring)
             extraction_result = self.code_extractor.extract_code(source_code)
-            
-            extracted_info = None
-            if isinstance(node, ast.ClassDef):
-                extracted_info = next((c for c in extraction_result.classes if c.name == node.name), None)
-            elif isinstance(node, ast.FunctionDef):
-                extracted_info = next((f for f in extraction_result.functions if f.name == node.name), None)
-
-            docstring_data = self.parse(ast.get_docstring(node) or '')
+            extracted_info = self._get_extracted_info(node, extraction_result)
             docstring_data.extraction_context = self._convert_extracted_info(extracted_info)
             docstring_data.metrics = self._convert_to_docstring_metrics(extracted_info.metrics if extracted_info else {})
-            
             return docstring_data
         except Exception as e:
             logger.error(f"Error processing node: {e}")
             return DocstringData("", "", [], {}, [])
+
+    def _get_extracted_info(self, node: ast.AST, extraction_result: Any) -> Union[ExtractedFunction, ExtractedClass, None]:
+        """
+        Retrieve extracted information for a given node.
+
+        Args:
+            node (ast.AST): The AST node for which to retrieve information.
+            extraction_result (Any): The result of code extraction.
+
+        Returns:
+            Union[ExtractedFunction, ExtractedClass, None]: The extracted information or None if not found.
+        """
+        if isinstance(node, ast.ClassDef):
+            return next((c for c in extraction_result.classes if c.name == node.name), None)
+        elif isinstance(node, ast.FunctionDef):
+            return next((f for f in extraction_result.functions if f.name == node.name), None)
+        return None
 
     def _convert_extracted_info(self, extracted_info: Union[ExtractedFunction, ExtractedClass, None]) -> Dict[str, Any]:
         """
         Convert extracted information into a context dictionary.
 
         Args:
-            extracted_info (Union[ExtractedFunction, ExtractedClass, None]): The extracted function or class information.
+            extracted_info (Union[ExtractedFunction, ExtractedClass, None]): The extracted information.
 
         Returns:
-            Dict[str, Any]: A dictionary containing the context of the extracted information.
+            Dict[str, Any]: A dictionary representing the extracted context.
         """
         if not extracted_info:
             return {}
@@ -208,7 +148,7 @@ class DocstringProcessor:
         Convert metrics from CodeExtractor to DocstringMetrics.
 
         Args:
-            metrics (Dict[str, Any]): The metrics dictionary from CodeExtractor.
+            metrics (Dict[str, Any]): The metrics to convert.
 
         Returns:
             DocstringMetrics: The converted docstring metrics.
@@ -221,12 +161,13 @@ class DocstringProcessor:
             completeness_score=metrics.get('maintainability_index', 0.0) / 100
         )
 
-    def parse(self, docstring: str) -> DocstringData:
+    def parse(self, docstring: str, style: str = 'google') -> DocstringData:
         """
         Parse a raw docstring into a structured format.
 
         Args:
             docstring (str): The raw docstring text.
+            style (str): The docstring style to parse ('google', 'numpy', 'sphinx').
 
         Returns:
             DocstringData: The parsed docstring data.
@@ -235,134 +176,132 @@ class DocstringProcessor:
             if not docstring.strip():
                 return DocstringData("", "", [], {}, [])
 
-            # Example heuristic parsing (extendable with AI tools or regex)
-            summary = docstring.split("\n\n")[0].strip()  # First paragraph is the summary
-            description = "\n\n".join(docstring.split("\n\n")[1:]).strip()  # Rest is the description
+            # Use a third-party library like docstring_parser
+            from docstring_parser import parse
 
-            # Parse structured sections
-            args, returns, raises = [], {}, []
-            if "Args:" in docstring:
-                args = self._parse_args_section(docstring)
+            parsed = parse(docstring, style=style)
 
-            if "Returns:" in docstring:
-                returns = self._parse_returns_section(docstring)
+            args = [
+                {
+                    'name': param.arg_name,
+                    'type': param.type_name or 'Any',
+                    'description': param.description or ''
+                }
+                for param in parsed.params
+            ]
 
-            if "Raises:" in docstring:
-                raises = self._parse_raises_section(docstring)
+            returns = {
+                'type': parsed.returns.type_name if parsed.returns else 'Any',
+                'description': parsed.returns.description if parsed.returns else ''
+            }
 
-            return DocstringData(summary, description, args, returns, raises)
+            raises = [
+                {
+                    'exception': e.type_name or 'Exception',
+                    'description': e.description or ''
+                }
+                for e in parsed.raises
+            ] if parsed.raises else []
+
+            return DocstringData(
+                summary=parsed.short_description or '',
+                description=parsed.long_description or '',
+                args=args,
+                returns=returns,
+                raises=raises
+            )
         except Exception as e:
             logger.error(f"Error parsing docstring: {e}")
             return DocstringData("", "", [], {}, [])
 
-    def _parse_args_section(self, docstring: str) -> List[Dict[str, str]]:
+    def validate(self, docstring_data: DocstringData) -> Tuple[bool, List[str]]:
         """
-        Parse the Args section of a docstring.
-        
-        Args:
-            docstring (str): The full docstring text
-            
-        Returns:
-            List[Dict[str, str]]: List of argument dictionaries with 'name', 'type', and 'description'
-        """
-        args = []
-        try:
-            # Extract the Args section
-            args_section = docstring.split("Args:")[1].split("\n\n")[0]
-            
-            # Process each argument line
-            for line in args_section.split("\n"):
-                line = line.strip()
-                if not line:
-                    continue
-                    
-                # Expected format: arg_name (arg_type): description
-                if ":" in line:
-                    arg_parts = line.split(":", 1)
-                    name_type = arg_parts[0].strip()
-                    description = arg_parts[1].strip()
-                    
-                    # Extract type if present
-                    if "(" in name_type and ")" in name_type:
-                        name = name_type.split("(")[0].strip()
-                        arg_type = name_type.split("(")[1].split(")")[0].strip()
-                    else:
-                        name = name_type
-                        arg_type = "Any"
-                        
-                    args.append({
-                        "name": name,
-                        "type": arg_type,
-                        "description": description
-                    })
-        except Exception as e:
-            logger.warning(f"Error parsing args section: {e}")
-            
-        return args
-
-    def _parse_returns_section(self, docstring: str) -> Dict[str, str]:
-        """Parse the Returns section of a docstring."""
-        try:
-            returns_section = docstring.split("Returns:")[1].split("\n\n")[0].strip()
-            if "(" in returns_section and ")" in returns_section:
-                return_type = returns_section.split("(")[1].split(")")[0].strip()
-                description = returns_section.split(")")[1].strip(": ")
-            else:
-                return_type = "Any"
-                description = returns_section
-            return {"type": return_type, "description": description}
-        except Exception as e:
-            logger.warning(f"Error parsing returns section: {e}")
-            return {"type": "Any", "description": ""}
-
-    def _parse_raises_section(self, docstring: str) -> List[str]:
-        """Parse the Raises section of a docstring."""
-        raises = []
-        try:
-            raises_section = docstring.split("Raises:")[1].split("\n\n")[0]
-            for line in raises_section.split("\n"):
-                line = line.strip()
-                if line:
-                    raises.append(line)
-        except Exception as e:
-            logger.warning(f"Error parsing raises section: {e}")
-        return raises
-
-    def format(self, docstring_data: DocstringData) -> str:
-        """
-        Format structured docstring data into a docstring string.
+        Validate the structured docstring data.
 
         Args:
-            docstring_data (DocstringData): The structured docstring data.
+            docstring_data (DocstringData): The docstring data to validate.
 
         Returns:
-            str: The formatted docstring.
+            Tuple[bool, List[str]]: Validation result and list of errors.
         """
-        docstring_lines = [docstring_data.summary, "", docstring_data.description]
+        errors = []
+        if len(docstring_data.summary) < self.min_length['summary']:
+            errors.append("Summary is too short.")
+        if len(docstring_data.description) < self.min_length['description']:
+            errors.append("Description is too short.")
+        if not docstring_data.args:
+            errors.append("Arguments section is missing.")
+        if not docstring_data.returns:
+            errors.append("Returns section is missing.")
+        is_valid = not errors
+        return is_valid, errors
 
+    def format(self, docstring_data: DocstringData, complexity_score: Optional[int] = None) -> str:
+        """Format structured docstring data into a docstring string with complexity score."""
+        docstring_lines = []
+
+        # Add summary if present
+        if docstring_data.summary:
+            docstring_lines.append(docstring_data.summary)
+            docstring_lines.append("")
+
+        # Add description
+        if docstring_data.description:
+            docstring_lines.append(docstring_data.description)
+            docstring_lines.append("")
+
+        # Add arguments section
         if docstring_data.args:
             docstring_lines.append("Args:")
             for arg in docstring_data.args:
                 docstring_lines.append(
                     f"    {arg['name']} ({arg.get('type', 'Any')}): {arg.get('description', '')}"
                 )
-
-        if docstring_data.returns:
             docstring_lines.append("")
+
+        # Add returns section
+        if docstring_data.returns:
             docstring_lines.append("Returns:")
             docstring_lines.append(
-                f"    {docstring_data.returns['type']}: {docstring_data.returns['description']}"
+                f"    {docstring_data.returns.get('type', 'Any')}: "
+                f"{docstring_data.returns.get('description', '')}"
             )
-
-        if docstring_data.raises:
             docstring_lines.append("")
+
+        # Add raises section
+        if docstring_data.raises:
             docstring_lines.append("Raises:")
             for exc in docstring_data.raises:
                 docstring_lines.append(
-                    f"    {exc['exception']}: {exc['description']}"
+                    f"    {exc.get('exception', 'Exception')}: {exc.get('description', '')}"
                 )
+            docstring_lines.append("")
 
-        return "\n".join(docstring_lines)
+        # Add complexity score if provided
+        if complexity_score is not None:
+            warning = " ⚠️" if complexity_score > 10 else ""
+            docstring_lines.append(f"Complexity Score: {complexity_score}{warning}")
+
+        return "\n".join(docstring_lines).strip()
+
+    def _format_module_docstring(self, docstring_data: DocstringData, complexity_metrics: Dict[str, Any]) -> str:
+        """Format module-level docstring with complexity scores."""
+        docstring_lines = []
+
+        # Add summary and description
+        if docstring_data.summary:
+            docstring_lines.extend([docstring_data.summary, ""])
+        if docstring_data.description:
+            docstring_lines.extend([docstring_data.description, ""])
+
+        # Add complexity scores section if metrics are provided
+        if complexity_metrics:
+            docstring_lines.append("Complexity Scores:")
+            for name, score in complexity_metrics.items():
+                warning = " ⚠️" if score > 10 else ""
+                docstring_lines.append(f"    {name}: {score}{warning}")
+
+        return "\n".join(docstring_lines).strip()
 
     def insert(self, node: ast.AST, docstring: str) -> bool:
         """

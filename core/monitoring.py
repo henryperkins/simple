@@ -10,6 +10,7 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
+import ast
 
 from core.logger import LoggerSetup
 
@@ -50,6 +51,22 @@ class MetricsCollector:
         }
         self.metrics_store.append(metric)
         logger.debug(f"Tracked metrics: {metric}")
+
+    def calculate_complexity(self, node: ast.AST) -> int:
+        """Calculate code complexity for an AST node."""
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return 0
+            
+        complexity = 1  # Base complexity
+        
+        for child in ast.walk(node):
+            if isinstance(child, (ast.If, ast.While, ast.For, ast.Try,
+                                ast.ExceptHandler, ast.With, ast.Assert)):
+                complexity += 1
+            elif isinstance(child, ast.BoolOp):
+                complexity += len(child.values) - 1
+                
+        return complexity
 
     def get_metrics(self) -> List[Dict[str, Any]]:
         """Retrieve all collected metrics."""

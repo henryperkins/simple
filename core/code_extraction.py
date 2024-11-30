@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Set, Union
 from pathlib import Path
-from core.logger import LoggerSetup
+from core.logger import LoggerSetup, log_debug, log_info, log_error
 from core.metrics import Metrics
 from exceptions import ExtractionError
 
@@ -67,6 +67,7 @@ class ExtractionResult:
     """Contains the complete extraction results."""
     classes: List['ExtractedClass'] = field(default_factory=list)
     functions: List[ExtractedFunction] = field(default_factory=list)
+    variables: List[Dict[str, Any]] = field(default_factory=list)
     module_docstring: Optional[str] = None
     imports: Dict[str, Set[str]] = field(default_factory=dict)
     constants: List[Dict[str, Any]] = field(default_factory=list)
@@ -108,15 +109,12 @@ class CodeExtractor:
         """
         try:
             tree = ast.parse(source_code)
-            
-            # Add parent references to AST nodes
-            for parent in ast.walk(tree):
-                for child in ast.iter_child_nodes(parent):
-                    setattr(child, 'parent', parent)
+            self._add_parents(tree)
 
             return ExtractionResult(
                 classes=self._extract_classes(tree),
                 functions=self._extract_functions(tree),
+                variables=self._extract_variables(tree),
                 module_docstring=ast.get_docstring(tree),
                 imports=self._extract_imports(tree),
                 constants=self._extract_constants(tree),
@@ -126,11 +124,11 @@ class CodeExtractor:
 
         except SyntaxError as e:
             error_msg = f"Syntax error in source code: {str(e)}"
-            logger.error(error_msg)
+            log_error(logger, error_msg)
             raise ExtractionError(error_msg) from e
         except Exception as e:
             error_msg = f"Extraction failed: {str(e)}"
-            logger.error(error_msg)
+            log_error(logger, error_msg)
             raise ExtractionError(error_msg) from e
 
     def _extract_classes(self, tree: ast.AST) -> List[ExtractedClass]:
@@ -150,18 +148,35 @@ class CodeExtractor:
         return classes
 
     def _extract_functions(self, tree: ast.AST) -> List[ExtractedFunction]:
-        """Extract all functions from the AST."""
+        """Extract top-level functions from the AST."""
         functions = []
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
+            if isinstance(node, ast.FunctionDef) and isinstance(node.parent, ast.Module):
                 if not self.context.include_private and node.name.startswith('_'):
                     continue
-                if not self._is_method(node):
-                    try:
-                        functions.append(self._process_function(node))
-                    except Exception as e:
-                        self.errors.append(f"Failed to extract function {node.name}: {str(e)}")
+                try:
+                    functions.append(self._process_function(node))
+                except Exception as e:
+                    self.errors.append(f"Failed to extract function {node.name}: {str(e)}")
         return functions
+
+    def _extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:
+        """Extract variables from the AST."""
+        variables = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AnnAssign):
+                target = node.target
+                if isinstance(target, ast.Name):
+                    var_name = target.id
+                    var_type = ast.unparse(node.annotation) if node.annotation else 'Any'
+                    var_value = ast.unparse(node.value) if node.value else 'Unknown'
+
+                    variables.append({
+                        'name': var_name,
+                        'type': var_type,
+                        'value': var_value
+                    })
+        return variables
 
     def _process_class(self, node: ast.ClassDef) -> ExtractedClass:
         """Process a class definition node."""
@@ -224,7 +239,7 @@ class CodeExtractor:
                 try:
                     calls.add(ast.unparse(child.func))
                 except Exception as e:
-                    logger.error(f"Failed to unparse function call: {e}")
+                    log_error(logger, f"Failed to unparse function call: {e}")
         return calls
     
     def _extract_attribute_access(self, node: ast.AST) -> Set[str]:
@@ -235,7 +250,7 @@ class CodeExtractor:
                 try:
                     attributes.add(ast.unparse(child))
                 except Exception as e:
-                    logger.error(f"Failed to unparse attribute access: {e}")
+                    log_error(logger, f"Failed to unparse attribute access: {e}")
         return attributes
 
     def _calculate_class_metrics(self, node: ast.ClassDef) -> Dict[str, Any]:
@@ -475,7 +490,7 @@ class CodeExtractor:
                         if resolved_base:
                             new_bases.extend(resolved_base.bases)
                     except Exception as e:
-                        logger.error(f"Failed to resolve base class {base}: {e}")
+                        log_error(logger, f"Failed to resolve base class {base}: {e}")
             bases = new_bases
             
         return depth
@@ -513,7 +528,7 @@ class CodeExtractor:
             # Locate the module file
             module_spec = importlib.util.find_spec(module_name)
             if module_spec is None or module_spec.origin is None:
-                logger.error(f"Module {module_name} not found.")
+                log_error(logger, f"Module {module_name} not found.")
                 return None
     
             module_path = module_spec.origin
@@ -523,16 +538,16 @@ class CodeExtractor:
                 with open(module_path, 'r', encoding='utf-8') as file:
                     module_source = file.read()
             except FileNotFoundError:
-                logger.error(f"File not found for module {module_name} at path {module_path}.")
+                log_error(logger, f"File not found for module {module_name} at path {module_path}.")
                 return None
             except IOError as e:
-                logger.error(f"IO error reading module {module_name} at path {module_path}: {e}")
+                log_error(logger, f"IO error reading module {module_name} at path {module_path}: {e}")
                 return None
     
             try:
                 module_ast = ast.parse(module_source)
             except SyntaxError as e:
-                logger.error(f"Syntax error parsing module {module_name}: {e}")
+                log_error(logger, f"Syntax error parsing module {module_name}: {e}")
                 return None
     
             # Search for the class definition
@@ -541,7 +556,7 @@ class CodeExtractor:
                     return node
     
         except Exception as e:
-            logger.error(f"Unexpected error resolving class {class_name} from module {module_name}: {e}")
+            log_error(logger, f"Unexpected error resolving class {class_name} from module {module_name}: {e}")
     
         return None
 
@@ -552,3 +567,9 @@ class CodeExtractor:
             if isinstance(child, ast.Return):
                 return_count += 1
         return return_count
+
+    def _add_parents(self, node: ast.AST) -> None:
+        """Add parent references to AST nodes."""
+        for child in ast.iter_child_nodes(node):
+            child.parent = node
+            self._add_parents(child)

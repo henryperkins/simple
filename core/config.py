@@ -78,8 +78,8 @@ class AzureOpenAIConfig:
 
     # Base configuration
     model_type: str = field(default_factory=lambda: os.getenv("MODEL_TYPE", "azure"))
-    max_tokens: int = field(default_factory=lambda: get_env_int("MAX_TOKENS", 1000))
-    temperature: float = field(default_factory=lambda: get_env_float("TEMPERATURE", 0.7))
+    max_tokens: int = field(default_factory=lambda: get_env_int("MAX_TOKENS", 6000))
+    temperature: float = field(default_factory=lambda: get_env_float("TEMPERATURE", 0.4))
     request_timeout: int = field(default_factory=lambda: get_env_int("REQUEST_TIMEOUT", 30))
     max_retries: int = field(default_factory=lambda: get_env_int("MAX_RETRIES", 3))
     retry_delay: int = field(default_factory=lambda: get_env_int("RETRY_DELAY", 2))
@@ -88,9 +88,9 @@ class AzureOpenAIConfig:
     # Azure-specific configuration
     endpoint: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_ENDPOINT", ""))
     api_key: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_KEY", ""))
-    api_version: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"))
+    api_version: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_API_VERSION", "2024-09-01-preview"))
     deployment_name: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_DEPLOYMENT", ""))
-    model_name: str = field(default_factory=lambda: os.getenv("MODEL_NAME", "gpt-4"))
+    model_name: str = field(default_factory=lambda: os.getenv("MODEL_NAME", "gpt-4o-2024-08-06"))
 
     # Additional Azure-specific parameters
     max_tokens_per_minute: int = field(default_factory=lambda: get_env_int("MAX_TOKENS_PER_MINUTE", 150000))

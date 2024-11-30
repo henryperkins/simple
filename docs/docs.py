@@ -1,4 +1,3 @@
-# docs.py
 """
 Documentation Management Module
 
@@ -6,284 +5,352 @@ Handles docstring operations and documentation generation with improved structur
 and centralized processing.
 """
 
+class DocumentationError(Exception):
+    """Custom exception for documentation generation errors."""
+    def __init__(self, message: str, details: dict):
+        self.details = details
+        super().__init__(message)
+
 import ast
 from typing import Optional, Dict, Any, List
 from pathlib import Path
-from dataclasses import dataclass
-
-from core.logger import LoggerSetup, log_debug, log_error, log_info
-from core.docstring_processor import DocstringProcessor, DocstringData, DocumentationSection
-from markdown_generator import MarkdownGenerator
+from dataclasses import dataclass, field
+from core.logger import LoggerSetup
+from core.docstring_processor import DocstringProcessor, DocumentationSection
+from .markdown_generator import MarkdownGenerator, MarkdownConfig
+from core.code_extraction import CodeExtractor, ExtractionContext, ExtractedClass, ExtractedFunction, ExtractedArgument
+from core.metrics import Metrics
 
 logger = LoggerSetup.get_logger(__name__)
 
-
-class ValidationError(Exception):
-    """Custom exception for validation errors."""
-
-    def __init__(self, message: str, errors: List[str]) -> None:
-        """
-        Initialize ValidationError with a message and list of errors.
-
-        Args:
-            message (str): Error message.
-            errors (List[str]): List of validation errors.
-        """
-        super().__init__(message)
-        self.errors = errors
-
-
-class DocumentationError(Exception):
-    """Custom exception for documentation generation errors."""
-
-    def __init__(self, message: str, details: Dict[str, Any]) -> None:
-        """
-        Initialize DocumentationError with a message and error details.
-
-        Args:
-            message (str): Error message.
-            details (Dict[str, Any]): Additional error details.
-        """
-        super().__init__(message)
-        self.details = details
-
-
 @dataclass
 class DocumentationContext:
-    """Holds context for documentation generation."""
+    """
+    Holds context for documentation generation.
+
+    Attributes:
+        source_code (str): The source code to be documented.
+        module_path (Optional[Path]): The path to the module file.
+        include_source (bool): Flag to include source code in the documentation.
+        metadata (Dict[str, Any]): Additional metadata for documentation.
+    """
     source_code: str
-    module_path: Optional[str] = None
+    module_path: Optional[Path] = None
     include_source: bool = True
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class DocStringManager:
-    """Manages docstring operations and documentation generation."""
+    """
+    Manages docstring operations and documentation generation.
+
+    Attributes:
+        context (DocumentationContext): The context for documentation generation.
+        cache (Optional[Any]): Optional cache for storing intermediate results.
+    """
 
     def __init__(self, context: DocumentationContext, cache: Optional[Any] = None) -> None:
         """
         Initialize DocStringManager with context and optional cache.
 
         Args:
-            context (DocumentationContext): Documentation generation context.
-            cache (Optional[Any]): Optional cache implementation.
+            context (DocumentationContext): The context for documentation generation.
+            cache (Optional[Any]): Optional cache for storing intermediate results.
         """
         self.context = context
         self.tree: ast.Module = ast.parse(context.source_code)
         self.processor = DocstringProcessor()
         self.cache = cache
         self.changes: List[str] = []
-        self.markdown_generator = MarkdownGenerator()
-
-    async def process_docstring(
-        self,
-        node: ast.AST,
-        docstring_data: DocstringData
-    ) -> bool:
-        """
-        Process and insert a docstring for an AST node.
-
-        Args:
-            node (ast.AST): AST node to process.
-            docstring_data (DocstringData): Structured docstring data.
-
-        Returns:
-            bool: Success status of the operation.
-
-        Raises:
-            ValidationError: If docstring validation fails.
-            DocumentationError: If docstring insertion fails.
-        """
-        try:
-            cache_key = f"validation:{hash(str(docstring_data))}"
-
-            # Check cache
-            if self.cache:
-                cached_result = await self.cache.get_cached_docstring(cache_key)
-                if cached_result:
-                    return await self._handle_cached_result(node, cached_result)
-
-            # Validate docstring
-            is_valid, errors = self.processor.validate(docstring_data)
-            if not is_valid:
-                raise ValidationError("Docstring validation failed", errors)
-
-            # Format and insert
-            docstring = self.processor.format(docstring_data)
-            if self.processor.insert(node, docstring):
-                node_name = getattr(node, 'name', 'unknown')
-                self.changes.append(f"Updated docstring for {node_name}")
-
-                # Cache successful result
-                if self.cache:
-                    await self.cache.save_docstring(cache_key, {
-                        'docstring': docstring,
-                        'valid': True
-                    })
-
-                return True
-
-            return False
-
-        except ValidationError as e:
-            log_error(f"Docstring validation failed: {e.errors}")
-            raise
-        except Exception as e:
-            log_error(f"Failed to process docstring: {e}")
-            raise DocumentationError(
-                "Failed to process docstring",
-                {'node': getattr(node, 'name', 'unknown'), 'error': str(e)}
-            )
+        self.markdown_generator = MarkdownGenerator(MarkdownConfig(include_source=True))
+        self.code_extractor = CodeExtractor(ExtractionContext())
+        self.metrics_calculator = Metrics()
+        self._add_parents(self.tree)
 
     async def generate_documentation(self) -> str:
         """
         Generate complete documentation for the current context.
 
         Returns:
-            str: Generated documentation in markdown format.
+            str: The generated documentation in markdown format.
 
         Raises:
             DocumentationError: If documentation generation fails.
         """
         try:
-            # Prepare documentation sections
-            sections: List[DocumentationSection] = []
-
-            # Module documentation
-            if self.context.metadata:
-                sections.append(self._create_module_section())
-
-            # Classes documentation
-            class_nodes = [n for n in ast.walk(self.tree)
-                           if isinstance(n, ast.ClassDef)]
-            for node in class_nodes:
-                sections.append(await self._create_class_section(node))
-
-            # Functions documentation
-            function_nodes = [n for n in ast.walk(self.tree)
-                              if isinstance(n, ast.FunctionDef)]
-            for node in function_nodes:
-                if not self._is_method(node):
-                    sections.append(await self._create_function_section(node))
-
-            # Generate markdown
-            return self.markdown_generator.generate(
-                sections,
-                include_source=self.context.include_source,
-                source_code=self.context.source_code if self.context.include_source else None,
-                module_path=self.context.module_path
-            )
-
+            extraction_result = self.code_extractor.extract_code(self.context.source_code)
+            sections = [
+                self._create_module_section(),
+                self._create_overview_section(),
+                self._create_classes_section(extraction_result.classes),
+                self._create_class_methods_section(extraction_result.classes),
+                self._create_functions_section(extraction_result.functions),
+                self._create_constants_section(extraction_result.constants),
+                self._create_source_code_section(extraction_result.metrics)
+            ]
+            return self.markdown_generator.generate(sections, self.context.module_path)
         except Exception as e:
-            log_error(f"Failed to generate documentation: {e}")
-            raise DocumentationError(
-                "Documentation generation failed",
-                {'error': str(e)}
-            )
+            logger.error(f"Failed to generate documentation: {e}")
+            raise DocumentationError("Documentation generation failed", {'error': str(e)})
 
     def _create_module_section(self) -> DocumentationSection:
         """
-        Create module-level documentation section.
+        Create module section.
 
         Returns:
-            DocumentationSection: Module documentation section.
+            DocumentationSection: The module section of the documentation.
         """
-        return DocumentationSection(
-            title="Module Overview",
-            content=self.context.metadata.get('description', ''),
-            subsections=[
-                DocumentationSection(
-                    title="Module Information",
-                    content=f"Path: {self.context.module_path}\n"
-                            f"Last Modified: {self.context.metadata.get('last_modified', 'Unknown')}"
-                )
-            ]
-        )
+        module_name = self.context.module_path.stem if self.context.module_path else 'Unknown Module'
+        return DocumentationSection(title=f"Module: {module_name}", content="")
 
-    async def _create_class_section(self, node: ast.ClassDef) -> DocumentationSection:
+    def _create_overview_section(self) -> DocumentationSection:
         """
-        Create class documentation section.
+        Create overview section.
+
+        Returns:
+            DocumentationSection: The overview section of the documentation.
+        """
+        file_path = self.context.module_path or Path('unknown')
+        description = self.context.metadata.get('description', 'No description provided.')
+        content = [
+            "## Overview",
+            f"**File:** `{file_path}`",
+            f"**Description:** {description}"
+        ]
+        return DocumentationSection(title="Overview", content="\n".join(content))
+
+    def _create_classes_section(self, classes: List[ExtractedClass]) -> DocumentationSection:
+        """
+        Create classes section.
 
         Args:
-            node (ast.ClassDef): Class definition node.
+            classes (List[ExtractedClass]): List of extracted classes.
 
         Returns:
-            DocumentationSection: Class documentation section.
+            DocumentationSection: The classes section of the documentation.
         """
-        docstring_data = self.processor.parse(ast.get_docstring(node) or '')
+        if not classes:
+            return DocumentationSection("Classes", "")
+        content = [
+            "## Classes",
+            "| Class | Inherits From | Complexity Score* |",
+            "|-------|---------------|------------------|"
+        ]
+        for cls in classes:
+            complexity_score = self.metrics_calculator.calculate_complexity(cls.node)
+            warning = " ⚠️" if complexity_score > 10 else ""
+            bases = ", ".join(cls.bases) if cls.bases else "None"
+            row = f"| `{cls.name}` | `{bases}` | {complexity_score}{warning} |"
+            content.append(row)
+        return DocumentationSection(title="Classes", content="\n".join(content))
 
-        methods_sections: List[DocumentationSection] = []
-        for method in [n for n in node.body if isinstance(n, ast.FunctionDef)]:
-            methods_sections.append(await self._create_function_section(method))
-
-        return DocumentationSection(
-            title=f"Class: {node.name}",
-            content=docstring_data.description,
-            subsections=[
-                DocumentationSection(
-                    title="Methods",
-                    content="",
-                    subsections=methods_sections
-                )
-            ]
-        )
-
-    async def _create_function_section(
-        self,
-        node: ast.FunctionDef
-    ) -> DocumentationSection:
+    def _create_class_methods_section(self, classes: List[ExtractedClass]) -> DocumentationSection:
         """
-        Create function documentation section.
+        Create class methods section.
 
         Args:
-            node (ast.FunctionDef): Function definition node.
+            classes (List[ExtractedClass]): List of extracted classes.
 
         Returns:
-            DocumentationSection: Function documentation section.
+            DocumentationSection: The class methods section of the documentation.
         """
-        docstring_data = self.processor.parse(ast.get_docstring(node) or '')
+        if not classes:
+            return DocumentationSection("Class Methods", "")
+        content = [
+            "### Class Methods",
+            "| Class | Method | Parameters | Returns | Complexity Score* |",
+            "|-------|--------|------------|---------|-------------------|"
+        ]
+        for cls in classes:
+            for method in cls.methods:
+                complexity_score = self.metrics_calculator.calculate_complexity(method.node)
+                warning = " ⚠️" if complexity_score > 10 else ""
+                params = self._format_parameters(method.args)
+                returns = method.return_type or "None"
+                row = f"| `{cls.name}` | `{method.name}` | `{params}` | `{returns}` | {complexity_score}{warning} |"
+                content.append(row)
+        return DocumentationSection(title="Class Methods", content="\n".join(content))
 
-        return DocumentationSection(
-            title=f"{'Method' if self._is_method(node) else 'Function'}: {node.name}",
-            content=self.processor.format(docstring_data),
-            subsections=[
-                DocumentationSection(
-                    title="Source",
-                    content=f"```python\n{ast.unparse(node)}\n```"
-                ) if self.context.include_source else None
-            ]
-        )
-
-    def _is_method(self, node: ast.FunctionDef) -> bool:
+    def _create_functions_section(self, functions: List[ExtractedFunction]) -> DocumentationSection:
         """
-        Check if a function node is a method.
+        Create functions section.
 
         Args:
-            node (ast.FunctionDef): Function node to check.
+            functions (List[ExtractedFunction]): List of extracted functions.
 
         Returns:
-            bool: True if the function is a method of a class, False otherwise.
+            DocumentationSection: The functions section of the documentation.
         """
-        return any(
-            isinstance(parent, ast.ClassDef) and node in parent.body
-            for parent in ast.walk(self.tree)
-        )
+        if not functions:
+            return DocumentationSection("Functions", "")
+        content = [
+            "## Functions",
+            "| Function | Parameters | Returns | Complexity Score* |",
+            "|----------|------------|---------|-------------------|"
+        ]
+        for func in functions:
+            complexity_score = self.metrics_calculator.calculate_complexity(func.node)
+            warning = " ⚠️" if complexity_score > 10 else ""
+            params = self._format_parameters(func.args)
+            returns = func.return_type or "None"
+            row = f"| `{func.name}` | `{params}` | `{returns}` | {complexity_score}{warning} |"
+            content.append(row)
+        return DocumentationSection(title="Functions", content="\n".join(content))
 
-    async def _handle_cached_result(
-        self,
-        node: ast.AST,
-        cached_result: Dict[str, Any]
-    ) -> bool:
+    def _create_constants_section(self, constants: List[Dict[str, Any]]) -> DocumentationSection:
         """
-        Handle cached docstring result.
+        Create constants and variables section.
 
         Args:
-            node (ast.AST): AST node to insert docstring into.
-            cached_result (Dict[str, Any]): Cached docstring result.
+            constants (List[Dict[str, Any]]): List of extracted constants.
 
         Returns:
-            bool: True if insertion was successful, False otherwise.
+            DocumentationSection: The constants and variables section of the documentation.
         """
-        if cached_result.get('valid'):
-            return self.processor.insert(node, cached_result['docstring'])
-        return False
+        if not constants:
+            return DocumentationSection("Constants and Variables", "")
+        content = [
+            "## Constants and Variables",
+            "| Name | Type | Value |",
+            "|------|------|--------|"
+        ]
+        for const in constants:
+            row = f"| `{const['name']}` | `{const['type']}` | `{const['value']}` |"
+            content.append(row)
+        return DocumentationSection(title="Constants and Variables", content="\n".join(content))
+
+    def _create_changes_section(self) -> DocumentationSection:
+        """
+        Create recent changes section.
+
+        Returns:
+            DocumentationSection: The recent changes section of the documentation.
+        """
+        content = ["## Recent Changes"]
+        changes = self.context.metadata.get('changes', [])
+        if changes:
+            content.extend(f"- {change}" for change in changes)
+        else:
+            content.append("- No recent changes recorded.")
+        return DocumentationSection(title="Recent Changes", content="\n".join(content))
+
+    def _create_source_code_section(self, metrics: Dict[str, Any]) -> DocumentationSection:
+        """
+        Create source code section with complexity info.
+
+        Args:
+            metrics (Dict[str, Any]): Complexity metrics of the source code.
+
+        Returns:
+            DocumentationSection: The source code section of the documentation.
+        """
+        complexity_header = self._format_complexity_header(metrics)
+        content = [
+            "## Source Code",
+            "```python",
+            f'"""{complexity_header}"""',
+            self.context.source_code,
+            "```"
+        ]
+        return DocumentationSection(title="Source Code", content="\n".join(content))
+
+    def _format_parameters(self, args: List[ExtractedArgument]) -> str:
+        """
+        Format function parameters.
+
+        Args:
+            args (List[ExtractedArgument]): List of function arguments.
+
+        Returns:
+            str: Formatted string of parameters.
+        """
+        params = []
+        for arg in args:
+            param = f"{arg.name}: {arg.type_hint or 'Any'}"
+            if arg.default_value is not None:
+                param += f" = {arg.default_value}"
+            params.append(param)
+        return f"({', '.join(params)})"
+
+    def _format_complexity_header(self, metrics: Dict[str, Any]) -> str:
+        """
+        Format complexity information for module header.
+
+        Args:
+            metrics (Dict[str, Any]): Complexity metrics of the source code.
+
+        Returns:
+            str: Formatted complexity header.
+        """
+        lines = ["Module Complexity Information:"]
+        for name, score in metrics.items():
+            if isinstance(score, (int, float)):
+                warning = " ⚠️" if score > 10 else ""
+                lines.append(f"    {name}: {score}{warning}")
+        return "\n".join(lines)
+
+    def _add_parents(self, node: ast.AST) -> None:
+        """
+        Add parent references to AST nodes.
+
+        Args:
+            node (ast.AST): The AST node to process.
+        """
+        for child in ast.iter_child_nodes(node):
+            child.parent = node
+            self._add_parents(child)
+
+    def _format_markdown(self, content: str) -> str:
+        """Format documentation as markdown with enhanced structure."""
+        sections = [
+            "# API Documentation\n",
+            "## Summary\n",
+            f"{content}\n",
+            "## Changelog\n",
+            self._generate_changelog(),
+            "## Classes\n",
+            self._generate_class_documentation(),
+            "## Functions\n", 
+            self._generate_function_documentation(),
+            "## Complexity Metrics\n",
+            self._generate_complexity_metrics()
+        ]
+
+        return "\n".join(sections)
+
+    def _extract_module_info(self) -> Dict[str, Any]:
+        """Extract key information about the module."""
+        info = {
+            'name': getattr(self.context.module_path, 'stem', 'Unknown'),
+            'version': '0.1.0',
+            'author': 'Unknown',
+            'description': self.context.metadata.get('description', '').strip()
+        }
+        return info
+
+    def _generate_changelog(self) -> str:
+        """Generate a changelog section for the documentation."""
+        changes = self.context.metadata.get('changes', [])
+        if not changes:
+            return "No recent changes recorded."
+        
+        changelog_lines = ["## Changelog"]
+        for change in changes:
+            changelog_lines.append(f"- {change}")
+        
+        return "\n".join(changelog_lines)
+
+    def _generate_class_documentation(self) -> str:
+        """Generate class documentation section."""
+        classes_section = self._create_classes_section(self.code_extractor.extract_code(self.context.source_code).classes)
+        return classes_section.content
+
+    def _generate_function_documentation(self) -> str:
+        """Generate function documentation section."""
+        functions_section = self._create_functions_section(self.code_extractor.extract_code(self.context.source_code).functions)
+        return functions_section.content
+
+    def _generate_complexity_metrics(self) -> str:
+        """Generate complexity metrics section."""
+        metrics = {'Module Complexity': self.metrics_calculator.calculate_complexity(self.tree)}
+        return self._format_complexity_header(metrics)

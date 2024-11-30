@@ -6,12 +6,13 @@ Ensures consistent and reliable output formatting.
 """
 
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List  # Ensure List is imported
 from jsonschema import validate, ValidationError
 
 from core.logger import LoggerSetup
 
 logger = LoggerSetup.get_logger(__name__)
+
 
 class ResponseParser:
     """Parses and validates Azure OpenAI API responses."""
@@ -162,7 +163,7 @@ class ResponseParser:
     def _parse_parameters(self, params_text: str) -> List[Dict[str, str]]:
         """Parse parameter section from markdown."""
         params = []
-        current_param = None
+        current_param = {}
 
         for line in params_text.split('\n'):
             line = line.strip()
