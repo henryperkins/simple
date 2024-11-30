@@ -13,7 +13,6 @@ from core.logger import LoggerSetup
 # Configure logging
 logger = LoggerSetup.get_logger(__name__)
 
-
 def get_env_int(var_name: str, default: int) -> int:
     """Get an integer environment variable or return the default."""
     value = os.getenv(var_name, None)
@@ -25,7 +24,6 @@ def get_env_int(var_name: str, default: int) -> int:
             var_name, default
         )
         return default
-
 
 def get_env_float(var_name: str, default: float) -> float:
     """Get a float environment variable or return the default."""
@@ -39,12 +37,10 @@ def get_env_float(var_name: str, default: float) -> float:
         )
         return default
 
-
 def get_env_bool(var_name: str, default: bool) -> bool:
     """Get a boolean environment variable or return the default."""
     value = os.getenv(var_name, str(default)).lower()
     return value in ("true", "1", "yes")
-
 
 def check_required_env_vars() -> None:
     """Verify required environment variables are set."""
@@ -54,18 +50,9 @@ def check_required_env_vars() -> None:
         "AZURE_OPENAI_DEPLOYMENT": "Your deployment name"
     }
 
-    missing = []
-    for var, description in required_vars.items():
-        if not os.getenv(var):
-            missing.append(f"{var} ({description})")
+    missing = [f"{var} ({description})" for var, description in required_vars.items() if not os.getenv(var)]
 
     if missing:
-        env_file = Path(".env")
-        if not env_file.exists():
-            raise ValueError(
-                "Missing .env file. Create one with required variables:\n" +
-                "\n".join(f"{var}=" for var in required_vars.keys())
-            )
         raise ValueError(
             "Missing required environment variables:\n" +
             "\n".join(f"- {var}" for var in missing)
@@ -76,7 +63,6 @@ def check_required_env_vars() -> None:
 class AzureOpenAIConfig:
     """Configuration settings for Azure OpenAI service."""
 
-    # Base configuration
     model_type: str = field(default_factory=lambda: os.getenv("MODEL_TYPE", "azure"))
     max_tokens: int = field(default_factory=lambda: get_env_int("MAX_TOKENS", 6000))
     temperature: float = field(default_factory=lambda: get_env_float("TEMPERATURE", 0.4))
@@ -85,30 +71,25 @@ class AzureOpenAIConfig:
     retry_delay: int = field(default_factory=lambda: get_env_int("RETRY_DELAY", 2))
     cache_enabled: bool = field(default_factory=lambda: get_env_bool("CACHE_ENABLED", False))
 
-    # Azure-specific configuration
     endpoint: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_ENDPOINT", ""))
     api_key: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_KEY", ""))
     api_version: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_API_VERSION", "2024-09-01-preview"))
     deployment_name: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_DEPLOYMENT", ""))
     model_name: str = field(default_factory=lambda: os.getenv("MODEL_NAME", "gpt-4o-2024-08-06"))
 
-    # Additional Azure-specific parameters
     max_tokens_per_minute: int = field(default_factory=lambda: get_env_int("MAX_TOKENS_PER_MINUTE", 150000))
     token_buffer: int = field(default_factory=lambda: get_env_int("TOKEN_BUFFER", 100))
     batch_size: int = field(default_factory=lambda: get_env_int("BATCH_SIZE", 5))
 
-    # Logging configuration
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "DEBUG"))
     log_format: str = field(default_factory=lambda: os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     log_directory: str = field(default_factory=lambda: os.getenv("LOG_DIRECTORY", "logs"))
 
-    # Redis connection parameters
     redis_host: str = field(default_factory=lambda: os.getenv("REDIS_HOST", "localhost"))
     redis_port: int = field(default_factory=lambda: get_env_int("REDIS_PORT", 6379))
     redis_db: int = field(default_factory=lambda: get_env_int("REDIS_DB", 0))
     redis_password: str = field(default_factory=lambda: os.getenv("REDIS_PASSWORD", ""))
 
-    # Model limits and pricing
     model_limits: Dict[str, Any] = field(default_factory=lambda: {
         "gpt-4": {
             "max_tokens": 8192,
@@ -118,25 +99,17 @@ class AzureOpenAIConfig:
         }
     })
 
-    # Output directory configuration
     output_directory: str = field(default_factory=lambda: os.getenv("OUTPUT_DIR", "docs"))
 
     @classmethod
     def from_env(cls) -> "AzureOpenAIConfig":
         """Create configuration from environment variables."""
         logger.debug("Loading Azure OpenAI configuration from environment variables")
-        check_required_env_vars()
         try:
+            check_required_env_vars()
             config = cls()
             if not config.validate():
-                missing = []
-                if not config.endpoint:
-                    missing.append("AZURE_OPENAI_ENDPOINT")
-                if not config.api_key:
-                    missing.append("AZURE_OPENAI_KEY")
-                if not config.deployment_name:
-                    missing.append("AZURE_OPENAI_DEPLOYMENT")
-                raise ValueError(f"Missing required configuration: {', '.join(missing)}")
+                raise ValueError("Invalid configuration values.")
             logger.debug("Successfully loaded Azure OpenAI configuration")
             return config
         except ValueError as ve:

@@ -1,3 +1,5 @@
+# ai_interaction.py
+
 """
 AI Interaction Handler Module
 
@@ -20,7 +22,7 @@ from core.monitoring import MetricsCollector
 from core.config import AzureOpenAIConfig
 from core.docstring_processor import DocstringProcessor, DocstringData
 from core.code_extraction import CodeExtractor
-from core.docs import DocStringManager
+from docs.docs import DocStringManager
 from api.token_management import TokenManager
 from api.api_client import APIClient
 from exceptions import ValidationError
@@ -105,7 +107,8 @@ class AIInteractionHandler:
             self.token_manager = token_manager or TokenManager(
                 model=self.config.model_name,
                 deployment_name=self.config.deployment_name,
-                config=self.config
+                config=self.config,
+                metrics_collector=self.metrics_collector
             )
             self.client = APIClient(self.config)
             self.docstring_processor = DocstringProcessor()
@@ -207,7 +210,10 @@ class AIInteractionHandler:
                 if node and self.metrics_collector:
                     complexity = self.metrics_collector.calculate_complexity(node)
                     docstring_data.set_complexity(complexity)
-                
+                    asyncio.create_task(self.metrics_collector.track_operation(
+                        "docstring_generation", True, 0, usage  # Track usage data
+                    ))
+
                 formatted_docstring = self.docstring_processor.format(docstring_data)
                 
                 # Track token usage
