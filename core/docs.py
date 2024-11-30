@@ -10,7 +10,8 @@ class DocumentationError(Exception):
     def __init__(self, message: str, details: dict):
         self.details = details
         super().__init__(message)
-
+        
+from datetime import datetime
 import ast
 from typing import Optional, Dict, Any, List
 from pathlib import Path

@@ -1,4 +1,5 @@
 # core/__init__.py
+from datetime import datetime  # Add this import if datetime is used in this file
 from .cache import Cache
 from .code_extraction import (
     CodeExtractor, ExtractionContext, ExtractedArgument, ExtractedElement,
