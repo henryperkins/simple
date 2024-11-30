@@ -13,3 +13,7 @@ extract/__pycache__/
 /venv
 /core/__pycache__
 /pip
+docs
+docs/api
+docs/api/models
+docs/core
