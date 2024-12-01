@@ -26,7 +26,8 @@ class MetricsCollector:
         success: bool,
         duration: float,
         usage: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None
+        error: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None  # Added parameter
     ):
         """Track an operation's metrics."""
         metric = {
@@ -35,6 +36,7 @@ class MetricsCollector:
             'duration': duration,
             'usage': usage or {},
             'error': error,
+            'metadata': metadata or {},  # Include metadata
             'timestamp': datetime.now().isoformat()
         }
         self.metrics_store.append(metric)

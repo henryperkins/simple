@@ -164,10 +164,10 @@ class Cache:
             self.logger.debug(f"Cached data for key: {cache_key}")    
             return True    
     
-        except Exception as e:    
-            self._stats['errors'] += 1    
-            self.logger.error(f"Cache save error for key {cache_key}: {e}")    
-            return False    
+        except Exception as e:
+            self._stats['errors'] += 1
+            self.logger.error(f"Cache save error for key {cache_key}: {e}")
+            return False
     
     async def invalidate(self, key: str) -> bool:    
         """    

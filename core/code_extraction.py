@@ -119,7 +119,7 @@ class ExtractedClass(ExtractedElement):
     """Represents an extracted class."""
     bases: List[str] = field(default_factory=list)
     methods: List[ExtractedFunction] = field(default_factory=list)
-    attributes: List[Dict[str, Any]] = field(default_factory.list)
+    attributes: List[Dict[str, Any]] = field(default_factory=list)
     is_exception: bool = False
     instance_attributes: List[Dict[str, Any]] = field(default_factory=list)
     metaclass: Optional[str] = None

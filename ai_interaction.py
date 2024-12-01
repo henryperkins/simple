@@ -20,24 +20,14 @@ from core.logger import LoggerSetup
 from core.cache import Cache
 from core.metrics_collector import MetricsCollector
 from core.config import AzureOpenAIConfig
-from core.docstring_processor import DocstringData, DocstringProcessor
 from core.code_extraction import CodeExtractor
-from core.types import ProcessingResult, DocstringData
-# from core.docs import DocStringManager
+from core.docstring_processor import DocstringProcessor
+from core.types import ProcessingResult, DocstringData, AIHandler, DocumentationContext
 from api.token_management import TokenManager
 from api.api_client import APIClient
 from exceptions import ValidationError, ExtractionError
 
 logger = LoggerSetup.get_logger(__name__)
-
-@dataclass
-class ProcessingResult:
-    """Result of AI processing operation."""
-    content: str
-    usage: Dict[str, Any]
-    metrics: Optional[Dict[str, Any]] = None
-    cached: bool = False
-    processing_time: float = 0.0
 
 DOCSTRING_SCHEMA = {
     "name": "google_style_docstring",
@@ -137,7 +127,7 @@ DOCSTRING_SCHEMA = {
     }
 }
 
-class AIInteractionHandler:
+class AIInteractionHandler(AIHandler):
     """
     Handles AI interactions for docstring generation via Azure OpenAI API.
 

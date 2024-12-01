@@ -1,31 +1,17 @@
 """
-Markdown Documentation Generator Module
-
-Generates formatted markdown documentation from documentation sections.
+Markdown Documentation Generator Module.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
-from pathlib import Path
 
 from core.logger import LoggerSetup
-from core.docstring_processor import DocumentationSection
-
-logger = LoggerSetup.get_logger(__name__)
+from core.code_extraction import ExtractedClass, ExtractedFunction
 
 @dataclass
 class MarkdownConfig:
-    """Configuration for markdown generation.
-
-    Attributes:
-        include_toc (bool): Whether to include a table of contents.
-        include_timestamp (bool): Whether to include a timestamp in the documentation.
-        code_language (str): The programming language for syntax highlighting in code blocks.
-        heading_offset (int): Offset for heading levels in the documentation.
-        max_heading_level (int): Maximum heading level allowed (default is 6).
-        include_source (bool): Option to include source code snippets in the documentation.
-    """
+    """Configuration for markdown generation."""
     include_toc: bool = True
     include_timestamp: bool = True
     code_language: str = "python"
@@ -34,172 +20,186 @@ class MarkdownConfig:
     include_source: bool = True
 
 class MarkdownGenerator:
-    """Generates markdown documentation with consistent formatting."""
+    """Generates formatted markdown documentation."""
 
     def __init__(self, config: Optional[MarkdownConfig] = None):
-        """Initialize the markdown generator with optional configuration."""
+        """Initialize the markdown generator."""
+        self.logger = LoggerSetup.get_logger(__name__)
         self.config = config or MarkdownConfig()
 
-    def generate(self, sections: List[DocumentationSection], module_path: Optional[Path] = None) -> str:
-        """Generate complete markdown documentation following the template structure."""
-        module_name = module_path.stem if module_path else "Unknown Module"
-        
+    def generate(self, context: Dict[str, Any]) -> str:
+        """Generate complete markdown documentation."""
         sections = [
-            self._generate_header(module_name),
-            self._generate_overview(module_path, sections),
-            self._generate_classes_section(sections),
-            self._generate_class_methods_section(sections),
-            self._generate_functions_section(sections),
-            self._generate_constants_section(sections),
-            self._generate_changes_section(sections),
-            self._generate_source_section(sections)
+            self._generate_header(context),
+            self._generate_overview(context),
+            self._generate_classes(context.get('classes', [])),
+            self._generate_functions(context.get('functions', [])),
+            self._generate_source_code(context)
         ]
         
-        return "\n".join(filter(None, sections))
-
-    def _generate_header(self, module_name: str) -> str:
-        """Generate the module header."""
-        header = [f"# Module: {module_name}\n"]
+        content = "\n\n".join(filter(None, sections))
+        
         if self.config.include_toc:
-            header.append("[TOC]\n")
+            content = self._generate_toc(content) + "\n\n" + content
+            
+        return content
+
+    def _generate_header(self, context: Dict[str, Any]) -> str:
+        """Generate the document header."""
+        header = [
+            "# " + context['module_name'],
+            "",
+            f"**File Path:** `{context['file_path']}`"
+        ]
+        
         if self.config.include_timestamp:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            header.append(f"_Generated on: {timestamp}_\n")
+            header.extend([
+                "",
+                f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            ])
+            
         return "\n".join(header)
 
-    def _generate_overview(self, module_path: Optional[Path], sections: List[DocumentationSection]) -> str:
+    def _generate_overview(self, context: Dict[str, Any]) -> str:
         """Generate the overview section."""
-        overview_section = next((s for s in sections if s.title == "Overview"), None)
-        description = overview_section.content if overview_section else "No description available."
+        description = context.get('description', 'No description available.')
+        metrics = context.get('metrics', {})
         
         return "\n".join([
             "## Overview",
-            f"**File:** `{str(module_path) if module_path else 'Unknown'}`",
-            f"**Description:** {description}",
-            ""
+            "",
+            description,
+            "",
+            "### Module Statistics",
+            f"- Classes: {len(context.get('classes', []))}",
+            f"- Functions: {len(context.get('functions', []))}",
+            f"- Constants: {len(context.get('constants', []))}",
+            "",
+            "### Complexity Metrics",
+            *[f"- {key}: {value}" + (" ⚠️" if key == 'complexity' and value > 10 else "") 
+              for key, value in metrics.items()]
         ])
 
-    def _generate_classes_section(self, sections: List[DocumentationSection]) -> str:
+    def _generate_classes(self, classes: List[ExtractedClass]) -> str:
         """Generate the classes section."""
-        classes_section = next((s for s in sections if s.title == "Classes"), None)
-        if not classes_section:
+        if not classes:
             return ""
 
         lines = [
             "## Classes",
-            "| Class | Inherits From | Complexity Score* |",
-            "|-------|---------------|-------------------|"
+            "",
+            "| Class | Inherits From | Complexity | Methods |",
+            "|-------|---------------|------------|----------|"
         ]
 
-        if hasattr(classes_section, 'tables'):
-            lines.extend(classes_section.tables)
+        for cls in classes:
+            complexity = cls.metrics.get('complexity', 0)
+            warning = " ⚠️" if complexity > 10 else ""
+            lines.append(
+                f"| `{cls.name}` | {', '.join(cls.bases) or 'None'} | "
+                f"{complexity}{warning} | {len(cls.methods)} |"
+            )
 
-        return "\n".join(lines) + "\n"
+            if cls.docstring:
+                lines.extend(["", f"### {cls.name}", "", cls.docstring])
 
-    def _generate_class_methods_section(self, sections: List[DocumentationSection]) -> str:
-        """Generate the class methods section."""
-        methods_section = next((s for s in sections if s.title == "Class Methods"), None)
-        if not methods_section:
-            return ""
+            if cls.methods:
+                lines.extend(self._generate_methods(cls.name, cls.methods))
 
+        return "\n".join(lines)
+
+    def _generate_methods(self, class_name: str, methods: List[ExtractedFunction]) -> List[str]:
+        """Generate the methods section."""
         lines = [
-            "### Class Methods",
-            "| Class | Method | Parameters | Returns | Complexity Score* |",
-            "|-------|--------|------------|---------|-------------------|"
+            "",
+            f"### {class_name} Methods",
+            "",
+            "| Method | Parameters | Returns | Complexity |",
+            "|--------|------------|---------|------------|"
         ]
 
-        if hasattr(methods_section, 'tables'):
-            lines.extend(methods_section.tables)
+        for method in methods:
+            complexity = method.metrics.get('complexity', 0)
+            warning = " ⚠️" if complexity > 10 else ""
+            
+            params = ", ".join(
+                f"{arg.name}: {arg.type_hint}" for arg in method.args
+            )
+            
+            lines.append(
+                f"| `{method.name}` | `{params}` | "
+                f"`{method.return_type or 'None'}` | {complexity}{warning} |"
+            )
 
-        return "\n".join(lines) + "\n"
+            if method.docstring:
+                lines.extend(["", method.docstring, ""])
 
-    def _generate_functions_section(self, sections: List[DocumentationSection]) -> str:
+        return lines
+
+    def _generate_functions(self, functions: List[ExtractedFunction]) -> str:
         """Generate the functions section."""
-        functions_section = next((s for s in sections if s.title == "Functions"), None)
-        if not functions_section:
+        if not functions:
             return ""
 
         lines = [
             "## Functions",
-            "| Function | Parameters | Returns | Complexity Score* |",
-            "|----------|------------|---------|-------------------|"
+            "",
+            "| Function | Parameters | Returns | Complexity |",
+            "|----------|------------|---------|------------|"
         ]
 
-        if hasattr(functions_section, 'tables'):
-            lines.extend(functions_section.tables)
+        for func in functions:
+            complexity = func.metrics.get('complexity', 0)
+            warning = " ⚠️" if complexity > 10 else ""
+            
+            params = ", ".join(
+                f"{arg.name}: {arg.type_hint}" for arg in func.args
+            )
+            
+            lines.append(
+                f"| `{func.name}` | `{params}` | "
+                f"`{func.return_type or 'None'}` | {complexity}{warning} |"
+            )
 
-        return "\n".join(lines) + "\n"
+            if func.docstring:
+                lines.extend(["", func.docstring])
 
-    def _generate_constants_section(self, sections: List[DocumentationSection]) -> str:
-        """Generate the constants and variables section."""
-        constants_section = next((s for s in sections if s.title == "Constants and Variables"), None)
-        if not constants_section:
+        return "\n".join(lines)
+
+    def _generate_source_code(self, context: Dict[str, Any]) -> str:
+        """Generate the source code section."""
+        if not (context.get('source_code') and self.config.include_source):
             return ""
 
-        lines = [
-            "## Constants and Variables",
-            "| Name | Type | Value |",
-            "|------|------|--------|"
-        ]
-
-        if hasattr(constants_section, 'tables'):
-            lines.extend(constants_section.tables)
-
-        return "\n".join(lines) + "\n"
-
-    def _generate_changes_section(self, sections: List[DocumentationSection]) -> str:
-        """Generate the recent changes section."""
-        changes_section = next((s for s in sections if s.title == "Recent Changes"), None)
-        content = []
+        metrics = context.get('metrics', {})
         
-        if changes_section and changes_section.content:
-            content = [
-                "## Recent Changes",
-                changes_section.content,
-                ""
-            ]
-        else:
-            content = [
-                "## Recent Changes",
-                "- No recent changes recorded.",
-                ""
-            ]
-
-        return "\n".join(content)
-
-    def _generate_source_section(self, sections: List[DocumentationSection]) -> str:
-        """Generate source code section with docstrings."""
-        source_section = next((s for s in sections if s.title == "Source Code"), None)
-        if not source_section or not source_section.source_code:
-            return ""
-
-        # Get the modified source code with docstrings
-        source_code = source_section.source_code
-        
-        # Add module-level docstring if not present
-        if not source_code.startswith('"""'):
-            module_doc = self._generate_module_docstring(sections)
-            source_code = f'{module_doc}\n\n{source_code}'
-
         return "\n".join([
             "## Source Code",
-            "```python",
-            source_code,
+            "",
+            "### Code Metrics",
+            *[f"- {key}: {value}" + (" ⚠️" if key in ['complexity', 'total_lines'] and value > 10 else "")
+              for key, value in metrics.items()],
+            "",
+            "```" + self.config.code_language,
+            context['source_code'],
             "```"
         ])
-        
-    def _generate_module_docstring(self, sections: List[DocumentationSection]) -> str:
-        """Generate module-level docstring."""
-        overview = next((s for s in sections if s.title == "Overview"), None)
-        complexity = next((s for s in sections if s.title.startswith("Complexity")), None)
-        
-        doc_lines = ['"""']
-        
-        if overview:
-            doc_lines.extend([overview.content, ""])
-        
-        if complexity:
-            doc_lines.extend(["Complexity Scores:", complexity.content])
-        
-        doc_lines.append('"""')
-        return "\n".join(doc_lines)
+
+    def _generate_toc(self, content: str) -> str:
+        """Generate table of contents."""
+        lines = ["## Table of Contents"]
+        current_level = 0
+
+        for line in content.split('\n'):
+            if line.startswith('#'):
+                # Count heading level
+                level = len(line.split()[0]) - 1
+                if level > 1:  # Skip title
+                    title = line.lstrip('#').strip()
+                    # Create anchor link
+                    anchor = title.lower().replace(' ', '-')
+                    # Add appropriate indentation
+                    indent = '  ' * (level - 2)
+                    lines.append(f"{indent}- [{title}](#{anchor})")
+
+        return "\n".join(lines)
