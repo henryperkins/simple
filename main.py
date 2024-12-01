@@ -19,7 +19,6 @@ from ai_interaction import AIInteractionHandler
 from core.docs import DocumentationContext, DocStringManager
 from core.code_extraction import CodeExtractor
 from repository_handler import RepositoryHandler
-from core.ast_processor import ASTProcessor
 from exceptions import (
     ConfigurationError,
     ExtractionError
@@ -33,6 +32,7 @@ logger = LoggerSetup.get_logger(__name__)  # Initialize logger
 class DocumentationGenerator:
     def __init__(self):
         """Initialize the documentation generator."""
+        self.logger = LoggerSetup.get_logger(__name__)
         self.cache: Optional[Cache] = None
         self.metrics: Optional[MetricsCollector] = None
         self.token_manager: Optional[TokenManager] = None
@@ -110,66 +110,63 @@ class DocumentationGenerator:
         except Exception as e:
             logger.error(f"Cleanup failed: {e}")
 
-    async def process_file(self, file_path: Path) -> Optional[Tuple[str, str]]:  
-        """Process a single file and generate documentation."""  
-        try:  
-            source_code = file_path.read_text(encoding='utf-8')  
-            if not source_code.strip():  
-                self.logger.warning(f"Empty source code in {file_path}")  
-                return None  
-  
-            modified_code = source_code  
-            result = await self.ai_handler.process_code(  
-                modified_code,  
-                cache_key=f"doc:{file_path.stem}:{hash(modified_code.encode())}"  
-            )  
-  
-            if result:  
-                updated_code, ai_docs = result  
-  
-                context = DocumentationContext(  
-                    source_code=updated_code,  
-                    module_path=file_path,  
-                    include_source=True,  
-                    metadata={  
-                        "ai_generated": ai_docs,  
-                        "file_path": str(file_path),  
-                        "module_name": file_path.stem,  
-                        "changes": await self._get_recent_changes(file_path)  
-                    }  
-                )  
-  
-                try:  
-                    doc_manager = DocStringManager(context)  
-                    documentation = await doc_manager.generate_documentation()  
-  
-                    docs_dir = Path("docs")  
-                    docs_dir.mkdir(parents=True, exist_ok=True)  
-  
-                    relative_path = file_path.relative_to(file_path.parent)  
-                    output_dir = docs_dir / relative_path.parent  
-                    output_dir.mkdir(parents=True, exist_ok=True)  
-  
-                    doc_path = output_dir / f"{file_path.stem}.md"  
-                    doc_path.write_text(documentation, encoding='utf-8')  
-  
-                    self.logger.info(f"Documentation saved to: {doc_path}")  
-                    return updated_code, documentation  
-  
-                except Exception as e:  
-                    self.logger.error(f"Error generating documentation for {file_path}: {str(e)}")  
-                    return None  
-  
-            else:  
-                self.logger.error(f"AI documentation generation failed for {file_path}")  
-                return None  
-  
-        except SyntaxError as e:  
-            self.logger.error(f"Syntax error in {file_path}: {str(e)}")  
-            return None  
-        except Exception as e:  
-            self.logger.error(f"Failed to process {file_path}: {str(e)}")  
-            return None  
+    async def process_file(self, file_path: Path) -> Optional[Tuple[str, str]]:
+        """Process a single file and generate documentation."""
+        try:
+            self.logger.info(f"Processing file: {file_path}")
+            source_code = file_path.read_text(encoding='utf-8')
+            
+            if not source_code.strip():
+                self.logger.warning(f"Empty source code in {file_path}")
+                return None
+    
+            # Process with AI handler
+            self.logger.debug("Generating AI documentation...")
+            result = await self.ai_handler.process_code(
+                source_code,
+                cache_key=f"doc:{file_path.stem}:{hash(source_code.encode())}"
+            )
+    
+            if result:
+                self.logger.debug("AI documentation generated successfully")
+                updated_code, ai_docs = result
+    
+                # Create documentation context
+                context = DocumentationContext(
+                    source_code=updated_code,
+                    module_path=file_path,
+                    include_source=True,
+                    metadata={
+                        "ai_generated": ai_docs,
+                        "file_path": str(file_path),
+                        "module_name": file_path.stem,
+                        "changes": await self._get_recent_changes(file_path)
+                    }
+                )
+    
+                # Generate documentation
+                self.logger.debug("Generating markdown documentation...")
+                doc_manager = DocStringManager(context)
+                documentation = await doc_manager.generate_documentation()
+    
+                # Create output directory
+                docs_dir = Path("docs")
+                docs_dir.mkdir(parents=True, exist_ok=True)
+    
+                # Save documentation
+                doc_path = docs_dir / f"{file_path.stem}.md"
+                doc_path.write_text(documentation, encoding='utf-8')
+                self.logger.info(f"Documentation saved to: {doc_path}")
+    
+                return updated_code, documentation
+    
+            else:
+                self.logger.error(f"AI documentation generation failed for {file_path}")
+                return None
+    
+        except Exception as e:
+            self.logger.error(f"Failed to process {file_path}: {str(e)}")
+            return None
 
     async def _get_recent_changes(self, file_path: Path) -> List[str]:
         """Get recent changes for a file from git history."""
@@ -193,70 +190,68 @@ class DocumentationGenerator:
             logger.warning(f"Failed to get change history: {e}")
             return ["Could not retrieve change history"]
 
-    async def process_files(self, file_paths: List[Path]) -> None:  
-        """Process multiple Python files for documentation generation."""  
-        stats = {  
-            'total': len(file_paths),  
-            'processed': 0,  
-            'errors': {  
-                'syntax': [],  
-                'extraction': [],  
-                'empty': [],  
-                'other': []  
-            }  
-        }  
-  
-        for file_path in tqdm(file_paths, desc="Processing files", unit="file"):  
-            try:  
-                source_code = file_path.read_text(encoding='utf-8')  
-                if not source_code.strip():  
-                    self.logger.warning(f"Empty source code in {file_path}")  
-                    stats['errors']['empty'].append((file_path, "Empty file"))  
-                    continue  
-  
-                # Process the file using the AI handler  
-                try:  
-                    result = await self.process_file(file_path)  
-                    if result:  
-                        stats['processed'] += 1  
-                    else:  
-                        self.logger.error(f"Processing failed for {file_path}")  
-                        stats['errors']['other'].append((file_path, "Processing failed"))  
-                except SyntaxError as e:  
-                    self.logger.error(f"Syntax error in {file_path}: {str(e)}")  
-                    stats['errors']['syntax'].append((file_path, str(e)))  
-                except ExtractionError as e:  
-                    self.logger.error(f"Extraction error in {file_path}: {str(e)}")  
-                    stats['errors']['extraction'].append((file_path, str(e)))  
-                except Exception as e:  
-                    self.logger.error(f"Error processing {file_path}: {str(e)}")  
-                    stats['errors']['other'].append((file_path, str(e)))  
-  
-            except Exception as e:  
-                self.logger.error(f"Unexpected error reading {file_path}: {str(e)}")  
-                stats['errors']['other'].append((file_path, str(e)))  
-  
-        self.logger.info("\nProcessing Summary:")  
-        self.logger.info(f"Total files: {stats['total']}")  
-        self.logger.info(f"Successfully processed: {stats['processed']}")  
-  
-        if stats['processed'] == 0:  
-            self.logger.warning("\nWARNING: No files were successfully processed!")  
-  
-        # Log errors by category  
-        if any(stats['errors'].values()):  
-            self.logger.info("\nErrors by category:")  
-            for category, errors in stats['errors'].items():  
-                if errors:  
-                    self.logger.info(f"\n{category.upper()} Errors ({len(errors)}):")  
-                    for file_path, error in errors:  
-                        self.logger.info(f"- {file_path}: {error}")  
-  
-        # Optionally, provide suggestions based on error types  
-        if stats['errors']['syntax']:  
-            self.logger.info("\nSuggestion: Review syntax errors in the files listed above.")  
-        if stats['errors']['extraction']:  
-            self.logger.info("\nSuggestion: Check the extraction logic for possible issues.")
+    async def process_files(self, file_paths: List[Path]) -> None:
+        """Process multiple Python files for documentation generation."""
+        stats = {
+            'total': len(file_paths),
+            'processed': 0,
+            'errors': {
+                'syntax': [],
+                'extraction': [],
+                'empty': [],
+                'other': []
+            }
+        }
+
+        for file_path in tqdm(file_paths, desc="Processing files", unit="file"):
+            try:
+                source_code = file_path.read_text(encoding='utf-8')
+                if not source_code.strip():
+                    logger.warning(f"Empty source code in {file_path}")
+                    stats['errors']['empty'].append((file_path, "Empty file"))
+                    continue
+
+                try:
+                    result = await self.process_file(file_path)
+                    if result:
+                        stats['processed'] += 1
+                    else:
+                        logger.error(f"Processing failed for {file_path}")
+                        stats['errors']['other'].append((file_path, "Processing failed"))
+                except SyntaxError as e:
+                    logger.error(f"Syntax error in {file_path}: {str(e)}")
+                    stats['errors']['syntax'].append((file_path, str(e)))
+                except ExtractionError as e:
+                    logger.error(f"Extraction error in {file_path}: {str(e)}")
+                    stats['errors']['extraction'].append((file_path, str(e)))
+                except Exception as e:
+                    logger.error(f"Error processing {file_path}: {str(e)}")
+                    stats['errors']['other'].append((file_path, str(e)))
+
+            except Exception as e:
+                logger.error(f"Unexpected error reading {file_path}: {str(e)}")
+                stats['errors']['other'].append((file_path, str(e)))
+
+        logger.info("\nProcessing Summary:")
+        logger.info(f"Total files: {stats['total']}")
+        logger.info(f"Successfully processed: {stats['processed']}")
+
+        if stats['processed'] == 0:
+            logger.warning("\nWARNING: No files were successfully processed!")
+
+        if any(stats['errors'].values()):
+            logger.info("\nErrors by category:")
+            for category, errors in stats['errors'].items():
+                if errors:
+                    logger.info(f"\n{category.upper()} Errors ({len(errors)}):")
+                    for file_path, error in errors:
+                        logger.info(f"- {file_path}: {error}")
+
+        if stats['errors']['syntax']:
+            logger.info("\nSuggestion: Review syntax errors in the files listed above.")
+        if stats['errors']['extraction']:
+            logger.info("\nSuggestion: Check the extraction logic for possible issues.")
+
 
 async def process_repository(args: argparse.Namespace) -> int:
     """Process repository for documentation generation."""
@@ -277,7 +272,6 @@ async def process_repository(args: argparse.Namespace) -> int:
             logger.warning("No Python files found in repository")
             return 0
 
-        code_extractor = CodeExtractor()
         stats = {
             'total': len(python_files),
             'processed': 0,
@@ -291,52 +285,42 @@ async def process_repository(args: argparse.Namespace) -> int:
 
         for file_path in tqdm(python_files, desc="Processing files"):
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    source_code = f.read()
+                source_code = file_path.read_text(encoding='utf-8')
 
                 if not source_code.strip():
                     logger.warning(f"Empty source code in {file_path}")
                     stats['errors']['empty'].append((file_path, "Empty file"))
                     continue
 
-                try:
-                    extracted = code_extractor.extract_code(source_code)
+                result = await generator.process_file(file_path)
 
-                    if not extracted:
-                        logger.error(f"Failed to extract code from {file_path}")
-                        continue
+                if result:
+                    updated_code, documentation = result
 
-                    result = await generator.ai_handler.process_code(
-                        source_code=source_code,
-                        cache_key=f"doc:{Path(file_path).stem}:{hash(source_code)}",
-                        extracted_info=extracted
-                    )
+                    # Calculate relative path from repository root
+                    relative_path = normalize_path(file_path, repo_path)
 
-                    if result:
-                        updated_code, documentation = result
-                        output_dir = Path("docs") / Path(file_path).parent.relative_to(repo_path)
-                        output_dir.mkdir(parents=True, exist_ok=True)
+                    # Create output directory preserving structure
+                    output_dir = Path("docs") / relative_path.parent
+                    output_dir.mkdir(parents=True, exist_ok=True)
 
-                        doc_path = output_dir / f"{Path(file_path).stem}.md"
-                        doc_path.write_text(documentation)
+                    # Write documentation to markdown file
+                    doc_path = output_dir / f"{file_path.stem}.md"
+                    doc_path.write_text(documentation, encoding='utf-8')
 
-                        stats['processed'] += 1
-                    else:
-                        logger.error(f"Failed to process {file_path}")
-                        stats['errors']['other'].append((file_path, "Processing failed"))
+                    stats['processed'] += 1
+                else:
+                    logger.error(f"Failed to process {file_path}")
+                    stats['errors']['other'].append((file_path, "Processing failed"))
 
-                except SyntaxError as e:
-                    logger.error(f"Syntax error in {file_path}: {str(e)}")
-                    stats['errors']['syntax'].append((file_path, str(e)))
-                except ExtractionError as e:
-                    logger.error(f"Extraction error in {file_path}: {str(e)}")
-                    stats['errors']['extraction'].append((file_path, str(e)))
-                except Exception as e:
-                    logger.error(f"Error processing {file_path}: {str(e)}")
-                    stats['errors']['other'].append((file_path, str(e)))
-
+            except SyntaxError as e:
+                logger.error(f"Syntax error in {file_path}: {str(e)}")
+                stats['errors']['syntax'].append((file_path, str(e)))
+            except ExtractionError as e:
+                logger.error(f"Extraction error in {file_path}: {str(e)}")
+                stats['errors']['extraction'].append((file_path, str(e)))
             except Exception as e:
-                logger.error(f"Unexpected error processing {file_path}: {str(e)}")
+                logger.error(f"Error processing {file_path}: {str(e)}")
                 stats['errors']['other'].append((file_path, str(e)))
 
         logger.info("\nProcessing Summary:")
@@ -400,6 +384,15 @@ def parse_arguments() -> argparse.Namespace:
         help='Python files to process (alternative to repository)'
     )
     return parser.parse_args()
+
+def normalize_path(file_path: Path, base_path: Optional[Path] = None) -> Path:
+    """Normalize file path for documentation output."""
+    if base_path and file_path.is_absolute():
+        try:
+            return file_path.relative_to(base_path)
+        except ValueError:
+            return file_path
+    return file_path
 
 if __name__ == "__main__":
     try:

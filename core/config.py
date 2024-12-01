@@ -50,7 +50,11 @@ def check_required_env_vars() -> None:
         "AZURE_OPENAI_DEPLOYMENT": "Your deployment name"
     }
 
-    missing = [f"{var} ({description})" for var, description in required_vars.items() if not os.getenv(var)]
+    missing = [
+        f"{var} ({description})"
+        for var, description in required_vars.items()
+        if not os.getenv(var)
+    ]
 
     if missing:
         raise ValueError(
@@ -65,7 +69,9 @@ class AzureOpenAIConfig:
 
     model_type: str = field(default_factory=lambda: os.getenv("MODEL_TYPE", "azure"))
     max_tokens: int = field(default_factory=lambda: get_env_int("MAX_TOKENS", 6000))
-    temperature: float = field(default_factory=lambda: get_env_float("TEMPERATURE", 0.4))
+    temperature: float = field(
+        default_factory=lambda: get_env_float("TEMPERATURE", 0.4)
+    )
     request_timeout: int = field(default_factory=lambda: get_env_int("REQUEST_TIMEOUT", 30))
     max_retries: int = field(default_factory=lambda: get_env_int("MAX_RETRIES", 3))
     retry_delay: int = field(default_factory=lambda: get_env_int("RETRY_DELAY", 2))

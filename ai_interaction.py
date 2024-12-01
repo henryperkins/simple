@@ -16,19 +16,19 @@ from dataclasses import dataclass
 import openai  
 from openai import APIError  
 from jsonschema import validate, ValidationError as JsonValidationError  
-from core.logger import LoggerSetup  # Import LoggerSetup  
+from core.logger import LoggerSetup  
 from core.cache import Cache  
 from core.metrics_collector import MetricsCollector  
 from core.config import AzureOpenAIConfig  
-from core.docstring_processor import DocstringProcessor, DocstringData  
-from core.code_extraction import CodeExtractor  
-from core.docs import DocStringManager  # Assuming correct import  
+from core.docstring_processor import DocstringData, DocstringProcessor  
+from core.code_extraction import CodeExtractor
+from core.types import ProcessingResult, DocstringData
+# from core.docs import DocStringManager
 from api.token_management import TokenManager  
-from api.api_client import APIClient  # Assuming correct import  
-from core.ast_processor import ASTProcessor  
-from exceptions import ValidationError, ExtractionError  # Assuming correct import  
+from api.api_client import APIClient  
+from exceptions import ValidationError, ExtractionError  
   
-logger = LoggerSetup.get_logger(__name__)  # Initialize logger at module level  
+logger = LoggerSetup.get_logger(__name__)  
   
 @dataclass  
 class ProcessingResult:  
@@ -38,16 +38,6 @@ class ProcessingResult:
     metrics: Optional[Dict[str, Any]] = None  
     cached: bool = False  
     processing_time: float = 0.0  
-  
-@dataclass  
-class DocstringData:  
-    """Data structure for holding docstring information."""  
-    summary: str  
-    description: str  
-    args: list  
-    returns: dict  
-    raises: list  
-    complexity: int  
   
 DOCSTRING_SCHEMA = {  
     "name": "google_style_docstring",  
@@ -159,7 +149,7 @@ class AIInteractionHandler:
         code_extractor: Optional[CodeExtractor] = None  
     ):  
         """Initialize the AI Interaction Handler."""  
-        self.logger = LoggerSetup.get_logger(__name__)  # Initialize self.logger  
+        self.logger = LoggerSetup.get_logger(__name__)  
   
         try:  
             self.config = config or AzureOpenAIConfig.from_env()  
@@ -177,13 +167,11 @@ class AIInteractionHandler:
             self._initialize_tools()  
             self.logger.info("AI Interaction Handler initialized successfully")  
   
-            # Set up OpenAI API configuration  
             openai.api_type = "azure"  
             openai.api_key = self.config.api_key  
             openai.api_base = self.config.endpoint  
             openai.api_version = self.config.api_version  
   
-            # Initialize module state  
             self._current_module_tree = None  
             self._current_module_docs = {}  
             self._current_module = None  
@@ -192,7 +180,12 @@ class AIInteractionHandler:
             self.logger.error(f"Failed to initialize AI Interaction Handler: {str(e)}")  
             raise  
   
-    async def process_code(self, source_code: str, cache_key: Optional[str] = None, extracted_info: Optional[Dict[str, Any]] = None) -> Optional[Tuple[str, str]]:  
+    async def process_code(  
+        self,  
+        source_code: str,  
+        cache_key: Optional[str] = None,  
+        extracted_info: Optional[Dict[str, Any]] = None  
+    ) -> Optional[Tuple[str, str]]:  
         """  
         Process source code to generate documentation using AST parsing.  
   
@@ -205,32 +198,33 @@ class AIInteractionHandler:
             Tuple of (updated_code, documentation) or None if processing fails  
         """  
         try:  
-            # Initialize AST processor with proper logging  
-            processor = ASTProcessor()  
+            processor = CodeExtractor()  
   
-            # Use provided extracted_info or process the code  
             if extracted_info:  
                 metadata = extracted_info  
                 tree = ast.parse(source_code)  
             else:  
-                # Process the code using AST  
-                result = await processor.process_code(source_code)  
-                if not result:  
-                    self.logger.error("Failed to process code with AST parser")  
+                self.logger.debug("Processing code with extractor...")  
+                extraction_result = processor.extract_code(source_code)  
+                if not extraction_result:  
+                    self.logger.error("Failed to process code with extractor")  
                     return None  
   
-                tree, metadata = result  
+                tree = ast.parse(source_code)  
+                metadata = processor.metadata_to_dict()  
   
-            # Add required imports to the code  
             imports = []  
-            for imp in metadata.get('required_imports', []):  
+            required_imports = metadata.get('required_imports', [])  
+            self.logger.debug(f"Required imports: {required_imports}")  
+              
+            for imp in required_imports:  
                 if imp == 'datetime':  
                     imports.append('from datetime import datetime, timedelta')  
   
             modified_code = '\n'.join(imports + [''] + [source_code])  
   
-            # Generate AI documentation using metadata  
             try:  
+                self.logger.debug("Generating documentation...")  
                 result = await self._generate_documentation(  
                     source_code=modified_code,  
                     metadata=metadata,  
@@ -244,11 +238,11 @@ class AIInteractionHandler:
                 return modified_code, result.content  
   
             except Exception as e:  
-                self.logger.error(f"Error generating documentation: {str(e)}")  
+                self.logger.error(f"Error generating documentation: {str(e)}", exc_info=True)  
                 return None  
   
         except Exception as e:  
-            self.logger.error(f"Error processing code: {str(e)}")  
+            self.logger.error(f"Error processing code: {str(e)}", exc_info=True)  
             return None  
   
     async def _generate_documentation(self, source_code: str, metadata: Dict[str, Any], node: Optional[ast.AST] = None) -> Optional[ProcessingResult]:  
@@ -273,13 +267,12 @@ class AIInteractionHandler:
   
                 if node and self.metrics_collector:  
                     complexity = self.metrics_collector.calculate_complexity(node)  
-                    response_data["complexity"] = complexity  # Assign complexity directly  
+                    response_data["complexity"] = complexity  
   
-                validate(instance=response_data, schema=DOCSTRING_SCHEMA["schema"])  # Correct schema used here  
+                validate(instance=response_data, schema=DOCSTRING_SCHEMA["schema"])  
                 docstring_data = DocstringData(**response_data)  
                 formatted_docstring = self.docstring_processor.format(docstring_data)  
   
-                # Track token usage  
                 self.token_manager.track_request(usage['prompt_tokens'], usage['completion_tokens'])  
                 self.logger.info(f"Tokens used: {usage['prompt_tokens']} prompt, {usage['completion_tokens']} completion")  
   
@@ -444,7 +437,6 @@ class AIInteractionHandler:
                 await self.cache.close()  
             if self.metrics_collector:  
                 await self.metrics_collector.close()  
-            # Removed the call to close on TokenManager  
         except Exception as e:  
             self.logger.error(f"Error closing AI handler: {e}")  
             raise  

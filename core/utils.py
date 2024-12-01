@@ -98,7 +98,7 @@ async def load_json_file(filepath: str, max_retries: int = 3) -> Dict[str, Any]:
     log_debug(f"Loading JSON file: {filepath}")
     for attempt in range(max_retries):
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 log_info(f"Successfully loaded JSON file: {filepath}")
                 return data

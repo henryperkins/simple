@@ -5,7 +5,6 @@ Handles token counting, optimization, and management for Azure OpenAI API
 requests. Provides efficient token estimation and prompt optimization.  
 """  
   
-from dataclasses import dataclass  
 from functools import lru_cache  
 from typing import Dict, List, Optional, Tuple, Union  
 import asyncio  # Import for asynchronous operations  
@@ -17,7 +16,13 @@ from core.metrics_collector import MetricsCollector
   
 class TokenUsage:  
     """Token usage statistics and cost calculation."""  
-    def __init__(self, prompt_tokens: int, completion_tokens: int, total_tokens: int, estimated_cost: float):  
+    def __init__(
+        self,
+        prompt_tokens: int,
+        completion_tokens: int,
+        total_tokens: int,
+        estimated_cost: float
+    ):  
         self.prompt_tokens = prompt_tokens  
         self.completion_tokens = completion_tokens  
         self.total_tokens = total_tokens  

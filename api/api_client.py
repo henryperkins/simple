@@ -5,11 +5,14 @@ Provides an interface to interact with the Azure OpenAI API, handling
 requests and responses, including support for function calling and structured outputs.  
 """  
   
-from core.config import AzureOpenAIConfig  
-from core.logger import LoggerSetup  
-from typing import Any, Dict, List, Optional, Tuple  
-from openai import AsyncAzureOpenAI  
-  
+from typing import Any, Dict, List, Optional, Tuple
+
+from openai import AsyncAzureOpenAI
+
+from core.config import AzureOpenAIConfig
+from core.logger import LoggerSetup
+
+
 class APIClient:  
     """Client to interact with Azure OpenAI API."""  
   

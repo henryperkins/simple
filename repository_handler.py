@@ -128,7 +128,7 @@ class RepositoryHandler:
             for attempt in range(3):
                 try:
                     if path.exists():
-                        shutil.rmtree(path, onerror=remove_readonly)
+                        shutil.rmtree(path, onexc=remove_readonly, ignore_errors=False)
                     break
                 except PermissionError:
                     if attempt < 2:

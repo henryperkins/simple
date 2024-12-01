@@ -13,7 +13,7 @@ import math
 import sys  
 from collections import defaultdict  
 from typing import Dict, Set, Any, Union
-from core.logger import LoggerSetup, log_debug, log_info, log_error  
+from core.logger import LoggerSetup
   
 class MetricsError(Exception):  
     """Base exception for metrics calculation errors."""  
@@ -58,44 +58,43 @@ class Metrics:
 
         return complexity
   
-    def calculate_cognitive_complexity(self, function_node: ast.FunctionDef) -> int:  
-        """  
-        Calculate the cognitive complexity of a function.  
-  
-        Parameters:  
-            function_node (ast.FunctionDef): The AST node representing the function.  
-  
-        Returns:  
-            int: The cognitive complexity of the function.  
-        """  
-        self.logger.debug(f"Calculating cognitive complexity for function: {getattr(function_node, 'name', 'unknown')}")  
-        if not isinstance(function_node, ast.FunctionDef):  
-            self.logger.error(f"Provided node is not a function definition: {ast.dump(function_node)}")  
-            return 0  
-  
-        cognitive_complexity = 0  
-        nesting_depth = 0  
-  
-        def traverse(node, nesting_level):  
-            nonlocal cognitive_complexity  
-            for child in ast.iter_child_nodes(node):  
-                if self._is_nesting_construct(child):  
-                    nesting_level += 1  
-                    cognitive_complexity += 1  # Structural increment  
-                    self.logger.debug(f"Nesting level {nesting_level} increased at node: {ast.dump(child)}")  
-                    traverse(child, nesting_level)  
-                    nesting_level -= 1  
-                elif self._is_complexity_increment(child):  
-                    cognitive_complexity += nesting_level + 1  # Complexity increment with nesting consideration  
-                    self.logger.debug(f"Incremented cognitive complexity by {nesting_level + 1} at node: {ast.dump(child)}")  
-                    traverse(child, nesting_level)  
-                else:  
-                    traverse(child, nesting_level)  
-  
-        traverse(function_node, 0)  
-        self.logger.info(f"Calculated cognitive complexity for function '{function_node.name}' is {cognitive_complexity}")  
-        return cognitive_complexity  
-  
+    def calculate_cognitive_complexity(self, function_node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
+        """
+        Calculate the cognitive complexity of a function.
+
+        Parameters:
+            function_node: The AST node representing the function.
+
+        Returns:
+            int: The cognitive complexity of the function.
+        """
+        self.logger.debug(f"Calculating cognitive complexity for function: {getattr(function_node, 'name', 'unknown')}")
+        if not isinstance(function_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self.logger.error(f"Provided node is not a function definition: {ast.dump(function_node)}")
+            return 0
+
+        cognitive_complexity = 0
+
+        def traverse(node, nesting_level):
+            nonlocal cognitive_complexity
+            for child in ast.iter_child_nodes(node):
+                if self._is_nesting_construct(child):
+                    nesting_level += 1
+                    cognitive_complexity += 1
+                    self.logger.debug(f"Nesting level {nesting_level} increased at node: {ast.dump(child)}")
+                    traverse(child, nesting_level)
+                    nesting_level -= 1
+                elif self._is_complexity_increment(child):
+                    cognitive_complexity += nesting_level + 1
+                    self.logger.debug(f"Incremented cognitive complexity by {nesting_level + 1} at node: {ast.dump(child)}")
+                    traverse(child, nesting_level)
+                else:
+                    traverse(child, nesting_level)
+
+        traverse(function_node, 0)
+        self.logger.info(f"Calculated cognitive complexity for function '{function_node.name}' is {cognitive_complexity}")
+        return cognitive_complexity
+
     def calculate_complexity(self, node: ast.AST) -> int:
         """Calculate complexity for any AST node."""
         try:

@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from core.logger import LoggerSetup  
 from core.metrics import Metrics  
 from core.code_extraction import CodeExtractor, ExtractedFunction, ExtractedClass  
-from core.ast_processor import ASTProcessor  
   
 logger = LoggerSetup.get_logger(__name__)  
   
@@ -345,4 +344,4 @@ class DocstringProcessor:
                 return False  
         except Exception as e:  
             self.logger.error(f"Error inserting docstring: {e}")  
-            return False  
+            return False
