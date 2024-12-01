@@ -15,7 +15,15 @@ from core.config import AzureOpenAIConfig
 from core.metrics_collector import MetricsCollector
 
 class TokenUsage:
-    """Token usage statistics and cost calculation."""
+    """
+    Token usage statistics and cost calculation.
+
+    Attributes:
+        prompt_tokens (int): Number of tokens in the prompt.
+        completion_tokens (int): Number of tokens in the completion.
+        total_tokens (int): Total number of tokens used.
+        estimated_cost (float): Estimated cost of the tokens used.
+    """
     def __init__(
         self,
         prompt_tokens: int,
@@ -32,6 +40,17 @@ class TokenManager:
     """
     Manages token counting, optimization, and cost calculation for Azure OpenAI
     API requests. Handles different models and their token limits and pricing.
+
+    Attributes:
+        logger (Logger): Logger instance for logging.
+        config (AzureOpenAIConfig): Configuration object.
+        model (str): The model name to use for token management.
+        deployment_name (Optional[str]): Azure deployment name if different from model.
+        metrics_collector (Optional[MetricsCollector]): Metrics collector for tracking operations.
+        encoding (tiktoken.Encoding): Encoding object for token estimation.
+        model_config (Dict[str, Union[int, float]]): Model configuration including token limits and costs.
+        total_prompt_tokens (int): Total number of prompt tokens used.
+        total_completion_tokens (int): Total number of completion tokens used.
     """
 
     def __init__(
@@ -52,6 +71,9 @@ class TokenManager:
             metrics_collector (Optional[MetricsCollector]): Metrics collector
                                                             for tracking
                                                             operations.
+
+        Raises:
+            Exception: If initialization fails.
         """
         self.logger = LoggerSetup.get_logger(__name__)
         self.config = config or AzureOpenAIConfig.from_env()
@@ -99,6 +121,9 @@ class TokenManager:
 
         Returns:
             int: Estimated token count.
+
+        Raises:
+            Exception: If token estimation fails.
         """
         try:
             tokens = len(self.encoding.encode(text))
@@ -106,7 +131,7 @@ class TokenManager:
             return tokens
         except Exception as e:
             self.logger.error(f"Error estimating tokens: {e}")
-            return 0
+            raise
 
     async def validate_request(
         self,
@@ -124,6 +149,9 @@ class TokenManager:
         Returns:
             Tuple[bool, Dict[str, Union[int, float]], str]: Validation result,
             metrics, and message.
+
+        Raises:
+            Exception: If request validation fails.
         """
         try:
             prompt_tokens = self.estimate_tokens(prompt)
@@ -152,7 +180,7 @@ class TokenManager:
             return True, metrics, "Request validated successfully"
         except Exception as e:
             self.logger.error(f"Error validating request: {e}")
-            return False, {}, str(e)
+            raise
 
     def chunk_text(self, text: str) -> List[str]:
         """
@@ -163,27 +191,34 @@ class TokenManager:
 
         Returns:
             List[str]: List of text chunks.
+
+        Raises:
+            Exception: If text chunking fails.
         """
-        chunks = []
-        current_chunk = []
-        current_tokens = 0
-        chunk_size = self.model_config["chunk_size"]
+        try:
+            chunks = []
+            current_chunk = []
+            current_tokens = 0
+            chunk_size = self.model_config["chunk_size"]
 
-        sentences = text.split('. ')
-        for sentence in sentences:
-            sent_tokens = self.estimate_tokens(sentence)
-            if current_tokens + sent_tokens <= chunk_size:
-                current_chunk.append(sentence)
-                current_tokens += sent_tokens
-            else:
-                if current_chunk:
-                    chunks.append('. '.join(current_chunk) + '.')
-                current_chunk = [sentence]
-                current_tokens = sent_tokens
+            sentences = text.split('. ')
+            for sentence in sentences:
+                sent_tokens = self.estimate_tokens(sentence)
+                if current_tokens + sent_tokens <= chunk_size:
+                    current_chunk.append(sentence)
+                    current_tokens += sent_tokens
+                else:
+                    if current_chunk:
+                        chunks.append('. '.join(current_chunk) + '.')
+                    current_chunk = [sentence]
+                    current_tokens = sent_tokens
 
-        if current_chunk:
-            chunks.append('. '.join(current_chunk) + '.')
-        return chunks
+            if current_chunk:
+                chunks.append('. '.join(current_chunk) + '.')
+            return chunks
+        except Exception as e:
+            self.logger.error(f"Error chunking text: {e}")
+            raise
 
     def calculate_usage(
         self,
@@ -219,6 +254,9 @@ class TokenManager:
         Args:
             request_tokens (int): Number of tokens in the request.
             response_tokens (int): Number of tokens in the response.
+
+        Raises:
+            Exception: If tracking request fails.
         """
         try:
             self.total_prompt_tokens += request_tokens
@@ -263,6 +301,9 @@ class TokenManager:
 
         Returns:
             Dict[str, int]: Dictionary containing model token limits.
+
+        Raises:
+            Exception: If retrieving model limits fails.
         """
         try:
             return {
@@ -274,8 +315,7 @@ class TokenManager:
             }
         except Exception as e:
             self.logger.error(f"Error getting model limits: {e}")
-            return {"max_tokens": 0, "chunk_size": 0, "max_prompt_tokens": 0,
-                    "max_completion_tokens": 0}
+            raise
 
     def get_token_costs(self, cached: bool = False) -> Dict[str, float]:
         """
@@ -286,6 +326,9 @@ class TokenManager:
 
         Returns:
             Dict[str, float]: Dictionary containing token costs per 1k tokens.
+
+        Raises:
+            Exception: If retrieving token costs fails.
         """
         try:
             return {
@@ -294,12 +337,21 @@ class TokenManager:
             }
         except Exception as e:
             self.logger.error(f"Error getting token costs: {e}")
-            return {"prompt_cost_per_1k": 0.0, "completion_cost_per_1k": 0.0}
+            raise
 
     def reset_cache(self) -> None:
-        """Reset the token estimation cache."""
-        self.estimate_tokens.cache_clear()
-        self.logger.debug("Token estimation cache cleared")
+        """
+        Reset the token estimation cache.
+
+        Raises:
+            Exception: If resetting cache fails.
+        """
+        try:
+            self.estimate_tokens.cache_clear()
+            self.logger.debug("Token estimation cache cleared")
+        except Exception as e:
+            self.logger.error(f"Error resetting cache: {e}")
+            raise
 
 # Helper functions (outside the class)
 def estimate_tokens(text: str, model: str = "gpt-4") -> int:
@@ -312,9 +364,15 @@ def estimate_tokens(text: str, model: str = "gpt-4") -> int:
 
     Returns:
         int: Estimated token count.
+
+    Raises:
+        Exception: If token estimation fails.
     """
-    manager = TokenManager(model=model)
-    return manager.estimate_tokens(text)
+    try:
+        manager = TokenManager(model=model)
+        return manager.estimate_tokens(text)
+    except Exception as e:
+        raise
 
 def chunk_text(text: str, model: str = "gpt-4") -> List[str]:
     """
@@ -326,6 +384,12 @@ def chunk_text(text: str, model: str = "gpt-4") -> List[str]:
 
     Returns:
         List[str]: List of text chunks.
+
+    Raises:
+        Exception: If text chunking fails.
     """
-    manager = TokenManager(model=model)
-    return manager.chunk_text(text)
+    try:
+        manager = TokenManager(model=model)
+        return manager.chunk_text(text)
+    except Exception as e:
+        raise

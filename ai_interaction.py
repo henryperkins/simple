@@ -246,6 +246,10 @@ class AIInteractionHandler(AIHandler):
 
         Returns:
             Optional[Tuple[str, str]]: Tuple of (updated_code, documentation) or None if processing fails.
+
+        Raises:
+            ExtractionError: If there is an error in extracting code.
+            ValidationError: If there is an error in validating the response.
         """
         try:
             # Check cache first if key provided

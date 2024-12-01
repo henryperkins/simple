@@ -1,6 +1,27 @@
 """
 Documentation Generator main module.
 Handles initialization, processing, and cleanup of documentation generation.
+
+Usage Example:
+    ```python
+    from main import DocumentationGenerator
+    import asyncio
+
+    async def main():
+        generator = DocumentationGenerator()
+        await generator.initialize()
+        await generator.process_repository("https://github.com/user/repo.git")
+        await generator.cleanup()
+
+    asyncio.run(main())
+    ```
+
+Key Classes and Functions:
+- DocumentationGenerator: Main class for handling documentation generation.
+- initialize: Initialize all components.
+- cleanup: Clean up all resources.
+- process_file: Process a single file and generate documentation.
+- process_repository: Process an entire repository.
 """
 
 import asyncio
@@ -32,10 +53,23 @@ class DocumentationGenerator:
     """
     Documentation Generator Class.
     Handles initialization, processing, and cleanup of components for documentation generation.
+
+    Attributes:
+        logger (Logger): Logger instance for logging.
+        config (Optional[AzureOpenAIConfig]): Configuration settings for Azure OpenAI service.
+        cache (Optional[Cache]): Optional cache for storing intermediate results.
+        metrics (Optional[MetricsCollector]): Optional metrics collector for tracking operations.
+        token_manager (Optional[TokenManager]): Optional token manager for handling token limits.
+        ai_handler (Optional[AIInteractionHandler]): Handler for AI interactions.
+        repo_handler (Optional[RepositoryHandler]): Handler for repository operations.
+        system_monitor (Optional[SystemMonitor]): System monitor for tracking performance.
+        _initialized (bool): Flag indicating if the generator is initialized.
     """
 
     def __init__(self) -> None:
-        """Initialize the documentation generator with empty component references."""
+        """
+        Initialize the documentation generator with empty component references.
+        """
         self.logger = LoggerSetup.get_logger(__name__)
         self.config: Optional[AzureOpenAIConfig] = None
         self.cache: Optional[Cache] = None
@@ -51,10 +85,10 @@ class DocumentationGenerator:
         Initialize all components in correct order with proper dependency injection.
 
         Args:
-            base_path: Optional base path for repository operations
+            base_path (Optional[Path]): Optional base path for repository operations.
 
         Raises:
-            ConfigurationError: If initialization fails
+            ConfigurationError: If initialization fails.
         """
         try:
             # 1. First load configuration
@@ -119,7 +153,12 @@ class DocumentationGenerator:
             raise ConfigurationError(f"Failed to initialize components: {str(e)}") from e
 
     async def cleanup(self) -> None:
-        """Clean up all resources safely."""
+        """
+        Clean up all resources safely.
+
+        Raises:
+            Exception: If an error occurs during cleanup.
+        """
         cleanup_errors = []
         
         # List of (component, name, cleanup_method)
@@ -169,11 +208,16 @@ class DocumentationGenerator:
         Process a single file and generate documentation.
 
         Args:
-            file_path: Path to the file to process
-            output_base: Base path for output files
+            file_path (Path): Path to the file to process.
+            output_base (Path): Base path for output files.
 
         Returns:
-            Optional[Tuple[str, str]]: Tuple of (updated_code, documentation) or None if processing fails
+            Optional[Tuple[str, str]]: Tuple of (updated_code, documentation) or None if processing fails.
+
+        Raises:
+            FileNotFoundError: If the file is not found.
+            ValueError: If the file is not a Python file or has empty source code.
+            DocumentationError: If AI processing fails.
         """
         if not self._initialized:
             raise RuntimeError("DocumentationGenerator not initialized")
@@ -273,7 +317,19 @@ class DocumentationGenerator:
             return None
 
     async def process_repository(self, repo_path_or_url: str) -> int:
-        """Process an entire repository."""
+        """
+        Process an entire repository.
+
+        Args:
+            repo_path_or_url (str): Local path or Git URL of the repository to process.
+
+        Returns:
+            int: 0 if processing is successful, 1 otherwise.
+
+        Raises:
+            FileNotFoundError: If the repository path does not exist.
+            RuntimeError: If the generator is not initialized.
+        """
         try:
             if not self._initialized:
                 raise RuntimeError("DocumentationGenerator not initialized")
@@ -348,7 +404,15 @@ class DocumentationGenerator:
 
 
 async def main(args: argparse.Namespace) -> int:
-    """Main application entry point."""
+    """
+    Main application entry point.
+
+    Args:
+        args (argparse.Namespace): Command line arguments.
+
+    Returns:
+        int: Exit code (0 for success, 1 for failure).
+    """
     generator = DocumentationGenerator()
 
     try:
@@ -382,7 +446,12 @@ async def main(args: argparse.Namespace) -> int:
             logger.error(f"Error during cleanup: {e}")
         
 def parse_arguments() -> argparse.Namespace:
-    """Parse command line arguments."""
+    """
+    Parse command line arguments.
+
+    Returns:
+        argparse.Namespace: Parsed command line arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Generate documentation for Python files"
     )

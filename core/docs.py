@@ -1,5 +1,19 @@
 """
 Documentation generation orchestration module.
+
+This module provides functionality to orchestrate the documentation generation process,
+including extracting code elements, processing docstrings, and generating markdown documentation.
+
+Usage Example:
+    ```python
+    from core.docs import DocStringManager
+    from core.types import DocumentationContext
+
+    context = DocumentationContext(source_code="def example(): pass")
+    manager = DocStringManager(context)
+    documentation = await manager.generate_documentation()
+    print(documentation)
+    ```
 """
 
 from pathlib import Path
@@ -23,7 +37,14 @@ class DocStringManager:
         docstring_processor: Optional[DocstringProcessor] = None,
         markdown_generator: Optional[MarkdownGenerator] = None
     ):
-        """Initialize the documentation manager."""
+        """
+        Initialize the documentation manager.
+
+        Args:
+            context (DocumentationContext): The context for documentation generation.
+            docstring_processor (Optional[DocstringProcessor]): Optional docstring processor.
+            markdown_generator (Optional[MarkdownGenerator]): Optional markdown generator.
+        """
         self.logger = LoggerSetup.get_logger(__name__)
         self.context = context
         self.docstring_processor = docstring_processor or DocstringProcessor()
@@ -31,7 +52,15 @@ class DocStringManager:
         self.code_extractor = CodeExtractor()
 
     async def generate_documentation(self) -> str:
-        """Generate complete documentation."""
+        """
+        Generate complete documentation.
+
+        Returns:
+            str: The generated documentation in markdown format.
+
+        Raises:
+            DocumentationError: If documentation generation fails.
+        """
         try:
             # Extract code elements
             extraction_result = self.code_extractor.extract_code(self.context.source_code)
@@ -63,7 +92,19 @@ class DocStringManager:
         file_path: Path,
         output_dir: Optional[Path] = None
     ) -> Tuple[str, str]:
-        """Process a single file and generate documentation."""
+        """
+        Process a single file and generate documentation.
+
+        Args:
+            file_path (Path): The path to the file to process.
+            output_dir (Optional[Path]): Optional output directory to save the documentation.
+
+        Returns:
+            Tuple[str, str]: The source code and generated documentation.
+
+        Raises:
+            DocumentationError: If file processing fails.
+        """
         try:
             if not file_path.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")

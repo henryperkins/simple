@@ -3,6 +3,23 @@ API Client Module
   
 Provides an interface to interact with the Azure OpenAI API, handling  
 requests and responses, including support for function calling and structured outputs.  
+  
+Usage Example:
+    ```python
+    from api.api_client import APIClient
+    from core.config import AzureOpenAIConfig
+
+    config = AzureOpenAIConfig.from_env()
+    client = APIClient(config)
+
+    async def main():
+        prompt = "Translate the following English text to French: 'Hello, world!'"
+        response, usage = await client.process_request(prompt)
+        print(response)
+
+    import asyncio
+    asyncio.run(main())
+    ```
 """  
   
 from typing import Any, Dict, List, Optional, Tuple

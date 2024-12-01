@@ -1,6 +1,38 @@
 """
 Repository handling module for cloning and managing git repositories.
+
+This module provides functionality to clone, manage, and interact with git repositories.
+It includes methods for cloning repositories, retrieving Python files, getting file content,
+cleaning up resources, and more.
+
+Usage Example:
+    ```python
+    from repository_handler import RepositoryHandler
+    from pathlib import Path
+
+    async def main():
+        repo_path = Path("/path/to/repo")
+        handler = RepositoryHandler(repo_path)
+        await handler.clone_repository("https://github.com/user/repo.git")
+        python_files = handler.get_python_files()
+        for file in python_files:
+            content, relative_path = handler.get_file_content(file)
+            print(f"File: {relative_path}\nContent:\n{content}")
+
+    import asyncio
+    asyncio.run(main())
+    ```
+
+Key Classes and Functions:
+- RepositoryHandler: Main class for handling repository operations.
+- clone_repository: Clone a git repository to a temporary directory.
+- get_python_files: Get all Python files from the repository.
+- get_file_content: Get the content of a file and its relative path.
+- cleanup: Clean up resources.
+- get_file_history: Get git history for a specific file.
+- validate_repository: Validate if the given path is a valid git repository.
 """
+
 import os
 import sys
 import shutil
@@ -18,9 +50,38 @@ from core.logger import LoggerSetup
 logger = LoggerSetup.get_logger(__name__)
 
 class RepositoryHandler:
+    """
+    Handles operations related to git repositories, including cloning, file retrieval,
+    and cleanup.
+
+    Attributes:
+        repo_path (Path): Path to the repository.
+        repo_handler (Optional[Any]): Optional repository handler.
+        ai_handler (Optional[Any]): Optional AI handler.
+        token_manager (Optional[Any]): Optional token manager.
+        metrics (Optional[Any]): Optional metrics collector.
+        cache (Optional[Any]): Optional cache.
+        system_monitor (Optional[Any]): Optional system monitor.
+        logger (Logger): Logger instance for logging.
+        repo (Optional[Repo]): Git repository instance.
+        _lock (asyncio.Lock): Asynchronous lock for thread safety.
+    """
+
     def __init__(self, repo_path: Path, repo_handler: Optional[Any] = None, ai_handler: Optional[Any] = None,
                  token_manager: Optional[Any] = None, metrics: Optional[Any] = None,
                  cache: Optional[Any] = None, system_monitor: Optional[Any] = None):
+        """
+        Initialize the RepositoryHandler.
+
+        Args:
+            repo_path (Path): Path to the repository.
+            repo_handler (Optional[Any]): Optional repository handler.
+            ai_handler (Optional[Any]): Optional AI handler.
+            token_manager (Optional[Any]): Optional token manager.
+            metrics (Optional[Any]): Optional metrics collector.
+            cache (Optional[Any]): Optional cache.
+            system_monitor (Optional[Any]): Optional system monitor.
+        """
         self.repo_path = repo_path
         self.repo_handler = repo_handler
         self.ai_handler = ai_handler
@@ -33,13 +94,28 @@ class RepositoryHandler:
         self._lock = asyncio.Lock()  # Initialize the lock
 
     async def __aenter__(self):
-        """Asynchronous context manager entry."""
+        """
+        Asynchronous context manager entry.
+
+        Returns:
+            RepositoryHandler: The instance of the handler.
+        """
         self.logger.info("Entering RepositoryHandler context")
         self.initialize()
         return self
 
     async def __aexit__(self, exc_type=None, exc_val=None, exc_tb=None) -> None:
-        """Asynchronous context manager exit with proper argument handling."""
+        """
+        Asynchronous context manager exit with proper argument handling.
+
+        Args:
+            exc_type: Exception type.
+            exc_val: Exception value.
+            exc_tb: Exception traceback.
+
+        Raises:
+            Exception: If an error occurs during cleanup.
+        """
         self.logger.info("Exiting RepositoryHandler context")
         try:
             if hasattr(self, 'temp_dir') and self.temp_dir:
@@ -50,7 +126,13 @@ class RepositoryHandler:
             raise
 
     def initialize(self) -> None:
-        """Initialize the repository handler."""
+        """
+        Initialize the repository handler.
+
+        Raises:
+            InvalidGitRepositoryError: If the repository path is not a valid git repository.
+            Exception: If initialization fails.
+        """
         try:
             self.repo = git.Repo(self.repo_path)
             self.logger.info("Repository initialized at %s", self.repo_path)
@@ -62,7 +144,20 @@ class RepositoryHandler:
             raise
 
     async def clone_repository(self, repo_url: str) -> Path:
-        """Clone a git repository to a temporary directory."""
+        """
+        Clone a git repository to a temporary directory.
+
+        Args:
+            repo_url (str): URL of the git repository to clone.
+
+        Returns:
+            Path: Path to the cloned repository.
+
+        Raises:
+            GitCommandError: If cloning the repository fails.
+            ValueError: If the repository URL is invalid.
+            Exception: If an error occurs during cloning.
+        """
         async with self._lock:
             try:
                 # Validate URL
@@ -99,7 +194,19 @@ class RepositoryHandler:
                 raise
 
     def get_python_files(self, exclude_patterns: Optional[Set[str]] = None) -> List[Path]:
-        """Get all Python files from the repository."""
+        """
+        Get all Python files from the repository.
+
+        Args:
+            exclude_patterns (Optional[Set[str]]): Set of patterns to exclude from the search.
+
+        Returns:
+            List[Path]: List of Python file paths.
+
+        Raises:
+            ValueError: If the repository path is not set.
+            Exception: If an error occurs while finding Python files.
+        """
         if not self.repo_path:
             raise ValueError("Repository path not set")
 
@@ -129,7 +236,19 @@ class RepositoryHandler:
             return []
 
     def get_file_content(self, file_path: Path) -> Tuple[str, str]:
-        """Get the content of a file and its relative path."""
+        """
+        Get the content of a file and its relative path.
+
+        Args:
+            file_path (Path): Path to the file.
+
+        Returns:
+            Tuple[str, str]: Tuple containing the file content and its relative path.
+
+        Raises:
+            FileNotFoundError: If the file is not found.
+            Exception: If an error occurs while reading the file.
+        """
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -149,7 +268,12 @@ class RepositoryHandler:
             return content, str(file_path)
 
     async def cleanup(self) -> None:
-        """Clean up resources."""
+        """
+        Clean up resources.
+
+        Raises:
+            Exception: If an error occurs during cleanup.
+        """
         try:
             if self.system_monitor:
                 await self.system_monitor.stop()
@@ -178,8 +302,19 @@ class RepositoryHandler:
         except Exception as e:
             self.logger.error("Cleanup failed: %s", str(e))
 
-    async def get_file_history(self, file_path: Path) -> List[Dict[str, Any]]:
-        """Get git history for a specific file."""
+    async def get_file_history(self, file_path: Path) -> List<Dict[str, Any]]:
+        """
+        Get git history for a specific file.
+
+        Args:
+            file_path (Path): Path to the file.
+
+        Returns:
+            List[Dict[str, Any]]: List of dictionaries containing commit history.
+
+        Raises:
+            Exception: If an error occurs while retrieving file history.
+        """
         if not self.repo:
             return []
 
@@ -200,7 +335,18 @@ class RepositoryHandler:
             return []
 
     def validate_repository(self, path: Path) -> bool:
-        """Validate if the given path is a valid git repository."""
+        """
+        Validate if the given path is a valid git repository.
+
+        Args:
+            path (Path): Path to the repository.
+
+        Returns:
+            bool: True if the path is a valid git repository, False otherwise.
+
+        Raises:
+            Exception: If an error occurs during validation.
+        """
         try:
             _ = git.Repo(path).git_dir
             return True
@@ -211,7 +357,12 @@ class RepositoryHandler:
             return False
 
     def _get_git_progress(self) -> git.RemoteProgress:
-        """Create a progress handler for git operations."""
+        """
+        Create a progress handler for git operations.
+
+        Returns:
+            git.RemoteProgress: Progress handler for git operations.
+        """
         logger = self.logger  # Capture logger from outer scope
         
         class GitProgress(git.RemoteProgress):
@@ -229,7 +380,15 @@ class RepositoryHandler:
         return GitProgress()
 
     async def _cleanup_git_directory(self, path: Path) -> None:
-        """Safely clean up a Git repository directory."""
+        """
+        Safely clean up a Git repository directory.
+
+        Args:
+            path (Path): Path to the directory to clean up.
+
+        Raises:
+            Exception: If an error occurs during cleanup.
+        """
         try:
             # Kill any running Git processes on Windows
             if sys.platform == 'win32':
@@ -267,7 +426,18 @@ class RepositoryHandler:
             logger.error(f"Error during cleanup: {e}")
 
     def _is_valid_git_url(self, url: str) -> bool:
-        """Validate if the URL is a valid git repository URL."""
+        """
+        Validate if the URL is a valid git repository URL.
+
+        Args:
+            url (str): URL to validate.
+
+        Returns:
+            bool: True if the URL is valid, False otherwise.
+
+        Raises:
+            Exception: If an error occurs during validation.
+        """
         try:
             result = urlparse(url)
             
