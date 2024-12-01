@@ -30,8 +30,16 @@ load_dotenv()
 logger = LoggerSetup.get_logger(__name__)  # Initialize logger
 
 class DocumentationGenerator:
-    def __init__(self):
-        """Initialize the documentation generator."""
+    """
+    Documentation Generator Class
+
+    Handles the initialization, processing, and cleanup of components for generating documentation.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize the documentation generator.
+        """
         self.logger = LoggerSetup.get_logger(__name__)
         self.cache: Optional[Cache] = None
         self.metrics: Optional[MetricsCollector] = None
@@ -42,7 +50,12 @@ class DocumentationGenerator:
         self.config = AzureOpenAIConfig.from_env()
 
     async def initialize(self) -> None:
-        """Initialize all components."""
+        """
+        Initialize all components.
+
+        Raises:
+            ConfigurationError: If initialization fails.
+        """
         try:
             if self.config.cache_enabled:
                 self.cache = Cache(
@@ -85,7 +98,9 @@ class DocumentationGenerator:
             raise ConfigurationError(f"Failed to initialize components: {str(e)}") from e
 
     async def cleanup(self) -> None:
-        """Clean up and close all resources."""
+        """
+        Clean up and close all resources.
+        """
         try:
             if self.system_monitor:
                 await self.system_monitor.stop()
@@ -111,7 +126,18 @@ class DocumentationGenerator:
             logger.error(f"Cleanup failed: {e}")
 
     async def process_file(self, file_path: Path) -> Optional[Tuple[str, str]]:
-        """Process a single file and generate documentation."""
+        """
+        Process a single file and generate documentation.
+
+        Args:
+            file_path (Path): The path to the file to process.
+
+        Returns:
+            Optional[Tuple[str, str]]: Tuple of (updated_code, documentation) or None if processing fails.
+
+        Raises:
+            Exception: If processing fails.
+        """
         try:
             self.logger.info(f"Processing file: {file_path}")
             source_code = file_path.read_text(encoding='utf-8')
@@ -169,7 +195,18 @@ class DocumentationGenerator:
             return None
 
     async def _get_recent_changes(self, file_path: Path) -> List[str]:
-        """Get recent changes for a file from git history."""
+        """
+        Get recent changes for a file from git history.
+
+        Args:
+            file_path (Path): The path to the file.
+
+        Returns:
+            List[str]: List of recent changes.
+
+        Raises:
+            Exception: If retrieving changes fails.
+        """
         try:
             if not self.repo_handler:
                 return ["No change history available - not a git repository"]
@@ -191,7 +228,12 @@ class DocumentationGenerator:
             return ["Could not retrieve change history"]
 
     async def process_files(self, file_paths: List[Path]) -> None:
-        """Process multiple Python files for documentation generation."""
+        """
+        Process multiple Python files for documentation generation.
+
+        Args:
+            file_paths (List[Path]): List of file paths to process.
+        """
         stats = {
             'total': len(file_paths),
             'processed': 0,
@@ -254,7 +296,15 @@ class DocumentationGenerator:
 
 
 async def process_repository(args: argparse.Namespace) -> int:
-    """Process repository for documentation generation."""
+    """
+    Process repository for documentation generation.
+
+    Args:
+        args (argparse.Namespace): Command line arguments.
+
+    Returns:
+        int: Exit code (0 for success, 1 for failure).
+    """
     generator = DocumentationGenerator()
 
     try:
@@ -347,7 +397,15 @@ async def process_repository(args: argparse.Namespace) -> int:
         await generator.cleanup()
 
 async def main(args: argparse.Namespace) -> int:
-    """Main application entry point for processing local files."""
+    """
+    Main application entry point for processing local files.
+
+    Args:
+        args (argparse.Namespace): Command line arguments.
+
+    Returns:
+        int: Exit code (0 for success, 1 for failure).
+    """
     generator = DocumentationGenerator()
 
     try:
@@ -369,7 +427,12 @@ async def main(args: argparse.Namespace) -> int:
         await generator.cleanup()
 
 def parse_arguments() -> argparse.Namespace:
-    """Parse command line arguments."""
+    """
+    Parse command line arguments.
+
+    Returns:
+        argparse.Namespace: Parsed command line arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Generate documentation for Python files using Azure OpenAI"
     )
@@ -386,7 +449,16 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 def normalize_path(file_path: Path, base_path: Optional[Path] = None) -> Path:
-    """Normalize file path for documentation output."""
+    """
+    Normalize file path for documentation output.
+
+    Args:
+        file_path (Path): The file path to normalize.
+        base_path (Optional[Path]): The base path to use for normalization.
+
+    Returns:
+        Path: The normalized file path.
+    """
     if base_path and file_path.is_absolute():
         try:
             return file_path.relative_to(base_path)

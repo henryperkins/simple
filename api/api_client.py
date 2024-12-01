@@ -13,11 +13,26 @@ from core.config import AzureOpenAIConfig
 from core.logger import LoggerSetup
 
 
-class APIClient:  
-    """Client to interact with Azure OpenAI API."""  
-  
-    def __init__(self, config: Optional[AzureOpenAIConfig] = None):  
-        """Initialize API client with configuration."""  
+class APIClient:
+    """
+    Client to interact with Azure OpenAI API.
+
+    Attributes:
+        config (AzureOpenAIConfig): Configuration settings for Azure OpenAI service.
+        client (AsyncAzureOpenAI): Asynchronous client for Azure OpenAI API.
+        logger (Logger): Logger instance for logging.
+    """
+
+    def __init__(self, config: Optional[AzureOpenAIConfig] = None) -> None:
+        """
+        Initialize API client with configuration.
+
+        Args:
+            config (Optional[AzureOpenAIConfig]): Configuration settings for Azure OpenAI service.
+
+        Raises:
+            Exception: If initialization fails.
+        """
         self.logger = LoggerSetup.get_logger(__name__)  # Initialize self.logger  
         try:  
             self.config = config or AzureOpenAIConfig.from_env()  
@@ -30,17 +45,32 @@ class APIClient:
                              extra={"api_version": self.config.api_version})  
         except Exception as e:  
             self.logger.error(f"Failed to initialize APIClient: {e}")  
-            raise  
-  
-    async def process_request(  
-        self,  
-        prompt: str,  
-        temperature: float = 0.4,  
-        max_tokens: int = 6000,  
-        tools: Optional[List[Dict[str, Any]]] = None,  
-        tool_choice: Optional[Dict[str, str]] = None  
-    ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:  
-        """Process request to Azure OpenAI API."""  
+            raise
+
+    async def process_request(
+        self,
+        prompt: str,
+        temperature: float = 0.4,
+        max_tokens: int = 6000,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Dict[str, str]] = None
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """
+        Process request to Azure OpenAI API.
+
+        Args:
+            prompt (str): The prompt text to send to the API.
+            temperature (float): Sampling temperature for the API response.
+            max_tokens (int): Maximum number of tokens in the response.
+            tools (Optional[List[Dict[str, Any]]]): Optional tools for the API request.
+            tool_choice (Optional[Dict[str, str]]): Optional tool choice for the API request.
+
+        Returns:
+            Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]: API response and usage information.
+
+        Raises:
+            Exception: If the API request fails.
+        """
         try:  
             self.logger.debug("Processing API request",  
                               extra={"max_tokens": max_tokens, "temperature": temperature})  
@@ -62,12 +92,18 @@ class APIClient:
         except Exception as e:  
             self.logger.error(f"API request failed: {e}",  
                               extra={"prompt_length": len(prompt)})  
-            return None, None  
-  
-    async def close(self) -> None:  
-        """Close API client resources."""  
+            raise
+
+    async def close(self) -> None:
+        """
+        Close API client resources.
+
+        Raises:
+            Exception: If closing the client fails.
+        """
         try:  
             await self.client.close()  
             self.logger.info("APIClient closed successfully")  
         except Exception as e:  
             self.logger.error(f"Error closing APIClient: {e}")  
+            raise
