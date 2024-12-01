@@ -10,7 +10,7 @@ caching, and response processing with structured JSON outputs.
 import asyncio
 import json
 from datetime import datetime
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Union, List
 import ast
 from dataclasses import dataclass
 import openai
@@ -18,6 +18,7 @@ from openai import APIError
 from jsonschema import validate, ValidationError as JsonValidationError
 from core.logger import LoggerSetup
 from core.cache import Cache
+from core.metrics import MetricsCalculator  # Add this import
 from core.metrics_collector import MetricsCollector
 from core.config import AzureOpenAIConfig
 from core.code_extraction import CodeExtractor
@@ -177,6 +178,7 @@ class AIInteractionHandler(AIHandler):
             self.client = APIClient(self.config)
             self.docstring_processor = DocstringProcessor()
             self.code_extractor = code_extractor or CodeExtractor()
+            self.metrics_calculator = MetricsCalculator()
             self._initialize_tools()
             self.logger.info("AI Interaction Handler initialized successfully")
 
@@ -192,6 +194,41 @@ class AIInteractionHandler(AIHandler):
         except Exception as e:
             self.logger.error(f"Failed to initialize AI Interaction Handler: {str(e)}")
             raise
+        
+    def _preprocess_code(self, source_code: str) -> str:
+        """
+        Preprocess source code before parsing to handle special cases.
+        
+        Args:
+            source_code (str): The source code to preprocess.
+            
+        Returns:
+            str: Preprocessed source code.
+        """
+        try:
+            # Handle timestamps in comments by converting them to strings
+            import re
+            
+            # Pattern to match timestamps (various formats)
+            timestamp_pattern = r'(\[|\b)(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}(?:\.\d+)?)\]?'
+            
+            def timestamp_replacer(match):
+                # Convert timestamp to string format
+                timestamp = match.group(2)
+                # Keep the opening bracket if it exists
+                prefix = match.group(1) if match.group(1) == '[' else ''
+                # Add closing bracket if we had an opening one
+                suffix = ']' if prefix == '[' else ''
+                return f'{prefix}"{timestamp}"{suffix}'
+
+            processed_code = re.sub(timestamp_pattern, timestamp_replacer, source_code)
+            
+            self.logger.debug("Preprocessed source code to handle timestamps")
+            return processed_code
+
+        except Exception as e:
+            self.logger.error(f"Error preprocessing code: {e}")
+            return source_code
 
     async def process_code(
         self,
@@ -200,7 +237,7 @@ class AIInteractionHandler(AIHandler):
         extracted_info: Optional[Dict[str, Any]] = None
     ) -> Optional[Tuple[str, str]]:
         """
-        Process source code to generate documentation using AST parsing.
+        Process source code to generate documentation.
 
         Args:
             source_code (str): The source code to process.
@@ -209,75 +246,187 @@ class AIInteractionHandler(AIHandler):
 
         Returns:
             Optional[Tuple[str, str]]: Tuple of (updated_code, documentation) or None if processing fails.
-
-        Raises:
-            Exception: If processing fails.
         """
         try:
-            processor = CodeExtractor()
+            # Check cache first if key provided
+            if cache_key and self.cache:
+                try:
+                    cached_result = await self.cache.get_cached_docstring(cache_key)
+                    if cached_result:
+                        self.logger.info(f"Cache hit for key: {cache_key}")
+                        return cached_result.get("updated_code"), cached_result.get("documentation")
+                except Exception as e:
+                    self.logger.error(f"Cache retrieval error: {e}")
 
+            # Preprocess code to handle timestamps and other special cases
+            processed_code = self._preprocess_code(source_code)
+
+            # Parse the processed code
+            try:
+                tree = ast.parse(processed_code)
+            except SyntaxError as e:
+                self.logger.error(f"Syntax error in source code: {e}")
+                raise ExtractionError(f"Failed to parse code: {e}")
+
+            # Use provided metadata or extract it
             if extracted_info:
                 metadata = extracted_info
-                tree = ast.parse(source_code)
             else:
                 self.logger.debug("Processing code with extractor...")
-                extraction_result = processor.extract_code(source_code)
+                extraction_result = self.code_extractor.extract_code(processed_code)
                 if not extraction_result:
                     self.logger.error("Failed to process code with extractor")
                     return None
+                    
+                # Create metadata dictionary from extraction result
+                metadata = {
+                    'module_docstring': extraction_result.module_docstring,
+                    'classes': [
+                        {
+                            'name': cls.name,
+                            'docstring': cls.docstring,
+                            'methods': [
+                                {
+                                    'name': method.name,
+                                    'docstring': method.docstring,
+                                    'args': [
+                                        {'name': arg.name, 'type': arg.type_hint}
+                                        for arg in method.args
+                                    ],
+                                    'return_type': method.return_type,
+                                    'complexity': method.metrics.get('complexity', 0) if method.metrics else 0
+                                }
+                                for method in cls.methods
+                            ],
+                            'complexity': cls.metrics.get('complexity', 0) if cls.metrics else 0
+                        }
+                        for cls in extraction_result.classes
+                    ],
+                    'functions': [
+                        {
+                            'name': func.name,
+                            'docstring': func.docstring,
+                            'args': [
+                                {'name': arg.name, 'type': arg.type_hint}
+                                for arg in func.args
+                            ],
+                            'return_type': func.return_type,
+                            'complexity': func.metrics.get('complexity', 0) if func.metrics else 0
+                        }
+                        for func in extraction_result.functions
+                    ],
+                    'metrics': extraction_result.metrics or {}
+                }
 
-                tree = ast.parse(source_code)
-                metadata = processor.metadata_to_dict()
+            # Create the prompt
+            prompt = self._create_function_calling_prompt(processed_code, metadata)
+            
+            # Get response from AI
+            response, usage = await self.client.process_request(
+                prompt=prompt,
+                temperature=0.3,
+                max_tokens=2000,
+                tools=[self.docstring_function],
+                tool_choice={"type": "function", "function": {"name": "generate_docstring"}}
+            )
 
-            imports = []
-            required_imports = metadata.get('required_imports', [])
-            self.logger.debug(f"Required imports: {required_imports}")
-
-            for imp in required_imports:
-                if imp == 'datetime':
-                    imports.append('from datetime import datetime, timedelta')
-
-            modified_code = '\n'.join(imports + [''] + [source_code])
-
-            try:
-                self.logger.debug("Generating documentation...")
-                result = await self._generate_documentation(
-                    source_code=modified_code,
-                    metadata=metadata,
-                    node=tree
-                )
-
-                if not result:
-                    self.logger.error("Failed to generate documentation")
-                    return None
-
-                return modified_code, result.content
-
-            except Exception as e:
-                self.logger.error(f"Error generating documentation: {str(e)}", exc_info=True)
+            if not response:
+                self.logger.error("No response from AI service")
                 return None
 
+            # Process the response
+            message = response.choices[0].message
+            if not message.tool_calls or not message.tool_calls[0].function:
+                self.logger.error("No function call in response")
+                return None
+
+            # Parse function arguments
+            try:
+                function_args = message.tool_calls[0].function.arguments
+                response_data = json.loads(function_args)
+            except json.JSONDecodeError as e:
+                self.logger.error(f"Failed to parse response JSON: {e}")
+                return None
+
+            # Validate response data
+            try:
+                validate(instance=response_data, schema=DOCSTRING_SCHEMA["schema"])
+            except ValidationError as e:
+                self.logger.error(f"Response validation failed: {e}")
+                return None
+
+            # Create docstring data
+            docstring_data = DocstringData(**response_data)
+            
+            # Format the docstring
+            docstring = self.docstring_processor.format(docstring_data)
+
+            # Update source code with new docstring
+            try:
+                tree = ast.parse(processed_code)
+                modified = False
+                
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                        # Get existing docstring
+                        existing_docstring = ast.get_docstring(node) or ""
+                        updated_docstring = self.docstring_processor.update_docstring(
+                            existing_docstring, docstring
+                        )
+                        self.docstring_processor.insert_docstring(node, updated_docstring)
+                        modified = True
+
+                updated_code = ast.unparse(tree) if modified else processed_code
+            except Exception as e:
+                self.logger.error(f"Error updating source code: {e}")
+                return None
+
+            # Track usage if available
+            if usage:
+                self.token_manager.track_request(
+                    usage.get('prompt_tokens', 0),
+                    usage.get('completion_tokens', 0)
+                )
+
+            # Cache result if caching is enabled
+            if cache_key and self.cache:
+                try:
+                    await self.cache.save_docstring(
+                        cache_key,
+                        {
+                            "updated_code": updated_code,
+                            "documentation": docstring
+                        }
+                    )
+                except Exception as e:
+                    self.logger.error(f"Cache save error: {e}")
+
+            return updated_code, docstring
+
         except Exception as e:
-            self.logger.error(f"Error processing code: {str(e)}", exc_info=True)
+            self.logger.error(f"Error processing code: {e}")
             return None
 
-    async def _generate_documentation(self, source_code: str, metadata: Dict[str, Any], node: Optional[ast.AST] = None) -> Optional[ProcessingResult]:
-        """
-        Generate documentation using Azure OpenAI.
-
-        Args:
-            source_code (str): The source code to document.
-            metadata (Dict[str, Any]): Additional metadata for the prompt.
-            node (Optional[ast.AST]): The AST node representing the code element.
-
-        Returns:
-            Optional[ProcessingResult]: The result of the documentation generation.
-
-        Raises:
-            Exception: If documentation generation fails.
-        """
+    async def _generate_documentation(self, source_code: str, metadata: Dict[str, Any], node: ast.AST) -> Optional[ProcessingResult]:
+        """Generate documentation using Azure OpenAI."""
         try:
             prompt = self._create_function_calling_prompt(source_code, metadata, node)
+            
+            # Create function-specific context
+            context = {
+                'name': getattr(node, 'name', 'unknown'),
+                'type': type(node).__name__,
+                'args': self._get_function_args(node) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else [],
+                'returns': self._get_return_annotation(node) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else None,
+                'is_class': isinstance(node, ast.ClassDef),
+                'bases': self._get_base_classes(node) if isinstance(node, ast.ClassDef) else [],
+                'decorators': self._get_decorators(node),
+                'complexity': self.metrics_calculator.calculate_complexity(node) if self.metrics_calculator else 0
+            }
+
+            # Add the context to the prompt
+            prompt += f"\nContext:\n{json.dumps(context, indent=2)}"
+            
             response, usage = await self.client.process_request(
                 prompt=prompt,
                 temperature=0.3,
@@ -294,17 +443,16 @@ class AIInteractionHandler(AIHandler):
                 function_args = message.tool_calls[0].function.arguments
                 response_data = json.loads(function_args)
 
-                if node and self.metrics_collector:
-                    complexity = self.metrics_collector.calculate_complexity(node)
-                    response_data["complexity"] = complexity
+                # Add complexity score
+                if context['complexity'] > 0:
+                    response_data["complexity"] = context['complexity']
 
                 validate(instance=response_data, schema=DOCSTRING_SCHEMA["schema"])
                 docstring_data = DocstringData(**response_data)
                 formatted_docstring = self.docstring_processor.format(docstring_data)
 
                 self.token_manager.track_request(usage['prompt_tokens'], usage['completion_tokens'])
-                self.logger.info(f"Tokens used: {usage['prompt_tokens']} prompt, {usage['completion_tokens']} completion")
-
+                
                 return ProcessingResult(
                     content=formatted_docstring,
                     usage=usage or {},
@@ -314,7 +462,42 @@ class AIInteractionHandler(AIHandler):
         except Exception as e:
             self.logger.error(f"Error during generation: {e}")
             return None
+        
+    def _get_function_args(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[Dict[str, Any]]:
+        """Extract function arguments with type hints."""
+        args = []
+        for arg in node.args.args:
+            arg_info = {
+                'name': arg.arg,
+                'type': ast.unparse(arg.annotation) if arg.annotation else 'Any',
+                'has_default': False
+            }
+            args.append(arg_info)
+        
+        # Handle defaults
+        defaults = node.args.defaults
+        if defaults:
+            default_offset = len(args) - len(defaults)
+            for i, default in enumerate(defaults):
+                args[default_offset + i]['has_default'] = True
+                args[default_offset + i]['default'] = ast.unparse(default)
+        
+        return args
 
+    def _get_return_annotation(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> Optional[str]:
+        """Extract return type annotation."""
+        if node.returns:
+            return ast.unparse(node.returns)
+        return None
+
+    def _get_base_classes(self, node: ast.ClassDef) -> List[str]:
+        """Extract base class names."""
+        return [ast.unparse(base) for base in node.bases]
+
+    def _get_decorators(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef]) -> List[str]:
+        """Extract decorator names."""
+        return [ast.unparse(decorator) for decorator in node.decorator_list]
+    
     def _initialize_tools(self) -> None:
         """Initialize the function tools for structured output."""
         self.docstring_function = {

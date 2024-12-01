@@ -388,5 +388,45 @@ class Metrics:
         except Exception as e:
             self.logger.error(f"Error categorizing import {module_name}: {e}")
             raise MetricsError(f"Error categorizing import {module_name}: {e}")
+        
+class MetricsCalculator:
+    """Calculates code complexity metrics."""
+    
+    def __init__(self) -> None:
+        self.logger = LoggerSetup.get_logger(__name__)
 
+    def calculate_complexity(self, node: ast.AST) -> int:
+        """Calculate complexity for any AST node."""
+        try:
+            # Handle async and regular functions
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return self.calculate_cyclomatic_complexity(node)
+            elif isinstance(node, ast.ClassDef):
+                # Calculate class complexity as sum of methods complexity
+                return sum(
+                    self.calculate_cyclomatic_complexity(method)
+                    for method in node.body 
+                    if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
+                )
+            elif isinstance(node, ast.Module):
+                # Calculate module complexity
+                return sum(
+                    self.calculate_complexity(child)
+                    for child in ast.iter_child_nodes(node)
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                )
+            return 0
+        except Exception as e:
+            self.logger.error("Error calculating complexity: %s", str(e))
+            return 0
+
+    def calculate_cyclomatic_complexity(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
+        """Calculate cyclomatic complexity for a function."""
+        complexity = 1  # Start with 1 for the function itself
+        for child in ast.walk(node):
+            if isinstance(child, (ast.If, ast.While, ast.For, ast.Try,
+                               ast.ExceptHandler, ast.With, ast.Assert,
+                               ast.BoolOp)):
+                complexity += 1
+        return complexity
 # If needed, testing functions can be included below

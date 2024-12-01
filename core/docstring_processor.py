@@ -77,66 +77,47 @@ class DocstringProcessor:
             raise DocumentationError(f"Failed to parse docstring: {e}")
 
     def format(self, data: DocstringData, style: str = 'google') -> str:
-        """
-        Format structured docstring data into a string.
+        """Format structured docstring data into a string."""
+        lines = []
 
-        Args:
-            data (DocstringData): Structured docstring data.
-            style (str): The docstring style to use ('google', 'numpy', 'sphinx').
+        # Add summary
+        if data.summary:
+            lines.extend([data.summary, ""])
 
-        Returns:
-            str: Formatted docstring.
-        """
-        try:
-            lines = []
+        # Add detailed description if different from summary
+        if data.description and data.description != data.summary:
+            lines.extend([data.description, ""])
 
-            # Add summary if present
-            if data.summary:
-                lines.extend([data.summary, ""])
+        # Add arguments section if present
+        if data.args:
+            lines.append("Args:")
+            for arg in data.args:
+                arg_desc = f"    {arg['name']} ({arg['type']}): {arg['description']}"
+                if arg.get('optional', False):
+                    arg_desc += " (Optional)"
+                if 'default_value' in arg and arg['default_value'] is not None:
+                    arg_desc += f", default: {arg['default_value']}"
+                lines.append(arg_desc)
+            lines.append("")
 
-            # Add description
-            if data.description:
-                lines.extend([data.description, ""])
+        # Add returns section
+        if data.returns:
+            lines.append("Returns:")
+            lines.append(f"    {data.returns['type']}: {data.returns['description']}")
+            lines.append("")
 
-            # Add arguments section
-            if data.args:
-                lines.append("Args:")
-                for arg in data.args:
-                    lines.append(
-                        f"    {arg['name']} ({arg.get('type', 'Any')}): "
-                        f"{arg.get('description', '')}"
-                    )
-                lines.append("")
+        # Add raises section if present
+        if data.raises:
+            lines.append("Raises:")
+            for exc in data.raises:
+                lines.append(f"    {exc['exception']}: {exc['description']}")
+            lines.append("")
 
-            # Add returns section
-            if data.returns:
-                lines.append("Returns:")
-                lines.append(
-                    f"    {data.returns.get('type', 'Any')}: "
-                    f"{data.returns.get('description', '')}"
-                )
-                lines.append("")
+        # Add complexity warning if high
+        if data.complexity and data.complexity > 10:
+            lines.append(f"Warning: High complexity score ({data.complexity}) ⚠️")
 
-            # Add raises section
-            if data.raises:
-                lines.append("Raises:")
-                for exc in data.raises:
-                    lines.append(
-                        f"    {exc.get('exception', 'Exception')}: "
-                        f"{exc.get('description', '')}"
-                    )
-                lines.append("")
-
-            # Add complexity score if present
-            if data.complexity is not None:
-                warning = " ⚠️" if data.complexity > 10 else ""
-                lines.append(f"Complexity Score: {data.complexity}{warning}")
-
-            return "\n".join(lines).strip()
-
-        except Exception as e:
-            self.logger.error(f"Error formatting docstring: {e}")
-            raise DocumentationError(f"Failed to format docstring: {e}")
+        return "\n".join(lines).strip()
 
     def extract_from_node(self, node: ast.AST) -> DocstringData:
         """

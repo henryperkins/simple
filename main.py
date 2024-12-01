@@ -121,8 +121,8 @@ class DocumentationGenerator:
     async def cleanup(self) -> None:
         """Clean up all resources safely."""
         cleanup_errors = []
-
-        # Components to cleanup with their descriptive names
+        
+        # List of (component, name, cleanup_method)
         components = [
             (self.system_monitor, "System Monitor", 
             lambda x: x.stop() if hasattr(x, 'stop') else None),
@@ -134,7 +134,7 @@ class DocumentationGenerator:
             lambda x: x.close() if hasattr(x, 'close') else None),
             
             (self.token_manager, "Token Manager", 
-            lambda x: x.close() if hasattr(x, 'close') else None),
+            None),  # No async cleanup needed
             
             (self.cache, "Cache", 
             lambda x: x.close() if hasattr(x, 'close') else None),
@@ -147,12 +147,15 @@ class DocumentationGenerator:
             if component is not None:
                 try:
                     if cleanup_func:
-                        await cleanup_func(component)
+                        result = cleanup_func(component)
+                        if asyncio.iscoroutine(result):
+                            await result
                     self.logger.info(f"{name} cleaned up successfully")
                 except Exception as e:
                     error_msg = f"Error cleaning up {name}: {str(e)}"
                     self.logger.error(error_msg)
                     cleanup_errors.append(error_msg)
+                    continue  # Continue with other cleanups even if one fails
 
         self._initialized = False
 
@@ -160,9 +163,6 @@ class DocumentationGenerator:
             self.logger.error("Some components failed to cleanup properly")
             for error in cleanup_errors:
                 self.logger.error(f"- {error}")
-            return False
-        
-        return True
 
     async def process_file(self, file_path: Path, output_base: Path) -> Optional[Tuple[str, str]]:
         """
