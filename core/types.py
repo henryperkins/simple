@@ -34,6 +34,7 @@ class DocumentationContext:
     include_source: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
     ai_generated: Optional[str] = None
+    metrics_enabled: bool = True  # Add this line
 
 class AIHandler(ABC):
     """Interface for AI processing."""

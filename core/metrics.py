@@ -11,6 +11,7 @@ Author: Development Team
 import ast
 import math
 import sys
+from graphviz import Digraph
 from collections import defaultdict
 from typing import Dict, Set, Any, Union
 from core.logger import LoggerSetup
@@ -237,7 +238,49 @@ class Metrics:
             'program_vocabulary': program_vocabulary,
             'program_volume': program_volume
         }
+    def generate_dependency_graph(self, dependencies: Dict[str, Set[str]], output_file: str) -> None:
+        """
+        Generates a visual dependency graph.
 
+        Args:
+            dependencies: A dictionary of module dependencies.
+            output_file: The file path to save the graph.
+        """
+        try:
+            dot = Digraph(comment='Module Dependencies')
+
+            for module, deps in dependencies.items():
+                dot.node(module, module)
+                for dep in deps:
+                    dot.edge(module, dep)
+
+            dot.render(output_file, view=False)
+            self.logger.info(f"Dependency graph saved to {output_file}")
+        except Exception as e:
+            self.logger.error(f"Error generating dependency graph: {e}")
+            raise MetricsError(f"Error generating dependency graph: {e}") from e
+
+    def _process_import(self, node: ast.AST, deps: Dict[str, Set[str]]) -> None:
+        """Processes import statements and updates dependencies dictionary."""
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                module_name = alias.name
+                self._categorize_import(module_name, deps)
+        elif isinstance(node, ast.ImportFrom):
+            module_name = node.module  # Accessing the correct attribute .module
+            if module_name:  # Check that it's not None
+                self._categorize_import(module_name, deps)
+
+    def _categorize_import(self, module_name: str, deps: Dict[str, Set[str]]) -> None:
+        """Categorizes and adds import to dependencies dictionary."""
+        top_level_module = module_name.split('.')[0] # Getting the top-level module
+
+        if top_level_module in sys.stdlib_module_names:
+            deps['stdlib'].add(top_level_module) # Using top-level module for builtins
+        elif '.' in module_name:
+            deps['local'].add(module_name)
+        else:
+            deps['third_party'].add(top_level_module) # Using top-level name
     def _get_operand_name(self, node: ast.AST) -> str:
         """
         Get a string representation of an operand.

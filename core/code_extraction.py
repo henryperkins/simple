@@ -109,6 +109,7 @@ class ExtractionResult:
     constants: List[Dict[str, Any]] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     metrics: Dict[str, Any] = field(default_factory=dict)
+    dependencies: Dict[str, Set[str]] = field(default_factory=dict) # Add this line
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get attribute value safely."""
@@ -177,16 +178,34 @@ class CodeExtractor:
             return source_code
 
     def extract_code(self, source_code: str) -> Optional[ExtractionResult]:
-        """Extract all code elements and metadata."""
+        """
+        Extract all code elements and metadata, including detailed metrics and dependency analysis.
+
+        Args:
+            source_code (str): The source code to extract.
+
+        Returns:
+            Optional[ExtractionResult]: The extraction result or None if extraction fails.
+
+        Raises:
+            ExtractionError: If extraction fails.
+        """
         try:
-            tree = ast.parse(source_code)
+            processed_source_code = self._preprocess_code(source_code)
+            tree = ast.parse(processed_source_code)  # Use preprocessed source
             self._module_ast = tree
-            self._add_parents(tree)
-    
+            self._add_parents(tree)  # Needed for resolving inheritance, etc.
+
             # Analyze dependencies
             dependencies = self.metrics_calculator.analyze_dependencies(tree)
             self.logger.debug(f"Module dependencies: {dependencies}")
-    
+
+            # Generate dependency graph (optional, but useful)
+            try:
+                self.metrics_calculator.generate_dependency_graph(dependencies, "dependencies.png")  # Or another suitable path
+            except Exception as e:
+                self.logger.error(f"Failed to generate dependency graph: {e}")
+
             result = ExtractionResult(
                 classes=self._extract_classes(tree),
                 functions=self._extract_functions(tree),
@@ -194,49 +213,56 @@ class CodeExtractor:
                 module_docstring=ast.get_docstring(tree),
                 imports=self._extract_imports(tree),
                 constants=self._extract_constants(tree),
-                metrics=self._calculate_module_metrics(tree),
+                errors=self.errors, # Add errors to result
                 dependencies=dependencies
             )
-    
-            # Calculate metrics *after* classes and functions are extracted
+
             if self.context.metrics_enabled:
-                self._calculate_and_add_metrics(result)
-    
+                self._calculate_and_add_metrics(result, tree)  # Calculate metrics after extraction
+
             return result
-    
+
         except SyntaxError as e:
             self.logger.error("Syntax error in source code: %s", str(e))
             return ExtractionResult(errors=[f"Syntax error: {str(e)}"])
-    
+
+        except ExtractionError as e: # Catch and re-raise custom extraction errors
+            raise
+
         except Exception as e:
             self.logger.error("Extraction failed: %s", str(e))
-            raise ExtractionError(f"Failed to extract code: {str(e)}")
+            raise ExtractionError(f"Failed to extract code: {str(e)}") from e  # Chain the exception
             
-    def _calculate_and_add_metrics(self, result: ExtractionResult) -> None:
+    def _calculate_and_add_metrics(self, result: ExtractionResult, tree: ast.AST) -> None:
         """Calculate and add metrics to the extraction result."""
         for cls in result.classes:
-            try:
-                cls.metrics.update(self._calculate_class_metrics(cls.ast_node))
-                self.logger.debug(f"Calculated metrics for class {cls.name}: {cls.metrics}")
-                # Add other class-level metrics as needed
-            except Exception as e:
-                self.logger.error(f"Error calculating metrics for class {cls.name}: {e}")
-    
+            cls.metrics.update(self.metrics_calculator.calculate_halstead_metrics(cls.ast_node))
+
+            cls.metrics.update({  # Calculating metrics directly here
+                'method_count': len([n for n in cls.ast_node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]),
+                'complexity': self.metrics_calculator.calculate_complexity(cls.ast_node),
+                'maintainability': self.metrics_calculator.calculate_maintainability_index(cls.ast_node),
+                'inheritance_depth': self._calculate_inheritance_depth(cls.ast_node)
+            })
+            cls.complexity_warnings.extend(self._get_complexity_warnings(cls.metrics))
+
             for method in cls.methods:
-                try:
-                    method.metrics.update(self._calculate_function_metrics(method.ast_node))
-                    self.logger.debug(f"Calculated metrics for method {method.name}: {method.metrics}")
-                    # Add other method-level metrics as needed
-                except Exception as e:
-                    self.logger.error(f"Error calculating metrics for method {method.name}: {e}")
-    
+                method.metrics.update(self.metrics_calculator.calculate_halstead_metrics(method.ast_node)) # Calculate method Halstead metrics
+                method.metrics.update(self._calculate_function_metrics(method.ast_node)) # Calculate other function metrics
+                method.complexity_warnings.extend(self._get_complexity_warnings(method.metrics))
+
+        # Module-level metrics
+        result.metrics.update({
+            'total_lines': len(ast.unparse(tree).splitlines()),
+            'complexity': self.metrics_calculator.calculate_complexity(tree),
+            'maintainability': self.metrics_calculator.calculate_maintainability_index(tree),
+            'halstead': self.metrics_calculator.calculate_halstead_metrics(tree)
+        })
+
         for func in result.functions:
-            try:
-                func.metrics.update(self._calculate_function_metrics(func.ast_node))
-                self.logger.debug(f"Calculated metrics for function {func.name}: {func.metrics}")
-                # Add other function-level metrics as needed
-            except Exception as e:
-                self.logger.error(f"Error calculating metrics for function {func.name}: {e}")
+            func.metrics.update(self.metrics_calculator.calculate_halstead_metrics(func.ast_node)) # Calculate function Halstead metrics
+            func.metrics.update(self._calculate_function_metrics(func.ast_node))  # Call the actual function
+            func.complexity_warnings.extend(self._get_complexity_warnings(func.metrics))
                 
     def _add_detailed_metrics_and_warnings(self, result: ExtractionResult) -> None:
         """
@@ -419,17 +445,17 @@ class CodeExtractor:
             return "typing.Any"
 
     def _find_import_module(self, name: str) -> Optional[str]:
-    """Finds the module a name is imported from."""
-    for imp in ast.walk(self._module_ast):
-        if isinstance(imp, ast.Import):
-            module = {alias.name: alias.name for alias in imp.names if alias.name == name or alias.asname == name}
-            if module:
-                return module[name]  # Return if found in this import statement
-        elif isinstance(imp, ast.ImportFrom) and imp.module:
-            module = {alias.name: f"{imp.module}.{alias.name}" for alias in imp.names if alias.name == name or alias.asname == name}
-            if module:
-                return module[name]  # Return if found in this importFrom statement
-    return None
+        """Finds the module a name is imported from."""
+        for imp in ast.walk(self._module_ast):
+            if isinstance(imp, ast.Import):
+                module = {alias.name: alias.name for alias in imp.names if alias.name == name or alias.asname == name}
+                if module:
+                    return module[name]  # Return if found in this import statement
+            elif isinstance(imp, ast.ImportFrom) and imp.module:
+                module = {alias.name: f"{imp.module}.{alias.name}" for alias in imp.names if alias.name == name or alias.asname == name}
+                if module:
+                    return module[name]  # Return if found in this importFrom statement
+        return None
 
     def _extract_classes(self, tree: ast.AST) -> List[ExtractedClass]:
         """Extract all classes from the AST."""
@@ -1175,50 +1201,50 @@ class CodeExtractor:
         return None
 
     def _resolve_external_class(self, module_name: str, class_name: str) -> Optional[type]:
-    """
-    Dynamically resolves a class from an external module.
+        """
+        Dynamically resolves a class from an external module.
 
-    Args:
-        module_name (str): The name of the module.
-        class_name (str): The name of the class.
+        Args:
+            module_name (str): The name of the module.
+            class_name (str): The name of the class.
 
-    Returns:
-        Optional[type]: The resolved class, or None if not found.
-    """
-    try:
-        # 1. Attempt direct import (in case it's somehow available)
+        Returns:
+            Optional[type]: The resolved class, or None if not found.
+        """
         try:
-            module = importlib.import_module(module_name)
-            return getattr(module, class_name, None)
-        except ImportError:
-            pass  # Fallback to dynamic import
+            # 1. Attempt direct import (in case it's somehow available)
+            try:
+                module = importlib.import_module(module_name)
+                return getattr(module, class_name, None)
+            except ImportError:
+                pass  # Fallback to dynamic import
 
-        # 2. Dynamic import from file path (if available)
-        if self.context.file_path:
-            module_path = module_name.replace('.', '/')
-            file_path = Path(self.context.file_path).parent / f"{module_path}.py"
-            if file_path.exists():
-                spec = importlib.util.spec_from_file_location(module_name, file_path)
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    sys.modules[module_name] = module  # Add to sys.modules to prevent re-loading
-                    try:
-                        spec.loader.exec_module(module)
-                        return getattr(module, class_name, None)
-                    except Exception as e:
-                        self.logger.error(f"Error executing module {module_name}: {e}")
-                        self.errors.append(f"Error executing module {module_name}: {e}")  # Optional: Add to errors list
-                        return None  # Explicitly return None after logging the error
+            # 2. Dynamic import from file path (if available)
+            if self.context.file_path:
+                module_path = module_name.replace('.', '/')
+                file_path = Path(self.context.file_path).parent / f"{module_path}.py"
+                if file_path.exists():
+                    spec = importlib.util.spec_from_file_location(module_name, file_path)
+                    if spec and spec.loader:
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[module_name] = module  # Add to sys.modules to prevent re-loading
+                        try:
+                            spec.loader.exec_module(module)
+                            return getattr(module, class_name, None)
+                        except Exception as e:
+                            self.logger.error(f"Error executing module {module_name}: {e}")
+                            self.errors.append(f"Error executing module {module_name}: {e}")  # Optional: Add to errors list
+                            return None  # Explicitly return None after logging the error
 
-        # 3. If all else fails, check current loaded modules
-        if module_name in sys.modules:
-            return getattr(sys.modules[module_name], class_name, None)
+            # 3. If all else fails, check current loaded modules
+            if module_name in sys.modules:
+                return getattr(sys.modules[module_name], class_name, None)
 
-        return None
+            return None
 
-    except Exception as e:
-        self.logger.error(f"Failed to resolve class {class_name} from {module_name}: {e}")
-        return None
+        except Exception as e:
+            self.logger.error(f"Failed to resolve class {class_name} from {module_name}: {e}")
+            return None
 
     def _add_parents(self, node: ast.AST) -> None:
         """

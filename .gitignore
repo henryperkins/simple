@@ -17,3 +17,5 @@ docs
 docs/api
 docs/api/models
 docs/core
+.aider*
+.env

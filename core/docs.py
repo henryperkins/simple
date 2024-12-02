@@ -8,7 +8,7 @@ generating markdown documentation.
 Usage Example:
     ```python
     from core.docs import DocStringManager
-    from core.types import DocumentationContext
+    from core.types import DocumentationContext, ExtractedFunction, ExtractedClass
 
     context = DocumentationContext(source_code="def example(): pass")
     manager = DocStringManager(context)
@@ -16,12 +16,13 @@ Usage Example:
     print(documentation)
     ```
 """
+import ast
 import json
 from pathlib import Path
 from typing import Optional, Any, Tuple, Dict, List
 from datetime import datetime
 from core.logger import LoggerSetup
-from core.code_extraction import CodeExtractor
+from core.code_extraction import CodeExtractor, ExtractedFunction, ExtractedClass
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from exceptions import DocumentationError
@@ -56,116 +57,98 @@ class DocStringManager:
         Raises:
             DocumentationError: If documentation generation fails.
         """
-        self.logger.debug(f"Metadata received: {self.context.metadata}")
+        self.logger.debug("Generating documentation...")
+
         try:
-            # Extract code elements
-            extraction_result = self.code_extractor.extract_code(
-                self.context.source_code
-            )
-            if not extraction_result:
-                raise DocumentationError("Code extraction failed")
+            extraction_result = self.code_extractor.extract_code(self.context.source_code)
 
-            # Format constants properly
-            formatted_constants = []
-            if extraction_result.constants:
-                for const in extraction_result.constants:
-                    if isinstance(const, dict) and all(key in const for key in ['name', 'type', 'value']):
-                        formatted_constants.append(const)
-                    else:
-                        try:
-                            if isinstance(const, tuple):
-                                name, value, const_type = const
-                            else:
-                                name = const
-                                value = const
-                                const_type = type(const).__name__
+            if extraction_result is None:
+                raise DocumentationError("Code extraction failed unexpectedly.")
 
-                            formatted_constants.append({
-                                'name': str(name),
-                                'type': str(const_type),
-                                'value': str(value)
-                            })
-                        except Exception as e:
-                            self.logger.warning(f"Skipping malformed constant: {const} - {str(e)}")
+            if extraction_result.errors:
+                error_message = "\n".join(extraction_result.errors)
+                raise DocumentationError(f"Code extraction encountered errors:\n{error_message}")
 
-            # Format classes
-            formatted_classes = []
-            if extraction_result.classes:
-                for cls in extraction_result.classes:
-                    if isinstance(cls, dict):
-                        formatted_classes.append(cls)
-                    else:
-                        try:
-                            formatted_classes.append({
-                                'name': cls.name,
-                                'docstring': cls.docstring,
-                                'methods': cls.methods,
-                                'bases': cls.bases if hasattr(cls, 'bases') else [],
-                                'metrics': cls.metrics if hasattr(cls, 'metrics') else {},
-                                'source': cls.source if hasattr(cls, 'source') else None
-                            })
-                        except Exception as e:
-                            self.logger.warning(f"Skipping malformed class: {cls} - {str(e)}")
+            # Calculate metrics *BEFORE* creating the doc_context and formatting
+            if self.context.metrics_enabled:
+                tree = ast.parse(self.context.source_code)
+                self.code_extractor._calculate_and_add_metrics(extraction_result, tree)
 
-            # Format functions
-            formatted_functions = []
-            if extraction_result.functions:
-                for func in extraction_result.functions:
-                    if isinstance(func, dict):
-                        formatted_functions.append(func)
-                    else:
-                        try:
-                            formatted_functions.append({
-                                'name': func.name,
-                                'docstring': func.docstring,
-                                'args': func.args,
-                                'return_type': func.return_type if hasattr(func, 'return_type') else None,
-                                'metrics': func.metrics if hasattr(func, 'metrics') else {},
-                                'source': func.source if hasattr(func, 'source') else None
-                            })
-                        except Exception as e:
-                            self.logger.warning(f"Skipping malformed function: {func} - {str(e)}")
+            # Format constants, classes, and functions *after* metrics calculation
+            formatted_constants = self._format_constants(extraction_result.constants)
+            formatted_classes = self._format_classes(extraction_result.classes)
+            formatted_functions = self._format_functions(extraction_result.functions)
 
-            # Create documentation context
             doc_context = {
-                'module_name': (
-                    self.context.module_path.stem
-                    if self.context.module_path else "Unknown"
-                ),
-                'file_path': (
-                    str(self.context.module_path)
-                    if self.context.module_path else ""
-                ),
-                'description': (
-                    extraction_result.module_docstring
-                    or "No description available."
-                ),
+                'module_name': self.context.module_path.stem if self.context.module_path else "Unknown",
+                'file_path': str(self.context.module_path) if self.context.module_path else "",
+                'description': extraction_result.module_docstring or "No description available.",
                 'classes': formatted_classes,
                 'functions': formatted_functions,
                 'constants': formatted_constants,
-                'metrics': extraction_result.metrics or {},
-                'source_code': (
-                    self.context.source_code
-                    if self.context.include_source else None
-                ),
-                'imports': extraction_result.imports if hasattr(extraction_result, 'imports') else {},
-                'ai_docs': (
-                    self.context.metadata.get('ai_generated')
-                    if hasattr(self.context, 'metadata') else None
-                )
+                'metrics': extraction_result.metrics,
+                'source_code': self.context.source_code if self.context.include_source else None,
+                'imports': extraction_result.imports,
+                'ai_docs': self.context.metadata.get('ai_generated') if self.context.metadata else None,
             }
 
-            # Add any additional metadata from context
-            if hasattr(self.context, 'metadata') and isinstance(self.context.metadata, dict):
+            # Add any additional metadata from context using safe attribute access
+            if self.context.metadata:
                 for key, value in self.context.metadata.items():
-                    if key not in doc_context:
+                    if key not in doc_context:  # Avoid overwriting existing keys
                         doc_context[key] = value
 
-            # Generate markdown using the markdown generator
-            return self.markdown_generator.generate(doc_context)
+            markdown_doc = self.markdown_generator.generate(doc_context)
+            return markdown_doc
+
+        except DocumentationError as e:
+            raise  # Re-raise DocumentationErrors
+
         except Exception as e:
-            self.logger.error(f"Documentation generation failed: {e}")
-            raise DocumentationError(f"Failed to generate documentation: {e}")
+            self.logger.exception(f"Documentation generation failed: {e}")
+            raise DocumentationError(f"Failed to generate documentation: {e}") from e
+
+    def _format_constants(self, constants: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [
+            {
+                'name': str(const.get('name', '')),  # Use safe .get() and convert to string
+                'type': str(const.get('type', '')),
+                'value': str(const.get('value', ''))
+            } for const in constants
+        ]
+
+    def _format_classes(self, classes: List[ExtractedClass]) -> List[Dict[str, Any]]:
+        return [
+            {
+                'name': cls.name,
+                'docstring': cls.docstring,
+                'methods': [
+                    {   # Format methods correctly
+                        'name': m.name,
+                        'docstring': m.docstring,
+                        'args': m.args,
+                        'return_type': m.return_type,
+                        'metrics': m.metrics,
+                        'source': m.source
+                    } for m in cls.methods
+                ],
+                'bases': cls.bases,
+                'metrics': cls.metrics,
+                'source': cls.source
+            } for cls in classes
+        ]
+
+    def _format_functions(self, functions: List[ExtractedFunction]) -> List[Dict[str, Any]]:
+        return [
+            {
+                'name': func.name,
+                'docstring': func.docstring,
+                'args': func.args,
+                'return_type': func.return_type,
+                'metrics': func.metrics,
+                'source': func.source,
+            } for func in functions
+        ]
     
     async def process_file(
         self,
