@@ -92,7 +92,7 @@ class DocumentationGenerator:
             self.ai_handler = AIInteractionHandler(
                 config=self.config,
                 cache=self.cache,
-                metrics_collector=self.metrics,
+                metrics_calculator=self.metrics,  # Changed parameter name
                 token_manager=self.token_manager
             )
             self.logger.info("AI handler initialized")

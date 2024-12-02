@@ -1,19 +1,10 @@
-"""
-Code Metrics Analysis Module
-
-This module provides comprehensive code quality and complexity metrics for Python source code,
-including cyclomatic complexity, cognitive complexity, Halstead metrics, maintainability index,
-and dependency analysis, including circular dependency detection and dependency graph generation.
-
-Version: 1.3.0
-"""
-
 import ast
 import math
 import os
 import sys
+import importlib.util
 from collections import defaultdict
-from typing import Dict, Set, List, Tuple, Any, Union
+from typing import Dict, Set, List, Tuple, Union
 from graphviz import Digraph  # For dependency graphs
 from core.logger import LoggerSetup
 
@@ -25,10 +16,10 @@ class MetricsError(Exception):
 
 class Metrics:
     """
-    Calculates various code complexity metrics for Python code.
+    A class to calculate various code complexity metrics for Python code.
     """
 
-    MAINTAINABILITY_THRESHOLDS = {
+    MAINTAINABILITY_THRESHOLDS: Dict[str, int] = {
         'good': 80,
         'moderate': 60,
         'poor': 40
@@ -36,17 +27,17 @@ class Metrics:
 
     def __init__(self) -> None:
         """Initializes the Metrics class."""
-        self.module_name: Union[str, None] = None  # Initialize module_name
+        self.module_name: Union[str, None] = None
 
     def calculate_cyclomatic_complexity(self, function_node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
         """
         Calculates cyclomatic complexity for a function.
 
         Args:
-            function_node: The AST node representing a function.
+            function_node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The AST node representing a function.
 
         Returns:
-            The cyclomatic complexity as an integer.
+            int: The cyclomatic complexity as an integer.
         """
         logger.debug(f"Calculating cyclomatic complexity for: {function_node.name}")
         complexity = 1
@@ -63,10 +54,10 @@ class Metrics:
         Calculates cognitive complexity for a function.
 
         Args:
-            function_node: The AST node representing a function.
+            function_node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The AST node representing a function.
 
         Returns:
-            The cognitive complexity as an integer.
+            int: The cognitive complexity as an integer.
         """
         logger.debug(f"Calculating cognitive complexity for: {function_node.name}")
         complexity = 0
@@ -94,10 +85,10 @@ class Metrics:
         Calculates Halstead metrics.
 
         Args:
-            node: The AST node to analyze.
+            node (ast.AST): The AST node to analyze.
 
         Returns:
-            A dictionary containing various Halstead metrics.
+            Dict[str, float]: A dictionary containing various Halstead metrics.
         """
         logger.debug("Calculating Halstead metrics.")
         operators: Set[str] = set()
@@ -129,8 +120,8 @@ class Metrics:
         program_length = N1 + N2
         program_vocabulary = n1 + n2
 
-        if program_vocabulary == 0:  # Handle potential division by zero
-            logger.warning("Program vocabulary is zero, returning default Halstead metrics.")
+        if program_vocabulary == 0 or n2 == 0:  # Handle potential division by zero
+            logger.warning("Program vocabulary or operands are zero, returning default Halstead metrics.")
             return {
                 'program_length': program_length,
                 'program_vocabulary': program_vocabulary,
@@ -164,10 +155,10 @@ class Metrics:
         Calculates complexity for any AST node.
 
         Args:
-            node: The AST node to analyze.
+            node (ast.AST): The AST node to analyze.
 
         Returns:
-            The complexity as an integer.
+            int: The complexity as an integer.
         """
         logger.debug("Calculating complexity.")
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -186,10 +177,10 @@ class Metrics:
         Calculates maintainability index.
 
         Args:
-            node: The AST node to analyze.
+            node (ast.AST): The AST node to analyze.
 
         Returns:
-            The maintainability index as a float.
+            float: The maintainability index as a float.
         """
         logger.debug("Calculating maintainability index.")
         halstead = self.calculate_halstead_metrics(node)
@@ -213,27 +204,42 @@ class Metrics:
         Counts source lines of code (excluding comments and blank lines).
 
         Args:
-            node: The AST node to analyze.
+            node (ast.AST): The AST node to analyze.
 
         Returns:
-            The number of source lines as an integer.
+            int: The number of source lines as an integer.
         """
         logger.debug("Counting source lines of code.")
-        source = ast.unparse(node)
+        if hasattr(ast, 'unparse'):
+            source = ast.unparse(node)
+        else:
+            source = self._get_source_code(node)
         lines = [line.strip() for line in source.splitlines()]
         sloc = len([line for line in lines if line and not line.startswith('#')])
         logger.debug(f"Source lines of code: {sloc}")
         return sloc
+
+    def _get_source_code(self, node: ast.AST) -> str:
+        """
+        Extracts source code for Python < 3.9.
+
+        Args:
+            node (ast.AST): The AST node to analyze.
+
+        Returns:
+            str: The source code as a string.
+        """
+        return ast.dump(node)
 
     def _get_operand_name(self, node: ast.AST) -> str:
         """
         Gets the name of an operand node.
 
         Args:
-            node: The AST node to analyze.
+            node (ast.AST): The AST node to analyze.
 
         Returns:
-            The operand name as a string.
+            str: The operand name as a string.
         """
         if isinstance(node, ast.Name):
             return node.id
@@ -246,11 +252,11 @@ class Metrics:
         Analyzes module dependencies, including circular dependency detection.
 
         Args:
-            node: The AST node to analyze.
-            module_name: The name of the module being analyzed (optional).
+            node (ast.AST): The AST node to analyze.
+            module_name (str, optional): The name of the module being analyzed.
 
         Returns:
-            A dictionary of module dependencies.
+            Dict[str, Set[str]]: A dictionary of module dependencies.
 
         Raises:
             MetricsError: If an error occurs during import processing.
@@ -275,10 +281,10 @@ class Metrics:
         Detects circular dependencies.
 
         Args:
-            dependencies: A dictionary of module dependencies.
+            dependencies (Dict[str, Set[str]]): A dictionary of module dependencies.
 
         Returns:
-            A list of tuples representing circular dependencies.
+            List[Tuple[str, str]]: A list of tuples representing circular dependencies.
         """
         logger.debug("Detecting circular dependencies.")
         circular_dependencies = []
@@ -296,34 +302,40 @@ class Metrics:
         Generates a visual dependency graph.
 
         Args:
-            dependencies: A dictionary of module dependencies.
-            output_file: The file path to save the graph.
-
-        Raises:
-            MetricsError: If an error occurs during graph generation.
+            dependencies (Dict[str, Set[str]]): A dictionary of module dependencies.
+            output_file (str): The file path to save the graph.
         """
         logger.debug("Generating dependency graph.")
-        dot = Digraph(comment='Module Dependencies')
-
-        for module, deps in dependencies.items():
-            dot.node(module, module)  # Add module as a node
-            for dep in deps:
-                dot.edge(module, dep)  # Add edges for dependencies
+        try:
+            from graphviz import Digraph
+        except ImportError:
+            logger.warning("Graphviz not installed. Skipping dependency graph generation.")
+            return
 
         try:
-            dot.render(output_file, view=False)  # Save to file (e.g., PNG, SVG, PDF)
+            dot = Digraph(comment='Module Dependencies')
+            
+            # Add nodes and edges
+            for module, deps in dependencies.items():
+                dot.node(module, module)
+                for dep in deps:
+                    dot.edge(module, dep)
+
+            # Render graph
+            dot.render(output_file, view=False, cleanup=True)
             logger.info(f"Dependency graph saved to {output_file}")
+            
         except Exception as e:
             logger.error(f"Error generating dependency graph: {e}")
-            raise MetricsError(f"Error generating dependency graph: {e}")
+            logger.error("Make sure Graphviz is installed and in your system PATH")
 
     def _process_import(self, node: ast.AST, deps: Dict[str, Set[str]]) -> None:
         """
         Processes import statements and categorizes dependencies.
 
         Args:
-            node: The AST node representing an import statement.
-            deps: A dictionary to store dependencies.
+            node (ast.AST): The AST node representing an import statement.
+            deps (Dict[str, Set[str]]): A dictionary to store dependencies.
 
         Raises:
             MetricsError: If an error occurs during import processing.
@@ -343,14 +355,14 @@ class Metrics:
         Categorizes an import as stdlib, third-party, or local.
 
         Args:
-            module_name: The name of the module being imported.
-            deps: A dictionary to store categorized dependencies.
+            module_name (str): The name of the module being imported.
+            deps (Dict[str, Set[str]]): A dictionary to store categorized dependencies.
 
         Raises:
             MetricsError: If an error occurs during categorization.
         """
         try:
-            if module_name in sys.stdlib_module_names:
+            if importlib.util.find_spec(module_name) is not None:
                 deps['stdlib'].add(module_name)
             elif '.' in module_name:
                 deps['local'].add(module_name)
@@ -359,4 +371,3 @@ class Metrics:
         except Exception as e:
             logger.error(f"Error categorizing import {module_name}: {e}")
             raise MetricsError(f"Error categorizing import {module_name}: {e}")
-

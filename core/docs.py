@@ -26,7 +26,7 @@ from core.code_extraction import CodeExtractor, ExtractedFunction, ExtractedClas
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from exceptions import DocumentationError
-from core.types import DocumentationContext
+from core.types import DocumentationContext, AIHandler
 
 
 class DocStringManager:

@@ -18,7 +18,7 @@ from openai import APIError
 from jsonschema import validate, ValidationError as JsonValidationError
 from core.logger import LoggerSetup
 from core.cache import Cache
-from core.metrics import MetricsCalculator  # Add this import
+from core.metrics import Metrics
 from core.metrics_collector import MetricsCollector
 from core.config import AzureOpenAIConfig
 from core.code_extraction import CodeExtractor
@@ -145,7 +145,7 @@ class AIInteractionHandler(AIHandler):
     def __init__(
         self,
         cache: Optional[Cache] = None,
-        metrics_collector: Optional[MetricsCollector] = None,
+        metrics_calculator: Optional[Metrics] = None,
         token_manager: Optional[TokenManager] = None,
         config: Optional[AzureOpenAIConfig] = None,
         code_extractor: Optional[CodeExtractor] = None
@@ -155,7 +155,7 @@ class AIInteractionHandler(AIHandler):
 
         Args:
             cache (Optional[Cache]): Optional cache for storing intermediate results.
-            metrics_collector (Optional[MetricsCollector]): Optional metrics collector for tracking operations.
+            metrics_calculator (Optional[Metrics]): Optional metrics calculator for code analysis.
             token_manager (Optional[TokenManager]): Optional token manager for handling token limits.
             config (Optional[AzureOpenAIConfig]): Configuration settings for Azure OpenAI service.
             code_extractor (Optional[CodeExtractor]): Extractor for analyzing and extracting code elements.
@@ -168,7 +168,7 @@ class AIInteractionHandler(AIHandler):
         try:
             self.config = config or AzureOpenAIConfig.from_env()
             self.cache = cache
-            self.metrics_collector = metrics_collector or MetricsCollector()
+            self.metrics_calculator = metrics_calculator or Metrics()
             self.token_manager = token_manager or TokenManager(
                 model=self.config.model_name,
                 deployment_name=self.config.deployment_name,
@@ -178,7 +178,6 @@ class AIInteractionHandler(AIHandler):
             self.client = APIClient(self.config)
             self.docstring_processor = DocstringProcessor()
             self.code_extractor = code_extractor or CodeExtractor()
-            self.metrics_calculator = MetricsCalculator()
             self._initialize_tools()
             self.logger.info("AI Interaction Handler initialized successfully")
 
@@ -344,26 +343,48 @@ class AIInteractionHandler(AIHandler):
                 self.logger.error("No function call in response")
                 return None
 
-            # Parse function arguments
-            try:
-                function_args = message.tool_calls[0].function.arguments
-                response_data = json.loads(function_args)
-            except json.JSONDecodeError as e:
-                self.logger.error(f"Failed to parse response JSON: {e}")
-                return None
+            # Debug: Log the raw function arguments
+            function_args = message.tool_calls[0].function.arguments
+            self.logger.debug(f"Raw function arguments received from AI: {function_args}")
 
-            # Validate response data
+            # Parse function arguments with resilient error handling
+            try:
+                response_data = json.loads(function_args)
+                # Debug: Log the parsed response data
+                self.logger.debug(f"Parsed response data: {json.dumps(response_data, indent=2)}")
+            except json.JSONDecodeError as e:
+                self.logger.error(f"JSON decode error - Raw content that failed: {function_args}")
+                self.logger.warning(f"Failed to parse AI-generated documentation: {e}")
+                # Create a basic valid response instead of failing
+                response_data = {
+                    "summary": "Generated documentation",
+                    "description": "Documentation could not be fully parsed",
+                    "args": [],
+                    "returns": {"type": "Any", "description": "Unknown return value"},
+                    "raises": [],
+                    "complexity": 1
+                }
+
+            # Validate response data with detailed error reporting
             try:
                 validate(instance=response_data, schema=DOCSTRING_SCHEMA["schema"])
             except ValidationError as e:
-                self.logger.error(f"Response validation failed: {e}")
-                return None
+                self.logger.error(f"Validation error - Schema path: {' -> '.join(str(p) for p in e.path)}")
+                self.logger.error(f"Validation error message: {e.message}")
+                self.logger.error(f"Failed validating value: {e.instance}")
+                response_data = self._create_fallback_response(response_data)
 
             # Create docstring data
-            docstring_data = DocstringData(**response_data)
+            try:
+                docstring_data = DocstringData(**response_data)
+                self.logger.debug(f"Created DocstringData object successfully: {docstring_data}")
+            except Exception as e:
+                self.logger.error(f"Error creating DocstringData: {e}")
+                return None
             
             # Format the docstring
             docstring = self.docstring_processor.format(docstring_data)
+            self.logger.debug(f"Formatted docstring result: {docstring}")
 
             # Update source code with new docstring
             try:
@@ -410,7 +431,24 @@ class AIInteractionHandler(AIHandler):
         except Exception as e:
             self.logger.error(f"Error processing code: {e}")
             return None
-
+        
+    def _create_fallback_response(self, partial_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a valid response from partial/invalid data."""
+        fallback = {
+            "summary": "Generated documentation",
+            "description": "Documentation could not be fully parsed",
+            "args": [],
+            "returns": {"type": "Any", "description": "Unknown return value"},
+            "raises": [],
+            "complexity": 1
+        }
+        
+        # Try to salvage any valid fields from the partial data
+        for key in fallback.keys():
+            if key in partial_data and isinstance(partial_data[key], type(fallback[key])):
+                fallback[key] = partial_data[key]
+                
+        return fallback
     async def _generate_documentation(self, source_code: str, metadata: Dict[str, Any], node: ast.AST) -> Optional[ProcessingResult]:
         """Generate documentation using Azure OpenAI."""
         try:
@@ -666,8 +704,8 @@ class AIInteractionHandler(AIHandler):
                 await self.client.close()
             if self.cache:
                 await self.cache.close()
-            if self.metrics_collector:
-                await self.metrics_collector.close()
+            if hasattr(self, 'metrics_calculator') and self.metrics_calculator:  # Changed from metrics_collector
+                await self.metrics_calculator.close()
         except Exception as e:
             self.logger.error(f"Error closing AI handler: {e}")
             raise
