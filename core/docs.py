@@ -35,7 +35,7 @@ class DocStringManager:
     def __init__(
         self,
         context: DocumentationContext,
-        ai_handler: Any,  # Required parameter
+        ai_handler: AIHandler,  # Required parameter
         docstring_processor: Optional[DocstringProcessor] = None,
         markdown_generator: Optional[MarkdownGenerator] = None
     ):
@@ -46,68 +46,44 @@ class DocStringManager:
         self.markdown_generator = markdown_generator or MarkdownGenerator()
         self.code_extractor = CodeExtractor()
 
-
     async def generate_documentation(self) -> str:
-        """
-        Generate complete documentation.
-
-        Returns:
-            str: The generated documentation in markdown format.
-
-        Raises:
-            DocumentationError: If documentation generation fails.
-        """
-        self.logger.debug("Generating documentation...")
-
+        """Generate complete documentation."""
         try:
+            # Extract code elements
             extraction_result = self.code_extractor.extract_code(self.context.source_code)
+            if not extraction_result:
+                raise DocumentationError("Code extraction failed")
 
-            if extraction_result is None:
-                raise DocumentationError("Code extraction failed unexpectedly.")
+            # Process AI-generated documentation if available
+            ai_docs = {}
+            if self.context.ai_generated:
+                try:
+                    if isinstance(self.context.ai_generated, str):
+                        ai_docs = json.loads(self.context.ai_generated)
+                    elif isinstance(self.context.ai_generated, dict):
+                        ai_docs = self.context.ai_generated
+                except json.JSONDecodeError:
+                    self.logger.warning("Failed to parse AI-generated documentation")
 
-            if extraction_result.errors:
-                error_message = "\n".join(extraction_result.errors)
-                raise DocumentationError(f"Code extraction encountered errors:\n{error_message}")
-
-            # Calculate metrics *BEFORE* creating the doc_context and formatting
-            if self.context.metrics_enabled:
-                tree = ast.parse(self.context.source_code)
-                self.code_extractor._calculate_and_add_metrics(extraction_result, tree)
-
-            # Format constants, classes, and functions *after* metrics calculation
-            formatted_constants = self._format_constants(extraction_result.constants)
-            formatted_classes = self._format_classes(extraction_result.classes)
-            formatted_functions = self._format_functions(extraction_result.functions)
-
+            # Create documentation context
             doc_context = {
                 'module_name': self.context.module_path.stem if self.context.module_path else "Unknown",
                 'file_path': str(self.context.module_path) if self.context.module_path else "",
                 'description': extraction_result.module_docstring or "No description available.",
-                'classes': formatted_classes,
-                'functions': formatted_functions,
-                'constants': formatted_constants,
+                'classes': extraction_result.classes,
+                'functions': extraction_result.functions,
+                'constants': extraction_result.constants,
                 'metrics': extraction_result.metrics,
-                'source_code': self.context.source_code if self.context.include_source else None,
-                'imports': extraction_result.imports,
-                'ai_docs': self.context.metadata.get('ai_generated') if self.context.metadata else None,
+                'source_code': self.context.source_code if self.context.include_source else None
             }
 
-            # Add any additional metadata from context using safe attribute access
-            if self.context.metadata:
-                for key, value in self.context.metadata.items():
-                    if key not in doc_context:  # Avoid overwriting existing keys
-                        doc_context[key] = value
-
-            markdown_doc = self.markdown_generator.generate(doc_context)
-            return markdown_doc
-
-        except DocumentationError as e:
-            raise  # Re-raise DocumentationErrors
+            # Generate markdown using the markdown generator
+            return self.markdown_generator.generate(doc_context)
 
         except Exception as e:
-            self.logger.exception(f"Documentation generation failed: {e}")
-            raise DocumentationError(f"Failed to generate documentation: {e}") from e
-
+            self.logger.error(f"Documentation generation failed: {e}")
+            raise DocumentationError(f"Failed to generate documentation: {e}")
+        
     def _format_constants(self, constants: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return [
             {

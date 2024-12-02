@@ -2,19 +2,22 @@
 Code Metrics Analysis Module
 
 This module provides comprehensive code quality and complexity metrics for Python source code,
-including cyclomatic complexity, cognitive complexity, Halstead metrics, and code quality analysis.
+including cyclomatic complexity, cognitive complexity, Halstead metrics, maintainability index,
+and dependency analysis, including circular dependency detection and dependency graph generation.
 
-Version: 1.1.0
-Author: Development Team
+Version: 1.3.0
 """
 
 import ast
 import math
+import os
 import sys
-from graphviz import Digraph
 from collections import defaultdict
-from typing import Dict, Set, Any, Union
+from typing import Dict, Set, List, Tuple, Any, Union
+from graphviz import Digraph  # For dependency graphs
 from core.logger import LoggerSetup
+
+logger = LoggerSetup.get_logger(__name__)
 
 class MetricsError(Exception):
     """Base exception for metrics calculation errors."""
@@ -22,11 +25,7 @@ class MetricsError(Exception):
 
 class Metrics:
     """
-    Provides methods to calculate different complexity metrics for Python functions.
-
-    This class includes methods for calculating cyclomatic complexity, cognitive complexity,
-    Halstead metrics, and maintainability index. It also provides functionality to analyze
-    module dependencies.
+    Calculates various code complexity metrics for Python code.
     """
 
     MAINTAINABILITY_THRESHOLDS = {
@@ -36,208 +35,262 @@ class Metrics:
     }
 
     def __init__(self) -> None:
-        """
-        Initialize the Metrics class with a logger.
-        """
-        self.logger = LoggerSetup.get_logger(__name__)
+        """Initializes the Metrics class."""
+        self.module_name: Union[str, None] = None  # Initialize module_name
 
-    def calculate_cyclomatic_complexity(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
+    def calculate_cyclomatic_complexity(self, function_node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
         """
-        Calculate cyclomatic complexity for a function.
+        Calculates cyclomatic complexity for a function.
 
         Args:
-            node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The function definition node.
+            function_node: The AST node representing a function.
 
         Returns:
-            int: The cyclomatic complexity of the function.
-
-        Raises:
-            MetricsError: If the provided node is not a function definition.
+            The cyclomatic complexity as an integer.
         """
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            self.logger.error("Provided node is not a function definition: %s", ast.dump(node))
-            raise MetricsError("Provided node is not a function definition")
-
-        complexity = 1  # Start with 1 for the function itself
-
-        decision_points = (
-            ast.If, ast.For, ast.AsyncFor, ast.While, ast.And, ast.Or,
-            ast.ExceptHandler, ast.With, ast.AsyncWith, ast.Try,
-            ast.BoolOp, ast.Lambda
-        )
-
-        for child in ast.walk(node):
-            if isinstance(child, decision_points):
+        logger.debug(f"Calculating cyclomatic complexity for: {function_node.name}")
+        complexity = 1
+        for node in ast.walk(function_node):
+            if isinstance(node, (ast.If, ast.For, ast.While, ast.AsyncFor,
+                                  ast.Try, ast.ExceptHandler, ast.With,
+                                  ast.AsyncWith, ast.BoolOp)):
                 complexity += 1
-
+        logger.debug(f"Cyclomatic complexity for {function_node.name}: {complexity}")
         return complexity
 
     def calculate_cognitive_complexity(self, function_node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
         """
-        Calculate the cognitive complexity of a function.
+        Calculates cognitive complexity for a function.
 
         Args:
-            function_node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The function definition node.
+            function_node: The AST node representing a function.
 
         Returns:
-            int: The cognitive complexity of the function.
-
-        Raises:
-            MetricsError: If the provided node is not a function definition.
+            The cognitive complexity as an integer.
         """
-        self.logger.debug(f"Calculating cognitive complexity for function: {getattr(function_node, 'name', 'unknown')}")
-        if not isinstance(function_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            self.logger.error(f"Provided node is not a function definition: {ast.dump(function_node)}")
-            raise MetricsError("Provided node is not a function definition")
+        logger.debug(f"Calculating cognitive complexity for: {function_node.name}")
+        complexity = 0
 
-        cognitive_complexity = 0
+        def _increment_complexity(node: ast.AST, nesting: int) -> None:
+            nonlocal complexity
+            if isinstance(node, (ast.If, ast.For, ast.While, ast.Try,
+                                  ast.ExceptHandler, ast.With)):
+                complexity += 1
+                nesting += 1
+            elif isinstance(node, (ast.BoolOp, ast.Break, ast.Continue,
+                                    ast.Raise, ast.Return, ast.Yield,
+                                    ast.YieldFrom)):
+                complexity += nesting + 1
 
-        def traverse(node: ast.AST, nesting_level: int) -> None:
-            nonlocal cognitive_complexity
             for child in ast.iter_child_nodes(node):
-                if self._is_nesting_construct(child):
-                    nesting_level += 1
-                    cognitive_complexity += 1
-                    self.logger.debug(f"Nesting level {nesting_level} increased at node: {ast.dump(child)}")
-                    traverse(child, nesting_level)
-                    nesting_level -= 1
-                elif self._is_complexity_increment(child):
-                    cognitive_complexity += nesting_level + 1
-                    self.logger.debug(f"Incremented cognitive complexity by {nesting_level + 1} at node: {ast.dump(child)}")
-                    traverse(child, nesting_level)
-                else:
-                    traverse(child, nesting_level)
+                _increment_complexity(child, nesting)
 
-        traverse(function_node, 0)
-        self.logger.info(f"Calculated cognitive complexity for function '{function_node.name}' is {cognitive_complexity}")
-        return cognitive_complexity
-
-    def calculate_complexity(self, node: ast.AST) -> int:
-        """
-        Calculate complexity for any AST node.
-
-        Args:
-            node (ast.AST): The AST node to analyze.
-
-        Returns:
-            int: The calculated complexity.
-
-        Raises:
-            MetricsError: If an error occurs during complexity calculation.
-        """
-        try:
-            # Handle async and regular functions
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                return self.calculate_cyclomatic_complexity(node)
-            elif isinstance(node, ast.ClassDef):
-                # Calculate class complexity as sum of methods complexity
-                return sum(
-                    self.calculate_cyclomatic_complexity(method)
-                    for method in node.body 
-                    if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
-                )
-            elif isinstance(node, ast.Module):
-                # Calculate module complexity
-                return sum(
-                    self.calculate_complexity(child)
-                    for child in ast.iter_child_nodes(node)
-                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-                )
-            return 0
-        except Exception as e:
-            self.logger.error("Error calculating complexity: %s", str(e))
-            raise MetricsError(f"Error calculating complexity: {str(e)}")
-
-    def calculate_maintainability_index(self, node: ast.AST) -> float:
-        """
-        Calculate maintainability index based on various metrics.
-
-        Args:
-            node (ast.AST): AST node to analyze.
-
-        Returns:
-            float: Maintainability index score (0-100).
-
-        Raises:
-            MetricsError: If an error occurs during maintainability index calculation.
-        """
-        self.logger.debug("Calculating maintainability index.")
-        try:
-            halstead = self.calculate_halstead_metrics(node)
-            complexity = self.calculate_complexity(node)
-            sloc = self._count_source_lines(node)
-
-            # Calculate Maintainability Index
-            volume = halstead['program_volume']
-            if volume == 0 or sloc == 0:
-                mi = 0.0
-            else:
-                mi = max(0, (171 - 5.2 * math.log(volume) - 0.23 * complexity - 16.2 * math.log(sloc)) * 100 / 171)
-                mi = min(100, mi)  # Normalize to 0-100
-
-            self.logger.info(f"Calculated maintainability index is {mi}")
-            return round(mi, 2)
-
-        except Exception as e:
-            self.logger.error(f"Error calculating maintainability index: {e}")
-            raise MetricsError(f"Error calculating maintainability index: {e}")
+        _increment_complexity(function_node, 0)
+        logger.debug(f"Cognitive complexity for {function_node.name}: {complexity}")
+        return complexity
 
     def calculate_halstead_metrics(self, node: ast.AST) -> Dict[str, float]:
         """
-        Calculate Halstead metrics for the given AST node.
+        Calculates Halstead metrics.
 
         Args:
-            node (ast.AST): The AST node to analyze.
+            node: The AST node to analyze.
 
         Returns:
-            Dict[str, float]: A dictionary containing Halstead metrics.
-
-        Raises:
-            MetricsError: If an error occurs during Halstead metrics calculation.
+            A dictionary containing various Halstead metrics.
         """
-        self.logger.debug("Calculating Halstead metrics.")
-        operators = set()
-        operands = set()
-        operator_count = 0
-        operand_count = 0
-
-        operator_types = (
-            ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow,
-            ast.LShift, ast.RShift, ast.BitOr, ast.BitXor, ast.BitAnd,
-            ast.FloorDiv, ast.And, ast.Or, ast.Not, ast.Invert,
-            ast.UAdd, ast.USub, ast.Eq, ast.NotEq, ast.Lt, ast.LtE,
-            ast.Gt, ast.GtE, ast.Is, ast.IsNot, ast.In, ast.NotIn,
-            ast.Call, ast.Attribute, ast.Subscript, ast.Index, ast.Slice,
-            ast.Assign, ast.AugAssign, ast.AnnAssign, ast.Yield, ast.YieldFrom
-        )
-
-        operand_types = (
-            ast.Constant, ast.Name, ast.List, ast.Tuple, ast.Set, ast.Dict
-        )
+        logger.debug("Calculating Halstead metrics.")
+        operators: Set[str] = set()
+        operands: Set[str] = set()
+        operator_counts: Dict[str, int] = defaultdict(int)
+        operand_counts: Dict[str, int] = defaultdict(int)
 
         for n in ast.walk(node):
-            if isinstance(n, operator_types):
+            if isinstance(n, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow,
+                              ast.LShift, ast.RShift, ast.BitOr, ast.BitXor, ast.BitAnd,
+                              ast.FloorDiv, ast.And, ast.Or, ast.Not, ast.Invert,
+                              ast.UAdd, ast.USub, ast.Eq, ast.NotEq, ast.Lt, ast.LtE,
+                              ast.Gt, ast.GtE, ast.Is, ast.IsNot, ast.In, ast.NotIn,
+                              ast.Call, ast.Attribute, ast.Subscript, ast.Assign,
+                              ast.AugAssign, ast.AnnAssign, ast.Yield, ast.YieldFrom)):
                 operators.add(type(n).__name__)
-                operator_count += 1
-            elif isinstance(n, operand_types):
-                operands.add(self._get_operand_name(n))
-                operand_count += 1
+                operator_counts[type(n).__name__] += 1
+            elif isinstance(n, (ast.Constant, ast.Name, ast.List, ast.Tuple, ast.Set, ast.Dict)):
+                operand_name = self._get_operand_name(n)
+                if operand_name:
+                    operands.add(operand_name)
+                    operand_counts[operand_name] += 1
 
         n1 = len(operators)
         n2 = len(operands)
-        N1 = operator_count
-        N2 = operand_count
+        N1 = sum(operator_counts.values())
+        N2 = sum(operand_counts.values())
 
         program_length = N1 + N2
         program_vocabulary = n1 + n2
-        program_volume = program_length * math.log2(program_vocabulary) if program_vocabulary > 0 else 0
 
-        self.logger.info(f"Calculated Halstead metrics: Length={program_length}, Vocabulary={program_vocabulary}, Volume={program_volume}")
-        return {
+        if program_vocabulary == 0:  # Handle potential division by zero
+            logger.warning("Program vocabulary is zero, returning default Halstead metrics.")
+            return {
+                'program_length': program_length,
+                'program_vocabulary': program_vocabulary,
+                'program_volume': 0.0,
+                'program_difficulty': 0.0,
+                'program_effort': 0.0,
+                'time_required_to_program': 0.0,
+                'number_delivered_bugs': 0.0
+            }
+
+        program_volume = program_length * math.log2(program_vocabulary)
+        program_difficulty = (n1 / 2) * (N2 / n2)
+        program_effort = program_difficulty * program_volume
+        time_required_to_program = program_effort / 18  # seconds
+        number_delivered_bugs = program_volume / 3000
+
+        metrics = {
             'program_length': program_length,
             'program_vocabulary': program_vocabulary,
-            'program_volume': program_volume
+            'program_volume': program_volume,
+            'program_difficulty': program_difficulty,
+            'program_effort': program_effort,
+            'time_required_to_program': time_required_to_program,
+            'number_delivered_bugs': number_delivered_bugs
         }
+        logger.debug(f"Halstead metrics: {metrics}")
+        return metrics
+
+    def calculate_complexity(self, node: ast.AST) -> int:
+        """
+        Calculates complexity for any AST node.
+
+        Args:
+            node: The AST node to analyze.
+
+        Returns:
+            The complexity as an integer.
+        """
+        logger.debug("Calculating complexity.")
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            complexity = self.calculate_cyclomatic_complexity(node)
+        elif isinstance(node, ast.ClassDef):
+            complexity = sum(self.calculate_complexity(m) for m in node.body if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)))
+        elif isinstance(node, ast.Module):
+            complexity = sum(self.calculate_complexity(n) for n in ast.iter_child_nodes(node) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)))
+        else:
+            complexity = 0
+        logger.debug(f"Complexity: {complexity}")
+        return complexity
+
+    def calculate_maintainability_index(self, node: ast.AST) -> float:
+        """
+        Calculates maintainability index.
+
+        Args:
+            node: The AST node to analyze.
+
+        Returns:
+            The maintainability index as a float.
+        """
+        logger.debug("Calculating maintainability index.")
+        halstead = self.calculate_halstead_metrics(node)
+        complexity = self.calculate_complexity(node)
+        sloc = self._count_source_lines(node)
+
+        volume = halstead['program_volume']
+
+        if volume == 0 or sloc == 0:  # Handle potential errors
+            mi = 100.0  # Maximum value if no volume or lines of code
+        else:
+            mi = 171 - 5.2 * math.log(volume) - 0.23 * complexity - 16.2 * math.log(sloc)
+            mi = max(0, mi)  # Ensure MI is not negative
+            mi = min(100, mi * 100 / 171)  # Normalize to 0-100
+
+        logger.debug(f"Maintainability index: {mi}")
+        return round(mi, 2)
+
+    def _count_source_lines(self, node: ast.AST) -> int:
+        """
+        Counts source lines of code (excluding comments and blank lines).
+
+        Args:
+            node: The AST node to analyze.
+
+        Returns:
+            The number of source lines as an integer.
+        """
+        logger.debug("Counting source lines of code.")
+        source = ast.unparse(node)
+        lines = [line.strip() for line in source.splitlines()]
+        sloc = len([line for line in lines if line and not line.startswith('#')])
+        logger.debug(f"Source lines of code: {sloc}")
+        return sloc
+
+    def _get_operand_name(self, node: ast.AST) -> str:
+        """
+        Gets the name of an operand node.
+
+        Args:
+            node: The AST node to analyze.
+
+        Returns:
+            The operand name as a string.
+        """
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Constant):
+            return str(node.value)
+        return ''
+
+    def analyze_dependencies(self, node: ast.AST, module_name: str = None) -> Dict[str, Set[str]]:
+        """
+        Analyzes module dependencies, including circular dependency detection.
+
+        Args:
+            node: The AST node to analyze.
+            module_name: The name of the module being analyzed (optional).
+
+        Returns:
+            A dictionary of module dependencies.
+
+        Raises:
+            MetricsError: If an error occurs during import processing.
+        """
+        logger.debug("Analyzing module dependencies.")
+        deps: Dict[str, Set[str]] = defaultdict(set)
+        self.module_name = module_name  # Store for circular dependency check
+
+        for subnode in ast.walk(node):
+            if isinstance(subnode, (ast.Import, ast.ImportFrom)):
+                self._process_import(subnode, deps)
+
+        circular_deps = self._detect_circular_dependencies(deps)
+        if circular_deps:
+            logger.warning(f"Circular dependencies detected: {circular_deps}")
+
+        logger.debug(f"Module dependencies: {deps}")
+        return dict(deps)
+
+    def _detect_circular_dependencies(self, dependencies: Dict[str, Set[str]]) -> List[Tuple[str, str]]:
+        """
+        Detects circular dependencies.
+
+        Args:
+            dependencies: A dictionary of module dependencies.
+
+        Returns:
+            A list of tuples representing circular dependencies.
+        """
+        logger.debug("Detecting circular dependencies.")
+        circular_dependencies = []
+        for module, deps in dependencies.items():
+            for dep in deps:
+                if self.module_name and dep == self.module_name:  # Check against current module
+                    circular_dependencies.append((module, dep))
+                elif dep in dependencies and module in dependencies[dep]:
+                    circular_dependencies.append((module, dep))
+        logger.debug(f"Circular dependencies: {circular_dependencies}")
+        return circular_dependencies
+
     def generate_dependency_graph(self, dependencies: Dict[str, Set[str]], output_file: str) -> None:
         """
         Generates a visual dependency graph.
@@ -245,160 +298,36 @@ class Metrics:
         Args:
             dependencies: A dictionary of module dependencies.
             output_file: The file path to save the graph.
-        """
-        try:
-            dot = Digraph(comment='Module Dependencies')
-
-            for module, deps in dependencies.items():
-                dot.node(module, module)
-                for dep in deps:
-                    dot.edge(module, dep)
-
-            dot.render(output_file, view=False)
-            self.logger.info(f"Dependency graph saved to {output_file}")
-        except Exception as e:
-            self.logger.error(f"Error generating dependency graph: {e}")
-            raise MetricsError(f"Error generating dependency graph: {e}") from e
-
-    def _process_import(self, node: ast.AST, deps: Dict[str, Set[str]]) -> None:
-        """Processes import statements and updates dependencies dictionary."""
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                module_name = alias.name
-                self._categorize_import(module_name, deps)
-        elif isinstance(node, ast.ImportFrom):
-            module_name = node.module  # Accessing the correct attribute .module
-            if module_name:  # Check that it's not None
-                self._categorize_import(module_name, deps)
-
-    def _categorize_import(self, module_name: str, deps: Dict[str, Set[str]]) -> None:
-        """Categorizes and adds import to dependencies dictionary."""
-        top_level_module = module_name.split('.')[0] # Getting the top-level module
-
-        if top_level_module in sys.stdlib_module_names:
-            deps['stdlib'].add(top_level_module) # Using top-level module for builtins
-        elif '.' in module_name:
-            deps['local'].add(module_name)
-        else:
-            deps['third_party'].add(top_level_module) # Using top-level name
-    def _get_operand_name(self, node: ast.AST) -> str:
-        """
-        Get a string representation of an operand.
-
-        Args:
-            node (ast.AST): The operand node.
-
-        Returns:
-            str: The string representation of the operand.
-        """
-        if isinstance(node, ast.Constant):
-            return str(node.value)
-        elif isinstance(node, ast.Name):
-            return node.id
-        elif isinstance(node, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
-            return type(node).__name__
-        else:
-            return ''
-
-    def _count_source_lines(self, node: ast.AST) -> int:
-        """
-        Count source lines of code (excluding comments and blank lines).
-
-        Args:
-            node (ast.AST): AST node to analyze.
-
-        Returns:
-            int: Number of source code lines.
 
         Raises:
-            MetricsError: If an error occurs during source line counting.
+            MetricsError: If an error occurs during graph generation.
         """
-        self.logger.debug("Counting source lines of code.")
-        try:
-            source = ast.unparse(node)
-            lines = [line.strip() for line in source.splitlines()]
-            count = len([line for line in lines if line and not line.startswith('#')])
-            self.logger.info(f"Counted {count} source lines of code.")
-            return count
-        except Exception as e:
-            self.logger.error(f"Error counting source lines: {e}")
-            raise MetricsError(f"Error counting source lines: {e}")
+        logger.debug("Generating dependency graph.")
+        dot = Digraph(comment='Module Dependencies')
 
-    def _is_nesting_construct(self, node: ast.AST) -> bool:
-        """
-        Determine if a node represents a nesting construct for cognitive complexity.
-
-        Args:
-            node (ast.AST): The AST node to check.
-
-        Returns:
-            bool: True if the node is a nesting construct, False otherwise.
-        """
-        nesting_construct = isinstance(node, (
-            ast.If, ast.For, ast.While, ast.Try, ast.ExceptHandler, ast.With,
-            ast.Lambda, ast.AsyncFunctionDef, ast.FunctionDef
-        ))
-        self.logger.debug(f"Node {ast.dump(node)} is {'a' if nesting_construct else 'not a'} nesting construct.")
-        return nesting_construct
-
-    def _is_complexity_increment(self, node: ast.AST) -> bool:
-        """
-        Determine if a node should increment cognitive complexity.
-
-        Args:
-            node (ast.AST): The current AST node.
-
-        Returns:
-            bool: True if the node should increment complexity, False otherwise.
-        """
-        increment = isinstance(node, (
-            ast.BoolOp, ast.Compare, ast.Break, ast.Continue, ast.Raise, ast.Return, ast.Yield, ast.YieldFrom
-        ))
-        self.logger.debug(f"Node {ast.dump(node)} {'increments' if increment else 'does not increment'} complexity.")
-        return increment
-
-    def analyze_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:
-        """
-        Analyze module dependencies and imports.
-
-        Args:
-            node (ast.AST): AST node to analyze.
-
-        Returns:
-            Dict[str, Set[str]]: Dictionary of module dependencies.
-
-        Raises:
-            MetricsError: If an error occurs during dependency analysis.
-        """
-        self.logger.debug("Analyzing module dependencies.")
-        deps = {
-            'stdlib': set(),
-            'third_party': set(),
-            'local': set()
-        }
+        for module, deps in dependencies.items():
+            dot.node(module, module)  # Add module as a node
+            for dep in deps:
+                dot.edge(module, dep)  # Add edges for dependencies
 
         try:
-            for subnode in ast.walk(node):
-                if isinstance(subnode, (ast.Import, ast.ImportFrom)):
-                    self._process_import(subnode, deps)
-            self.logger.info(f"Analyzed dependencies: {deps}")
-            return deps
+            dot.render(output_file, view=False)  # Save to file (e.g., PNG, SVG, PDF)
+            logger.info(f"Dependency graph saved to {output_file}")
         except Exception as e:
-            self.logger.error(f"Error analyzing dependencies: {e}")
-            raise MetricsError(f"Error analyzing dependencies: {e}")
+            logger.error(f"Error generating dependency graph: {e}")
+            raise MetricsError(f"Error generating dependency graph: {e}")
 
     def _process_import(self, node: ast.AST, deps: Dict[str, Set[str]]) -> None:
         """
-        Process import statement and categorize dependency.
+        Processes import statements and categorizes dependencies.
 
         Args:
-            node (ast.AST): The import node.
-            deps (Dict[str, Set[str]]): The dependencies dictionary.
+            node: The AST node representing an import statement.
+            deps: A dictionary to store dependencies.
 
         Raises:
             MetricsError: If an error occurs during import processing.
         """
-        self.logger.debug(f"Processing import: {ast.dump(node)}")
         try:
             if isinstance(node, ast.Import):
                 for name in node.names:
@@ -406,70 +335,28 @@ class Metrics:
             elif isinstance(node, ast.ImportFrom) and node.module:
                 self._categorize_import(node.module, deps)
         except Exception as e:
-            self.logger.error(f"Error processing import: {e}")
+            logger.error(f"Error processing import: {e}")
             raise MetricsError(f"Error processing import: {e}")
 
     def _categorize_import(self, module_name: str, deps: Dict[str, Set[str]]) -> None:
         """
-        Categorize import as stdlib, third-party, or local.
+        Categorizes an import as stdlib, third-party, or local.
 
         Args:
-            module_name (str): The name of the module.
-            deps (Dict[str, Set[str]]): The dependencies dictionary.
+            module_name: The name of the module being imported.
+            deps: A dictionary to store categorized dependencies.
 
         Raises:
-            MetricsError: If an error occurs during import categorization.
+            MetricsError: If an error occurs during categorization.
         """
-        self.logger.debug(f"Categorizing import: {module_name}")
         try:
-            if module_name in sys.builtin_module_names:
+            if module_name in sys.stdlib_module_names:
                 deps['stdlib'].add(module_name)
             elif '.' in module_name:
                 deps['local'].add(module_name)
             else:
                 deps['third_party'].add(module_name)
         except Exception as e:
-            self.logger.error(f"Error categorizing import {module_name}: {e}")
+            logger.error(f"Error categorizing import {module_name}: {e}")
             raise MetricsError(f"Error categorizing import {module_name}: {e}")
-        
-class MetricsCalculator:
-    """Calculates code complexity metrics."""
-    
-    def __init__(self) -> None:
-        self.logger = LoggerSetup.get_logger(__name__)
 
-    def calculate_complexity(self, node: ast.AST) -> int:
-        """Calculate complexity for any AST node."""
-        try:
-            # Handle async and regular functions
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                return self.calculate_cyclomatic_complexity(node)
-            elif isinstance(node, ast.ClassDef):
-                # Calculate class complexity as sum of methods complexity
-                return sum(
-                    self.calculate_cyclomatic_complexity(method)
-                    for method in node.body 
-                    if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
-                )
-            elif isinstance(node, ast.Module):
-                # Calculate module complexity
-                return sum(
-                    self.calculate_complexity(child)
-                    for child in ast.iter_child_nodes(node)
-                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-                )
-            return 0
-        except Exception as e:
-            self.logger.error("Error calculating complexity: %s", str(e))
-            return 0
-
-    def calculate_cyclomatic_complexity(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
-        """Calculate cyclomatic complexity for a function."""
-        complexity = 1  # Start with 1 for the function itself
-        for child in ast.walk(node):
-            if isinstance(child, (ast.If, ast.While, ast.For, ast.Try,
-                               ast.ExceptHandler, ast.With, ast.Assert,
-                               ast.BoolOp)):
-                complexity += 1
-        return complexity
-# If needed, testing functions can be included below

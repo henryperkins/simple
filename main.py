@@ -1,27 +1,6 @@
 """
 Documentation Generator main module.
 Handles initialization, processing, and cleanup of documentation generation.
-
-Usage Example:
-    ```python
-    from main import DocumentationGenerator
-    import asyncio
-
-    async def main():
-        generator = DocumentationGenerator()
-        await generator.initialize()
-        await generator.process_repository("https://github.com/user/repo.git")
-        await generator.cleanup()
-
-    asyncio.run(main())
-    ```
-
-Key Classes and Functions:
-- DocumentationGenerator: Main class for handling documentation generation.
-- initialize: Initialize all components.
-- cleanup: Clean up all resources.
-- process_file: Process a single file and generate documentation.
-- process_repository: Process an entire repository.
 """
 
 import asyncio
@@ -34,6 +13,7 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 from urllib.parse import urlparse
 import tempfile
+import ast
 from core.logger import LoggerSetup
 from core.cache import Cache
 from core.monitoring import SystemMonitor
@@ -53,23 +33,10 @@ class DocumentationGenerator:
     """
     Documentation Generator Class.
     Handles initialization, processing, and cleanup of components for documentation generation.
-
-    Attributes:
-        logger (Logger): Logger instance for logging.
-        config (Optional[AzureOpenAIConfig]): Configuration settings for Azure OpenAI service.
-        cache (Optional[Cache]): Optional cache for storing intermediate results.
-        metrics (Optional[MetricsCollector]): Optional metrics collector for tracking operations.
-        token_manager (Optional[TokenManager]): Optional token manager for handling token limits.
-        ai_handler (Optional[AIInteractionHandler]): Handler for AI interactions.
-        repo_handler (Optional[RepositoryHandler]): Handler for repository operations.
-        system_monitor (Optional[SystemMonitor]): System monitor for tracking performance.
-        _initialized (bool): Flag indicating if the generator is initialized.
     """
 
     def __init__(self) -> None:
-        """
-        Initialize the documentation generator with empty component references.
-        """
+        """Initialize the documentation generator with empty component references."""
         self.logger = LoggerSetup.get_logger(__name__)
         self.config: Optional[AzureOpenAIConfig] = None
         self.cache: Optional[Cache] = None
@@ -85,10 +52,10 @@ class DocumentationGenerator:
         Initialize all components in correct order with proper dependency injection.
 
         Args:
-            base_path (Optional[Path]): Optional base path for repository operations.
+            base_path: Optional base path for repository operations
 
         Raises:
-            ConfigurationError: If initialization fails.
+            ConfigurationError: If initialization fails
         """
         try:
             # 1. First load configuration
@@ -153,33 +120,28 @@ class DocumentationGenerator:
             raise ConfigurationError(f"Failed to initialize components: {str(e)}") from e
 
     async def cleanup(self) -> None:
-        """
-        Clean up all resources safely.
-
-        Raises:
-            Exception: If an error occurs during cleanup.
-        """
+        """Clean up all resources safely."""
         cleanup_errors = []
         
         # List of (component, name, cleanup_method)
         components = [
             (self.system_monitor, "System Monitor", 
-            lambda x: x.stop() if hasattr(x, 'stop') else None),
+             lambda x: x.stop() if hasattr(x, 'stop') else None),
             
             (self.repo_handler, "Repository Handler", 
-            lambda x: x.__aexit__(None, None, None) if hasattr(x, '__aexit__') else None),
+             lambda x: x.__aexit__(None, None, None) if hasattr(x, '__aexit__') else None),
             
             (self.ai_handler, "AI Handler", 
-            lambda x: x.close() if hasattr(x, 'close') else None),
+             lambda x: x.close() if hasattr(x, 'close') else None),
             
             (self.token_manager, "Token Manager", 
-            None),  # No async cleanup needed
+             None),  # No async cleanup needed
             
             (self.cache, "Cache", 
-            lambda x: x.close() if hasattr(x, 'close') else None),
+             lambda x: x.close() if hasattr(x, 'close') else None),
             
             (self.metrics, "Metrics Collector", 
-            lambda x: x.close() if hasattr(x, 'close') else None)
+             lambda x: x.close() if hasattr(x, 'close') else None)
         ]
 
         for component, name, cleanup_func in components:
@@ -204,21 +166,7 @@ class DocumentationGenerator:
                 self.logger.error(f"- {error}")
 
     async def process_file(self, file_path: Path, output_base: Path) -> Optional[Tuple[str, str]]:
-        """
-        Process a single file and generate documentation.
-
-        Args:
-            file_path (Path): Path to the file to process.
-            output_base (Path): Base path for output files.
-
-        Returns:
-            Optional[Tuple[str, str]]: Tuple of (updated_code, documentation) or None if processing fails.
-
-        Raises:
-            FileNotFoundError: If the file is not found.
-            ValueError: If the file is not a Python file or has empty source code.
-            DocumentationError: If AI processing fails.
-        """
+        """Process a single file with improved error handling."""
         if not self._initialized:
             raise RuntimeError("DocumentationGenerator not initialized")
 
@@ -233,104 +181,117 @@ class DocumentationGenerator:
             if not file_path.suffix == '.py':
                 raise ValueError(f"Not a Python file: {file_path}")
 
-            # Create output directory structure
-            relative_path = file_path.relative_to(output_base) if output_base else file_path
-            output_dir = Path("docs") / relative_path.parent
-            output_dir.mkdir(parents=True, exist_ok=True)
-
             # Read and validate source code
             try:
-                source_code = file_path.read_text(encoding='utf-8')
+                # Try UTF-8 first
+                try:
+                    source_code = file_path.read_text(encoding='utf-8')
+                except UnicodeDecodeError:
+                    # Fallback to latin-1
+                    source_code = file_path.read_text(encoding='latin-1')
+                    self.logger.warning(f"Used latin-1 fallback encoding for {file_path}")
+
                 if not source_code.strip():
                     raise ValueError("Empty source code")
-            except UnicodeDecodeError:
-                # Fallback to latin-1 if UTF-8 fails
-                source_code = file_path.read_text(encoding='latin-1')
-                self.logger.warning(f"Used latin-1 fallback encoding for {file_path}")
 
-            # Process with AI handler
-            cache_key = f"doc:{file_path.stem}:{hash(source_code.encode())}"
-            result = await self.ai_handler.process_code(
-                source_code=source_code,
-                cache_key=cache_key
-            )
+                # Validate syntax before processing
+                try:
+                    ast.parse(source_code)
+                except SyntaxError as e:
+                    self.logger.error(f"Syntax error in {file_path}: {str(e)}")
+                    if self.metrics:
+                        await self.metrics.track_operation(
+                            operation_type="documentation_generation",
+                            success=False,
+                            duration=(datetime.now() - start_time).total_seconds(),
+                            error=f"Syntax error: {str(e)}",
+                            metadata={"file_path": str(file_path)}
+                        )
+                    return None
 
-            if not result:
-                raise DocumentationError("AI processing failed")
-
-            updated_code, ai_docs = result
-
-            # Create documentation context
-            context = DocumentationContext(
-                source_code=updated_code,
-                module_path=file_path,
-                include_source=True,
-                metadata={
-                    "ai_generated": ai_docs,
-                    "file_path": str(file_path),
-                    "module_name": file_path.stem,
-                    "creation_time": datetime.now().isoformat()
-                }
-            )
-
-            # Generate documentation
-            doc_manager = DocStringManager(
-                context=context,
-                ai_handler=self.ai_handler,  # Add AI handler
-                docstring_processor=None,  # Will use default
-                markdown_generator=None    # Will use default
-            )
-
-            documentation = await doc_manager.generate_documentation()
-
-            # Save documentation
-            output_path = output_dir / f"{file_path.stem}.md"
-            output_path.write_text(documentation, encoding='utf-8')
-
-            # Track metrics
-            processing_time = (datetime.now() - start_time).total_seconds()
-            if self.metrics:
-                await self.metrics.track_operation(
-                    operation_type="documentation_generation",
-                    success=True,
-                    duration=processing_time,
-                    metadata={
-                        "file_path": str(file_path),
-                        "output_path": str(output_path),
-                        "processing_time": processing_time
-                    }
+                # Process with AI handler
+                cache_key = f"doc:{file_path.stem}:{hash(source_code.encode())}"
+                result = await self.ai_handler.process_code(
+                    source_code=source_code,
+                    cache_key=cache_key
                 )
 
-            return updated_code, documentation
+                if not result:
+                    raise DocumentationError("AI processing failed")
+
+                updated_code, ai_docs = result
+
+                # Create documentation context
+                context = DocumentationContext(
+                    source_code=updated_code,
+                    module_path=file_path,
+                    include_source=True,
+                    metadata={
+                        "file_path": str(file_path),
+                        "module_name": file_path.stem,
+                        "creation_time": datetime.now().isoformat()
+                    },
+                    ai_generated=ai_docs
+                )
+
+                # Generate documentation
+                doc_manager = DocStringManager(
+                    context=context,
+                    ai_handler=self.ai_handler,
+                    docstring_processor=None,  # Will use default
+                    markdown_generator=None     # Will use default
+                )
+
+                documentation = await doc_manager.generate_documentation()
+
+                # Save documentation
+                output_dir = Path("docs") / file_path.relative_to(output_base).parent
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / f"{file_path.stem}.md"
+                output_path.write_text(documentation, encoding='utf-8')
+
+                # Track metrics
+                processing_time = (datetime.now() - start_time).total_seconds()
+                if self.metrics:
+                    await self.metrics.track_operation(
+                        operation_type="documentation_generation",
+                        success=True,
+                        duration=processing_time,
+                        metadata={
+                            "file_path": str(file_path),
+                            "output_path": str(output_path),
+                            "processing_time": processing_time
+                        }
+                    )
+
+                return updated_code, documentation
+
+            except Exception as e:
+                self.logger.error(f"Error processing {file_path}: {str(e)}")
+                if self.metrics:
+                    await self.metrics.track_operation(
+                        operation_type="documentation_generation",
+                        success=False,
+                        duration=(datetime.now() - start_time).total_seconds(),
+                        error=str(e),
+                        metadata={"file_path": str(file_path)}
+                    )
+                return None
 
         except Exception as e:
-            self.logger.error(f"Error processing {file_path}: {str(e)}", exc_info=True)
+            self.logger.error(f"Error processing {file_path}: {str(e)}")
             if self.metrics:
                 await self.metrics.track_operation(
                     operation_type="documentation_generation",
                     success=False,
                     duration=(datetime.now() - start_time).total_seconds(),
                     error=str(e),
-                    metadata={
-                        "file_path": str(file_path)
-                    }
+                    metadata={"file_path": str(file_path)}
                 )
             return None
 
     async def process_repository(self, repo_path_or_url: str) -> int:
-        """
-        Process an entire repository.
-
-        Args:
-            repo_path_or_url (str): Local path or Git URL of the repository to process.
-
-        Returns:
-            int: 0 if processing is successful, 1 otherwise.
-
-        Raises:
-            FileNotFoundError: If the repository path does not exist.
-            RuntimeError: If the generator is not initialized.
-        """
+        """Process an entire repository."""
         try:
             if not self._initialized:
                 raise RuntimeError("DocumentationGenerator not initialized")
@@ -405,15 +366,7 @@ class DocumentationGenerator:
 
 
 async def main(args: argparse.Namespace) -> int:
-    """
-    Main application entry point.
-
-    Args:
-        args (argparse.Namespace): Command line arguments.
-
-    Returns:
-        int: Exit code (0 for success, 1 for failure).
-    """
+    """Main application entry point."""
     generator = DocumentationGenerator()
 
     try:
@@ -447,12 +400,7 @@ async def main(args: argparse.Namespace) -> int:
             logger.error(f"Error during cleanup: {e}")
         
 def parse_arguments() -> argparse.Namespace:
-    """
-    Parse command line arguments.
-
-    Returns:
-        argparse.Namespace: Parsed command line arguments.
-    """
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Generate documentation for Python files"
     )
