@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Set, Union, Tuple, TypedDict, get_type_hints
 from core.logger import LoggerSetup
-from core.metrics import Metrics
+from core.metrics import Metrics  # Ensure this imports the updated Metrics class
 from exceptions import ExtractionError
 
 # Define TypedDict classes
@@ -150,7 +150,7 @@ class CodeExtractor:
         self._module_ast = None
         self._current_class = None
         self.errors = []
-        self.metrics_calculator = Metrics()
+        self.metrics_calculator = Metrics()  # Use the updated Metrics class
         self.metadata = CodeMetadata.create_empty()
         self.logger.debug(f"Processing in {__name__}")
 
@@ -166,7 +166,7 @@ class CodeExtractor:
         """
         try:
             # Convert timestamps with leading zeros to string literals. Handles milliseconds/microseconds.
-            pattern = r'\[(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}(?:\.\d+)?)\]'
+            pattern = r'$(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}(?:\.\d+)?)$'
             processed_code = re.sub(pattern, r'["\g<0>"]', source_code)
 
             self.logger.debug("Preprocessed source code to handle timestamps.")
@@ -177,26 +177,16 @@ class CodeExtractor:
             return source_code
 
     def extract_code(self, source_code: str) -> Optional[ExtractionResult]:
-        """
-        Extract all code elements and metadata.
-
-        Args:
-            source_code (str): The source code to extract.
-
-        Returns:
-            Optional[ExtractionResult]: The extraction result or None if extraction fails.
-
-        Raises:
-            ExtractionError: If extraction fails.
-        """
+        """Extract all code elements and metadata."""
         try:
             tree = ast.parse(source_code)
             self._module_ast = tree
             self._add_parents(tree)
-
-            # First analyze tree to populate metadata
-            self._analyze_tree(tree)
-
+    
+            # Analyze dependencies
+            dependencies = self.metrics_calculator.analyze_dependencies(tree)
+            self.logger.debug(f"Module dependencies: {dependencies}")
+    
             result = ExtractionResult(
                 classes=self._extract_classes(tree),
                 functions=self._extract_functions(tree),
@@ -204,18 +194,89 @@ class CodeExtractor:
                 module_docstring=ast.get_docstring(tree),
                 imports=self._extract_imports(tree),
                 constants=self._extract_constants(tree),
-                metrics=self._calculate_module_metrics(tree)
+                metrics=self._calculate_module_metrics(tree),
+                dependencies=dependencies
             )
-
+    
+            # Calculate metrics *after* classes and functions are extracted
+            if self.context.metrics_enabled:
+                self._calculate_and_add_metrics(result)
+    
             return result
-
+    
         except SyntaxError as e:
             self.logger.error("Syntax error in source code: %s", str(e))
             return ExtractionResult(errors=[f"Syntax error: {str(e)}"])
-
+    
         except Exception as e:
             self.logger.error("Extraction failed: %s", str(e))
             raise ExtractionError(f"Failed to extract code: {str(e)}")
+            
+    def _calculate_and_add_metrics(self, result: ExtractionResult) -> None:
+        """Calculate and add metrics to the extraction result."""
+        for cls in result.classes:
+            try:
+                cls.metrics.update(self._calculate_class_metrics(cls.ast_node))
+                self.logger.debug(f"Calculated metrics for class {cls.name}: {cls.metrics}")
+                # Add other class-level metrics as needed
+            except Exception as e:
+                self.logger.error(f"Error calculating metrics for class {cls.name}: {e}")
+    
+            for method in cls.methods:
+                try:
+                    method.metrics.update(self._calculate_function_metrics(method.ast_node))
+                    self.logger.debug(f"Calculated metrics for method {method.name}: {method.metrics}")
+                    # Add other method-level metrics as needed
+                except Exception as e:
+                    self.logger.error(f"Error calculating metrics for method {method.name}: {e}")
+    
+        for func in result.functions:
+            try:
+                func.metrics.update(self._calculate_function_metrics(func.ast_node))
+                self.logger.debug(f"Calculated metrics for function {func.name}: {func.metrics}")
+                # Add other function-level metrics as needed
+            except Exception as e:
+                self.logger.error(f"Error calculating metrics for function {func.name}: {e}")
+                
+    def _add_detailed_metrics_and_warnings(self, result: ExtractionResult) -> None:
+        """
+        Add detailed metrics and code quality warnings to the extraction result.
+
+        Args:
+            result (ExtractionResult): The extraction result to enhance.
+        """
+        for cls in result.classes:
+            cls.metrics.update(self.metrics_calculator.calculate_halstead_metrics(cls))
+            cls.complexity_warnings.extend(self._get_complexity_warnings(cls.metrics))
+
+        for func in result.functions:
+            func.metrics.update(self.metrics_calculator.calculate_halstead_metrics(func))
+            func.complexity_warnings.extend(self._get_complexity_warnings(func.metrics))
+
+    def _get_complexity_warnings(self, metrics: Dict[str, Any]) -> List[str]:
+        """
+        Generate warnings based on complexity metrics.
+
+        Args:
+            metrics (Dict[str, Any]): The complexity metrics.
+
+        Returns:
+            List[str]: The list of complexity warnings.
+        """
+        warnings = []
+        try:
+            if metrics.get('cyclomatic_complexity', 0) > 10:
+                warnings.append("High cyclomatic complexity")
+            if metrics.get('cognitive_complexity', 0) > 15:
+                warnings.append("High cognitive complexity")
+            if metrics.get('maintainability_index', 100) < 20:
+                warnings.append("Low maintainability index")
+            if metrics.get('program_volume', 0) > 1000:
+                warnings.append("High program volume (Halstead metric)")
+            return warnings
+        except Exception as e:
+            self.logger.error(f"Error generating complexity warnings: {e}")
+            return []
 
     def _analyze_tree(self, tree: ast.AST) -> None:
         """
@@ -310,67 +371,68 @@ class CodeExtractor:
         return import_map
 
     def _resolve_type_annotation(self, node: ast.AST) -> str:
-        """
-        Safely resolve type annotations to their string representation.
-
-        Args:
-            node (ast.AST): The AST node representing a type annotation.
-
-        Returns:
-            str: String representation of the type.
-        """
+        """Resolves type annotations to string representations, including custom classes."""
         try:
             if isinstance(node, ast.Name):
-                # Try to resolve the type if it's a custom class
-                try:
-                    resolved_class = None
-                    if self.context.file_path:  # Only attempt resolution if we have a file path
-                        module_name = None
+                resolved_class = None
+                if self.context.file_path and self.context.resolve_external_types:
+                    module_name = self._find_import_module(node.id)  # Reuse existing function
+                    if module_name:
+                        resolved_class = self._resolve_external_class(module_name.split('.')[0], node.id)
 
-                        # Try to determine the module from imports
-                        for imp in ast.walk(self._module_ast):
-                            if isinstance(imp, ast.Import):
-                                for name in imp.names:
-                                    if name.name == node.id or name.asname == node.id:
-                                        module_name = name.name
-                                        break
-                            elif isinstance(imp, ast.ImportFrom) and imp.module:
-                                for name in imp.names:
-                                    if name.name == node.id or name.asname == node.id:
-                                        module_name = f"{imp.module}.{name.name}"
-                                        break
+                if resolved_class:
+                    if hasattr(resolved_class, '__module__') and hasattr(resolved_class, '__name__'):
+                        return f"{resolved_class.__module__}.{resolved_class.__name__}"
+                return node.id # Fallback to the simple name
 
-                        if module_name:
-                            resolved_class = self._resolve_external_class(
-                                module_name.split('.')[0],
-                                node.id
-                            )
-                    return node.id
-                except Exception as e:
-                    self.logger.debug(f"Could not resolve type {node.id}: {e}")
-                    return node.id
             elif isinstance(node, ast.Attribute):
-                value = self._resolve_type_annotation(node.value)
+                value = self._resolve_type_annotation(node.value) # Recursive call
                 return f"{value}.{node.attr}"
+
             elif isinstance(node, ast.Subscript):
-                value = self._resolve_type_annotation(node.value)
-                slice_value = self._resolve_type_annotation(node.slice)
+                value = self._resolve_type_annotation(node.value) # Recursive call
+                slice_value = self._resolve_type_annotation(node.slice) # Recursive call
+                if value in ('List', 'Set', 'Dict', 'Tuple', 'Optional', 'Union'):
+                    value = f"typing.{value}"
                 return f"{value}[{slice_value}]"
-            return ast.unparse(node)
+
+            elif isinstance(node, ast.Constant):
+                return str(node.value)
+
+            elif isinstance(node, ast.Tuple):
+                elts = [self._resolve_type_annotation(elt) for elt in node.elts] # Recursive call
+                return f"Tuple[{', '.join(elts)}]"
+
+            elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+                left = self._resolve_type_annotation(node.left) # Recursive call
+                right = self._resolve_type_annotation(node.right) # Recursive call
+                return f"typing.Union[{left}, {right}]"
+
+            else:
+                try:
+                    return ast.unparse(node)
+                except:
+                    return "typing.Any"
+
         except Exception as e:
             self.logger.debug(f"Error resolving type annotation: {e}")
             return "typing.Any"
 
+    def _find_import_module(self, name: str) -> Optional[str]:
+    """Finds the module a name is imported from."""
+    for imp in ast.walk(self._module_ast):
+        if isinstance(imp, ast.Import):
+            module = {alias.name: alias.name for alias in imp.names if alias.name == name or alias.asname == name}
+            if module:
+                return module[name]  # Return if found in this import statement
+        elif isinstance(imp, ast.ImportFrom) and imp.module:
+            module = {alias.name: f"{imp.module}.{alias.name}" for alias in imp.names if alias.name == name or alias.asname == name}
+            if module:
+                return module[name]  # Return if found in this importFrom statement
+    return None
+
     def _extract_classes(self, tree: ast.AST) -> List[ExtractedClass]:
-        """
-        Extract all classes from the AST.
-
-        Args:
-            tree (ast.AST): The AST to extract classes from.
-
-        Returns:
-            List[ExtractedClass]: The list of extracted classes.
-        """
+        """Extract all classes from the AST."""
         classes = []
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
@@ -379,6 +441,7 @@ class CodeExtractor:
                 try:
                     self._current_class = node
                     extracted_class = self._process_class(node)
+                    extracted_class.ast_node = node  # Store the AST node!
                     classes.append(extracted_class)
                     self.logger.debug(f"Extracted class: {extracted_class.name}")
                 except Exception as e:
@@ -570,32 +633,16 @@ class CodeExtractor:
             complexity_warnings=complexity_warnings
         )
 
-    def _process_function(
-        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
-    ) -> ExtractedFunction:
-        """
-        Process a function definition node.
-
-        Args:
-            node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The function definition node.
-
-        Returns:
-            ExtractedFunction: The processed function.
-
-        Raises:
-            ValueError: If the node is not a function definition.
-        """
-        if not (isinstance(node, ast.FunctionDef) or
-                isinstance(node, ast.AsyncFunctionDef)):
-            raise ValueError(
-                f"Expected FunctionDef or AsyncFunctionDef, got {type(node)}"
-            )
-
+    def _process_function(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> ExtractedFunction:
+        """Process a function definition node."""
+        if not (isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef)):
+            raise ValueError(f"Expected FunctionDef or AsyncFunctionDef, got {type(node)}")
+    
         try:
             metrics = self._calculate_function_metrics(node)
             docstring = ast.get_docstring(node)
-
-            return ExtractedFunction(
+    
+            extracted_function = ExtractedFunction(
                 name=node.name,
                 lineno=node.lineno,
                 source=ast.unparse(node) if self.context.include_source else None,
@@ -611,6 +658,8 @@ class CodeExtractor:
                 body_summary=self._get_body_summary(node),
                 raises=self._extract_raises(node)
             )
+            extracted_function.ast_node = node  # Store the AST Node
+            return extracted_function
         except Exception as e:
             self.logger.error(f"Failed to process function {node.name}: {e}")
             raise
@@ -672,40 +721,22 @@ class CodeExtractor:
             return []
 
     def _get_name(self, node: Optional[ast.AST]) -> str:
-        """
-        Get string representation of a name node.
-
-        Args:
-            node (Optional[ast.AST]): The name node.
-
-        Returns:
-            str: The string representation of the name.
-        """
+        """Get string representation of a name node, using _resolve_type_annotation."""
         if node is None:
             return 'Any'
         return self._resolve_type_annotation(node)
 
     def _calculate_class_metrics(self, node: ast.ClassDef) -> Dict[str, Any]:
-        """
-        Calculate metrics for a class.
-
-        Args:
-            node (ast.ClassDef): The class definition node.
-
-        Returns:
-            Dict[str, Any]: The calculated metrics.
-        """
+        """Calculate metrics for a class."""
         if not self.context.metrics_enabled:
             return {}
-
+    
         try:
             complexity = self.metrics_calculator.calculate_complexity(node)
             return {
                 'method_count': len([n for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]),
                 'complexity': complexity,
-                'maintainability': (
-                    self.metrics_calculator.calculate_maintainability_index(node)
-                ),
+                'maintainability': self.metrics_calculator.calculate_maintainability_index(node),
                 'inheritance_depth': self._calculate_inheritance_depth(node)
             }
         except Exception as e:
@@ -713,18 +744,9 @@ class CodeExtractor:
             return {'error': str(e)}
 
     def _calculate_module_metrics(self, tree: ast.AST) -> Dict[str, Any]:
-        """
-        Calculate module-level metrics.
-
-        Args:
-            tree (ast.AST): The AST of the module.
-
-        Returns:
-            Dict[str, Any]: The calculated metrics.
-        """
         if not self.context.metrics_enabled:
             return {}
-
+    
         return {
             'total_lines': len(ast.unparse(tree).splitlines()),
             'complexity': self.metrics_calculator.calculate_complexity(tree),
@@ -733,19 +755,11 @@ class CodeExtractor:
         }
 
     def _calculate_function_metrics(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> Dict[str, Any]:
-        """
-        Calculate metrics for both regular and async functions.
-
-        Args:
-            node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The function definition node.
-
-        Returns:
-            Dict[str, Any]: The calculated metrics.
-        """
+        """Calculate metrics for a function."""
         if not (isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef)):
             self.logger.error("Provided node is not a function definition: %s", ast.dump(node))
             return {}
-
+    
         try:
             return {
                 'cyclomatic_complexity': self.metrics_calculator.calculate_cyclomatic_complexity(node),
@@ -758,29 +772,6 @@ class CodeExtractor:
         except Exception as e:
             self.logger.error(f"Error calculating metrics for function {node.name}: {e}")
             return {}
-
-    def _get_complexity_warnings(self, metrics: Dict[str, Any]) -> List[str]:
-        """
-        Generate warnings based on complexity metrics.
-
-        Args:
-            metrics (Dict[str, Any]): The complexity metrics.
-
-        Returns:
-            List[str]: The list of complexity warnings.
-        """
-        warnings = []
-        try:
-            if metrics.get('cyclomatic_complexity', 0) > 10:
-                warnings.append("High cyclomatic complexity")
-            if metrics.get('cognitive_complexity', 0) > 15:
-                warnings.append("High cognitive complexity")
-            if metrics.get('maintainability_index', 100) < 20:
-                warnings.append("Low maintainability index")
-            return warnings
-        except Exception as e:
-            self.logger.error(f"Error generating complexity warnings: {e}")
-            return []
 
     def _extract_dependencies(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef]) -> Dict[str, Set[str]]:
         """
@@ -1058,19 +1049,19 @@ class CodeExtractor:
     def _is_method(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:
         """
         Check if a function is a method.
-
+    
         Args:
             node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The function definition node.
-
+    
         Returns:
             bool: True if the function is a method, False otherwise.
         """
         if self._current_class:
             return True
-
-        for parent in ast.walk(node):
+    
+        for parent in ast.walk(node):  # Iterate over parents
             if isinstance(parent, ast.ClassDef) and node in parent.body:
-                return True
+                return True  # Return immediately if found
         return False
 
     def _is_exception_class(self, node: ast.ClassDef) -> bool:
@@ -1184,128 +1175,50 @@ class CodeExtractor:
         return None
 
     def _resolve_external_class(self, module_name: str, class_name: str) -> Optional[type]:
-        """
-        Dynamically resolves a class from an external module.
+    """
+    Dynamically resolves a class from an external module.
 
-        Args:
-            module_name (str): The name of the module.
-            class_name (str): The name of the class.
+    Args:
+        module_name (str): The name of the module.
+        class_name (str): The name of the class.
 
-        Returns:
-            Optional[type]: The resolved class, or None if not found.
-        """
+    Returns:
+        Optional[type]: The resolved class, or None if not found.
+    """
+    try:
+        # 1. Attempt direct import (in case it's somehow available)
         try:
-            # 1. Attempt direct import (in case it's somehow available)
-            try:
-                module = importlib.import_module(module_name)
-                return getattr(module, class_name, None)
-            except ImportError:
-                pass  # Fallback to dynamic import
+            module = importlib.import_module(module_name)
+            return getattr(module, class_name, None)
+        except ImportError:
+            pass  # Fallback to dynamic import
 
-            # 2. Dynamic import from file path (if available)
-            if self.context.file_path:
-                module_path = module_name.replace('.', '/')
-                file_path = Path(self.context.file_path).parent / f"{module_path}.py"
-                if file_path.exists():
-                    spec = importlib.util.spec_from_file_location(module_name, file_path)
-                    if spec and spec.loader:
-                        module = importlib.util.module_from_spec(spec)
-                        sys.modules[module_name] = module  # Add to sys.modules to prevent re-loading
+        # 2. Dynamic import from file path (if available)
+        if self.context.file_path:
+            module_path = module_name.replace('.', '/')
+            file_path = Path(self.context.file_path).parent / f"{module_path}.py"
+            if file_path.exists():
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    sys.modules[module_name] = module  # Add to sys.modules to prevent re-loading
+                    try:
                         spec.loader.exec_module(module)
                         return getattr(module, class_name, None)
+                    except Exception as e:
+                        self.logger.error(f"Error executing module {module_name}: {e}")
+                        self.errors.append(f"Error executing module {module_name}: {e}")  # Optional: Add to errors list
+                        return None  # Explicitly return None after logging the error
 
-            # 3. If all else fails, check current loaded modules
-            if module_name in sys.modules:
-                return getattr(sys.modules[module_name], class_name, None)
+        # 3. If all else fails, check current loaded modules
+        if module_name in sys.modules:
+            return getattr(sys.modules[module_name], class_name, None)
 
-            return None
+        return None
 
-        except Exception as e:
-            self.logger.error(f"Failed to resolve class {class_name} from {module_name}: {e}")
-            return None
-
-    def _resolve_type_annotation(self, node: ast.AST) -> str:
-        """
-        Safely resolve type annotations to their string representation.
-
-        Args:
-            node (ast.AST): The AST node representing a type annotation.
-
-        Returns:
-            str: String representation of the type.
-        """
-        try:
-            if isinstance(node, ast.Name):
-                # Try to resolve the type if it's a custom class
-                try:
-                    resolved_class = None
-                    if self.context.file_path:  # Only attempt resolution if we have a file path
-                        parent_node = getattr(node, 'parent', None)
-                        module_name = None
-
-                        # Try to determine the module from imports
-                        for imp in ast.walk(self._module_ast):
-                            if isinstance(imp, ast.Import):
-                                for name in imp.names:
-                                    if name.name == node.id or name.asname == node.id:
-                                        module_name = name.name
-                                        break
-                            elif isinstance(imp, ast.ImportFrom) and imp.module:
-                                for name in imp.names:
-                                    if name.name == node.id or name.asname == node.id:
-                                        module_name = f"{imp.module}.{name.name}"
-                                        break
-
-                        if module_name:
-                            resolved_class = self._resolve_external_class(module_name.split('.')[0], node.id)
-
-                    if resolved_class:
-                        # Use the full qualified name if available
-                        if hasattr(resolved_class, '__module__') and hasattr(resolved_class, '__name__'):
-                            return f"{resolved_class.__module__}.{resolved_class.__name__}"
-                except Exception as e:
-                    self.logger.debug(f"Could not resolve type {node.id}: {e}")
-
-                # Fall back to the simple name if resolution fails
-                return node.id
-
-            elif isinstance(node, ast.Attribute):
-                value = self._resolve_type_annotation(node.value)
-                return f"{value}.{node.attr}"
-
-            elif isinstance(node, ast.Subscript):
-                value = self._resolve_type_annotation(node.value)
-                slice_value = self._resolve_type_annotation(node.slice)
-
-                # Handle special cases for common container types
-                if value in ('List', 'Set', 'Dict', 'Tuple', 'Optional', 'Union'):
-                    value = f"typing.{value}"
-
-                return f"{value}[{slice_value}]"
-
-            elif isinstance(node, ast.Constant):
-                return str(node.value)
-
-            elif isinstance(node, ast.Tuple):
-                elts = [self._resolve_type_annotation(elt) for elt in node.elts]
-                return f"Tuple[{', '.join(elts)}]"
-
-            elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-                # Handle Union types written with | (Python 3.10+)
-                left = self._resolve_type_annotation(node.left)
-                right = self._resolve_type_annotation(node.right)
-                return f"typing.Union[{left}, {right}]"
-
-            else:
-                # Try to use ast.unparse for other cases, fall back to Any
-                try:
-                    return ast.unparse(node)
-                except:
-                    return "typing.Any"
-
-        except Exception as e:
-            self.logger.debug(f"Error resolving type annotation: {e}")
-            return "typing.Any"
+    except Exception as e:
+        self.logger.error(f"Failed to resolve class {class_name} from {module_name}: {e}")
+        return None
 
     def _add_parents(self, node: ast.AST) -> None:
         """
@@ -1359,29 +1272,32 @@ class CodeExtractor:
     def _extract_raises(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[str]:
         """
         Extract raised exceptions from function body.
-
+    
         Args:
             node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The function definition node.
-
+    
         Returns:
             List[str]: The list of raised exceptions.
         """
         raises = set()
         try:
             for child in ast.walk(node):
-                if isinstance(child, ast.Raise) and child.exc:
-                    exc_node = child.exc
-                    try:
-                        if isinstance(exc_node, ast.Call):
-                            exception_name = self._get_exception_name(exc_node.func)
-                        elif isinstance(exc_node, (ast.Name, ast.Attribute)):
-                            exception_name = self._get_exception_name(exc_node)
-                        else:
-                            exception_name = "Exception"
-                        raises.add(exception_name)
-                    except Exception as e:
-                        self.logger.debug(f"Could not process raise statement: {e}")
-                        raises.add("UnknownException")
+                if isinstance(child, ast.Raise):
+                    if child.exc:  # Check if exception is specified
+                        exc_node = child.exc
+                        try:
+                            if isinstance(exc_node, ast.Call):
+                                exception_name = self._get_exception_name(exc_node.func)
+                            elif isinstance(exc_node, (ast.Name, ast.Attribute)):
+                                exception_name = self._get_exception_name(exc_node)
+                            else:
+                                exception_name = "Exception"
+                            raises.add(exception_name)
+                        except Exception as e:
+                            self.logger.debug(f"Could not process raise statement: {e}")
+                            raises.add("UnknownException")
+                    else:
+                        self.logger.debug("Empty raise statement found.")  # Or add "raise" to the raises list if needed
             return list(raises)
         except Exception as e:
             self.logger.error(f"Error extracting raises: {e}")

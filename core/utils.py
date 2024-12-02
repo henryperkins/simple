@@ -25,6 +25,47 @@ def generate_hash(content: str) -> str:
     log_debug(f"Generated hash: {hash_value}")
     return hash_value
 
+def sanitize_changes(raw_changes: Any) -> List[Dict[str, str]]:
+    """Validate and sanitize the raw changes data."""
+    changes: List[Dict[str, str]] = []
+    current_date = datetime.now().strftime('%Y-%m-%d')
+
+    if not raw_changes:
+        return changes
+
+    if not isinstance(raw_changes, list):
+        raw_changes = [raw_changes]
+
+    for change in raw_changes:
+        if isinstance(change, dict):
+            date = str(change.get('date', current_date))
+            description = str(change.get('description', ''))
+            if description:
+                changes.append({'date': date, 'description': description})
+        elif isinstance(change, str):
+            try:
+                parsed_change = json.loads(change)
+                if isinstance(parsed_change, dict):
+                    date = str(parsed_change.get('date', current_date))
+                    description = str(parsed_change.get('description', change))
+                    if description:
+                        changes.append({'date': date, 'description': description})
+                else:
+                    changes.append({'date': current_date, 'description': change})
+            except (json.JSONDecodeError, TypeError):
+                changes.append({'date': current_date, 'description': change})
+        elif isinstance(change, (list, tuple)):
+            try:
+                date = str(change[0])
+                description = str(change[1])
+                changes.append({'date': date, 'description': description})
+            except IndexError:
+                changes.append({'date': current_date, 'description': str(change)})
+        else:
+            changes.append({'date': current_date, 'description': str(change)})
+
+    return changes
+
 def get_annotation(node: ast.AST) -> str:
     """
     Get the annotation of an AST node.

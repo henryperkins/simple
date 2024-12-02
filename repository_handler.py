@@ -302,18 +302,32 @@ class RepositoryHandler:
         except Exception as e:
             self.logger.error("Cleanup failed: %s", str(e))
 
-    async def get_file_history(self, file_path: Path) -> List<Dict[str, Any]]:
+    async def get_file_history(self, file_path: Path) -> List[Dict[str, Any]]:
         """
-        Get git history for a specific file.
+        This method retrieves the commit history for a specified file in the git repository.
+        Each commit record includes the commit hash (first 8 characters), author name,
+        commit date in ISO format, and commit message.
 
-        Args:
-            file_path (Path): Path to the file.
+            file_path (Path): Path to the file whose history should be retrieved.
 
-        Returns:
-            List[Dict[str, Any]]: List of dictionaries containing commit history.
+            List[Dict[str, Any]]: A list of dictionaries, each containing commit details:
+                - hash (str): First 8 characters of commit hash
+                - author (str): Name of the commit author
+                - date (str): Commit date and time in ISO format
+                - message (str): Commit message
 
-        Raises:
-            Exception: If an error occurs while retrieving file history.
+            Exception: If an error occurs while accessing git history. In this case,
+                      the error is logged and an empty list is returned.
+
+        Example:
+            >>> history = await repo_handler.get_file_history(Path('src/main.py'))
+            >>> print(history[0])
+            {
+                'hash': 'a1b2c3d4',
+                'author': 'John Doe',
+                'date': '2023-01-01T12:00:00+00:00',
+                'message': 'Initial commit'
+            }
         """
         if not self.repo:
             return []

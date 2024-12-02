@@ -276,6 +276,7 @@ class DocumentationGenerator:
             # Generate documentation
             doc_manager = DocStringManager(
                 context=context,
+                ai_handler=self.ai_handler,  # Add AI handler
                 docstring_processor=None,  # Will use default
                 markdown_generator=None    # Will use default
             )

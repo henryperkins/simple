@@ -15,6 +15,10 @@ class ProcessingError(Exception):
     """Exception raised for errors during processing."""  
     pass  
   
+class DocumentationError(Exception):
+    """Exception raised for errors during documentation generation."""
+    pass
+
 class ValidationError(Exception):  
     """Exception raised for validation errors."""  
     pass  
