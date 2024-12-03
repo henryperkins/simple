@@ -25,6 +25,7 @@ from core.types import DocumentationContext
 from core.docs import DocStringManager
 from repository_handler import RepositoryHandler
 from exceptions import ConfigurationError, DocumentationError
+from core.extraction.code_extractor import CodeExtractor
 
 load_dotenv()
 logger = LoggerSetup.get_logger(__name__)
@@ -92,7 +93,6 @@ class DocumentationGenerator:
             self.ai_handler = AIInteractionHandler(
                 config=self.config,
                 cache=self.cache,
-                metrics_calculator=self.metrics,  # Changed parameter name
                 token_manager=self.token_manager
             )
             self.logger.info("AI handler initialized")
@@ -194,6 +194,10 @@ class DocumentationGenerator:
                 if not source_code.strip():
                     raise ValueError("Empty source code")
 
+                # Check if 'os' is imported, if not, add it
+                if 'import os' not in source_code:
+                    source_code = 'import os\n' + source_code
+
                 # Validate syntax before processing
                 try:
                     ast.parse(source_code)
@@ -211,6 +215,8 @@ class DocumentationGenerator:
 
                 # Process with AI handler
                 cache_key = f"doc:{file_path.stem}:{hash(source_code.encode())}"
+                if not self.ai_handler:
+                    raise RuntimeError("AI handler not initialized")
                 result = await self.ai_handler.process_code(
                     source_code=source_code,
                     cache_key=cache_key
@@ -326,7 +332,13 @@ class DocumentationGenerator:
                 with tqdm(python_files, desc="Processing files") as progress:
                     for file_path in progress:
                         try:
+                            relative_path = file_path.relative_to(repo_path)
+                            if self.ai_handler and self.ai_handler.context:
+                                # Use pathlib's parts to create module name
+                                module_name = '.'.join(relative_path.with_suffix('').parts)
+                                self.ai_handler.context.module_name = module_name
                             result = await self.process_file(file_path, repo_path)
+
                             if result:
                                 processed_files += 1
                             else:

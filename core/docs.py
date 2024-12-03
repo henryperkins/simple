@@ -22,7 +22,9 @@ from pathlib import Path
 from typing import Optional, Any, Tuple, Dict, List
 from datetime import datetime
 from core.logger import LoggerSetup
-from core.code_extraction import CodeExtractor, ExtractedFunction, ExtractedClass
+from core.extraction.code_extractor import CodeExtractor
+from core.extraction.function_extractor import ExtractedFunction
+from core.extraction.class_extractor import ExtractedClass
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from exceptions import DocumentationError

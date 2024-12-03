@@ -7,7 +7,8 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
 from core.logger import LoggerSetup
-from core.code_extraction import ExtractedClass, ExtractedFunction
+from core.extraction.function_extractor import ExtractedFunction
+from core.extraction.class_extractor import ExtractedClass
 from core.docstring_processor import DocstringProcessor
 
 @dataclass

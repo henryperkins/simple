@@ -62,7 +62,6 @@ def check_required_env_vars() -> None:
             "\n".join(f"- {var}" for var in missing)
         )
 
-
 @dataclass(frozen=True)
 class AzureOpenAIConfig:
     """Configuration settings for Azure OpenAI service."""

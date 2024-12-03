@@ -1,9 +1,5 @@
 # core/__init__.py
 from .cache import Cache
-from .code_extraction import (
-    CodeExtractor, ExtractionContext, ExtractedArgument, ExtractedElement,
-    ExtractedFunction, ExtractionResult, ExtractedClass
-)
 from .config import AzureOpenAIConfig
 from .docs import DocumentationError, DocumentationContext, DocStringManager
 from .docstring_processor import (
@@ -21,10 +17,19 @@ from .utils import (
 )
 from .types import ProcessingResult, AIHandler
 
+# Import specific classes and functions from core/extraction
+from .extraction.types import (
+    ExtractedArgument, ExtractionContext, ExtractedElement, ExtractedFunction,
+    ExtractedClass, ExtractionResult
+)
+from .extraction.utils import ASTUtils
+from .extraction.code_extractor import CodeExtractor
+from .extraction.function_extractor import FunctionExtractor
+from .extraction.class_extractor import ClassExtractor
+from .extraction.dependency_analyzer import DependencyAnalyzer
+
 __all__ = [
-    'Cache', 'CodeExtractor', 'ExtractionContext', 'ExtractedArgument',
-    'ExtractedElement', 'ExtractedFunction', 'ExtractionResult',
-    'ExtractedClass', 'AzureOpenAIConfig', 'DocumentationError',
+    'Cache', 'AzureOpenAIConfig', 'DocumentationError',
     'DocumentationContext', 'DocStringManager', 'DocstringData',
     'DocstringProcessor', 'LoggerSetup', 'log_debug', 'log_info',
     'log_warning', 'log_error', 'MarkdownConfig', 'MarkdownGenerator',
@@ -32,5 +37,10 @@ __all__ = [
     'generate_hash', 'get_annotation', 'handle_exceptions', 'load_json_file',
     'ensure_directory', 'validate_file_path', 'create_error_result',
     'add_parent_info', 'get_file_stats', 'filter_files', 'get_all_files',
-    'ProcessingResult', 'AIHandler'
+    'ProcessingResult', 'AIHandler',
+    # New modules
+    'ExtractedArgument', 'ExtractionContext', 'ExtractedElement',
+    'ExtractedFunction', 'ExtractedClass', 'ExtractionResult', 'ASTUtils',
+    'CodeExtractor', 'FunctionExtractor', 'ClassExtractor',
+    'DependencyAnalyzer'
 ]
