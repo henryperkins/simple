@@ -114,20 +114,13 @@ class FunctionExtractor:
             raise
 
     def _get_function_args(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[ExtractedArgument]:
-        """Extract function arguments.
-
-        Args:
-            node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The AST node representing the function definition.
-
-        Returns:
-            List[ExtractedArgument]: A list of ExtractedArgument objects representing the function's arguments.
-        """
+        """Extract function arguments."""
         self.logger.debug(f"Extracting arguments for function: {node.name}")
         args = []
         try:
             for arg in node.args.args:
                 arg_name = arg.arg
-                type_hint = self.ast_utils.get_name(arg.annotation) if arg.annotation else None
+                type_ = self.ast_utils.get_name(arg.annotation) if arg.annotation else None
                 default_value = None
                 is_required = True
 
@@ -141,11 +134,11 @@ class FunctionExtractor:
 
                 args.append(ExtractedArgument(
                     name=arg_name,
-                    type_hint=type_hint,
+                    type=type_,
                     default_value=default_value,
                     is_required=is_required
                 ))
-                self.logger.debug(f"Extracted argument: {arg_name}, type_hint: {type_hint}, default_value: {default_value}")
+                self.logger.debug(f"Extracted argument: {arg_name}, type: {type_}, default_value: {default_value}")
 
             # Handle keyword-only and positional-only arguments
             # Additional logic can be added here to handle these cases

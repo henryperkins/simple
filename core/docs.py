@@ -48,9 +48,13 @@ class DocStringManager:
                         self.logger.warning(
                             f"AI documentation parsing had errors: {parsed_response.errors}"
                         )
+                        # Fallback to default AI documentation if parsing fails
+                        ai_docs = self._create_fallback_ai_docs()
 
                 except Exception as e:
-                    self.logger.warning(f"Failed to parse AI-generated documentation: {e}", exc_info=True)
+                    self.logger.error(f"Failed to parse AI-generated documentation: {e}", exc_info=True)
+                    # Fallback to default AI documentation if parsing fails
+                    ai_docs = self._create_fallback_ai_docs()
 
             # Create documentation context
             doc_context = {
@@ -76,6 +80,21 @@ class DocStringManager:
         except Exception as e:
             self.logger.error(f"Documentation generation failed: {e}", exc_info=True)
             raise DocumentationError(f"Failed to generate documentation: {e}")
+
+    def _create_fallback_ai_docs(self) -> Dict[str, Any]:
+        """Create a fallback AI documentation when parsing fails."""
+        return {
+            'summary': 'AI-generated documentation unavailable',
+            'description': 'The AI-generated documentation could not be parsed or was not provided.',
+            'args': [],
+            'returns': {
+                'type': 'Any',
+                'description': 'Return value not documented'
+            },
+            'raises': [],
+            'complexity': 1
+        }
+
 
 
     def _format_class_info(self, cls: ExtractedClass) -> Dict[str, Any]:

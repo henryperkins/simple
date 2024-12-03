@@ -16,12 +16,12 @@ class ExtractedArgument:
 
     Attributes:
         name (str): The name of the argument.
-        type_hint (Optional[str]): The type hint of the argument, if available.
+        type (Optional[str]): The type hint of the argument, if available. Renamed from type_hint.
         default_value (Optional[str]): The default value of the argument, if any.
         is_required (bool): Indicates whether the argument is required (i.e., has no default value).
     """
     name: str
-    type_hint: Optional[str] = None
+    type: Optional[str] = None
     default_value: Optional[str] = None
     is_required: bool = True
 

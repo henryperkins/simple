@@ -21,18 +21,18 @@ class MarkdownGenerator:
         self.config = config or MarkdownConfig()
 
     def generate(self, context: Dict[str, Any]) -> str:
-        """Generate complete markdown documentation."""
         sections = [
             self._generate_header(context),
             self._generate_overview(context),
+            self._generate_ai_doc_section(context),  # Add this line
             self._generate_class_tables(context),
             self._generate_function_tables(context),
             self._generate_constants_table(context),
             self._generate_changes(context),
             self._generate_source_code(context)
         ]
-        
         return "\n\n".join(filter(None, sections))
+
 
     def _generate_header(self, context: Dict[str, Any]) -> str:
         """Generate the module header."""
@@ -81,7 +81,9 @@ class MarkdownGenerator:
                 method_complexity = method.metrics.get('complexity', 0)
                 method_warning = " ⚠️" if method_complexity > 10 else ""
                 params = ", ".join(
-                    f"{arg.name}: {arg.type}" for arg in method.args
+                    f"{arg.name}: {arg.type or 'Any'}" + 
+                    (f" = {arg.default_value}" if arg.default_value else "")
+                    for arg in method.args
                 )
                 methods_table.append(
                     f"| `{cls.name}` | `{method.name}` | "
@@ -183,3 +185,27 @@ class MarkdownGenerator:
             docstring + context['source_code'],
             "```"
         ])
+    
+    def _generate_ai_doc_section(self, context: Dict[str, Any]) -> str:
+        ai_docs = context.get('ai_documentation', {})
+        if ai_docs:
+            return "## AI-Generated Documentation\n\n" + self._format_ai_docs(ai_docs)
+        return ""
+
+    def _format_ai_docs(self, ai_docs: Dict[str, Any]) -> str:
+        sections = []
+        if ai_docs.get('summary'):
+            sections.append(f"**Summary:** {ai_docs['summary']}")
+        if ai_docs.get('description'):
+            sections.append(f"**Description:** {ai_docs['description']}")
+        if ai_docs.get('args'):
+            sections.append("**Arguments:**")
+            for arg in ai_docs['args']:
+                sections.append(f"- **{arg['name']}** ({arg['type']}): {arg['description']}")
+        if ai_docs.get('returns'):
+            sections.append(f"**Returns:** {ai_docs['returns']['type']} - {ai_docs['returns']['description']}")
+        if ai_docs.get('raises'):
+            sections.append("**Raises:**")
+            for raise_ in ai_docs['raises']:
+                sections.append(f"- **{raise_['exception']}**: {raise_['description']}")
+        return "\n\n".join(sections)
