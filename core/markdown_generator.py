@@ -24,7 +24,7 @@ class MarkdownGenerator:
         sections = [
             self._generate_header(context),
             self._generate_overview(context),
-            self._generate_ai_doc_section(context),  # Add this line
+            self._generate_ai_doc_section(context),
             self._generate_class_tables(context),
             self._generate_function_tables(context),
             self._generate_constants_table(context),
@@ -187,12 +187,86 @@ class MarkdownGenerator:
         ])
     
     def _generate_ai_doc_section(self, context: Dict[str, Any]) -> str:
+        """
+        Generates the AI documentation section of the markdown document.
+        This method processes the AI-generated documentation from the context and formats it
+        into a structured markdown section including summary, description, arguments,
+        return values, and exceptions.
+        Args:
+            context (Dict[str, Any]): A dictionary containing the 'ai_documentation' key
+                with nested documentation details including summary, description,
+                arguments, returns, and raises information.
+        Returns:
+            str: A formatted markdown string containing the AI documentation section.
+                Returns an empty string if no AI documentation is present in the context.
+        Examples of context structure:
+            {
+                'ai_documentation': {
+                    'summary': 'Function summary',
+                    'description': 'Detailed description',
+                    'args': [
+                        {'name': 'arg1', 'type': 'str', 'description': 'arg1 description'}
+                    ],
+                    'returns': {'type': 'str', 'description': 'return description'},
+                    'raises': [
+                        {'exception': 'ValueError', 'description': 'error description'}
+                }
+            }
+        """
         ai_docs = context.get('ai_documentation', {})
         if ai_docs:
-            return "## AI-Generated Documentation\n\n" + self._format_ai_docs(ai_docs)
+            sections = [
+                "## AI-Generated Documentation\n\n",
+                "**Summary:** " + (ai_docs.get('summary', '') or "No summary provided") + "\n\n",
+                "**Description:** " + (ai_docs.get('description', '') or "No description provided") + "\n\n"
+            ]
+            
+            if ai_docs.get('args'):
+                sections.append("**Arguments:**")
+                for arg in ai_docs['args']:
+                    sections.append(f"- **{arg['name']}** ({arg['type']}): {arg['description']}")
+                sections.append("\n")
+
+            if ai_docs.get('returns'):
+                sections.append(f"**Returns:** {ai_docs['returns']['type']} - {ai_docs['returns']['description']}\n\n")
+
+            if ai_docs.get('raises'):
+                sections.append("**Raises:**")
+                for raise_ in ai_docs['raises']:
+                    sections.append(f"- **{raise_['exception']}**: {raise_['description']}")
+                sections.append("\n")
+
+            return "\n".join(sections)
         return ""
 
     def _format_ai_docs(self, ai_docs: Dict[str, Any]) -> str:
+        """
+        Formats AI-generated documentation into a markdown string.
+
+        Args:
+            ai_docs (Dict[str, Any]): A dictionary containing AI-generated documentation with the following possible keys:
+                - summary: A brief summary of the code
+                - description: A detailed description
+                - args: List of argument dictionaries with name, type and description
+                - returns: Dictionary with return type and description
+                - raises: List of exception dictionaries with exception name and description
+
+        Returns:
+            str: Formatted markdown string with sections for summary, description, arguments, returns and raises where available
+
+        Example structure of ai_docs:
+            {
+                'summary': 'Brief summary',
+                'description': 'Detailed description',
+                'args': [
+                    {'name': 'arg1', 'type': 'str', 'description': 'arg1 description'}
+                ],
+                'returns': {'type': 'str', 'description': 'return description'},
+                'raises': [
+                    {'exception': 'ValueError', 'description': 'error description'}
+                ]
+            }
+        """
         sections = []
         if ai_docs.get('summary'):
             sections.append(f"**Summary:** {ai_docs['summary']}")

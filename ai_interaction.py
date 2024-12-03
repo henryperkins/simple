@@ -163,7 +163,7 @@ class AIInteractionHandler:
             content = completion.choices[0].message.content
             if content is None:
                 raise ValidationError("Empty response from AI service")
-                        
+            
             parsed_response = await self.response_parser.parse_response(
                 response=content,
                 expected_format='docstring',
@@ -176,6 +176,16 @@ class AIInteractionHandler:
                     # Parse the docstring data using DocstringProcessor
                     docstring_data = self.docstring_processor.parse(parsed_response.content)
                     
+                    # Ensure the AI-generated documentation matches the expected structure
+                    ai_documentation = {
+                        'summary': docstring_data.summary or "No summary provided",
+                        'description': docstring_data.description or "No description provided",
+                        'args': docstring_data.args or [],
+                        'returns': docstring_data.returns or {'type': 'Any', 'description': ''},
+                        'raises': docstring_data.raises or [],
+                        'complexity': docstring_data.complexity or 1
+                    }
+
                     # Create AST transformer to handle all node types
                     class DocstringTransformer(ast.NodeTransformer):
                         def __init__(self, docstring_processor, docstring_data):
@@ -203,7 +213,7 @@ class AIInteractionHandler:
                             if hasattr(self.docstring_data, 'functions') and \
                             node.name in self.docstring_data.functions:
                                 func_data = self.docstring_data.functions[node.name]
-                                func_docstring = self.docstring_processor.format(func_docstring)
+                                func_docstring = self.docstring_processor.format(func_data)
                                 node = self.docstring_processor.insert_docstring(node, func_docstring)
                             return self.generic_visit(node)
 
@@ -218,6 +228,10 @@ class AIInteractionHandler:
                     # Format the documentation using DocstringProcessor
                     documentation = self.docstring_processor.format(docstring_data)
                     
+                    # Update the context with AI-generated documentation
+                    if context:
+                        context.ai_generated = ai_documentation
+
                     # Cache the result if caching is enabled
                     if cache_key and self.cache:
                         try:

@@ -1,210 +1,125 @@
-# docs.py
-from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+import asyncio
+from typing import Optional, Dict, Any
 from core.logger import LoggerSetup
+from core.types import DocumentationContext, DocstringData
+from ai_interaction import AIInteractionHandler
 from core.response_parsing import ResponseParsingService
-from core.extraction.code_extractor import CodeExtractor, ExtractedClass, ExtractedFunction
+from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
-from core.types import DocumentationContext, AIHandler
 from exceptions import DocumentationError
 
+logger = LoggerSetup.get_logger(__name__)
+
 class DocStringManager:
-    """Orchestrates documentation generation with centralized response parsing."""
-    
+    """Manages the generation of documentation, integrating AI-generated content."""
+
     def __init__(
         self,
         context: DocumentationContext,
-        ai_handler: AIHandler,
-        response_parser: Optional[ResponseParsingService] = None,
-        markdown_generator: Optional[MarkdownGenerator] = None
+        ai_handler: AIInteractionHandler,
+        response_parser: ResponseParsingService
     ):
-        self.logger = LoggerSetup.get_logger(__name__)
+        """
+        Initialize the DocStringManager.
+
+        Args:
+            context (DocumentationContext): The context containing source code and metadata.
+            ai_handler (AIInteractionHandler): Handler for AI interactions.
+            response_parser (ResponseParsingService): Service for parsing AI responses.
+        """
         self.context = context
         self.ai_handler = ai_handler
-        self.response_parser = response_parser or ResponseParsingService()
-        self.markdown_generator = markdown_generator or MarkdownGenerator()
-        self.code_extractor = CodeExtractor()
+        self.response_parser = response_parser
+        self.docstring_processor = DocstringProcessor()
 
     async def generate_documentation(self) -> str:
-        """Generate complete documentation using centralized parsing."""
-        try:
-            # Extract code elements
-            extraction_result = self.code_extractor.extract_code(self.context.source_code)
-            if not extraction_result:
-                raise DocumentationError("Code extraction failed")
+        """
+        Generate documentation for the given source code.
 
-            # Parse AI-generated documentation if available
-            ai_docs = {}
-            if self.context.ai_generated:
+        Returns:
+            str: The generated markdown documentation.
+
+        Raises:
+            DocumentationError: If documentation generation fails.
+        """
+        try:
+            # If AI-generated documentation is not available, process the code
+            if not self.context.ai_generated:
                 try:
-                    parsed_response = await self.response_parser.parse_response(
-                        response=self.context.ai_generated,
-                        expected_format='json' if isinstance(self.context.ai_generated, str) else 'docstring'
+                    # Generate cache key based on file content
+                    cache_key = f"doc:{self.context.module_path.stem}:{hash(self.context.source_code.encode())}"
+                    
+                    # Process code with AI handler
+                    result = await self.ai_handler.process_code(
+                        source_code=self.context.source_code,
+                        cache_key=cache_key
                     )
 
-                    if parsed_response.validation_success:
-                        ai_docs = parsed_response.content
-                    else:
-                        self.logger.warning(
-                            f"AI documentation parsing had errors: {parsed_response.errors}"
-                        )
-                        # Fallback to default AI documentation if parsing fails
-                        ai_docs = self._create_fallback_ai_docs()
+                    if not result:
+                        raise DocumentationError("AI processing failed")
+
+                    updated_code, ai_docs = result
+
+                    # Update the context with AI-generated documentation
+                    self.context.source_code = updated_code
+                    self.context.ai_generated = ai_docs
 
                 except Exception as e:
-                    self.logger.error(f"Failed to parse AI-generated documentation: {e}", exc_info=True)
-                    # Fallback to default AI documentation if parsing fails
-                    ai_docs = self._create_fallback_ai_docs()
+                    logger.error(f"Error processing code for AI documentation: {e}")
+                    # If AI processing fails, use a fallback message
+                    self.context.ai_generated = {
+                        'summary': "AI-generated documentation not available",
+                        'description': "Documentation could not be generated by AI service",
+                        'args': [],
+                        'returns': {'type': 'Any', 'description': ''},
+                        'raises': []
+                    }
 
-            # Create documentation context
-            doc_context = {
-                'module_name': self.context.module_path.stem if self.context.module_path else "Unknown",
-                'file_path': str(self.context.module_path) if self.context.module_path else "",
-                'description': extraction_result.module_docstring or "No description available.",
-                'classes': extraction_result.classes,
-                'functions': extraction_result.functions,
-                'constants': extraction_result.constants,
-                'changes': self.context.changes or [],  # Assuming changes are provided in the context
-                'source_code': self.context.source_code if self.context.include_source else None,
-                'ai_documentation': ai_docs  # Include AI documentation
-            }
-
-            # Generate markdown
-            documentation = self.markdown_generator.generate(doc_context)
-
-            # Log successful generation
-            self.logger.debug(f"Generated documentation for {self.context.module_path}")
-
+            # Use MarkdownGenerator to generate the markdown documentation
+            markdown_generator = MarkdownGenerator()
+            documentation = markdown_generator.generate(self.context.__dict__)
             return documentation
 
         except Exception as e:
-            self.logger.error(f"Documentation generation failed: {e}", exc_info=True)
+            logger.error(f"Error generating documentation: {e}")
             raise DocumentationError(f"Failed to generate documentation: {e}")
 
-    def _create_fallback_ai_docs(self) -> Dict[str, Any]:
-        """Create a fallback AI documentation when parsing fails."""
-        return {
-            'summary': 'AI-generated documentation unavailable',
-            'description': 'The AI-generated documentation could not be parsed or was not provided.',
-            'args': [],
-            'returns': {
-                'type': 'Any',
-                'description': 'Return value not documented'
-            },
-            'raises': [],
-            'complexity': 1
-        }
-
-
-
-    def _format_class_info(self, cls: ExtractedClass) -> Dict[str, Any]:
-        """Format class information for markdown generation."""
-        return {
-            'name': cls.name,
-            'bases': cls.bases,
-            'docstring': cls.docstring,
-            'methods': [self._format_method_info(method) for method in cls.methods],
-            'metrics': cls.metrics,
-            'attributes': [
-                {
-                    'name': attr['name'],
-                    'type': attr['type'],
-                    'value': attr['value']
-                }
-                for attr in (cls.attributes + cls.instance_attributes)
-            ]
-        }
-
-    def _format_method_info(self, method: ExtractedFunction) -> Dict[str, Any]:
-        """Format method information for markdown generation."""
-        return {
-            'name': method.name,
-            'args': [
-                {
-                    'name': arg.name,
-                    'type': arg.type_hint or 'Any',
-                    'default_value': arg.default_value if not arg.is_required else None
-                }
-                for arg in method.args
-            ],
-            'return_type': method.return_type or 'None',
-            'docstring': method.docstring,
-            'metrics': method.metrics,
-            'is_async': method.is_async
-        }
-
-    def _format_function_info(self, func: ExtractedFunction) -> Dict[str, Any]:
-        """Format function information for markdown generation."""
-        return {
-            'name': func.name,
-            'args': [
-                {
-                    'name': arg.name,
-                    'type': arg.type_hint or 'Any',
-                    'default_value': arg.default_value if not arg.is_required else None
-                }
-                for arg in func.args
-            ],
-            'return_type': func.return_type or 'None',
-            'docstring': func.docstring,
-            'metrics': func.metrics,
-            'is_async': func.is_async
-        }
-
-    def _format_constant_info(self, const: Dict[str, Any]) -> Dict[str, Any]:
-        """Format constant information for markdown generation."""
-        return {
-            'name': const['name'],
-            'type': const['type'],
-            'value': const['value']
-        }
-
-    
-    async def process_file(
-        self,
-        file_path: Path,
-        output_dir: Optional[Path] = None
-    ) -> Tuple[str, str]:
+    async def update_docstring(self, existing: str, new_content: str) -> str:
         """
-        Process a single file and generate documentation.
+        Update an existing docstring with new content.
 
         Args:
-            file_path (Path): The path to the file to process.
-            output_dir (Optional[Path]): Optional output directory to save the
-                documentation.
+            existing (str): The existing docstring.
+            new_content (str): The new content to merge.
 
         Returns:
-            Tuple[str, str]: The source code and generated documentation.
-
-        Raises:
-            DocumentationError: If file processing fails.
+            str: The updated docstring.
         """
         try:
-            if not file_path.exists():
-                raise FileNotFoundError(f"File not found: {file_path}")
+            # Parse both docstrings
+            existing_data = self.docstring_processor.parse(existing)
+            new_data = self.docstring_processor.parse(new_content)
 
-            # Read source code
-            source_code = file_path.read_text(encoding='utf-8')
-
-            # Update documentation context
-            self.context = DocumentationContext(
-                source_code=source_code,
-                module_path=file_path,
-                include_source=True
+            # Merge data, preferring new content but keeping existing if new is empty
+            merged = DocstringData(
+                summary=new_data.summary or existing_data.summary,
+                description=new_data.description or existing_data.description,
+                args=new_data.args or existing_data.args,
+                returns=new_data.returns or existing_data.returns,
+                raises=new_data.raises or existing_data.raises,
+                complexity=new_data.complexity or existing_data.complexity
             )
 
-            # Generate documentation
-            documentation = await self.generate_documentation()
-
-            # Save to output directory if specified
-            if output_dir:
-                output_dir = Path(output_dir)
-                output_dir.mkdir(parents=True, exist_ok=True)
-                output_file = output_dir / f"{file_path.stem}.md"
-                output_file.write_text(documentation)
-
-            return self.context.source_code, documentation
+            return self.docstring_processor.format(merged)
 
         except Exception as e:
-            self.logger.error(f"File processing failed: {e}", exc_info=True)
-            raise DocumentationError(f"Failed to process file: {e}")
+            logger.error(f"Error updating docstring: {e}")
+            raise DocumentationError(f"Failed to update docstring: {e}")
+
+    async def __aenter__(self) -> 'DocStringManager':
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        pass  # Cleanup if needed
