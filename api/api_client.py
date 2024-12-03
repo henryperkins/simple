@@ -84,8 +84,8 @@ class APIClient:
             # Get usage statistics
             usage = completion.usage.model_dump() if hasattr(completion, 'usage') else {}
 
-            self.logger.debug("API request successful", 
-                            extra={"usage": usage, "parsing_success": parsed_response.validation_success})
+            self.logger.debug("API request successful",
+                           extra={"usage": usage, "parsing_success": parsed_response.validation_success})
 
             return parsed_response, usage
 
