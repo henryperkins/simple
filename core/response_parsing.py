@@ -123,42 +123,53 @@ class ResponseParsingService:
             raise CustomValidationError(f"Failed to parse response: {str(e)}")
 
     async def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
-        """Parse JSON response, handling code blocks and cleaning."""
+        """Parse a JSON response, handling code blocks and cleaning."""
         try:
-            # Clean up response
             response = response.strip()
-            
+
             # Extract JSON from code blocks if present
             if '```json' in response and '```' in response:
                 start = response.find('```json') + 7
                 end = response.rfind('```')
                 if start > 7 and end > start:
                     response = response[start:end].strip()
-            
+
             # Remove any non-JSON content
-            if not response.startswith('{') and not response.endswith('}'):
+            if not response.startswith('{') or not response.endswith('}'):
                 start = response.find('{')
                 end = response.rfind('}')
                 if start >= 0 and end >= 0:
                     response = response[start:end+1]
 
+            # Parse JSON into Python dictionary
             parsed_content = json.loads(response.strip())
-            
-            # Ensure the parsed content has the expected structure
+
+            # Ensure required fields are present and valid
             required_fields = {'summary', 'description', 'args', 'returns', 'raises'}
-            if not all(field in parsed_content for field in required_fields):
-                self.logger.warning("Parsed JSON missing required fields")
-                # Add missing fields with default values
-                parsed_content.update({
-                    field: parsed_content.get(field, [] if field in {'args', 'raises'} else 
-                                            {'type': 'Any', 'description': ''} if field == 'returns' else '')
-                    for field in required_fields
-                })
+            for field in required_fields:
+                if field not in parsed_content:
+                    if field in {'args', 'raises'}:
+                        parsed_content[field] = []  # Default to empty list
+                    elif field == 'returns':
+                        parsed_content[field] = {'type': 'Any', 'description': ''}  # Default returns value
+                    else:
+                        parsed_content[field] = ''  # Default to empty string for other fields
+
+            # Validate field types
+            if not isinstance(parsed_content['args'], list):
+                parsed_content['args'] = []  # Ensure `args` is a list
+            if not isinstance(parsed_content['raises'], list):
+                parsed_content['raises'] = []  # Ensure `raises` is a list
+            if not isinstance(parsed_content['returns'], dict):
+                parsed_content['returns'] = {'type': 'Any', 'description': ''}  # Ensure `returns` is a dict
 
             return parsed_content
 
         except json.JSONDecodeError as e:
-            self.logger.error(f"JSON parsing failed: {e}")
+            self.logger.error(f"Failed to parse JSON response: {e}")
+            return None
+        except Exception as e:
+            self.logger.error(f"Unexpected error during JSON response parsing: {e}")
             return None
 
     async def _parse_markdown_response(self, response: str) -> Dict[str, Any]:

@@ -26,29 +26,32 @@ class DocstringProcessor:
     def parse(self, docstring: Union[Dict[str, Any], str]) -> DocstringData:
         """Parse a raw docstring into structured format."""
         try:
-            # If it's already a dict, convert directly
             if isinstance(docstring, dict):
+                # Ensure 'returns' is a dictionary, providing a default if needed
+                returns = docstring.get('returns')
+                if not isinstance(returns, dict):
+                    returns = {'type': 'Any', 'description': ''}
+                    docstring['returns'] = returns  # Update the dictionary in place
+
                 return DocstringData(
                     summary=docstring.get('summary', ''),
                     description=docstring.get('description', ''),
                     args=docstring.get('args', []),
-                    returns=docstring.get('returns', {'type': 'Any', 'description': ''}),
+                    returns=returns,
                     raises=docstring.get('raises', []),
                     complexity=docstring.get('complexity', 1)
                 )
 
-            # If it's a string, try to parse as JSON first
+            # If it's a string, try to parse as JSON
             if isinstance(docstring, str) and docstring.strip().startswith('{'):
                 try:
-                    import json
                     doc_dict = json.loads(docstring)
                     return self.parse(doc_dict)
                 except json.JSONDecodeError:
                     pass
 
-            # Otherwise parse as regular docstring
+            # Otherwise, parse as a regular docstring string
             parsed = parse_docstring(docstring)
-            
             return DocstringData(
                 summary=parsed.short_description or '',
                 description=parsed.long_description or '',
@@ -75,14 +78,12 @@ class DocstringProcessor:
         """Format structured docstring data into a string."""
         lines = []
 
-        # Add summary and description
         if data.summary:
             lines.extend([data.summary, ""])
 
         if data.description and data.description != data.summary:
             lines.extend([data.description, ""])
 
-        # Add arguments section
         if data.args:
             lines.append("Args:")
             for arg in data.args:
@@ -94,13 +95,11 @@ class DocstringProcessor:
                 lines.append(arg_desc)
             lines.append("")
 
-        # Add returns section
         if data.returns:
             lines.append("Returns:")
             lines.append(f"    {data.returns['type']}: {data.returns['description']}")
             lines.append("")
 
-        # Add raises section
         if data.raises:
             lines.append("Raises:")
             for exc in data.raises:

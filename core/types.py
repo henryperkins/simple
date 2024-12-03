@@ -4,8 +4,9 @@ Core type definitions for documentation generation.
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Tuple, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+
 
 @dataclass
 class DocstringData:
@@ -17,6 +18,7 @@ class DocstringData:
     raises: List[Dict[str, Any]]
     complexity: int = 1  # Default to 1 if not provided
 
+
 @dataclass
 class ParsedResponse:
     """Container for parsed response data."""
@@ -27,6 +29,7 @@ class ParsedResponse:
     errors: List[str]
     metadata: Dict[str, Any]
 
+
 @dataclass
 class ProcessingResult:
     """Result of AI processing operation."""
@@ -36,13 +39,32 @@ class ProcessingResult:
     is_cached: bool = False
     processing_time: float = 0.0
 
-@dataclass
+
 class DocumentationContext:
-    source_code: str
-    module_path: Path
-    include_source: bool = True
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    ai_generated: Optional[Dict[str, Any]] = None
+    """Context for managing and generating documentation."""
+    
+    def __init__(
+        self, 
+        source_code: str, 
+        module_path: Path, 
+        include_source: bool = True, 
+        metadata: Optional[Dict[str, Any]] = None, 
+        ai_generated: Optional[Dict[str, Any]] = None,
+        classes: Optional[List[Any]] = None,
+        functions: Optional[List[Any]] = None,
+        constants: Optional[List[Any]] = None,
+        changes: Optional[List[Any]] = None
+    ):
+        self.source_code = source_code
+        self.module_path = module_path
+        self.include_source = include_source
+        self.metadata = metadata or {}
+        self.ai_generated = ai_generated or {}
+        self.classes = classes or []
+        self.functions = functions or []
+        self.constants = constants or []
+        self.changes = changes or []
+
 
 class AIHandler(ABC):
     """Interface for AI processing."""
@@ -63,6 +85,7 @@ class AIHandler(ABC):
             extracted_info: Optional pre-extracted code information
 
         Returns:
-            Optional[Tuple[str, str]]: Tuple of (updated_code, documentation) or None if processing fails
+            Optional[Tuple[str, str]]: Tuple of (updated_code, documentation) or
+            None if processing fails
         """
         pass
