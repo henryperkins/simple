@@ -29,6 +29,8 @@ class Metrics:
     def __init__(self) -> None:
         """Initializes the Metrics class."""
         self.module_name: Union[str, None] = None
+        self.logger = LoggerSetup.get_logger(__name__)
+        self.error_counts: Dict[str, int] = {}
 
     def calculate_cyclomatic_complexity(self, function_node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> int:
         """
@@ -372,7 +374,18 @@ class Metrics:
         except Exception as e:
             logger.error(f"Error categorizing import {module_name}: {e}")
             raise MetricsError(f"Error categorizing import {module_name}: {e}")
-
+        
+    async def track_error(self, operation: str, error: str) -> None:
+        """Track operation errors."""
+        try:
+            self.error_counts[operation] = self.error_counts.get(operation, 0) + 1
+            self.last_error = {
+                'operation': operation,
+                'error': error,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            self.logger.error(f"Error tracking metrics: {e}")
 class MetricsCollector:
     """Collects and manages metrics for operations."""
 

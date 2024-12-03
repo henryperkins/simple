@@ -1,82 +1,77 @@
 """
-Docstring processing module for parsing and formatting docstrings.
+Docstring processing module.
 """
 
 import ast
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
-
+from typing import Optional, Dict, Any, List, Union
 from docstring_parser import parse as parse_docstring
 from core.logger import LoggerSetup
 from core.metrics import Metrics
+from core.types import DocstringData
 from exceptions import DocumentationError
-
-@dataclass
-class DocstringData:
-    """Structured representation of a docstring."""
-    summary: str
-    description: str
-    args: List[Dict[str, Any]]
-    returns: Dict[str, Any]
-    raises: List[Dict[str, Any]]
-    complexity: Optional[int] = None
 
 class DocstringProcessor:
     """Processes docstrings by parsing, validating, and formatting them."""
 
-    def __init__(self):
-        """Initialize the docstring processor."""
-        self.logger = LoggerSetup.get_logger(__name__)
-        self.metrics = Metrics()
-
-    def parse(self, docstring: str) -> DocstringData:
+    def __init__(self, metrics: Optional[Metrics] = None) -> None:
         """
-        Parse a raw docstring into structured format.
+        Initialize docstring processor.
 
         Args:
-            docstring (str): Raw docstring text to parse.
-
-        Returns:
-            DocstringData: Structured docstring data.
-
-        Raises:
-            DocumentationError: If parsing fails.
+            metrics: Optional metrics instance for complexity calculations
         """
+        self.logger = LoggerSetup.get_logger(__name__)
+        self.metrics = metrics or Metrics()
+
+    def parse(self, docstring: Union[Dict[str, Any], str]) -> DocstringData:
+        """Parse a raw docstring into structured format."""
         try:
-            if not docstring.strip():
-                return DocstringData("", "", [], {}, [])
+            # If it's already a dict, convert directly
+            if isinstance(docstring, dict):
+                return DocstringData(
+                    summary=docstring.get('summary', ''),
+                    description=docstring.get('description', ''),
+                    args=docstring.get('args', []),
+                    returns=docstring.get('returns', {'type': 'Any', 'description': ''}),
+                    raises=docstring.get('raises', []),
+                    complexity=docstring.get('complexity', 1)
+                )
 
+            # If it's a string, try to parse as JSON first
+            if isinstance(docstring, str) and docstring.strip().startswith('{'):
+                try:
+                    import json
+                    doc_dict = json.loads(docstring)
+                    return self.parse(doc_dict)
+                except json.JSONDecodeError:
+                    pass
+
+            # Otherwise parse as regular docstring
             parsed = parse_docstring(docstring)
-
-            args = [{
-                'name': param.arg_name,
-                'type': param.type_name or 'Any',
-                'description': param.description or ''
-            } for param in parsed.params]
-
-            returns = {
-                'type': parsed.returns.type_name if parsed.returns else 'Any',
-                'description': parsed.returns.description if parsed.returns else ''
-            }
-
-            raises = [{
-                'exception': e.type_name or 'Exception',
-                'description': e.description or ''
-            } for e in parsed.raises] if parsed.raises else []
-
+            
             return DocstringData(
                 summary=parsed.short_description or '',
                 description=parsed.long_description or '',
-                args=args,
-                returns=returns,
-                raises=raises
+                args=[{
+                    'name': param.arg_name,
+                    'type': param.type_name or 'Any',
+                    'description': param.description or ''
+                } for param in parsed.params],
+                returns={
+                    'type': parsed.returns.type_name if parsed.returns else 'Any',
+                    'description': parsed.returns.description if parsed.returns else ''
+                },
+                raises=[{
+                    'exception': e.type_name or 'Exception',
+                    'description': e.description or ''
+                } for e in parsed.raises] if parsed.raises else []
             )
 
         except Exception as e:
             self.logger.error(f"Error parsing docstring: {e}")
             raise DocumentationError(f"Failed to parse docstring: {e}")
 
-    def format(self, data: DocstringData, style: str = 'google') -> str:
+    def format(self, data: DocstringData) -> str:
         """Format structured docstring data into a string."""
         lines = []
 
@@ -118,7 +113,7 @@ class DocstringProcessor:
             lines.append(f"Warning: High complexity score ({data.complexity}) ⚠️")
 
         return "\n".join(lines).strip()
-
+    
     def extract_from_node(self, node: ast.AST) -> DocstringData:
         """
         Extract docstring from an AST node.
@@ -151,29 +146,37 @@ class DocstringProcessor:
         Insert docstring into an AST node.
 
         Args:
-            node (ast.AST): The AST node to update.
-            docstring (str): The docstring to insert.
+            node (ast.AST): The AST node to update
+            docstring (str): The docstring to insert
 
         Returns:
-            ast.AST: The updated node.
+            ast.AST: The updated node
 
         Raises:
-            DocumentationError: If insertion fails.
+            DocumentationError: If insertion fails
         """
         try:
-            if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            # Handle module-level docstrings
+            if isinstance(node, ast.Module):
+                docstring_node = ast.Expr(value=ast.Constant(value=docstring))
+                # Remove existing docstring if present
+                if node.body and isinstance(node.body[0], ast.Expr) and \
+                isinstance(node.body[0].value, ast.Constant):
+                    node.body.pop(0)
+                node.body.insert(0, docstring_node)
+                return node
+                
+            # Handle class and function docstrings
+            elif isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                docstring_node = ast.Expr(value=ast.Constant(value=docstring))
+                # Remove existing docstring if present
+                if node.body and isinstance(node.body[0], ast.Expr) and \
+                isinstance(node.body[0].value, ast.Constant):
+                    node.body.pop(0)
+                node.body.insert(0, docstring_node)
+                return node
+            else:
                 raise ValueError(f"Invalid node type for docstring: {type(node)}")
-
-            docstring_node = ast.Expr(value=ast.Constant(value=docstring))
-
-            # Remove existing docstring if present
-            if node.body and isinstance(node.body[0], ast.Expr) and \
-               isinstance(node.body[0].value, ast.Constant):
-                node.body.pop(0)
-
-            # Insert new docstring
-            node.body.insert(0, docstring_node)
-            return node
 
         except Exception as e:
             self.logger.error(f"Error inserting docstring: {e}")

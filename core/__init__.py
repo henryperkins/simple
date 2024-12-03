@@ -7,9 +7,8 @@ from .docstring_processor import (
 )
 from .logger import LoggerSetup, log_debug, log_info, log_warning, log_error
 from .markdown_generator import MarkdownConfig, MarkdownGenerator
-from .metrics import MetricsError, Metrics
+from .metrics import MetricsError, Metrics, MetricsCollector
 from .monitoring import SystemMonitor
-from .metrics_collector import MetricsCollector
 from .utils import (
     generate_hash, get_annotation, handle_exceptions, load_json_file,
     ensure_directory, validate_file_path, create_error_result, add_parent_info,

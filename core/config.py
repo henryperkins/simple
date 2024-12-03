@@ -47,7 +47,7 @@ def check_required_env_vars() -> None:
     required_vars = {
         "AZURE_OPENAI_ENDPOINT": "Your Azure OpenAI endpoint URL",
         "AZURE_OPENAI_KEY": "Your Azure OpenAI API key",
-        "AZURE_OPENAI_DEPLOYMENT": "Your deployment name"
+        "AZURE_OPENAI_DEPLOYMENT_ID": "Your deployment ID"
     }
 
     missing = [
@@ -79,7 +79,7 @@ class AzureOpenAIConfig:
     endpoint: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_ENDPOINT", ""))
     api_key: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_KEY", ""))
     api_version: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_API_VERSION", "2024-09-01-preview"))
-    deployment_name: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_DEPLOYMENT", ""))
+    deployment_id: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_DEPLOYMENT_ID", ""))
     model_name: str = field(default_factory=lambda: os.getenv("MODEL_NAME", "gpt-4o-2024-08-06"))
 
     max_tokens_per_minute: int = field(default_factory=lambda: get_env_int("MAX_TOKENS_PER_MINUTE", 150000))
@@ -151,8 +151,8 @@ class AzureOpenAIConfig:
             logger.error("Azure OpenAI API key is required")
             return False
 
-        if not self.deployment_name:
-            logger.error("Azure OpenAI deployment name is required")
+        if not self.deployment_id:
+            logger.error("Azure OpenAI deployment ID is required")
             return False
 
         if not isinstance(self.redis_port, int) or self.redis_port <= 0:
@@ -173,7 +173,7 @@ class AzureOpenAIConfig:
             "model_type": self.model_type,
             "endpoint": self.endpoint,
             "api_version": self.api_version,
-            "deployment_name": self.deployment_name,
+            "deployment_id": self.deployment_id,
             "model_name": self.model_name,
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,

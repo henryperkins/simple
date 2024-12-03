@@ -15,7 +15,17 @@ class DocstringData:
     args: List[Dict[str, Any]]
     returns: Dict[str, Any]
     raises: List[Dict[str, Any]]
-    complexity: Optional[int] = None
+    complexity: int = 1  # Default to 1 if not provided
+
+@dataclass
+class ParsedResponse:
+    """Container for parsed response data."""
+    content: Dict[str, Any]
+    format_type: str
+    parsing_time: float
+    validation_success: bool
+    errors: List[str]
+    metadata: Dict[str, Any]
 
 @dataclass
 class ProcessingResult:

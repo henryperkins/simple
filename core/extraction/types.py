@@ -2,6 +2,8 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Set, Union
 import ast
+from core.metrics import Metrics
+from pathlib import Path
 
 @dataclass
 class ExtractedArgument:
@@ -13,16 +15,17 @@ class ExtractedArgument:
 
 @dataclass
 class ExtractionContext:
-    """Context for extraction operations."""
-    file_path: Optional[str] = None
+    """Context for code extraction operations."""
+    metrics: Optional[Metrics] = None
     module_name: Optional[str] = None
-    import_context: Optional[Dict[str, Set[str]]] = None
-    metrics_enabled: bool = True
-    include_source: bool = True
-    max_line_length: int = 100
     include_private: bool = False
-    include_metrics: bool = True
-    resolve_external_types: bool = True
+    include_magic: bool = False
+    include_nested: bool = True
+    include_source: bool = True  # Added missing attribute
+    metrics_enabled: bool = True
+    max_line_length: int = 88
+    ignore_decorators: Set[str] = field(default_factory=set)
+    base_path: Optional[Path] = None
 
 @dataclass
 class ExtractedElement:

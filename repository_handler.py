@@ -413,11 +413,12 @@ class RepositoryHandler:
             def handle_rm_error(func, path, exc_info):
                 """Handle errors during rmtree."""
                 try:
-                    if path.exists():
-                        os.chmod(str(path), stat.S_IWRITE)
-                        func(str(path))
+                    path_obj = Path(path)  # Convert path to Path object
+                    if path_obj.exists():
+                        os.chmod(str(path_obj), stat.S_IWRITE)
+                        func(str(path_obj))
                 except Exception as e:
-                    logger.error(f"Error removing path {path}: {e}")
+                    logger.error(f"Error removing path {path}: {e}", exc_info=True)
 
             # Attempt cleanup with retry
             max_retries = 3
@@ -433,11 +434,11 @@ class RepositoryHandler:
                     else:
                         logger.error(f"Could not remove directory after {max_retries} attempts: {path}")
                 except Exception as e:
-                    logger.error(f"Error removing directory {path}: {e}")
+                    logger.error(f"Error removing directory {path}: {e}", exc_info=True)
                     break
-                        
         except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            logger.error(f"Error during cleanup: {e}", exc_info=True)
+
 
     def _is_valid_git_url(self, url: str) -> bool:
         """

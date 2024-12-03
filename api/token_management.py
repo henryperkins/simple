@@ -12,7 +12,7 @@ import tiktoken
 
 from core.logger import LoggerSetup
 from core.config import AzureOpenAIConfig
-from core.metrics_collector import MetricsCollector
+from core.metrics import MetricsCollector
 
 class TokenUsage:
     """
@@ -45,7 +45,7 @@ class TokenManager:
         logger (Logger): Logger instance for logging.
         config (AzureOpenAIConfig): Configuration object.
         model (str): The model name to use for token management.
-        deployment_name (Optional[str]): Azure deployment name if different from model.
+        deployment_id (Optional[str]): Azure deployment ID if different from model.
         metrics_collector (Optional[MetricsCollector]): Metrics collector for tracking operations.
         encoding (tiktoken.Encoding): Encoding object for token estimation.
         model_config (Dict[str, Union[int, float]]): Model configuration including token limits and costs.
@@ -54,19 +54,19 @@ class TokenManager:
     """
 
     def __init__(
-        self,
-        model: str = "gpt-4",
-        deployment_name: Optional[str] = None,
-        config: Optional[AzureOpenAIConfig] = None,
-        metrics_collector: Optional[MetricsCollector] = None
-    ) -> None:
+            self,
+            model: str = "gpt-4",
+            deployment_id: Optional[str] = None,  # Updated parameter
+            config: Optional[AzureOpenAIConfig] = None,
+            metrics_collector: Optional[MetricsCollector] = None
+        ) -> None:
         """
         Initialize TokenManager with model configuration.
 
         Args:
             model (str): The model name to use for token management.
-            deployment_name (Optional[str]): Azure deployment name if different
-                                             from model.
+            deployment_id (Optional[str]): Azure deployment ID if different
+                                        from model.
             config (Optional[AzureOpenAIConfig]): Configuration object.
             metrics_collector (Optional[MetricsCollector]): Metrics collector
                                                             for tracking
@@ -77,8 +77,8 @@ class TokenManager:
         """
         self.logger = LoggerSetup.get_logger(__name__)
         self.config = config or AzureOpenAIConfig.from_env()
-        self.model = self._get_model_name(deployment_name, model)
-        self.deployment_name = deployment_name
+        self.model = self._get_model_name(deployment_id, model)
+        self.deployment_id = deployment_id  # Updated to deployment_id
         self.metrics_collector = metrics_collector
 
         try:
@@ -90,12 +90,13 @@ class TokenManager:
             self.model, self.config.model_limits["gpt-4"]
         )
         self.logger.debug(f"TokenManager initialized for model: {self.model}, "
-                          f"deployment: {self.deployment_name}")
+                          f"deployment: {self.deployment_id}")  # Updated log message
 
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
 
-    def _get_model_name(self, deployment_name: Optional[str], default_model: str) -> str:
+
+    def _get_model_name(self, deployment_id: Optional[str], default_model: str) -> str:
         """
         Get the model name based on deployment name or default model.
 
@@ -276,7 +277,7 @@ class TokenManager:
                         metadata={
                             "function": "track_request",
                             "model": self.model,
-                            "deployment_name": self.deployment_name
+                            "deployment_id": self.deployment_id
                         }
                     )
                 )

@@ -54,11 +54,15 @@ class ClassExtractor:
         metrics = self._calculate_class_metrics(node)
         complexity_warnings = self._get_complexity_warnings(metrics)
 
+        source = None
+        if getattr(self.context, 'include_source', True):  # Safe access
+            source = self.ast_utils.get_source_segment(node)
+
         extracted_class = ExtractedClass(
             name=node.name,
             docstring=ast.get_docstring(node),
             lineno=node.lineno,
-            source=self.ast_utils.get_source_segment(node, self.context.include_source),
+            source=source,
             metrics=metrics,
             dependencies=self._extract_dependencies(node),
             bases=self._extract_bases(node),
@@ -73,7 +77,23 @@ class ClassExtractor:
         )
         self.logger.debug(f"Completed processing class: {node.name}")
         return extracted_class
-    
+
+    def _process_attribute(self, node: ast.AST) -> Optional[Dict[str, Any]]:
+        """Process a class-level attribute assignment."""
+        try:
+            if isinstance(node, ast.Assign):
+                targets = [target.id for target in node.targets if isinstance(target, ast.Name)]
+                value = self.ast_utils.get_source_segment(node.value) if node.value else None
+                return {
+                    "name": targets[0] if targets else None,
+                    "value": value,
+                    "type": self.ast_utils.get_name(node.value) if node.value else 'Any'
+                }
+            return None
+        except Exception as e:
+            self.logger.error(f"Error processing attribute: {e}")
+            return None
+
     def _process_instance_attribute(self, stmt: ast.Assign) -> Optional[Dict[str, Any]]:
         """
         Process an instance attribute assignment statement.
@@ -135,7 +155,7 @@ class ClassExtractor:
                     attributes.append(attr_info)
                     self.logger.debug(f"Extracted attribute: {attr_info['name']}")
         return attributes
-    
+
     def _extract_decorators(self, node: ast.ClassDef) -> List[str]:
         """
         Extract decorator names from a class definition.
@@ -157,7 +177,7 @@ class ClassExtractor:
                 self.logger.error(f"Error extracting decorator: {e}")
                 decorators.append("unknown_decorator")
         return decorators
-    
+
     def _extract_instance_attributes(self, node: ast.ClassDef) -> List[Dict[str, Any]]:
         """Extract instance attributes from __init__ method."""
         self.logger.debug(f"Extracting instance attributes for class: {node.name}")
@@ -224,6 +244,7 @@ class ClassExtractor:
         except Exception as e:
             self.logger.error(f"Error calculating inheritance depth: {e}", exc_info=True)
             return 0
+
     def _resolve_base_class(self, base: ast.expr) -> Optional[ast.ClassDef]:
         """
         Resolve a base class node to its class definition.
@@ -253,6 +274,7 @@ class ClassExtractor:
         except Exception as e:
             self.logger.error(f"Error resolving base class: {e}")
             return None
+
     def _get_complexity_warnings(self, metrics: Dict[str, Any]) -> List[str]:
         """Generate warnings based on complexity metrics."""
         self.logger.debug("Generating complexity warnings")

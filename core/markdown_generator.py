@@ -36,7 +36,7 @@ class MarkdownGenerator:
         sections = [
             self._generate_header(context),
             self._generate_overview(context),
-            self._generate_classes(context.get('classes', [])),
+            self._generate_classes(context.get('classes', [])),  # Changed from _generate_class_documentation
             self._generate_functions(context.get('functions', [])),
             self._generate_source_code(context)
         ]
@@ -48,72 +48,13 @@ class MarkdownGenerator:
             content = f"{toc}\n\n{content}"
             
         return content
-
-    def _generate_methods(self, class_name: str, methods: List[Any]) -> List[str]:
-        """Generate the methods section."""
-        if not methods:
-            return []
-
-        lines = [
-            "",
-            f"### {class_name} Methods",
-            "",
-            "| Method | Parameters | Returns | Complexity |",
-            "|--------|------------|---------|------------|"
-        ]
-
-        for method in methods:
-            if isinstance(method, dict):
-                name = method.get('name', '')
-                params = []
-                for arg in method.get('args', []):
-                    arg_name = arg.get('name', '')
-                    arg_type = arg.get('type_hint', 'Any')
-                    params.append(f"{arg_name}: {arg_type}")
-                
-                return_type = method.get('return_type', 'None')
-                docstring = method.get('docstring', '')
-                metrics = method.get('metrics', {})
-            else:
-                name = getattr(method, 'name', '')
-                params = []
-                for arg in getattr(method, 'args', []):
-                    arg_name = getattr(arg, 'name', '')
-                    arg_type = getattr(arg, 'type_hint', 'Any')
-                    params.append(f"{arg_name}: {arg_type}")
-                
-                return_type = getattr(method, 'return_type', 'None')
-                docstring = getattr(method, 'docstring', '')
-                metrics = getattr(method, 'metrics', {})
-
-            complexity = metrics.get('complexity', 0) if isinstance(metrics, dict) else 0
-            warning = " ⚠️" if complexity > 10 else ""
-
-            lines.append(
-                f"| `{name}` | {', '.join(params) or 'None'} | "
-                f"`{return_type or 'None'}` | {complexity}{warning} |"
-            )
-
-            if docstring:
-                # Use docstring processor to parse and format
-                parsed_docstring = self.docstring_processor.parse(docstring)
-                formatted_docstring = self.docstring_processor.format(parsed_docstring)
-                if formatted_docstring:
-                    lines.extend(["", formatted_docstring, ""])
-
-        return lines
-
+    
     def _generate_classes(self, classes: List[Any]) -> str:
         """Generate the classes section."""
         if not classes:
             return ""
 
-        lines = [
-            "## Classes",
-            "",
-            "| Class | Inherits From | Complexity | Methods |",
-            "|-------|---------------|------------|----------|"
-        ]
+        lines = ["## Classes"]
 
         for cls in classes:
             if isinstance(cls, dict):
@@ -131,23 +72,199 @@ class MarkdownGenerator:
 
             complexity = metrics.get('complexity', 0) if isinstance(metrics, dict) else 0
             warning = " ⚠️" if complexity > 10 else ""
-            
-            lines.append(
-                f"| `{name}` | {', '.join(bases) or 'None'} | "
-                f"{complexity}{warning} | {len(methods)} |"
-            )
 
+            # Class header
+            lines.extend([
+                "",
+                f"### {name}",
+                "",
+                f"**Base Classes:** {', '.join(bases) or 'None'}",
+                f"**Complexity:** {complexity}{warning}",
+                ""
+            ])
+
+            # Class docstring
             if docstring:
-                # Use docstring processor to parse and format
-                parsed_docstring = self.docstring_processor.parse(docstring)
-                formatted_docstring = self.docstring_processor.format(parsed_docstring)
-                if formatted_docstring:
-                    lines.extend(["", f"### {name}", "", formatted_docstring])
+                # Clean up any JSON formatting in docstring
+                try:
+                    if docstring.startswith('{'):
+                        import json
+                        doc_dict = json.loads(docstring)
+                        lines.extend([
+                            doc_dict.get('summary', ''),
+                            "",
+                            doc_dict.get('description', ''),
+                            ""
+                        ])
+                    else:
+                        lines.extend([docstring, ""])
+                except:
+                    lines.extend([docstring, ""])
 
+            # Methods section
             if methods:
-                lines.extend(self._generate_methods(name, methods))
+                lines.append("#### Methods")
+                lines.append("")
+                lines.append("| Method | Description | Parameters | Returns | Complexity |")
+                lines.append("|--------|-------------|------------|---------|------------|")
+                
+                for method in methods:
+                    if isinstance(method, dict):
+                        method_name = method.get('name', '')
+                        method_doc = method.get('docstring', '')
+                        method_params = method.get('args', [])
+                        method_returns = method.get('return_type', 'None')
+                        method_metrics = method.get('metrics', {})
+                    else:
+                        method_name = getattr(method, 'name', '')
+                        method_doc = getattr(method, 'docstring', '')
+                        method_params = getattr(method, 'args', [])
+                        method_returns = getattr(method, 'return_type', 'None')
+                        method_metrics = getattr(method, 'metrics', {})
+
+                    # Get first line of docstring for brief description
+                    brief_desc = method_doc.split('\n')[0] if method_doc else "No description"
+                    
+                    # Format parameters
+                    params_str = ", ".join([
+                        f"{p.get('name', '')}: {p.get('type', 'Any')}" if isinstance(p, dict)
+                        else str(p) for p in method_params
+                    ]) or "None"
+
+                    # Get complexity
+                    complexity = method_metrics.get('complexity', 0) if isinstance(method_metrics, dict) else 0
+                    warning = " ⚠️" if complexity > 10 else ""
+
+                    lines.append(
+                        f"| `{method_name}` | {brief_desc} | `{params_str}` | "
+                        f"`{method_returns}` | {complexity}{warning} |"
+                    )
+
+                    # Add detailed documentation if available
+                    if method_doc and len(method_doc.split('\n')) > 1:
+                        lines.extend([
+                            "",
+                            "<details>",
+                            "<summary>Detailed Documentation</summary>",
+                            "",
+                            method_doc,
+                            "",
+                            "</details>",
+                            ""
+                        ])
+
+                lines.append("")
 
         return "\n".join(lines)
+
+    def _generate_methods(self, class_name: str, methods: List[Any]) -> List[str]:
+        """Generate the methods section."""
+        if not methods:
+            return []
+
+        lines = [
+            "",
+            "| Method | Description | Parameters | Returns | Complexity |",
+            "|--------|-------------|------------|---------|------------|"
+        ]
+
+        for method in methods:
+            if isinstance(method, dict):
+                name = method.get('name', '')
+                params = method.get('args', [])
+                return_type = method.get('return_type', 'None')
+                docstring = method.get('docstring', '')
+                metrics = method.get('metrics', {})
+            else:
+                name = getattr(method, 'name', '')
+                params = getattr(method, 'args', [])
+                return_type = getattr(method, 'return_type', 'None')
+                docstring = getattr(method, 'docstring', '')
+                metrics = getattr(method, 'metrics', {})
+
+            # Get first line of docstring for brief description
+            brief_desc = docstring.split('\n')[0] if docstring else "No description"
+            
+            # Format parameters
+            param_list = []
+            for param in params:
+                if isinstance(param, dict):
+                    param_name = param.get('name', '')
+                    param_type = param.get('type_hint', 'Any')
+                else:
+                    param_name = getattr(param, 'name', '')
+                    param_type = getattr(param, 'type_hint', 'Any')
+                param_list.append(f"{param_name}: {param_type}")
+
+            params_str = ", ".join(param_list) or "None"
+            
+            # Get complexity
+            complexity = metrics.get('complexity', 0) if isinstance(metrics, dict) else 0
+            warning = " ⚠️" if complexity > 10 else ""
+
+            lines.append(
+                f"| `{name}` | {brief_desc} | `{params_str}` | "
+                f"`{return_type}` | {complexity}{warning} |"
+            )
+
+            # If there's more to the docstring than the first line, add it
+            if docstring and len(docstring.split('\n')) > 1:
+                lines.extend(["", "<details>", "<summary>Detailed Documentation</summary>", "", docstring, "", "</details>", ""])
+
+        return lines
+
+    def _generate_functions(self, functions: List[Any]) -> str:
+        """Generate the functions section."""
+        if not functions:
+            return ""
+
+        lines = [
+            "## Functions",
+            "",
+            "| Function | Parameters | Returns | Complexity |",
+            "|----------|------------|---------|------------|"
+        ]
+
+        for func in functions:
+            if isinstance(func, dict):
+                metrics = func.get('metrics', {})
+                name = func.get('name', '')
+                args = func.get('args', [])
+                return_type = func.get('return_type')
+                docstring = func.get('docstring', '')
+            else:
+                metrics = getattr(func, 'metrics', {})
+                name = getattr(func, 'name', '')
+                args = getattr(func, 'args', [])
+                return_type = getattr(func, 'return_type', None)
+                docstring = getattr(func, 'docstring', '')
+
+            complexity = metrics.get('complexity', 0) if isinstance(metrics, dict) else 0
+            warning = " ⚠️" if complexity > 10 else ""
+
+            param_list = []
+            for arg in args:
+                if isinstance(arg, dict):
+                    arg_name = arg.get('name', '')
+                    arg_type = arg.get('type_hint', 'Any')
+                else:
+                    arg_name = getattr(arg, 'name', '')
+                    arg_type = getattr(arg, 'type_hint', 'Any')
+                param_list.append(f"{arg_name}: {arg_type}")
+
+            params = ", ".join(param_list)
+            
+            lines.append(
+                f"| `{name}` | `{params}` | "
+                f"`{return_type or 'None'}` | {complexity}{warning} |"
+            )
+
+            # Add function docstring if present
+            if docstring:
+                lines.extend(["", f"### {name}", "", docstring, ""])
+
+        return "\n".join(lines)
+
 
     def _generate_header(self, context: Dict[str, Any]) -> str:
         """Generate the document header."""
@@ -184,60 +301,6 @@ class MarkdownGenerator:
             *[f"- {key}: {value}" + (" ⚠️" if key == 'complexity' and value > 10 else "") 
               for key, value in metrics.items()]
         ])
-
-
-    def _generate_functions(self, functions: List[ExtractedFunction]) -> str:
-        """Generate the functions section."""
-        if not functions:
-            return ""
-
-        lines = [
-            "## Functions",
-            "",
-            "| Function | Parameters | Returns | Complexity |",
-            "|----------|------------|---------|------------|"
-        ]
-
-        for func in functions:
-            # Handle both object and dict cases
-            if isinstance(func, dict):
-                metrics = func.get('metrics', {})
-                name = func.get('name', '')
-                args = func.get('args', [])
-                return_type = func.get('return_type')
-                docstring = func.get('docstring', '')
-            else:
-                metrics = getattr(func, 'metrics', {})
-                name = getattr(func, 'name', '')
-                args = getattr(func, 'args', [])
-                return_type = getattr(func, 'return_type', None)
-                docstring = getattr(func, 'docstring', '')
-
-            complexity = metrics.get('complexity', 0) if isinstance(metrics, dict) else 0
-            warning = " ⚠️" if complexity > 10 else ""
-
-            # Handle args for both dict and object cases
-            param_list = []
-            for arg in args:
-                if isinstance(arg, dict):
-                    arg_name = arg.get('name', '')
-                    arg_type = arg.get('type_hint', 'Any')
-                else:
-                    arg_name = getattr(arg, 'name', '')
-                    arg_type = getattr(arg, 'type_hint', 'Any')
-                param_list.append(f"{arg_name}: {arg_type}")
-                
-            params = ", ".join(param_list)
-            
-            lines.append(
-                f"| `{name}` | `{params}` | "
-                f"`{return_type or 'None'}` | {complexity}{warning} |"
-            )
-
-            if docstring:
-                lines.extend(["", docstring])
-
-        return "\n".join(lines)
 
 
     def _generate_source_code(self, context: Dict[str, Any]) -> str:

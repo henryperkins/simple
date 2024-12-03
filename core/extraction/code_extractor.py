@@ -20,19 +20,18 @@ logger = LoggerSetup.get_logger(__name__)
 class CodeExtractor:
     """Extracts code elements and metadata from Python source code."""
 
-    def __init__(self, context: Optional[ExtractionContext] = None) -> None:  
-        """Initialize the code extractor."""  
-        self.logger = logger  
-        self.context = context or ExtractionContext()  # Use default context if none provided  
-        self._module_ast: Optional[ast.Module] = None  # Initialize module AST  
-        self._current_class: Optional[ast.ClassDef] = None  # Initialize current class  
-        self.errors: List[str] = []  # Initialize errors list  
-        self.metrics_calculator = Metrics()  # Initialize Metrics  
-        self.ast_utils = ASTUtils()  # Ensure ASTUtils is initialized  
-        self.function_extractor = FunctionExtractor(self.context, self.metrics_calculator)  # Initialize FunctionExtractor  
-        self.class_extractor = ClassExtractor(self.context, self.metrics_calculator)  # Initialize ClassExtractor  
-        self.dependency_analyzer = DependencyAnalyzer(self.context)  # Initialize DependencyAnalyzer  
-        self.logger.debug(f"Initialized CodeExtractor in {__name__}") 
+    def __init__(self, context: Optional[ExtractionContext] = None) -> None:
+        """Initialize the code extractor."""
+        self.logger = logger
+        self.context = context or ExtractionContext()
+        self._module_ast: Optional[ast.Module] = None
+        self._current_class: Optional[ast.ClassDef] = None
+        self.errors: List[str] = []
+        self.metrics_calculator = Metrics()
+        self.ast_utils = ASTUtils()
+        self.function_extractor = FunctionExtractor(self.context, self.metrics_calculator)
+        self.class_extractor = ClassExtractor(self.context, self.metrics_calculator)
+        self.dependency_analyzer = DependencyAnalyzer(self.context)
 
     def extract_code(self, source_code: str, context: Optional[ExtractionContext] = None) -> Optional[ExtractionResult]:
         """Extract all code elements and metadata."""
