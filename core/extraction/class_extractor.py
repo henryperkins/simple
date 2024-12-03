@@ -1,4 +1,9 @@
-"""Class extraction module."""
+"""Class extraction module.
+
+This module provides functionality to extract class definitions from Python source code.
+It uses the Abstract Syntax Tree (AST) to parse and analyze the code, extracting information
+about classes, their methods, attributes, and other metadata.
+"""
 
 import ast
 from typing import List, Dict, Any, Optional, Set
@@ -11,10 +16,21 @@ from .function_extractor import FunctionExtractor
 logger = LoggerSetup.get_logger(__name__)
 
 class ClassExtractor:
-    """Handles extraction of classes from Python source code."""
+    """Handles extraction of classes from Python source code.
+
+    Attributes:
+        context (ExtractionContext): The context for extraction, including configuration options.
+        metrics_calculator (Metrics): An instance of the Metrics class for calculating code metrics.
+        errors (List[str]): A list to store error messages encountered during extraction.
+    """
 
     def __init__(self, context: ExtractionContext, metrics_calculator: Metrics):
-        """Initialize class extractor."""
+        """Initialize the ClassExtractor.
+
+        Args:
+            context (ExtractionContext): The extraction context containing settings and configurations.
+            metrics_calculator (Metrics): An instance for calculating metrics related to code complexity.
+        """
         self.logger = logger
         self.context = context
         self.metrics_calculator = metrics_calculator
@@ -25,7 +41,14 @@ class ClassExtractor:
         self.logger.debug("Initialized ClassExtractor")
 
     def extract_classes(self, tree: ast.AST) -> List[ExtractedClass]:
-        """Extract all classes from the AST."""
+        """Extract all classes from the AST.
+
+        Args:
+            tree (ast.AST): The root of the AST representing the parsed Python source code.
+
+        Returns:
+            List[ExtractedClass]: A list of ExtractedClass objects containing information about each class.
+        """
         self.logger.info("Starting class extraction")
         classes = []
         try:
@@ -49,37 +72,55 @@ class ClassExtractor:
         return classes
 
     def _process_class(self, node: ast.ClassDef) -> ExtractedClass:
-        """Process a class definition node."""
+        """Process a class definition node.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            ExtractedClass: An object containing detailed information about the class.
+        """
         self.logger.debug(f"Processing class: {node.name}")
-        metrics = self._calculate_class_metrics(node)
-        complexity_warnings = self._get_complexity_warnings(metrics)
+        try:
+            metrics = self._calculate_class_metrics(node)
+            complexity_warnings = self._get_complexity_warnings(metrics)
 
-        source = None
-        if getattr(self.context, 'include_source', True):  # Safe access
-            source = self.ast_utils.get_source_segment(node)
+            source = None
+            if getattr(self.context, 'include_source', True):  # Safe access
+                source = self.ast_utils.get_source_segment(node)
 
-        extracted_class = ExtractedClass(
-            name=node.name,
-            docstring=ast.get_docstring(node),
-            lineno=node.lineno,
-            source=source,
-            metrics=metrics,
-            dependencies=self._extract_dependencies(node),
-            bases=self._extract_bases(node),
-            methods=self._extract_methods(node),
-            attributes=self._extract_attributes(node),
-            is_exception=self._is_exception_class(node),
-            decorators=self._extract_decorators(node),
-            instance_attributes=self._extract_instance_attributes(node),
-            metaclass=self._extract_metaclass(node),
-            complexity_warnings=complexity_warnings,
-            ast_node=node
-        )
-        self.logger.debug(f"Completed processing class: {node.name}")
-        return extracted_class
+            extracted_class = ExtractedClass(
+                name=node.name,
+                docstring=ast.get_docstring(node),
+                lineno=node.lineno,
+                source=source,
+                metrics=metrics,
+                dependencies=self._extract_dependencies(node),
+                bases=self._extract_bases(node),
+                methods=self._extract_methods(node),
+                attributes=self._extract_attributes(node),
+                is_exception=self._is_exception_class(node),
+                decorators=self._extract_decorators(node),
+                instance_attributes=self._extract_instance_attributes(node),
+                metaclass=self._extract_metaclass(node),
+                complexity_warnings=complexity_warnings,
+                ast_node=node
+            )
+            self.logger.debug(f"Completed processing class: {node.name}")
+            return extracted_class
+        except Exception as e:
+            self.logger.error(f"Failed to process class {node.name}: {e}", exc_info=True)
+            raise
 
     def _process_attribute(self, node: ast.AST) -> Optional[Dict[str, Any]]:
-        """Process a class-level attribute assignment."""
+        """Process a class-level attribute assignment.
+
+        Args:
+            node (ast.AST): The AST node representing the attribute assignment.
+
+        Returns:
+            Optional[Dict[str, Any]]: A dictionary with attribute details or None if processing fails.
+        """
         try:
             if isinstance(node, ast.Assign):
                 targets = [target.id for target in node.targets if isinstance(target, ast.Name)]
@@ -95,14 +136,13 @@ class ClassExtractor:
             return None
 
     def _process_instance_attribute(self, stmt: ast.Assign) -> Optional[Dict[str, Any]]:
-        """
-        Process an instance attribute assignment statement.
-        
+        """Process an instance attribute assignment statement.
+
         Args:
-            stmt (ast.Assign): Assignment statement node.
-            
+            stmt (ast.Assign): The AST node representing the assignment statement.
+
         Returns:
-            Optional[Dict[str, Any]]: Dictionary containing attribute information or None.
+            Optional[Dict[str, Any]]: A dictionary with instance attribute details or None if processing fails.
         """
         try:
             if isinstance(stmt.targets[0], ast.Attribute) and isinstance(stmt.targets[0].value, ast.Name):
@@ -118,7 +158,14 @@ class ClassExtractor:
             return None
 
     def _extract_bases(self, node: ast.ClassDef) -> List[str]:
-        """Extract base classes."""
+        """Extract base classes from a class definition.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            List[str]: A list of base class names.
+        """
         self.logger.debug(f"Extracting bases for class: {node.name}")
         bases = []
         for base in node.bases:
@@ -131,7 +178,14 @@ class ClassExtractor:
         return bases
 
     def _extract_methods(self, node: ast.ClassDef) -> List[ExtractedFunction]:
-        """Extract methods from class body."""
+        """Extract methods from a class definition.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            List[ExtractedFunction]: A list of ExtractedFunction objects representing the methods.
+        """
         self.logger.debug(f"Extracting methods for class: {node.name}")
         methods = []
         for n in node.body:
@@ -145,7 +199,14 @@ class ClassExtractor:
         return methods
 
     def _extract_attributes(self, node: ast.ClassDef) -> List[Dict[str, Any]]:
-        """Extract class attributes."""
+        """Extract class attributes from a class definition.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries containing attribute details.
+        """
         self.logger.debug(f"Extracting attributes for class: {node.name}")
         attributes = []
         for child in node.body:
@@ -157,14 +218,13 @@ class ClassExtractor:
         return attributes
 
     def _extract_decorators(self, node: ast.ClassDef) -> List[str]:
-        """
-        Extract decorator names from a class definition.
+        """Extract decorator names from a class definition.
 
         Args:
-            node (ast.ClassDef): The class definition node.
+            node (ast.ClassDef): The AST node representing the class definition.
 
         Returns:
-            List[str]: List of decorator names.
+            List[str]: A list of decorator names.
         """
         self.logger.debug(f"Extracting decorators for class: {node.name}")
         decorators = []
@@ -179,7 +239,14 @@ class ClassExtractor:
         return decorators
 
     def _extract_instance_attributes(self, node: ast.ClassDef) -> List[Dict[str, Any]]:
-        """Extract instance attributes from __init__ method."""
+        """Extract instance attributes from the __init__ method of a class.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries containing instance attribute details.
+        """
         self.logger.debug(f"Extracting instance attributes for class: {node.name}")
         instance_attributes = []
         for child in node.body:
@@ -193,7 +260,14 @@ class ClassExtractor:
         return instance_attributes
 
     def _extract_metaclass(self, node: ast.ClassDef) -> Optional[str]:
-        """Extract metaclass if specified."""
+        """Extract the metaclass if specified in the class definition.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            Optional[str]: The name of the metaclass or None if not specified.
+        """
         self.logger.debug(f"Extracting metaclass for class: {node.name}")
         for keyword in node.keywords:
             if keyword.arg == 'metaclass':
@@ -201,7 +275,14 @@ class ClassExtractor:
         return None
 
     def _is_exception_class(self, node: ast.ClassDef) -> bool:
-        """Check if a class is an exception class."""
+        """Check if a class is an exception class.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            bool: True if the class is an exception class, False otherwise.
+        """
         self.logger.debug(f"Checking if class is an exception: {node.name}")
         for base in node.bases:
             base_name = self.ast_utils.get_name(base)
@@ -210,7 +291,14 @@ class ClassExtractor:
         return False
 
     def _calculate_class_metrics(self, node: ast.ClassDef) -> Dict[str, Any]:
-        """Calculate metrics for a class."""
+        """Calculate metrics for a class.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing metrics such as method count, complexity, and inheritance depth.
+        """
         self.logger.debug(f"Calculating metrics for class: {node.name}")
         try:
             metrics = {
@@ -226,7 +314,14 @@ class ClassExtractor:
             return {}
 
     def _calculate_inheritance_depth(self, node: ast.ClassDef) -> int:
-        """Calculate the inheritance depth of a class."""
+        """Calculate the inheritance depth of a class.
+
+        Args:
+            node (ast.ClassDef): The AST node representing the class definition.
+
+        Returns:
+            int: The inheritance depth of the class.
+        """
         self.logger.debug(f"Calculating inheritance depth for class: {node.name}")
         try:
             depth = 0
@@ -246,37 +341,39 @@ class ClassExtractor:
             return 0
 
     def _resolve_base_class(self, base: ast.expr) -> Optional[ast.ClassDef]:
-        """
-        Resolve a base class node to its class definition.
+        """Resolve a base class node to its class definition.
 
         Args:
-            base (ast.expr): The base class expression node.
+            base (ast.expr): The AST node representing the base class.
 
         Returns:
-            Optional[ast.ClassDef]: The resolved class definition or None.
+            Optional[ast.ClassDef]: The AST node of the resolved base class or None if not found.
         """
         self.logger.debug(f"Resolving base class: {ast.dump(base)}")
         try:
-            # For simple names
             if isinstance(base, ast.Name):
-                # Look for class definition in the current module
                 if self._current_class and self._current_class.parent:
                     for node in ast.walk(self._current_class.parent):
                         if isinstance(node, ast.ClassDef) and node.name == base.id:
                             return node
-            # For attribute access (e.g., module.Class)
             elif isinstance(base, ast.Attribute):
                 base_name = self.ast_utils.get_name(base)
                 self.logger.debug(f"Complex base class name: {base_name}")
-                return None  # External class, can't resolve directly
-
+                return None
             return None
         except Exception as e:
             self.logger.error(f"Error resolving base class: {e}")
             return None
 
     def _get_complexity_warnings(self, metrics: Dict[str, Any]) -> List[str]:
-        """Generate warnings based on complexity metrics."""
+        """Generate warnings based on complexity metrics.
+
+        Args:
+            metrics (Dict[str, Any]): A dictionary containing class metrics.
+
+        Returns:
+            List[str]: A list of warnings related to class complexity.
+        """
         self.logger.debug("Generating complexity warnings")
         warnings = []
         try:
@@ -292,13 +389,25 @@ class ClassExtractor:
         return warnings
 
     def _handle_extraction_error(self, class_name: str, error: Exception) -> None:
-        """Handle class extraction errors."""
+        """Handle class extraction errors.
+
+        Args:
+            class_name (str): The name of the class being processed when the error occurred.
+            error (Exception): The exception that was raised.
+        """
         error_msg = f"Failed to extract class {class_name}: {str(error)}"
         self.logger.error(error_msg, exc_info=True)
         self.errors.append(error_msg)
 
     def _extract_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:
-        """Extract dependencies from a node."""
+        """Extract dependencies from a node.
+
+        Args:
+            node (ast.AST): The AST node representing the class definition.
+
+        Returns:
+            Dict[str, Set[str]]: A dictionary containing sets of dependencies categorized by type.
+        """
         self.logger.debug(f"Extracting dependencies for class: {node.name}")
         # This would typically call into the DependencyAnalyzer
         # Simplified version for class-level dependencies

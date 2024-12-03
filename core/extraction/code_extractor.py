@@ -1,4 +1,9 @@
-"""Main code extraction module."""
+"""Main code extraction module.
+
+This module provides functionality to extract various elements from Python source code,
+such as classes, functions, variables, and dependencies. It uses the Abstract Syntax Tree (AST)
+to parse and analyze the code, and calculates metrics related to code complexity and maintainability.
+"""
 
 import ast
 import re
@@ -18,10 +23,19 @@ from .dependency_analyzer import DependencyAnalyzer
 logger = LoggerSetup.get_logger(__name__)
 
 class CodeExtractor:
-    """Extracts code elements and metadata from Python source code."""
+    """Extracts code elements and metadata from Python source code.
+
+    Attributes:
+        context (ExtractionContext): The context for extraction, including configuration options.
+        errors (List[str]): A list to store error messages encountered during extraction.
+    """
 
     def __init__(self, context: Optional[ExtractionContext] = None) -> None:
-        """Initialize the code extractor."""
+        """Initialize the CodeExtractor.
+
+        Args:
+            context (Optional[ExtractionContext]): The extraction context containing settings and configurations.
+        """
         self.logger = logger
         self.context = context or ExtractionContext()
         self._module_ast: Optional[ast.Module] = None
@@ -34,7 +48,15 @@ class CodeExtractor:
         self.dependency_analyzer = DependencyAnalyzer(self.context)
 
     def extract_code(self, source_code: str, context: Optional[ExtractionContext] = None) -> Optional[ExtractionResult]:
-        """Extract all code elements and metadata."""
+        """Extract all code elements and metadata from source code.
+
+        Args:
+            source_code (str): The source code to be analyzed.
+            context (Optional[ExtractionContext]): Optional context to override the existing one.
+
+        Returns:
+            Optional[ExtractionResult]: An object containing the extracted code elements and metrics.
+        """
         if context:
             self.context = context
 
@@ -47,24 +69,16 @@ class CodeExtractor:
             self._module_ast = tree
             self.ast_utils.add_parents(tree)
 
-            result = ExtractionResult(
-                module_docstring=ast.get_docstring(tree)
-            )
+            result = ExtractionResult(module_docstring=ast.get_docstring(tree))
 
-            # Extract dependencies
             try:
-                result.dependencies = self.dependency_analyzer.analyze_dependencies(
-                    tree,
-                    self.context.module_name
-                )
+                result.dependencies = self.dependency_analyzer.analyze_dependencies(tree, self.context.module_name)
                 self.logger.debug(f"Module dependencies: {result.dependencies}")
             except Exception as e:
                 self._handle_extraction_error("Dependency analysis", e, result)
 
-            # Extract code elements
             self._extract_elements(tree, result)
 
-            # Calculate metrics if enabled
             if self.context.metrics_enabled:
                 try:
                     self._calculate_metrics(result, tree)
@@ -83,7 +97,14 @@ class CodeExtractor:
             return ExtractionResult(errors=[f"Failed to extract code: {str(e)}"])
 
     def _preprocess_code(self, source_code: str) -> str:
-        """Preprocess source code to handle special cases."""
+        """Preprocess source code to handle special cases.
+
+        Args:
+            source_code (str): The source code to preprocess.
+
+        Returns:
+            str: The preprocessed source code.
+        """
         try:
             pattern = r'\$\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}(?:\.\d+)?\$'
             processed_code = re.sub(pattern, r'"\g<0>"', source_code)
@@ -94,7 +115,12 @@ class CodeExtractor:
             return source_code
 
     def _extract_elements(self, tree: ast.AST, result: ExtractionResult) -> None:
-        """Extract different code elements."""
+        """Extract different code elements from the AST.
+
+        Args:
+            tree (ast.AST): The root of the AST representing the parsed Python source code.
+            result (ExtractionResult): The result object to store extracted elements.
+        """
         try:
             result.classes = self.class_extractor.extract_classes(tree)
             self.logger.debug(f"Extracted {len(result.classes)} classes.")
@@ -127,7 +153,12 @@ class CodeExtractor:
             result.imports = {'stdlib': set(), 'local': set(), 'third_party': set()}
 
     def _calculate_metrics(self, result: ExtractionResult, tree: ast.AST) -> None:
-        """Calculate metrics for the extraction result."""
+        """Calculate metrics for the extraction result.
+
+        Args:
+            result (ExtractionResult): The result object to store calculated metrics.
+            tree (ast.AST): The root of the AST representing the parsed Python source code.
+        """
         if not self.context.metrics_enabled:
             return
 
@@ -145,11 +176,10 @@ class CodeExtractor:
             self.errors.append(str(e))
 
     def _calculate_class_metrics(self, cls: ExtractedClass) -> None:
-        """
-        Calculate metrics for a class.
-        
+        """Calculate metrics for a class.
+
         Args:
-            cls (ExtractedClass): The extracted class to calculate metrics for.
+            cls (ExtractedClass): The extracted class object to calculate metrics for.
         """
         try:
             if not cls.ast_node:
@@ -166,16 +196,15 @@ class CodeExtractor:
             
         except Exception as e:
             self.logger.error(f"Error calculating class metrics: {e}")
-        
+
     def _calculate_module_metrics(self, tree: ast.AST) -> Dict[str, Any]:
-        """
-        Calculate metrics for the entire module.
-        
+        """Calculate metrics for the entire module.
+
         Args:
-            tree (ast.AST): The module's AST.
-            
+            tree (ast.AST): The root of the AST representing the parsed Python source code.
+
         Returns:
-            Dict[str, Any]: Module-level metrics.
+            Dict[str, Any]: A dictionary containing module-level metrics.
         """
         try:
             return {
@@ -188,34 +217,50 @@ class CodeExtractor:
         except Exception as e:
             self.logger.error(f"Error calculating module metrics: {e}")
             return {}
-            
-    def _calculate_function_metrics(self, func: ExtractedFunction) -> None:  
-        """Calculate metrics for a given function."""  
-        try:  
-            # Assuming `func` is an instance of `ExtractedFunction`  
-            metrics = {  
-                'cyclomatic_complexity': self.metrics_calculator.calculate_cyclomatic_complexity(func.ast_node),  
-                'cognitive_complexity': self.metrics_calculator.calculate_cognitive_complexity(func.ast_node),  
-                'maintainability_index': self.metrics_calculator.calculate_maintainability_index(func.ast_node),  
-                'parameter_count': len(func.args),  
-                'return_complexity': self._calculate_return_complexity(func.ast_node),  
-                'is_async': func.is_async  
-            }  
-            func.metrics.update(metrics)  
-        except Exception as e:  
-            self.logger.error(f"Error calculating function metrics: {e}", exc_info=True)  
-            self.errors.append(str(e))  
 
-    def _calculate_return_complexity(self, node: ast.AST) -> int:  
-        """Calculate the complexity of return statements."""  
-        try:  
-            return sum(1 for _ in ast.walk(node) if isinstance(_, ast.Return))  
-        except Exception as e:  
-            self.logger.error(f"Error calculating return complexity: {e}", exc_info=True)  
+    def _calculate_function_metrics(self, func: ExtractedFunction) -> None:
+        """Calculate metrics for a given function.
+
+        Args:
+            func (ExtractedFunction): The extracted function object to calculate metrics for.
+        """
+        try:
+            metrics = {
+                'cyclomatic_complexity': self.metrics_calculator.calculate_cyclomatic_complexity(func.ast_node),
+                'cognitive_complexity': self.metrics_calculator.calculate_cognitive_complexity(func.ast_node),
+                'maintainability_index': self.metrics_calculator.calculate_maintainability_index(func.ast_node),
+                'parameter_count': len(func.args),
+                'return_complexity': self._calculate_return_complexity(func.ast_node),
+                'is_async': func.is_async
+            }
+            func.metrics.update(metrics)
+        except Exception as e:
+            self.logger.error(f"Error calculating function metrics: {e}", exc_info=True)
+            self.errors.append(str(e))
+
+    def _calculate_return_complexity(self, node: ast.AST) -> int:
+        """Calculate the complexity of return statements.
+
+        Args:
+            node (ast.AST): The AST node representing the function definition.
+
+        Returns:
+            int: The number of return statements in the function.
+        """
+        try:
+            return sum(1 for _ in ast.walk(node) if isinstance(_, ast.Return))
+        except Exception as e:
+            self.logger.error(f"Error calculating return complexity: {e}", exc_info=True)
             return 0
-            
+
     def _handle_extraction_error(self, operation: str, error: Exception, result: ExtractionResult) -> None:
-        """Handle extraction errors consistently."""
+        """Handle extraction errors consistently.
+
+        Args:
+            operation (str): The name of the operation during which the error occurred.
+            error (Exception): The exception that was raised.
+            result (ExtractionResult): The result object to record the error.
+        """
         error_msg = f"{operation} failed: {str(error)}"
         self.logger.warning(error_msg, exc_info=True)
         result.errors.append(error_msg)

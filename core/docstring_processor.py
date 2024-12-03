@@ -75,22 +75,21 @@ class DocstringProcessor:
         """Format structured docstring data into a string."""
         lines = []
 
-        # Add summary
+        # Add summary and description
         if data.summary:
             lines.extend([data.summary, ""])
 
-        # Add detailed description if different from summary
         if data.description and data.description != data.summary:
             lines.extend([data.description, ""])
 
-        # Add arguments section if present
+        # Add arguments section
         if data.args:
             lines.append("Args:")
             for arg in data.args:
                 arg_desc = f"    {arg['name']} ({arg['type']}): {arg['description']}"
                 if arg.get('optional', False):
                     arg_desc += " (Optional)"
-                if 'default_value' in arg and arg['default_value'] is not None:
+                if 'default_value' in arg:
                     arg_desc += f", default: {arg['default_value']}"
                 lines.append(arg_desc)
             lines.append("")
@@ -101,16 +100,12 @@ class DocstringProcessor:
             lines.append(f"    {data.returns['type']}: {data.returns['description']}")
             lines.append("")
 
-        # Add raises section if present
+        # Add raises section
         if data.raises:
             lines.append("Raises:")
             for exc in data.raises:
                 lines.append(f"    {exc['exception']}: {exc['description']}")
             lines.append("")
-
-        # Add complexity warning if high
-        if data.complexity and data.complexity > 10:
-            lines.append(f"Warning: High complexity score ({data.complexity}) ⚠️")
 
         return "\n".join(lines).strip()
     

@@ -1,7 +1,12 @@
-"""Utility functions for code extraction."""
+"""Utility functions for code extraction.
+
+This module provides utility functions and classes for working with the Abstract Syntax Tree (AST)
+in Python source code. It includes functions for adding parent references, extracting names and
+source segments, and identifying variables and constants.
+"""
 
 import ast
-from typing import Optional, Dict, Any, List, Set, Union
+from typing import Optional, Dict, Any, List, Union
 import importlib.util
 import sys
 from core.logger import LoggerSetup
@@ -9,7 +14,10 @@ from core.logger import LoggerSetup
 logger = LoggerSetup.get_logger(__name__)
 
 class ASTUtils:
-    """Utility class for AST operations."""
+    """Utility class for AST operations.
+
+    Provides methods for manipulating and extracting information from AST nodes.
+    """
 
     def __init__(self):
         """Initialize AST utilities."""
@@ -17,8 +25,10 @@ class ASTUtils:
         self.logger.debug("Initialized ASTUtils")
 
     def add_parents(self, node: ast.AST) -> None:
-        """
-        Add parent references to AST nodes.
+        """Add parent references to AST nodes.
+
+        This method traverses the AST and sets a 'parent' attribute on each node,
+        pointing to its parent node.
 
         Args:
             node (ast.AST): The root AST node.
@@ -29,8 +39,10 @@ class ASTUtils:
             self.add_parents(child)
 
     def get_name(self, node: Optional[ast.AST]) -> str:
-        """
-        Get string representation of a node.
+        """Get string representation of a node.
+
+        Converts an AST node into a string representation, handling different types
+        of nodes such as names, attributes, subscripts, calls, tuples, and lists.
 
         Args:
             node (Optional[ast.AST]): The AST node to analyze.
@@ -51,6 +63,11 @@ class ASTUtils:
                 value = self.get_name(node.value)
                 slice_val = self.get_name(node.slice)
                 return f"{value}[{slice_val}]"
+            elif isinstance(node, ast.Call):
+                return f"{self.get_name(node.func)}()"
+            elif isinstance(node, (ast.Tuple, ast.List)):
+                elements = ', '.join(self.get_name(e) for e in node.elts)
+                return f"({elements})" if isinstance(node, ast.Tuple) else f"[{elements}]"
             elif hasattr(ast, 'unparse'):
                 return ast.unparse(node)
             else:
@@ -58,11 +75,12 @@ class ASTUtils:
                 return astor.to_source(node).strip()
         except Exception as e:
             self.logger.error(f"Error getting name from node {type(node).__name__}: {e}", exc_info=True)
-            return 'Unknown'
+            return f'Unknown<{type(node).__name__}>'
 
     def get_source_segment(self, node: ast.AST, include_source: bool = True) -> Optional[str]:
-        """
-        Get source code segment for a node.
+        """Get source code segment for a node.
+
+        Retrieves the source code segment corresponding to an AST node.
 
         Args:
             node (ast.AST): The AST node to analyze.
@@ -82,11 +100,12 @@ class ASTUtils:
                 return astor.to_source(node).strip()
         except Exception as e:
             self.logger.error(f"Error getting source segment: {e}", exc_info=True)
-            return None
+            return f"<unparseable: {type(node).__name__}>"
 
     def extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:
-        """
-        Extract variables from the AST.
+        """Extract variables from the AST.
+
+        Identifies variable assignments in the AST and extracts relevant information.
 
         Args:
             tree (ast.AST): The AST tree to analyze.
@@ -108,8 +127,9 @@ class ASTUtils:
         return variables
 
     def extract_constants(self, tree: ast.AST) -> List[Dict[str, Any]]:
-        """
-        Extract module-level constants.
+        """Extract module-level constants.
+
+        Identifies constant assignments in the AST and extracts relevant information.
 
         Args:
             tree (ast.AST): The AST tree to analyze.
@@ -133,8 +153,9 @@ class ASTUtils:
         return constants
 
     def _create_variable_info(self, target: ast.Name, node: Union[ast.Assign, ast.AnnAssign]) -> Optional[Dict[str, Any]]:
-        """
-        Create variable information dictionary.
+        """Create variable information dictionary.
+
+        Constructs a dictionary containing information about a variable assignment.
 
         Args:
             target (ast.Name): The target variable node.
@@ -156,11 +177,11 @@ class ASTUtils:
                     value = self.get_name(node.value)
                 except Exception as e:
                     self.logger.error(f"Failed to get value for {var_name}: {e}", exc_info=True)
-                    value = "Unknown"
+                    value = "UnknownValue"
 
             return {
                 'name': var_name,
-                'type': annotation,
+                'type': annotation or "UnknownType",
                 'value': value
             }
         except Exception as e:
@@ -168,8 +189,9 @@ class ASTUtils:
             return None
 
     def _create_constant_info(self, target: ast.Name, node: ast.Assign) -> Optional[Dict[str, Any]]:
-        """
-        Create constant information dictionary.
+        """Create constant information dictionary.
+
+        Constructs a dictionary containing information about a constant assignment.
 
         Args:
             target (ast.Name): The target constant node.
@@ -181,10 +203,14 @@ class ASTUtils:
         self.logger.debug(f"Creating constant info for target: {target.id}")
         try:
             value = self.get_name(node.value)
+            try:
+                value_type = type(ast.literal_eval(node.value)).__name__
+            except Exception:
+                value_type = "UnknownType"
             return {
                 'name': target.id,
                 'value': value,
-                'type': type(ast.literal_eval(node.value)).__name__ if isinstance(node.value, ast.Constant) else None
+                'type': value_type
             }
         except Exception as e:
             self.logger.error(f"Error creating constant info: {e}", exc_info=True)

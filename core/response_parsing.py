@@ -135,10 +135,9 @@ class ResponseParsingService:
                 start = response.find('```json') + 7
                 end = response.rfind('```')
                 if start > 7 and end > start:
-                    response = response[start:end]
+                    response = response[start:end].strip()
             
             # Remove any non-JSON content
-            response = response.strip()
             if not response.startswith('{'):
                 start = response.find('{')
                 if start >= 0:
@@ -148,7 +147,20 @@ class ResponseParsingService:
                 if end >= 0:
                     response = response[:end+1]
 
-            return json.loads(response.strip())
+            parsed_content = json.loads(response.strip())
+            
+            # Ensure the parsed content has the expected structure
+            required_fields = {'summary', 'description', 'args', 'returns', 'raises'}
+            if not all(field in parsed_content for field in required_fields):
+                self.logger.warning("Parsed JSON missing required fields")
+                # Add missing fields with default values
+                parsed_content.update({
+                    field: parsed_content.get(field, [] if field in {'args', 'raises'} else 
+                                            {'type': 'Any', 'description': ''} if field == 'returns' else '')
+                    for field in required_fields
+                })
+
+            return parsed_content
 
         except json.JSONDecodeError as e:
             self.logger.error(f"JSON parsing failed: {e}")

@@ -1,10 +1,9 @@
+# docs.py
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, Tuple
 from core.logger import LoggerSetup
 from core.response_parsing import ResponseParsingService
-from core.extraction.code_extractor import CodeExtractor
-from core.extraction.types import ExtractedClass, ExtractedFunction
-from core.docstring_processor import DocstringProcessor
+from core.extraction.code_extractor import CodeExtractor, ExtractedClass, ExtractedFunction
 from core.markdown_generator import MarkdownGenerator
 from core.types import DocumentationContext, AIHandler
 from exceptions import DocumentationError
@@ -17,24 +16,12 @@ class DocStringManager:
         context: DocumentationContext,
         ai_handler: AIHandler,
         response_parser: Optional[ResponseParsingService] = None,
-        docstring_processor: Optional[DocstringProcessor] = None,
         markdown_generator: Optional[MarkdownGenerator] = None
     ):
-        """
-        Initialize documentation manager.
-
-        Args:
-            context: Documentation context
-            ai_handler: AI processing handler
-            response_parser: Optional response parsing service
-            docstring_processor: Optional docstring processor
-            markdown_generator: Optional markdown generator
-        """
         self.logger = LoggerSetup.get_logger(__name__)
         self.context = context
         self.ai_handler = ai_handler
         self.response_parser = response_parser or ResponseParsingService()
-        self.docstring_processor = docstring_processor or DocstringProcessor(self.response_parser)
         self.markdown_generator = markdown_generator or MarkdownGenerator()
         self.code_extractor = CodeExtractor()
 
@@ -46,11 +33,10 @@ class DocStringManager:
             if not extraction_result:
                 raise DocumentationError("Code extraction failed")
 
-            # Process AI-generated documentation if available
+            # Parse AI-generated documentation if available
             ai_docs = {}
             if self.context.ai_generated:
                 try:
-                    # Use centralized parser
                     parsed_response = await self.response_parser.parse_response(
                         response=self.context.ai_generated,
                         expected_format='json' if isinstance(self.context.ai_generated, str) else 'docstring'
@@ -74,9 +60,9 @@ class DocStringManager:
                 'classes': extraction_result.classes,
                 'functions': extraction_result.functions,
                 'constants': extraction_result.constants,
-                'metrics': extraction_result.metrics,
+                'changes': self.context.changes or [],  # Assuming changes are provided in the context
                 'source_code': self.context.source_code if self.context.include_source else None,
-                'ai_documentation': ai_docs
+                'ai_documentation': ai_docs  # Include AI documentation
             }
 
             # Generate markdown
@@ -90,6 +76,70 @@ class DocStringManager:
         except Exception as e:
             self.logger.error(f"Documentation generation failed: {e}", exc_info=True)
             raise DocumentationError(f"Failed to generate documentation: {e}")
+
+
+    def _format_class_info(self, cls: ExtractedClass) -> Dict[str, Any]:
+        """Format class information for markdown generation."""
+        return {
+            'name': cls.name,
+            'bases': cls.bases,
+            'docstring': cls.docstring,
+            'methods': [self._format_method_info(method) for method in cls.methods],
+            'metrics': cls.metrics,
+            'attributes': [
+                {
+                    'name': attr['name'],
+                    'type': attr['type'],
+                    'value': attr['value']
+                }
+                for attr in (cls.attributes + cls.instance_attributes)
+            ]
+        }
+
+    def _format_method_info(self, method: ExtractedFunction) -> Dict[str, Any]:
+        """Format method information for markdown generation."""
+        return {
+            'name': method.name,
+            'args': [
+                {
+                    'name': arg.name,
+                    'type': arg.type_hint or 'Any',
+                    'default_value': arg.default_value if not arg.is_required else None
+                }
+                for arg in method.args
+            ],
+            'return_type': method.return_type or 'None',
+            'docstring': method.docstring,
+            'metrics': method.metrics,
+            'is_async': method.is_async
+        }
+
+    def _format_function_info(self, func: ExtractedFunction) -> Dict[str, Any]:
+        """Format function information for markdown generation."""
+        return {
+            'name': func.name,
+            'args': [
+                {
+                    'name': arg.name,
+                    'type': arg.type_hint or 'Any',
+                    'default_value': arg.default_value if not arg.is_required else None
+                }
+                for arg in func.args
+            ],
+            'return_type': func.return_type or 'None',
+            'docstring': func.docstring,
+            'metrics': func.metrics,
+            'is_async': func.is_async
+        }
+
+    def _format_constant_info(self, const: Dict[str, Any]) -> Dict[str, Any]:
+        """Format constant information for markdown generation."""
+        return {
+            'name': const['name'],
+            'type': const['type'],
+            'value': const['value']
+        }
+
     
     async def process_file(
         self,
@@ -139,45 +189,3 @@ class DocStringManager:
         except Exception as e:
             self.logger.error(f"File processing failed: {e}", exc_info=True)
             raise DocumentationError(f"Failed to process file: {e}")
-        
-    def _format_constants(self, constants: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [
-            {
-                'name': str(const.get('name', '')),  # Use safe .get() and convert to string
-                'type': str(const.get('type', '')),
-                'value': str(const.get('value', ''))
-            } for const in constants
-        ]
-
-    def _format_classes(self, classes: List[ExtractedClass]) -> List[Dict[str, Any]]:
-        return [
-            {
-                'name': cls.name,
-                'docstring': cls.docstring,
-                'methods': [
-                    {   # Format methods correctly
-                        'name': m.name,
-                        'docstring': m.docstring,
-                        'args': m.args,
-                        'return_type': m.return_type,
-                        'metrics': m.metrics,
-                        'source': m.source
-                    } for m in cls.methods
-                ],
-                'bases': cls.bases,
-                'metrics': cls.metrics,
-                'source': cls.source
-            } for cls in classes
-        ]
-
-    def _format_functions(self, functions: List[ExtractedFunction]) -> List[Dict[str, Any]]:
-        return [
-            {
-                'name': func.name,
-                'docstring': func.docstring,
-                'args': func.args,
-                'return_type': func.return_type,
-                'metrics': func.metrics,
-                'source': func.source,
-            } for func in functions
-        ]

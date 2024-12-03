@@ -36,15 +36,22 @@ class ProcessingResult:
     is_cached: bool = False
     processing_time: float = 0.0
 
-@dataclass
 class DocumentationContext:
-    """Context for documentation generation."""
-    source_code: str
-    module_path: Optional[Path] = None
-    include_source: bool = True
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    ai_generated: Optional[str] = None
-    metrics_enabled: bool = True  # Add this line
+    def __init__(
+        self,
+        source_code: str,
+        module_path: Optional[Path] = None,
+        include_source: bool = False,
+        ai_generated: Optional[str] = None,
+        changes: Optional[List[Dict[str, Any]]] = None,
+        metadata: Optional[Dict[str, Any]] = None  # Add this line
+    ):
+        self.source_code = source_code
+        self.module_path = module_path
+        self.include_source = include_source
+        self.ai_generated = ai_generated
+        self.changes = changes or []
+        self.metadata = metadata or {}  # Initialize with an empty dict if not provided
 
 class AIHandler(ABC):
     """Interface for AI processing."""

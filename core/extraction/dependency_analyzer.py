@@ -1,4 +1,9 @@
-"""Dependency analysis module."""
+"""Dependency analysis module.
+
+This module provides functionality to analyze and categorize dependencies in Python source code.
+It uses the Abstract Syntax Tree (AST) to parse and analyze the code, identifying imports and
+categorizing them as standard library, third-party, or local dependencies.
+"""
 
 import ast
 import sys
@@ -12,10 +17,20 @@ from .utils import ASTUtils
 logger = LoggerSetup.get_logger(__name__)
 
 class DependencyAnalyzer:
-    """Analyzes and categorizes code dependencies."""
+    """Analyzes and categorizes code dependencies.
+
+    Attributes:
+        context (ExtractionContext): The context for extraction, including configuration options.
+        module_name (str): The name of the module being analyzed.
+        _import_map (Dict[str, str]): A mapping of import aliases to their full module names.
+    """
 
     def __init__(self, context: ExtractionContext):
-        """Initialize dependency analyzer."""
+        """Initialize the DependencyAnalyzer.
+
+        Args:
+            context (ExtractionContext): The extraction context containing settings and configurations.
+        """
         self.logger = logger
         self.context = context
         self.ast_utils = ASTUtils()
@@ -24,8 +39,7 @@ class DependencyAnalyzer:
         self.logger.debug("Initialized DependencyAnalyzer")
 
     def analyze_dependencies(self, node: ast.AST, module_name: Optional[str] = None) -> Dict[str, Set[str]]:
-        """
-        Analyze module dependencies, including circular dependency detection.
+        """Analyze module dependencies, including circular dependency detection.
 
         Args:
             node (ast.AST): The AST node representing the module.
@@ -55,8 +69,7 @@ class DependencyAnalyzer:
             return {'stdlib': set(), 'third_party': set(), 'local': set()}
 
     def extract_imports(self, node: ast.AST) -> Dict[str, Set[str]]:
-        """
-        Extract and categorize imports from the AST.
+        """Extract and categorize imports from the AST.
 
         Args:
             node (ast.AST): The AST node representing the module.
@@ -85,8 +98,7 @@ class DependencyAnalyzer:
         return imports
 
     def _process_import(self, node: ast.AST, deps: Dict[str, Set[str]]) -> None:
-        """
-        Process import statements and categorize dependencies.
+        """Process import statements and categorize dependencies.
 
         Args:
             node (ast.AST): The AST node representing an import statement.
@@ -108,8 +120,7 @@ class DependencyAnalyzer:
             self.logger.error(f"Error processing import: {e}", exc_info=True)
 
     def _categorize_import(self, module_name: str, deps: Dict[str, Set[str]]) -> None:
-        """
-        Categorize an import as stdlib, third-party, or local.
+        """Categorize an import as stdlib, third-party, or local.
 
         Args:
             module_name (str): The name of the module being imported.
@@ -117,15 +128,12 @@ class DependencyAnalyzer:
         """
         self.logger.debug(f"Categorizing import: {module_name}")
         try:
-            # First check if it's a stdlib module
             if module_name in sys.stdlib_module_names or module_name.split('.')[0] in sys.stdlib_module_names:
                 deps['stdlib'].add(module_name)
                 return
 
-            # Then check if it's a local module
             if self.module_name:
                 current_module_parts = self.module_name.split('.')
-                # Only try local module resolution if module_name starts with a local package
                 if any(module_name.startswith(part) for part in current_module_parts):
                     for i in range(1, len(current_module_parts) + 1):
                         test_module_name = ".".join(current_module_parts[:-i] + [module_name])
@@ -136,22 +144,20 @@ class DependencyAnalyzer:
                         except ModuleNotFoundError:
                             continue
 
-            # Finally try direct import or mark as third-party
             try:
                 if importlib.util.find_spec(module_name):
                     deps['third_party'].add(module_name)
                 else:
-                    deps['local'].add(module_name)  # Assume local if not found
+                    deps['local'].add(module_name)
             except ModuleNotFoundError:
                 deps['third_party'].add(module_name)
 
         except Exception as e:
             self.logger.warning(f"Non-critical error categorizing import {module_name}: {e}", exc_info=True)
-            deps['third_party'].add(module_name)  # Default to third-party on error
+            deps['third_party'].add(module_name)
 
     def _detect_circular_dependencies(self, dependencies: Dict[str, Set[str]]) -> List[Tuple[str, str]]:
-        """
-        Detect circular dependencies.
+        """Detect circular dependencies.
 
         Args:
             dependencies (Dict[str, Set[str]]): A dictionary of module dependencies.
@@ -161,18 +167,20 @@ class DependencyAnalyzer:
         """
         self.logger.debug("Detecting circular dependencies")
         circular_dependencies = []
-        for module, deps in dependencies.items():
-            for dep in deps:
-                if self.module_name and dep == self.module_name:
-                    circular_dependencies.append((module, dep))
-                elif dep in dependencies and module in dependencies[dep]:
-                    circular_dependencies.append((module, dep))
-        self.logger.debug(f"Circular dependencies: {circular_dependencies}")
+        try:
+            for module, deps in dependencies.items():
+                for dep in deps:
+                    if self.module_name and dep == self.module_name:
+                        circular_dependencies.append((module, dep))
+                    elif dep in dependencies and module in dependencies[dep]:
+                        circular_dependencies.append((module, dep))
+            self.logger.debug(f"Circular dependencies: {circular_dependencies}")
+        except Exception as e:
+            self.logger.error(f"Error detecting circular dependencies: {e}", exc_info=True)
         return circular_dependencies
 
     def analyze_function_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:
-        """
-        Analyze dependencies specific to a function.
+        """Analyze dependencies specific to a function.
 
         Args:
             node (ast.AST): The AST node representing a function.
@@ -190,8 +198,7 @@ class DependencyAnalyzer:
         return dependencies
 
     def _extract_function_imports(self, node: ast.AST) -> Set[str]:
-        """
-        Extract imports used within a function.
+        """Extract imports used within a function.
 
         Args:
             node (ast.AST): The AST node representing a function.
@@ -211,8 +218,7 @@ class DependencyAnalyzer:
         return imports
 
     def _extract_function_calls(self, node: ast.AST) -> Set[str]:
-        """
-        Extract function calls within a function.
+        """Extract function calls within a function.
 
         Args:
             node (ast.AST): The AST node representing a function.
@@ -232,8 +238,7 @@ class DependencyAnalyzer:
         return calls
 
     def _extract_attribute_access(self, node: ast.AST) -> Set[str]:
-        """
-        Extract attribute accesses within a function.
+        """Extract attribute accesses within a function.
 
         Args:
             node (ast.AST): The AST node representing a function.
