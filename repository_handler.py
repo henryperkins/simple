@@ -41,11 +41,11 @@ import asyncio
 import stat
 from pathlib import Path
 from typing import Optional, List, Tuple, Set, Any, Dict
-from urllib.parse import urlparse
 import git
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
 from core.logger import LoggerSetup
+from utils import FileUtils, GitUtils
 
 logger = LoggerSetup.get_logger(__name__)
 
@@ -119,7 +119,7 @@ class RepositoryHandler:
         self.logger.info("Exiting RepositoryHandler context")
         try:
             if hasattr(self, 'temp_dir') and self.temp_dir:
-                await self._cleanup_git_directory(Path(self.temp_dir))
+                await GitUtils.cleanup_git_directory(Path(self.temp_dir))
             await self.cleanup()
         except Exception as e:
             self.logger.error(f"Error during repository cleanup: {e}")
@@ -161,7 +161,7 @@ class RepositoryHandler:
         async with self._lock:
             try:
                 # Validate URL
-                if not self._is_valid_git_url(repo_url):
+                if not GitUtils.is_valid_git_url(repo_url):
                     raise ValueError(f"Invalid git repository URL: {repo_url}")
 
                 # Create temporary directory as string
@@ -215,20 +215,8 @@ class RepositoryHandler:
             '*/.git/*', '*/__pycache__/*', '*/migrations/*'
         }
 
-        python_files = []
         try:
-            for path in self.repo_path.rglob('*.py'):
-                # Convert to relative path for pattern matching
-                try:
-                    rel_path = path.relative_to(self.repo_path)
-                    
-                    # Check if path matches any exclude pattern
-                    if not any(rel_path.match(pattern) for pattern in exclude_patterns):
-                        python_files.append(path)
-                except Exception as e:
-                    logger.error(f"Error processing path {path}: {e}")
-                    continue
-
+            python_files = FileUtils.filter_files(self.repo_path, pattern='*.py', exclude_patterns=exclude_patterns)
             logger.info(f"Found {len(python_files)} Python files")
             return python_files
         except Exception as e:
@@ -253,19 +241,12 @@ class RepositoryHandler:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         try:
-            # Try UTF-8 first
-            content = file_path.read_text(encoding='utf-8')
-        except UnicodeDecodeError:
-            # Fallback to latin-1
-            logger.warning(f"Failed UTF-8 decode for {file_path}, trying latin-1")
-            content = file_path.read_text(encoding='latin-1')
-
-        try:
+            content = FileUtils.read_file_safe(file_path)
             relative_path = str(file_path.relative_to(self.repo_path))
             return content, relative_path
-        except ValueError as e:
-            logger.error(f"Error calculating relative path: {e}")
-            return content, str(file_path)
+        except Exception as e:
+            logger.error(f"Error reading file {file_path}: {e}")
+            return "", str(file_path)
 
     async def cleanup(self) -> None:
         """
@@ -362,10 +343,7 @@ class RepositoryHandler:
             Exception: If an error occurs during validation.
         """
         try:
-            _ = git.Repo(path).git_dir
-            return True
-        except git.exc.InvalidGitRepositoryError:
-            return False
+            return GitUtils.is_valid_git_url(str(path))
         except Exception as e:
             self.logger.error("Error validating git URL: %s", str(e))
             return False
@@ -392,92 +370,3 @@ class RepositoryHandler:
                     self.logger.debug('Git progress: %s', message or "")
 
         return GitProgress()
-
-    async def _cleanup_git_directory(self, path: Path) -> None:
-        """
-        Safely clean up a Git repository directory.
-
-        Args:
-            path (Path): Path to the directory to clean up.
-
-        Raises:
-            Exception: If an error occurs during cleanup.
-        """
-        try:
-            # Kill any running Git processes on Windows
-            if sys.platform == 'win32':
-                os.system('taskkill /F /IM git.exe 2>NUL')
-            
-            await asyncio.sleep(1)
-            
-            def handle_rm_error(func, path, exc_info):
-                """Handle errors during rmtree."""
-                try:
-                    path_obj = Path(path)  # Convert path to Path object
-                    if path_obj.exists():
-                        os.chmod(str(path_obj), stat.S_IWRITE)
-                        func(str(path_obj))
-                except Exception as e:
-                    logger.error(f"Error removing path {path}: {e}", exc_info=True)
-
-            # Attempt cleanup with retry
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    if path.exists():
-                        # Convert Path to string for shutil operations
-                        shutil.rmtree(str(path), onerror=handle_rm_error)
-                    break
-                except PermissionError:
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)
-                    else:
-                        logger.error(f"Could not remove directory after {max_retries} attempts: {path}")
-                except Exception as e:
-                    logger.error(f"Error removing directory {path}: {e}", exc_info=True)
-                    break
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}", exc_info=True)
-
-
-    def _is_valid_git_url(self, url: str) -> bool:
-        """
-        Validate if the URL is a valid git repository URL.
-
-        Args:
-            url (str): URL to validate.
-
-        Returns:
-            bool: True if the URL is valid, False otherwise.
-
-        Raises:
-            Exception: If an error occurs during validation.
-        """
-        try:
-            result = urlparse(url)
-            
-            # Check basic URL structure
-            if not all([result.scheme, result.netloc]):
-                return False
-
-            # Check for valid git URL patterns
-            valid_schemes = {'http', 'https', 'git', 'ssh'}
-            if result.scheme not in valid_schemes:
-                return False
-
-            # Check for common git hosting domains or .git extension
-            common_domains = {
-                'github.com', 'gitlab.com', 'bitbucket.org',
-                'dev.azure.com'
-            }
-            
-            domain = result.netloc.lower()
-            if not any(domain.endswith(d) for d in common_domains):
-                if not url.endswith('.git'):
-                    return False
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Error validating git URL: {e}")
-            return False

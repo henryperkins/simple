@@ -1,47 +1,29 @@
 """AI Interaction Handler Module.
 
-Manages interactions with Azure OpenAI API using centralized response parsing.
+Manages interactions with Azure OpenAI API, focusing on prompt generation
+and API communication with validated data.
 """
 
-import ast
-from typing import Any, Dict, Optional, Tuple, Type
-from types import TracebackType
-
+from typing import Any, Dict, Optional
 from openai import AsyncAzureOpenAI
 
 from core.cache import Cache
 from core.config import AzureOpenAIConfig
-from core.docstring_processor import DocstringProcessor
-from core.extraction.code_extractor import CodeExtractor
-from core.extraction.types import ExtractionContext
 from core.logger import LoggerSetup
 from core.metrics import Metrics
 from core.response_parsing import ResponseParsingService
-from exceptions import ExtractionError, ValidationError
-
 from api.token_management import TokenManager
-from core.types import DocumentationContext
+from core.types import DocumentationData, DocstringData
+from exceptions import ValidationError, DocumentationError
+from core.utils import FileUtils
+from core.docstring_processor import DocstringProcessor
 
 logger = LoggerSetup.get_logger(__name__)
 
-
 class AIInteractionHandler:
     """Handler for AI interactions with Azure OpenAI API.
-
-    This class manages communication with the Azure OpenAI API, handles caching,
-    token management, code extraction, and response parsing.
-
-    Attributes:
-        logger: The logger instance for logging messages.
-        metrics: Metrics collector for tracking performance and usage.
-        context: Context for code extraction process.
-        config: Configuration for Azure OpenAI API.
-        cache: Cache instance for caching results.
-        token_manager: Token manager for handling API tokens.
-        code_extractor: Code extractor for parsing source code.
-        docstring_processor: Processor for handling docstrings.
-        response_parser: Service for parsing AI responses.
-        client: Asynchronous client for Azure OpenAI API.
+    
+    Focuses on dynamic prompt generation and processing AI responses.
     """
 
     def __init__(
@@ -50,338 +32,192 @@ class AIInteractionHandler:
         cache: Optional[Cache] = None,
         token_manager: Optional[TokenManager] = None,
         response_parser: Optional[ResponseParsingService] = None,
-        code_extractor: Optional[CodeExtractor] = None,
         metrics: Optional[Metrics] = None,
     ) -> None:
-        """Initialize the AIInteractionHandler with dependency injection.
-
-        Args:
-            config: Azure OpenAI configuration.
-                If None, it will be loaded from environment variables.
-            cache: Cache instance for caching docstrings.
-            token_manager: Pre-initialized TokenManager instance for handling API tokens.
-            response_parser: Pre-initialized ResponseParsingService for parsing AI responses.
-            code_extractor: Optional pre-initialized CodeExtractor for extracting information from code.
-            metrics: Optional pre-initialized Metrics collector.
-
-        Raises:
-            Exception: If initialization fails.
-        """
+        """Initialize the AIInteractionHandler."""
         self.logger = LoggerSetup.get_logger(__name__)
         try:
-            # Initialize metrics, use provided or default to new one
-            self.metrics = metrics or Metrics()
-
-            # Create an extraction context
-            self.context = ExtractionContext(
-                metrics=self.metrics,
-                metrics_enabled=True,
-                include_private=False,
-                include_magic=False,
-            )
-
-            # Use the provided config or load it from the environment
             self.config = config or AzureOpenAIConfig.from_env()
+            self.cache = cache  # Cache instance injected
+            self.token_manager = token_manager or TokenManager()
+            self.response_parser = response_parser or ResponseParsingService()
+            self.metrics = metrics
+            self.docstring_processor = DocstringProcessor()  # You'll need to import this
 
-            # Set other dependencies (cache, token manager, etc.)
-            self.cache = cache
-            self.token_manager = token_manager  # Injected dependency
-            self.response_parser = response_parser  # Injected dependency
-            self.code_extractor = code_extractor or CodeExtractor(context=self.context)
-
-            # Initialize the docstring processor
-            self.docstring_processor = DocstringProcessor(metrics=self.metrics)
-
-            # Initialize the API client for Azure OpenAI
+            
             self.client = AsyncAzureOpenAI(
                 azure_endpoint=self.config.endpoint,
                 api_key=self.config.api_key,
                 api_version=self.config.api_version,
             )
-
         except Exception as e:
             self.logger.error(f"Failed to initialize AIInteractionHandler: {e}")
             raise
 
-    def _preprocess_code(self, source_code: str) -> str:
-        """Preprocess the source code before parsing.
-
-        Strips leading and trailing whitespace from the source code.
-
-        Args:
-            source_code: The source code to preprocess.
-
-        Returns:
-            The preprocessed source code.
-        """
+    def _generate_cache_key(self, extracted_info: Dict[str, Any]) -> str:
+        """Generate a unique cache key based on input data."""
         try:
-            processed_code = source_code.strip()
-            self.logger.debug("Preprocessed source code")
-            return processed_code
+            # Use the utility function to generate a cache key
+            return FileUtils.generate_cache_key(str(extracted_info))
         except Exception as e:
-            self.logger.error(f"Error preprocessing code: {e}")
-            return source_code
+            self.logger.error(f"Error generating cache key: {e}")
+            return None
 
     async def process_code(
         self,
-        source_code: str,
+        extracted_info: Dict[str, Any],
         cache_key: Optional[str] = None,
-        extracted_info: Optional[Dict[str, Any]] = None,
-        context: Optional[DocumentationContext] = None,
-    ) -> Optional[Tuple[str, Dict[str, Any]]]:  # Change return type
-        """Process source code to generate documentation.
+    ) -> Optional[DocumentationData]:
+        """Process code information and generate documentation.
 
         Args:
-            source_code: The source code to process.
-            cache_key: Optional cache key for storing results.
-            extracted_info: Optional pre-extracted code information.
-            context: Optional extraction context.
+            extracted_info: Pre-processed code information from extractors
+            cache_key: Optional cache key for storing results
 
         Returns:
-            A tuple of (updated_code, ai_documentation), or None if processing fails.
-
-        Raises:
-            ExtractionError: If code extraction fails.
-            ValidationError: If response validation fails.
+            Optional[DocumentationData]: AI-generated documentation data
         """
         try:
-            # Check cache first if enabled
-            if cache_key and self.cache:
+            # Generate cache key if not provided
+            cache_key = cache_key or self._generate_cache_key(extracted_info)
+            
+            # Check cache if enabled
+            if self.cache and cache_key:
                 try:
                     cached_result = await self.cache.get_cached_docstring(cache_key)
                     if cached_result:
                         self.logger.info(f"Cache hit for key: {cache_key}")
-                        code = cached_result.get("updated_code")
-                        docs = cached_result.get("documentation")
-                        if isinstance(code, str) and isinstance(docs, str):
-                            return code, docs
+                        return DocumentationData(**cached_result)
                 except Exception as e:
                     self.logger.error(f"Cache retrieval error: {e}")
 
-            # Process and validate source code
-            processed_code = self._preprocess_code(source_code)
-            try:
-                tree = ast.parse(processed_code)
-            except SyntaxError as e:
-                self.logger.error(f"Syntax error in source code: {e}")
-                raise ExtractionError(f"Failed to parse code: {e}") from e
-
-            # Extract metadata if not provided
-            if not extracted_info:
-                ctx = self.context
-                if isinstance(context, DocumentationContext):
-                    ctx = ExtractionContext(
-                        metrics=self.metrics,
-                        metrics_enabled=True,
-                        include_private=False,
-                        include_magic=False,
-                    )
-                extraction_result = self.code_extractor.extract_code(
-                    processed_code, ctx
-                )
-                if not extraction_result:
-                    raise ExtractionError("Failed to extract code information")
-                extracted_info = {
-                    "module_docstring": extraction_result.module_docstring,
-                    "metrics": extraction_result.metrics,
-                }
-
             # Generate prompt
-            try:
-                prompt = self._create_function_calling_prompt(
-                    processed_code, extracted_info
-                )
-                completion = await self.client.chat.completions.create(
-                    model=self.config.deployment_id,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=2000,
-                    temperature=0.3,
-                )
-            except Exception as e:
-                self.logger.error(f"Error during Azure OpenAI API call: {e}")
-                raise
+            prompt = self._generate_prompt(extracted_info)
 
-            # Parse and validate the response
-            content = completion.choices[0].message.content
-            if content is None:
+            # Get request parameters from token manager
+            request_params = await self.token_manager.validate_and_prepare_request(prompt)
+
+            # Make API request
+            completion = await self.client.chat.completions.create(**request_params)
+
+            # Process completion through token manager
+            content, usage = await self.token_manager.process_completion(completion)
+
+            if not content:
                 raise ValidationError("Empty response from AI service")
 
+            # Parse and validate
             parsed_response = await self.response_parser.parse_response(
                 response=content,
                 expected_format="docstring",
                 validate_schema=True,
             )
 
-            # Handle the docstrings
-            if parsed_response.validation_success:
-                try:
-                    # Parse the docstring data
-                    docstring_data = self.docstring_processor.parse(
-                        parsed_response.content
-                    )
-
-                    # Ensure the documentation matches the expected structure
-                    ai_documentation = {
-                        "summary": docstring_data.summary or "No summary provided",
-                        "description": (
-                            docstring_data.description or "No description provided"
-                        ),
-                        "args": docstring_data.args or [],
-                        "returns": (
-                            docstring_data.returns
-                            or {"type": "Any", "description": ""}
-                        ),
-                        "raises": docstring_data.raises or [],
-                        "complexity": docstring_data.complexity or 1,
-                    }
-
-                    # Create AST transformer
-                    class DocstringTransformer(ast.NodeTransformer):
-                        def __init__(
-                            self,
-                            docstring_processor: DocstringProcessor,
-                            docstring_data: Any,
-                        ) -> None:
-                            self.docstring_processor = docstring_processor
-                            self.docstring_data = docstring_data
-
-                        def visit_Module(
-                            self, node: ast.Module
-                        ) -> ast.Module:
-                            # Handle module-level docstring
-                            if self.docstring_data.summary:
-                                module_docstring = (
-                                    self.docstring_processor.format(
-                                        self.docstring_data
-                                    )
-                                )
-                                node = self.docstring_processor.insert_docstring(
-                                    node, module_docstring
-                                )
-                            return self.generic_visit(node)
-
-                        def visit_ClassDef(
-                            self, node: ast.ClassDef
-                        ) -> ast.ClassDef:
-                            # Handle class docstrings
-                            if (
-                                hasattr(self.docstring_data, "classes")
-                                and node.name in self.docstring_data.classes
-                            ):
-                                class_data = self.docstring_data.classes[node.name]
-                                class_docstring = (
-                                    self.docstring_processor.format(class_data)
-                                )
-                                node = self.docstring_processor.insert_docstring(
-                                    node, class_docstring
-                                )
-                            return self.generic_visit(node)
-
-                        def visit_FunctionDef(
-                            self, node: ast.FunctionDef
-                        ) -> ast.FunctionDef:
-                            # Handle function docstrings
-                            if (
-                                hasattr(self.docstring_data, "functions")
-                                and node.name in self.docstring_data.functions
-                            ):
-                                func_data = self.docstring_data.functions[node.name]
-                                func_docstring = (
-                                    self.docstring_processor.format(func_data)
-                                )
-                                node = self.docstring_processor.insert_docstring(
-                                    node, func_docstring
-                                )
-                            return self.generic_visit(node)
-
-                    # Apply the transformer
-                    transformer = DocstringTransformer(
-                        self.docstring_processor, docstring_data
-                    )
-                    modified_tree = transformer.visit(tree)
-                    ast.fix_missing_locations(modified_tree)
-
-                    # Convert back to source code
-                    updated_code = ast.unparse(modified_tree)
-
-                    # Update the context with AI-generated documentation
-                    if context:
-                        context.ai_generated = ai_documentation
-
-                    # Cache the result if caching is enabled
-                    if cache_key and self.cache:
-                        try:
-                            await self.cache.save_docstring(
-                                cache_key,
-                                {
-                                    "updated_code": updated_code,
-                                    "documentation": ai_documentation,
-                                },
-                            )
-                        except Exception as e:
-                            self.logger.error(f"Cache storage error: {e}")
-
-                    return updated_code, ai_documentation
-
-                except Exception as e:
-                    self.logger.error(f"Error processing docstrings: {e}")
-                    return None
-            else:
-                self.logger.warning(
-                    f"Response parsing had errors: {parsed_response.errors}"
-                )
+            if not parsed_response.validation_success:
+                self.logger.warning(f"Response validation had errors: {parsed_response.errors}")
                 return None
+
+            # Create documentation data
+            doc_data = DocumentationData(
+                module_info={
+                    "name": extracted_info.get("module_name", "Unknown"),
+                    "file_path": extracted_info.get("file_path", "Unknown")
+                },
+                ai_content=parsed_response.content,
+                docstring_data=self.docstring_processor.parse(parsed_response.content),
+                code_metadata=extracted_info,
+                source_code=extracted_info.get("source_code"),
+                metrics=extracted_info.get("metrics")
+            )
+
+            # Cache the result if enabled
+            if self.cache and cache_key:
+                try:
+                    await self.cache.save_docstring(
+                        cache_key,
+                        doc_data.to_dict(),  # Convert to dictionary for caching
+                        expire=self.config.cache_ttl
+                    )
+                    self.logger.debug(f"Cached result for key: {cache_key}")
+                except Exception as e:
+                    self.logger.error(f"Cache storage error: {e}")
+
+            return doc_data
 
         except Exception as e:
             self.logger.error(f"Error processing code: {e}")
             return None
 
-    def _insert_docstrings(
-        self, tree: ast.AST, docstrings: Dict[str, Any]
-    ) -> ast.AST:
-        """Insert docstrings into the AST.
+    def _generate_prompt(self, extracted_info: Dict[str, Any]) -> str:
+        """Generate a dynamic prompt based on extracted code information.
 
         Args:
-            tree: The abstract syntax tree of the code.
-            docstrings: A dictionary of docstrings to insert.
+            extracted_info: Extracted code information and metadata
 
         Returns:
-            The AST with docstrings inserted.
+            str: Generated prompt for AI service
         """
+        context_blocks = []
 
-        class DocstringTransformer(ast.NodeTransformer):
-            def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
-                # Insert class docstring
-                if node.name in docstrings:
-                    docstring = ast.Constant(value=docstrings[node.name])
-                    node.body.insert(0, ast.Expr(value=docstring))
-                return node
+        # Add code context
+        if "source" in extracted_info:
+            context_blocks.append(
+                "CODE TO DOCUMENT:\n"
+                "```python\n"
+                f"{extracted_info['source']}\n"
+                "```\n"
+            )
 
-            def visit_FunctionDef(
-                self, node: ast.FunctionDef
-            ) -> ast.FunctionDef:
-                # Insert function docstring
-                if node.name in docstrings:
-                    docstring = ast.Constant(value=docstrings[node.name])
-                    node.body.insert(0, ast.Expr(value=docstring))
-                return node
+        # Add existing docstring context if available
+        if "existing_docstring" in extracted_info:
+            context_blocks.append(
+                "EXISTING DOCUMENTATION:\n"
+                f"{extracted_info['existing_docstring']}\n"
+            )
 
-        transformer = DocstringTransformer()
-        return transformer.visit(tree)
+        # Add code complexity information
+        if "metrics" in extracted_info:
+            metrics = extracted_info["metrics"]
+            context_blocks.append(
+                "CODE METRICS:\n"
+                f"- Complexity: {metrics.get('complexity', 'N/A')}\n"
+                f"- Maintainability: {metrics.get('maintainability_index', 'N/A')}\n"
+            )
 
-    def _create_function_calling_prompt(
-        self, source_code: str, metadata: Dict[str, Any]
-    ) -> str:
-        """Create the prompt for function calling with schema-compliant JSON output.
+        # Add function/method context
+        if "args" in extracted_info:
+            args_info = "\n".join(
+                f"- {arg['name']}: {arg['type']}"
+                for arg in extracted_info["args"]
+            )
+            context_blocks.append(
+                "FUNCTION ARGUMENTS:\n"
+                f"{args_info}\n"
+            )
 
-        Args:
-            source_code: The source code to document.
-            metadata: Metadata extracted from the source code.
+        # Add return type information
+        if "returns" in extracted_info:
+            context_blocks.append(
+                "RETURN TYPE:\n"
+                f"{extracted_info['returns']['type']}\n"
+            )
 
-        Returns:
-            The generated prompt to send to the AI model.
-        """
-        return (
+        # Add exception information
+        if "raises" in extracted_info:
+            raises_info = "\n".join(
+                f"- {exc['exception']}"
+                for exc in extracted_info["raises"]
+            )
+            context_blocks.append(
+                "EXCEPTIONS RAISED:\n"
+                f"{raises_info}\n"
+            )
+
+        # Combine all context blocks
+        context = "\n\n".join(context_blocks)
+
+        # Add the base prompt template
+        prompt_template = (
             "Generate documentation for the provided code as a JSON object.\n\n"
             "REQUIRED OUTPUT FORMAT:\n"
             "```json\n"
@@ -408,29 +244,47 @@ class AIInteractionHandler:
             '  "complexity": "integer - McCabe complexity score"\n'
             "}\n"
             "```\n\n"
-            "VALIDATION REQUIREMENTS:\n"
-            "1. All fields shown above are required\n"
-            "2. All strings must be descriptive and clear\n"
-            "3. Types must be accurate Python types\n"
-            "4. Complexity must be a positive integer\n"
-            "5. If complexity > 10, note this in the description with [WARNING]\n\n"
-            "CODE TO DOCUMENT:\n"
-            "```python\n"
-            f"{source_code}\n"
-            "```\n\n"
-            "IMPORTANT:\n"
+            "CONTEXT:\n"
+            f"{context}\n\n"
+            "IMPORTANT NOTES:\n"
             "1. Always include a 'complexity' field with an integer value\n"
-            "2. If complexity cannot be determined, use 1 as default\n"
-            "3. Never set complexity to null or omit it\n\n"
+            "2. If complexity > 10, note this in the description with [WARNING]\n"
+            "3. Never set complexity to null or omit it\n"
+            "4. Provide detailed, specific descriptions\n"
+            "5. Ensure all type hints are accurate Python types\n\n"
             "Respond with only the JSON object. Do not include any other text."
         )
 
-    async def close(self) -> None:
-        """Close and clean up resources.
+        return prompt_template
 
-        Raises:
-            Exception: If an error occurs during closing resources.
-        """
+    async def invalidate_cache(self, extracted_info: Dict[str, Any]) -> bool:
+        """Invalidate cache for specific code information."""
+        try:
+            if not self.cache:
+                return True
+
+            cache_key = self._generate_cache_key(extracted_info)
+            if cache_key:
+                await self.cache.invalidate(cache_key)
+                self.logger.info(f"Invalidated cache for key: {cache_key}")
+                return True
+            return False
+        except Exception as e:
+            self.logger.error(f"Error invalidating cache: {e}")
+            return False
+
+    async def get_cache_stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        try:
+            if not self.cache:
+                return {"enabled": False}
+            return await self.cache.get_stats()
+        except Exception as e:
+            self.logger.error(f"Error getting cache stats: {e}")
+            return {"error": str(e)}
+
+    async def close(self) -> None:
+        """Close and clean up resources."""
         try:
             if self.client:
                 await self.client.close()
@@ -441,24 +295,9 @@ class AIInteractionHandler:
             raise
 
     async def __aenter__(self) -> "AIInteractionHandler":
-        """Enter the async context manager.
-
-        Returns:
-            The AIInteractionHandler instance.
-        """
+        """Enter the async context manager."""
         return self
 
-    async def __aexit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
-    ) -> None:
-        """Exit the async context manager.
-
-        Args:
-            exc_type: Exception type.
-            exc_val: Exception value.
-            exc_tb: Exception traceback.
-        """
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the async context manager."""
         await self.close()

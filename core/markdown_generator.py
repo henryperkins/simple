@@ -63,6 +63,7 @@ class MarkdownGenerator:
             f"**File:** `{file_path}`",
             f"**Description:** {description}",
         ])
+
     def _generate_ai_doc_section(self, ai_documentation: Dict[str, Any]) -> str:
         """Generates the AI documentation section."""
         if not ai_documentation:
