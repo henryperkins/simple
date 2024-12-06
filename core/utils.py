@@ -369,48 +369,74 @@ class NodeNameVisitor(ast.NodeVisitor):
         self.name = ""
 
     def visit_Name(self, node):
+        """Visit a Name node."""
         self.name = node.id
 
     def visit_Attribute(self, node):
+        """Visit an Attribute node."""
         self.visit(node.value)
         self.name += f".{node.attr}"
 
     def visit_Constant(self, node):
+        """Visit a Constant node."""
         self.name = repr(node.value)
 
     def visit_Subscript(self, node):
+        """Visit a Subscript node."""
         value = self.visit_and_get(node.value)
-        slice_val = self.visit_and_get(node.slice)  # Get slice value
+        slice_val = self.visit_and_get(node.slice)
         self.name = f"{value}[{slice_val}]"
 
     def visit_List(self, node):
+        """Visit a List node."""
         self.name = "[" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + "]"
 
     def visit_Tuple(self, node):
+        """Visit a Tuple node."""
         self.name = "(" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + ")"
 
+    def visit_Call(self, node):
+        """Visit a Call node."""
+        func_name = self.visit_and_get(node.func)
+        args = ", ".join(self.visit_and_get(arg) for arg in node.args)
+        self.name = f"{func_name}({args})"
+
+    def visit_BinOp(self, node):
+        """Visit a BinOp node."""
+        left = self.visit_and_get(node.left)
+        op = type(node.op).__name__
+        right = self.visit_and_get(node.right)
+        self.name = f"{left} {op} {right}"
+
     def visit_Import(self, node):
+        """Visit an Import node."""
         self.name = "import " + ", ".join(alias.name for alias in node.names)
 
     def visit_ImportFrom(self, node):
+        """Visit an ImportFrom node."""
         self.name = f"from {node.module} import " + ", ".join(alias.name for alias in node.names)
 
     def visit_FunctionDef(self, node):
+        """Visit a FunctionDef node."""
         self.name = f"def {node.name}(" + ", ".join(a.arg for a in node.args.args) + ")"
 
     def visit_AsyncFunctionDef(self, node):
+        """Visit an AsyncFunctionDef node."""
         self.name = f"async def {node.name}(" + ", ".join(a.arg for a in node.args.args) + ")"
 
     def visit_ClassDef(self, node):
+        """Visit a ClassDef node."""
         bases = ", ".join(self.visit_and_get(base) for base in node.bases)
         self.name = f"class {node.name}({bases})"
 
     def visit_Assign(self, node):
+        """Visit an Assign node."""
         targets = ", ".join(self.visit_and_get(t) for t in node.targets)
         value = self.visit_and_get(node.value)
         self.name = f"{targets} = {value}"
 
     def visit_AnnAssign(self, node):
+        """Visit an AnnAssign node."""
         target = self.visit_and_get(node.target)
         annotation = self.visit_and_get(node.annotation)
         value = self.visit_and_get(node.value) if node.value else None
@@ -422,6 +448,7 @@ class NodeNameVisitor(ast.NodeVisitor):
         self.name = ""  # Set an empty string for unhandled nodes
 
     def visit_and_get(self, node):
+        """Helper method to visit a node and return its name."""
         visitor = NodeNameVisitor()
         visitor.visit(node)
         return visitor.name
