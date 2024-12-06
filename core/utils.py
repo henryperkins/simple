@@ -383,10 +383,13 @@ class NodeNameVisitor(ast.NodeVisitor):
 
     def visit_Subscript(self, node):
         """Visit a Subscript node."""
-        value = self.visit_and_get(node.value)
-        slice_val = self.visit_and_get(node.slice)
-        self.name = f"{value}[{slice_val}]"
-
+        try:
+            value = self.visit_and_get(node.value)
+            slice_val = self.visit_and_get(node.slice)
+            self.name = f"{value}[{slice_val}]"
+        except Exception as e:
+            logger.error(f"Error visiting Subscript node: {e}", exc_info=True)
+    
     def visit_List(self, node):
         """Visit a List node."""
         self.name = "[" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + "]"
