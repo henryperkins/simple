@@ -8,7 +8,7 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 
 from ai_interaction import AIInteractionHandler
@@ -23,6 +23,7 @@ from core.types import ExtractionContext
 from docs import DocumentationOrchestrator
 from monitoring import SystemMonitor
 from exceptions import ConfigurationError, DocumentationError
+from core.schema_loader import load_schema
 
 load_dotenv()
 logger = LoggerSetup.get_logger(__name__)
@@ -49,7 +50,7 @@ class DocumentationGenerator:
             )
 
             # Load schema
-            self.docstring_schema = self.load_schema("docstring_schema")
+            self.docstring_schema = load_schema("docstring_schema")
 
             # Initialize API and response handling
             self.response_parser = ResponseParsingService()
@@ -90,11 +91,6 @@ class DocumentationGenerator:
             error_msg = f"Failed to initialize DocumentationGenerator: {e}"
             self.logger.error(error_msg, exc_info=True)
             raise ConfigurationError(error_msg) from e
-
-    def load_schema(self, schema_name: str) -> Dict[str, Any]:
-        """Load the schema from a JSON file."""
-        with open(f"{schema_name}.json", "r") as file:
-            return json.load(file)
 
     def _setup_cache(self) -> Optional[Cache]:
         """Setup cache if enabled in configuration."""
