@@ -88,30 +88,36 @@ class ValidationUtils:
     """Utility methods for validation."""
 
     @staticmethod
-    def validate_docstring(docstring: Dict[str, Any]) -> Tuple[bool, List[str]]:
-        """Validate docstring structure."""
+    def validate_docstring(docstring: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """Validate the docstring but allow empty lists for args and raises."""
         errors = []
-        required_fields = {"docstring", "args", "returns"}
+        required_fields = {"summary", "description", "args", "returns", "raises"}
 
         for field in required_fields:
             if field not in docstring:
                 errors.append(f"Missing required field: {field}")
-            elif not docstring[field]:
+            elif field in ['args', 'raises']:
+                # Allow empty lists for args and raises
+                if not isinstance(docstring[field], list):
+                    errors.append(f"Field {field} must be a list")
+            elif not docstring[field] and field not in ['args', 'raises']:
                 errors.append(f"Empty value for required field: {field}")
 
-        # Validate args structure
-        for arg in docstring.get("args", []):
-            if not all(key in arg for key in ["name", "type", "description"]):
-                missing_keys = [key for key in ["name", "type", "description"] if key not in arg]
-                errors.append(f"Incomplete argument specification: Missing {', '.join(missing_keys)} for {arg}")
+        # Only validate non-empty args and raises
+        if docstring.get('args'):
+            for arg in docstring['args']:
+                if not all(key in arg for key in ["name", "type", "description"]):
+                    missing_keys = [key for key in ["name", "type", "description"] if key not in arg]
+                    errors.append(f"Incomplete argument specification: Missing {', '.join(missing_keys)}")
 
-        # Validate raises section
-        for exc in docstring.get("raises", []):
-            if "exception" not in exc or "description" not in exc:
-                errors.append(f"Incomplete raises specification: {exc}")
+        if docstring.get('raises'):
+            for exc in docstring['raises']:
+                if not all(key in exc for key in ["exception", "description"]):
+                    missing_keys = [key for key in ["exception", "description"] if key not in exc]
+                    errors.append(f"Incomplete raises specification: Missing {', '.join(missing_keys)}")
 
         return len(errors) == 0, errors
-
+    
     @staticmethod
     def validate_code(source_code: str) -> Tuple[bool, Optional[str]]:
         """Validate Python code syntax."""
@@ -376,8 +382,14 @@ def get_node_name(node: Optional[ast.AST]) -> str:
             return f"({elements})" if isinstance(node, ast.Tuple) else f"[{elements}]"
         if isinstance(node, ast.Constant):
             return str(node.value)
-        if hasattr(ast, "unparse"):
-            return ast.unparse(node)
+        if isinstance(node, ast.JoinedStr):  # f-strings
+            return "f-string"
+        if isinstance(node, ast.Dict):
+            return "dict"
+        if isinstance(node, ast.BinOp):
+            return f"{get_node_name(node.left)} {type(node.op).__name__} {get_node_name(node.right)}"
+        if isinstance(node, ast.Await):
+            return get_node_name(node.value)
         return f"Unknown<{type(node).__name__}>"
     except Exception as e:
         logger.error(f"Error getting name from node {type(node).__name__}: {e}")

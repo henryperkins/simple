@@ -132,6 +132,8 @@ class TokenManager:
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count for text."""
         try:
+            if not isinstance(text, str):
+                raise TypeError("Expected a string for text")
             tokens = len(self.encoding.encode(text))
             return tokens
         except Exception as e:

@@ -31,7 +31,7 @@
                         }
                     },
                     "required": ["name", "type", "description"],
-                    "additionalProperties": false
+                    "additionalProperties": true
                 }
             },
             "returns": {
@@ -48,7 +48,7 @@
                     }
                 },
                 "required": ["type", "description"],
-                "additionalProperties": false
+                "additionalProperties": true
             },
             "raises": {
                 "type": "array",
@@ -66,15 +66,20 @@
                         }
                     },
                     "required": ["exception", "description"],
-                    "additionalProperties": false
+                    "additionalProperties": true
                 }
             },
             "complexity": {
                 "type": "integer",
                 "description": "McCabe complexity score"
+            },
+            "metadata": {
+                "type": "object",
+                "description": "Additional metadata about the function or method",
+                "additionalProperties": true
             }
         },
         "required": ["summary", "description", "args", "returns", "raises", "complexity"],
-        "additionalProperties": false
+        "additionalProperties": true
     }
 }

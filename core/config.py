@@ -1,3 +1,9 @@
+"""
+Module: config.py
+
+Provides configuration settings for interacting with Azure OpenAI services, including model configurations, cache settings, and utilities for loading configurations from environment variables.
+"""
+
 import os
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
@@ -9,6 +15,16 @@ logger = LoggerSetup.get_logger(__name__)
 
 
 def get_env_int(var_name: str, default: int) -> int:
+    """
+    Retrieve an environment variable as an integer, with a default.
+
+    Args:
+        var_name (str): The name of the environment variable to retrieve.
+        default (int): The default value if the variable is not set or invalid.
+
+    Returns:
+        int: The integer value of the environment variable, or the default.
+    """
     value = os.getenv(var_name)
     try:
         return int(value) if value is not None else default
@@ -21,23 +37,15 @@ def get_env_int(var_name: str, default: int) -> int:
 
 
 def get_env_float(var_name: str, default: float) -> float:
-    """Retrieve and convert an environment variable to float type.
+    """
+    Retrieve an environment variable as a float, with a default.
 
     Args:
         var_name (str): The name of the environment variable to retrieve.
-        default (float): The default value to return if the environment variable is not set
-            or cannot be converted to float.
+        default (float): The default value if the variable is not set or invalid.
 
     Returns:
-        float: The environment variable value converted to float if successful,
-        otherwise returns the default value.
-
-    Example:
-        >>> get_env_float("TIMEOUT", 5.0)
-        5.0
-        >>> # With environment variable TIMEOUT=10.5
-        >>> get_env_float("TIMEOUT", 5.0)
-        10.5
+        float: The float value of the environment variable, or the default.
     """
     value = os.getenv(var_name)
     try:
@@ -51,24 +59,15 @@ def get_env_float(var_name: str, default: float) -> float:
 
 
 def get_env_bool(var_name: str, default: bool) -> bool:
-    """Get boolean value from environment variable.
-
-    Retrieves a boolean value from an environment variable, with a default fallback.
-    The function considers 'true', '1', and 'yes' (case-insensitive) as True values.
+    """
+    Retrieve an environment variable as a boolean, with a default.
 
     Args:
-        var_name (str): Name of the environment variable to retrieve
-        default (bool): Default value if environment variable is not set
+        var_name (str): The name of the environment variable to retrieve.
+        default (bool): The default value if the variable is not set.
 
     Returns:
-        bool: The boolean value from environment variable or default if not set
-
-    Example:
-        >>> os.environ['DEBUG'] = 'true'
-        >>> get_env_bool('DEBUG', False)
-        True
-        >>> get_env_bool('NONEXISTENT', False)
-        False
+        bool: The boolean value of the environment variable, or the default.
     """
     value = os.getenv(var_name, str(default)).lower()
     return value in ("true", "1", "yes")
@@ -76,7 +75,15 @@ def get_env_bool(var_name: str, default: bool) -> bool:
 
 @dataclass
 class OpenAIModelConfig:
-    """Configuration for OpenAI model limits and costs."""
+    """
+    Configuration for OpenAI model limits and costs.
+
+    Attributes:
+        max_tokens (int): Maximum number of tokens for the model.
+        cost_per_1k_prompt (float): Cost per 1000 tokens for prompts.
+        cost_per_1k_completion (float): Cost per 1000 tokens for completions.
+        chunk_size (int): Size of chunks for processing.
+    """
     max_tokens: int = 8192
     cost_per_1k_prompt: float = 0.03
     cost_per_1k_completion: float = 0.06
@@ -85,7 +92,20 @@ class OpenAIModelConfig:
 
 @dataclass
 class AzureOpenAIConfig:
-    """Configuration settings for Azure OpenAI service."""
+    """
+    Configuration settings for Azure OpenAI service.
+
+    Attributes:
+        model_type (str): Type of the model (e.g., 'gpt').
+        endpoint (str): Azure OpenAI endpoint URL.
+        api_version (str): API version to use.
+        deployment_id (str): Deployment ID associated with the model.
+        model_name (str): Name of the model.
+        max_tokens (int): Maximum tokens per request.
+        temperature (float): Sampling temperature.
+
+    Additional attributes manage cache settings and model limits.
+    """
 
     # Model settings
     model_type: str = "gpt"
@@ -106,19 +126,11 @@ class AzureOpenAIConfig:
     redis_host: str = field(default_factory=lambda: os.getenv("REDIS_HOST", "localhost"))
     redis_port: int = field(default_factory=lambda: get_env_int("REDIS_PORT", 6379))
     redis_db: int = field(default_factory=lambda: get_env_int("REDIS_DB", 0))
-    redis_password: Optional[str] = field(
-        default_factory=lambda: os.getenv("REDIS_PASSWORD", None)
-    )
+    redis_password: Optional[str] = field(default_factory=lambda: os.getenv("REDIS_PASSWORD", None))
     cache_ttl: int = field(default_factory=lambda: get_env_int("CACHE_TTL", 3600))
 
     # API Key
     api_key: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_KEY", "40c4befe4179411999c14239f386e24d"))
-
-    # Logging settings
-    output_directory: str = field(default_factory=lambda: os.getenv("OUTPUT_DIRECTORY", "output"))
-    log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
-    log_format: str = field(default_factory=lambda: os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    log_directory: str = field(default_factory=lambda: os.getenv("LOG_DIRECTORY", "logs"))
 
     # Model Limits
     model_limits: Dict[str, OpenAIModelConfig] = field(default_factory=lambda: {
@@ -127,7 +139,11 @@ class AzureOpenAIConfig:
     })
 
     def __post_init__(self):
-        """Initialize cache if enabled."""
+        """
+        Initializes the cache if caching is enabled.
+
+        Sets up the Cache instance based on the configuration parameters.
+        """
         self.cache: Optional[Cache] = None
         if self.cache_enabled:
             try:
@@ -150,10 +166,10 @@ class AzureOpenAIConfig:
         Create configuration from environment variables.
 
         Returns:
-            AzureOpenAIConfig instance
+            AzureOpenAIConfig: An instance with settings from environment variables.
 
         Raises:
-            ValueError: If configuration is invalid
+            ValueError: If required environment variables are missing or values are invalid.
         """
         logger.debug("Loading Azure OpenAI configuration from environment variables")
         try:
@@ -171,7 +187,12 @@ class AzureOpenAIConfig:
             raise
 
     def validate(self) -> bool:
-        """Validate required configuration settings."""
+        """
+        Validate that all required configuration settings are present.
+
+        Returns:
+            bool: True if valid, False otherwise.
+        """
         required_fields = ['endpoint', 'api_key', 'deployment_id']
         missing = [field for field in required_fields if not getattr(self, field, None)]
         if missing:
@@ -180,7 +201,12 @@ class AzureOpenAIConfig:
         return True
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration settings to a dictionary excluding sensitive info."""
+        """
+        Convert configuration settings to a dictionary excluding sensitive info.
+
+        Returns:
+            Dict[str, Any]: Dictionary representation of the configuration.
+        """
         config_dict = {
             "model_type": self.model_type,
             "endpoint": self.endpoint,
@@ -198,10 +224,6 @@ class AzureOpenAIConfig:
             "redis_db": self.redis_db,
             "cache_ttl": self.cache_ttl,
             "model_limits": self.model_limits,
-            "output_directory": self.output_directory,
-            "log_level": self.log_level,
-            "log_format": self.log_format,
-            "log_directory": self.log_directory,
             # Exclude sensitive information
         }
         return config_dict
@@ -209,10 +231,10 @@ class AzureOpenAIConfig:
 
 def check_required_env_vars() -> None:
     """
-    Verify required environment variables are set.
+    Verify that required environment variables are set.
 
     Raises:
-        ValueError: If required variables are missing
+        ValueError: If any required environment variable is missing.
     """
     required_vars = {
         "AZURE_OPENAI_ENDPOINT": "Your Azure OpenAI endpoint URL",
@@ -220,14 +242,16 @@ def check_required_env_vars() -> None:
         "AZURE_OPENAI_DEPLOYMENT_ID": "Your deployment ID"
     }
 
-    missing = [
-        var
-        for var, description in required_vars.items()
+    missing_vars = [
+        var for var in required_vars
         if not os.getenv(var)
     ]
 
-    if missing:
+    if missing_vars:
+        missing_desc = "\n".join(
+            f"- {var} ({required_vars[var]})"
+            for var in missing_vars
+        )
         raise ValueError(
-            "Missing required environment variables:\n" +
-            "\n".join(f"- {var} ({required_vars[var]})" for var in missing)
+            "Missing required environment variables:\n" + missing_desc
         )

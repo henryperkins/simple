@@ -4,6 +4,7 @@ Provides dataclass definitions for structured data handling throughout the appli
 """
 
 # Standard library imports
+import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Set, Union
@@ -59,32 +60,63 @@ class ExtractedArgument:
     is_required: bool = True
 
 
-@dataclass
-class ExtractedFunction(ExtractedElement):
-    """Represents an extracted function."""
-    return_type: Optional[str] = None
-    is_method: bool = False
-    is_async: bool = False
-    is_generator: bool = False
-    is_property: bool = False
-    body_summary: str = ""
-    args: List[ExtractedArgument] = field(default_factory=list)
-    raises: List[str] = field(default_factory=list)
-    ast_node: Optional[Any] = None
-    cognitive_complexity: Optional[int] = None
-    halstead_metrics: Optional[Dict[str, float]] = field(default_factory=dict)
-    complexity_warning: Optional[str] = None  # Added field for complexity warning
+class ExtractedFunction:
+    def __init__(self, name: str, lineno: int, source: str, docstring: str, metrics: Dict[str, Any],
+                 decorators: List[str], body_summary: str, raises: List[str], ast_node: Any):
+        self.name = name
+        self.lineno = lineno
+        self.source = source
+        self.docstring = docstring
+        self.metrics = metrics
+        self.decorators = decorators
+        self.body_summary = body_summary
+        self.raises = raises
+        self.ast_node = ast_node
+
+    # Add any utility methods if needed
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "lineno": self.lineno,
+            "source": self.source,
+            "docstring": self.docstring,
+            "metrics": self.metrics,
+            "decorators": self.decorators,
+            "body_summary": self.body_summary,
+            "raises": self.raises,
+        }
 
 
 @dataclass
 class ExtractedClass:
-    """Class to hold extracted class information."""
+    """
+    Represents extracted information about a class.
+
+    Args:
+        name: The name of the class
+        docstring: The class's docstring
+        raises: List of exceptions that this class can raise
+        methods: List of class methods
+        metrics: Dictionary of code metrics
+        bases: List of base classes
+        ast_node: Original AST node
+    """
     name: str
     docstring: str
-    methods: List[Dict[str, Any]]
-    bases: List[str]
-    metrics: Dict[str, Any]
-    raises: List[Dict[str, str]]
+    raises: List[str] = field(default_factory=list)
+    methods: List[Any] = field(default_factory=list)
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    bases: List[str] = field(default_factory=list)
+    lineno: int = 0
+    source: str = ""
+    dependencies: List[str] = field(default_factory=list)
+    attributes: List[str] = field(default_factory=list)
+    is_exception: bool = False
+    decorators: List[str] = field(default_factory=list)
+    instance_attributes: List[str] = field(default_factory=list)
+    metaclass: Optional[str] = None
+    complexity_warnings: List[str] = field(default_factory=list)
+    ast_node: Optional[ast.ClassDef] = None
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get attribute with fallback to default."""
