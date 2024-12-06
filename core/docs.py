@@ -12,7 +12,6 @@ from core.docstring_processor import DocstringProcessor
 from core.response_parsing import ResponseParsingService
 from core.metrics import Metrics
 from exceptions import DocumentationError
-from ai_interaction import AIInteractionHandler
 
 logger = LoggerSetup.get_logger(__name__)
 
@@ -21,7 +20,6 @@ class DocumentationOrchestrator:
 
     def __init__(
         self,
-        ai_handler: Optional[AIInteractionHandler] = None,
         docstring_processor: Optional[DocstringProcessor] = None,
         code_extractor: Optional[CodeExtractor] = None,
         metrics: Optional[Metrics] = None,
@@ -31,7 +29,6 @@ class DocumentationOrchestrator:
         Initialize the documentation orchestrator.
 
         Args:
-            ai_handler: Handler for AI interactions
             docstring_processor: Processor for docstrings
             code_extractor: Extractor for code elements
             metrics: Metrics calculator
@@ -39,10 +36,6 @@ class DocumentationOrchestrator:
         """
         self.logger = LoggerSetup.get_logger(__name__)
         self.docstring_schema = load_schema("docstring_schema")  # Load schema
-        self.ai_handler = ai_handler or AIInteractionHandler(
-            metrics=metrics or Metrics(),
-            docstring_schema=self.docstring_schema  # Pass the schema here
-        )
         self.metrics = metrics or Metrics()
         self.code_extractor = code_extractor or CodeExtractor(ExtractionContext())
         self.docstring_processor = docstring_processor or DocstringProcessor(metrics=self.metrics)

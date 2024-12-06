@@ -12,19 +12,8 @@ from exceptions import ProcessingError
 from openai import AsyncAzureOpenAI
 import asyncio
 import json
-import jsonschema
 
 logger = LoggerSetup.get_logger(__name__)
-
-class ValidationUtils:
-    @staticmethod
-    def validate_docstring(docstring_json: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bool, List[str]]:
-        """Validate the generated docstring JSON against the schema."""
-        try:
-            jsonschema.validate(instance=docstring_json, schema=schema['schema'])
-            return True, []
-        except jsonschema.exceptions.ValidationError as e:
-            return False, [str(e)]
 
 class AIInteractionHandler:
     """Handles AI interactions for generating enriched prompts and managing responses."""

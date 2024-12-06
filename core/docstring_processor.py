@@ -9,7 +9,8 @@ from core.logger import LoggerSetup
 from core.metrics import Metrics
 from core.types import DocstringData
 from exceptions import DocumentationError
-from core.utils import FormattingUtils, ValidationUtils
+from core.utils import FormattingUtils
+from core.schema_loader import load_schema
 
 try:
     import astor
@@ -19,6 +20,34 @@ except ImportError as e:
         "Please install it using 'pip install astor'."
     ) from e
 
+class ValidationUtils:
+    """Utility methods for validation."""
+
+    @staticmethod
+    def validate_docstring(docstring: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """Validate the generated docstring JSON against the schema."""
+        errors = []
+        required_fields = {"summary", "description", "args", "returns", "raises", "complexity"}
+
+        for field in required_fields:
+            if field not in docstring:
+                errors.append(f"Missing required field: {field}")
+            elif not docstring[field]:
+                errors.append(f"Empty value for required field: {field}")
+
+        # Validate args structure
+        for arg in docstring.get("args", []):
+            if not all(key in arg for key in ["name", "type", "description"]):
+                missing_keys = [key for key in ["name", "type", "description"] if key not in arg]
+                errors.append(f"Incomplete argument specification: Missing {', '.join(missing_keys)} for {arg}")
+
+        # Validate raises section
+        for exc in docstring.get("raises", []):
+            if "exception" not in exc or "description" not in exc:
+                errors.append(f"Incomplete raises specification: {exc}")
+
+        return len(errors) == 0, errors
+
 class DocstringProcessor:
     """Processes docstrings by parsing and validating them."""
 
@@ -26,12 +55,7 @@ class DocstringProcessor:
         """Initialize docstring processor."""
         self.logger = LoggerSetup.get_logger(__name__)
         self.metrics = metrics or Metrics()
-        self.docstring_schema = self.load_schema("docstring_schema")
-
-    def load_schema(self, schema_name: str) -> Dict[str, Any]:
-        """Load the schema from a JSON file."""
-        with open(f"{schema_name}.json", "r") as file:
-            return json.load(file)
+        self.docstring_schema = load_schema("docstring_schema")
 
     def parse(self, docstring: Union[Dict[str, Any], str]) -> DocstringData:
         """Parse a raw docstring into structured format."""
