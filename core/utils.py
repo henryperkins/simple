@@ -12,6 +12,7 @@ import asyncio
 import shutil
 import fnmatch
 import hashlib
+import logging
 from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
@@ -19,6 +20,7 @@ from typing import Any, Dict, List, Set, Tuple, Optional, Union
 from urllib.parse import urlparse
 from core.logger import LoggerSetup
 
+# Setup logging
 logger = LoggerSetup.get_logger(__name__)
 
 class FileUtils:
@@ -360,9 +362,9 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
         return None
 
 
-import ast
-
 class NodeNameVisitor(ast.NodeVisitor):
+    """Extracts names and relevant information from AST nodes for docstring generation."""
+
     def __init__(self):
         self.name = ""
 
@@ -373,19 +375,13 @@ class NodeNameVisitor(ast.NodeVisitor):
         self.visit(node.value)
         self.name += f".{node.attr}"
 
-    def visit_Call(self, node):
-        self.visit(node.func)
-        # Optionally, handle arguments if needed
-        self.name += "()"
-
-    def visit_Subscript(self, node):
-        self.visit(node.value)
-        self.name += "["
-        self.visit(node.slice)
-        self.name += "]"
-
     def visit_Constant(self, node):
         self.name = repr(node.value)
+
+    def visit_Subscript(self, node):
+        value = self.visit_and_get(node.value)
+        slice_val = self.visit_and_get(node.slice)  # Get slice value
+        self.name = f"{value}[{slice_val}]"
 
     def visit_List(self, node):
         self.name = "[" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + "]"
@@ -393,63 +389,43 @@ class NodeNameVisitor(ast.NodeVisitor):
     def visit_Tuple(self, node):
         self.name = "(" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + ")"
 
-    def visit_Set(self, node):
-        self.name = "{" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + "}"
-
-    def visit_Dict(self, node):
-        self.name = "{" + ", ".join(f"{self.visit_and_get(k)}: {self.visit_and_get(v)}"
-                                    for k, v in zip(node.keys, node.values)) + "}"
-
-    def visit_BinOp(self, node):
-        left = self.visit_and_get(node.left)
-        op = type(node.op).__name__
-        right = self.visit_and_get(node.right)
-        self.name = f"{left} {op} {right}"
-
-    def visit_UnaryOp(self, node):
-        self.name = f"{type(node.op).__name__} {self.visit_and_get(node.operand)}"
-
-    def visit_BoolOp(self, node):
-        op = " and " if isinstance(node.op, ast.And) else " or "
-        self.name = op.join(self.visit_and_get(val) for val in node.values)
-
-    def visit_Compare(self, node):
-        left = self.visit_and_get(node.left)
-        ops = [type(op).__name__ for op in node.ops]
-        comparators = [self.visit_and_get(comp) for comp in node.comparators]
-        self.name = f"{left} " + " ".join(f"{op} {comp}" for op, comp in zip(ops, comparators))
-
-    def visit_Await(self, node):
-        self.name = f"await {self.visit_and_get(node.value)}"
-
-    def visit_JoinedStr(self, node):
-        self.name = 'f"' + "".join(self.visit_and_get(value) for value in node.values) + '"'
-
-    def visit_Assign(self, node):
-        targets = ", ".join(self.visit_and_get(t) for t in node.targets)
-        value = self.visit_and_get(node.value)
-        self.name = f"{targets} = {value}"
-
-    def visit_AugAssign(self, node):
-        target = self.visit_and_get(node.target)
-        op = type(node.op).__name__
-        value = self.visit_and_get(node.value)
-        self.name = f"{target} {op}= {value}"
-        
     def visit_Import(self, node):
         self.name = "import " + ", ".join(alias.name for alias in node.names)
 
     def visit_ImportFrom(self, node):
         self.name = f"from {node.module} import " + ", ".join(alias.name for alias in node.names)
 
+    def visit_FunctionDef(self, node):
+        self.name = f"def {node.name}(" + ", ".join(a.arg for a in node.args.args) + ")"
+
+    def visit_AsyncFunctionDef(self, node):
+        self.name = f"async def {node.name}(" + ", ".join(a.arg for a in node.args.args) + ")"
+
+    def visit_ClassDef(self, node):
+        bases = ", ".join(self.visit_and_get(base) for base in node.bases)
+        self.name = f"class {node.name}({bases})"
+
+    def visit_Assign(self, node):
+        targets = ", ".join(self.visit_and_get(t) for t in node.targets)
+        value = self.visit_and_get(node.value)
+        self.name = f"{targets} = {value}"
+
+    def visit_AnnAssign(self, node):
+        target = self.visit_and_get(node.target)
+        annotation = self.visit_and_get(node.annotation)
+        value = self.visit_and_get(node.value) if node.value else None
+        self.name = f"{target}: {annotation}" + (f" = {value}" if value else "")
+
     def generic_visit(self, node):
-        self.name = type(node).__name__
-        logger.warning(f"Unsupported AST node type for extraction: {type(node).__name__}")
+        """Log skipped nodes silently at DEBUG level."""
+        logger.debug(f"Skipped node type: {type(node).__name__}")
+        self.name = ""  # Set an empty string for unhandled nodes
 
     def visit_and_get(self, node):
         visitor = NodeNameVisitor()
         visitor.visit(node)
         return visitor.name
+
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename for safe file system operations."""
