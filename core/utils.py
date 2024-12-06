@@ -442,6 +442,37 @@ class NodeNameVisitor(ast.NodeVisitor):
         value = self.visit_and_get(node.value) if node.value else None
         self.name = f"{target}: {annotation}" + (f" = {value}" if value else "")
 
+    def visit_Dict(self, node):
+        """Visit a Dict node."""
+        self.name = "{" + ", ".join(f"{self.visit_and_get(k)}: {self.visit_and_get(v)}"
+                                    for k, v in zip(node.keys, node.values)) + "}"
+
+    def visit_IfExp(self, node):
+        """Visit an IfExp node."""
+        test = self.visit_and_get(node.test)
+        body = self.visit_and_get(node.body)
+        orelse = self.visit_and_get(node.orelse)
+        self.name = f"{body} if {test} else {orelse}"
+
+    def visit_JoinedStr(self, node):
+        """Visit a JoinedStr node."""
+        self.name = 'f"' + "".join(self.visit_and_get(value) for value in node.values) + '"'
+
+    def visit_Await(self, node):
+        """Visit an Await node."""
+        self.name = f"await {self.visit_and_get(node.value)}"
+
+    def visit_BoolOp(self, node):
+        """Visit a BoolOp node."""
+        op = " and " if isinstance(node.op, ast.And) else " or "
+        self.name = op.join(self.visit_and_get(val) for val in node.values)
+
+    def visit_ListComp(self, node):
+        """Visit a ListComp node."""
+        elt = self.visit_and_get(node.elt)
+        generators = " ".join(self.visit_and_get(gen) for gen in node.generators)
+        self.name = f"[{elt} {generators}]"
+
     def generic_visit(self, node):
         """Log skipped nodes silently at DEBUG level."""
         logger.debug(f"Skipped node type: {type(node).__name__}")
