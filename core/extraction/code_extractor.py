@@ -24,7 +24,8 @@ from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.class_extractor import ClassExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.utils import handle_extraction_error, get_source_segment
-from core.docstringutils import DocstringUtils, get_node_name
+from core.docstringutils import DocstringUtils
+from core.utils import NodeNameVisitor
 
 logger = LoggerSetup.get_logger(__name__)
 
@@ -74,6 +75,7 @@ class CodeExtractor:
 
         try:
             tree = ast.parse(source_code)
+            self.context.tree = tree  # Set the tree attribute in the context
             self._add_parent_references(tree)
 
             # Extract module-level docstring info
@@ -145,23 +147,18 @@ class CodeExtractor:
             result.errors.extend(self.errors)
 
     def _extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:
-        """Extract variables from the AST.
-
-        Args:
-            tree (ast.AST): The AST to extract variables from.
-
-        Returns:
-            List[Dict[str, Any]]: A list of extracted variables.
-        """
+        """Extract variables from the AST."""
         variables = []
         for node in ast.walk(tree):
             if isinstance(node, (ast.Assign, ast.AnnAssign)):
                 targets = node.targets if isinstance(node, ast.Assign) else [node.target]
                 for target in targets:
                     if isinstance(target, ast.Name):
+                        visitor = NodeNameVisitor()
+                        visitor.visit(getattr(node, 'annotation', None))
                         var_info = {
                             "name": target.id,
-                            "type": get_node_name(getattr(node, 'annotation', None)) or "Any",
+                            "type": visitor.name or "Any",
                             "value": get_source_segment(self.context.source_code or "", getattr(node, 'value', ast.Constant()))
                         }
                         variables.append(var_info)

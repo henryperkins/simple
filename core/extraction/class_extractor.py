@@ -23,28 +23,16 @@ from core.metrics import Metrics
 from core.types import ExtractedClass, ExtractedFunction, ExtractionContext
 from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.dependency_analyzer import extract_dependencies_from_node
-from core.utils import handle_extraction_error, get_source_segment
-from core.docstringutils import DocstringUtils, get_node_name
+from core.utils import handle_extraction_error, get_source_segment, NodeNameVisitor
+from core.docstringutils import DocstringUtils
 
 logger = LoggerSetup.get_logger(__name__)
 
 class ClassExtractor:
-    """Handles extraction of classes from Python source code.
-
-    Attributes:
-        context (ExtractionContext): The context for extraction operations.
-        metrics_calculator (Metrics): The metrics calculator for evaluating code metrics.
-        function_extractor (FunctionExtractor): Extractor for functions within classes.
-        errors (List[str]): List of errors encountered during extraction.
-    """
+    """Handles extraction of classes from Python source code."""
 
     def __init__(self, context: ExtractionContext, metrics_calculator: Metrics):
-        """Initialize the ClassExtractor.
-
-        Args:
-            context (ExtractionContext): The context for extraction operations.
-            metrics_calculator (Metrics): The metrics calculator for evaluating code metrics.
-        """
+        """Initialize the ClassExtractor."""
         self.logger = logger
         self.context = context
         self.metrics_calculator = metrics_calculator
@@ -52,14 +40,7 @@ class ClassExtractor:
         self.errors: List[Dict[str, Any]] = []
 
     async def extract_classes(self, tree: ast.AST) -> List[ExtractedClass]:
-        """Extract classes from the AST.
-
-        Args:
-            tree (ast.AST): The AST tree to extract classes from.
-
-        Returns:
-            List[ExtractedClass]: A list of extracted class information.
-        """
+        """Extract classes from the AST."""
         classes = []
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
@@ -73,25 +54,11 @@ class ClassExtractor:
         return classes
 
     def _should_process_class(self, node: ast.ClassDef) -> bool:
-        """Determine if a class should be processed.
-
-        Args:
-            node (ast.ClassDef): The class node to evaluate.
-
-        Returns:
-            bool: True if the class should be processed, False otherwise.
-        """
+        """Determine if a class should be processed."""
         return not (not self.context.include_private and node.name.startswith("_"))
 
     async def _process_class(self, node: ast.ClassDef) -> ExtractedClass:
-        """Process a class node to extract information.
-
-        Args:
-            node (ast.ClassDef): The class node to process.
-
-        Returns:
-            ExtractedClass: The extracted class information.
-        """
+        """Process a class node to extract information."""
         self.logger.debug("Processing class: %s", node.name)
         try:
             metadata = DocstringUtils.extract_metadata(node)
@@ -129,35 +96,20 @@ class ClassExtractor:
             raise
 
     def _extract_bases(self, node: ast.ClassDef) -> List[str]:
-        """Extract base classes from a class definition.
-
-        Args:
-            node (ast.ClassDef): The class node to extract base classes from.
-
-        Returns:
-            List[str]: A list of base class names.
-        """
-        self.logger.debug("Extracting bases for class: %s", node.name)
+        """Extract base classes from a class definition."""
         bases = []
         for base in node.bases:
             try:
-                base_name = get_node_name(base)
-                bases.append(base_name)
+                visitor = NodeNameVisitor()
+                visitor.visit(base)
+                bases.append(visitor.name)
             except Exception as e:
                 self.logger.error("Error extracting base class: %s", e, exc_info=True)
                 bases.append("unknown")
         return bases
 
     async def _extract_methods(self, node: ast.ClassDef) -> List[ExtractedFunction]:
-        """Extract methods from a class definition.
-
-        Args:
-            node (ast.ClassDef): The class node to extract methods from.
-
-        Returns:
-            List[ExtractedFunction]: A list of extracted methods.
-        """
-        self.logger.debug("Extracting methods for class: %s", node.name)
+        """Extract methods from a class definition."""
         methods = []
         for n in node.body:
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -171,15 +123,7 @@ class ClassExtractor:
         return methods
 
     def _extract_attributes(self, node: ast.ClassDef) -> List[str]:
-        """Extract class attributes from a class definition.
-
-        Args:
-            node (ast.ClassDef): The class node to extract attributes from.
-
-        Returns:
-            List[str]: A list of attribute names.
-        """
-        self.logger.debug("Extracting attributes for class: %s", node.name)
+        """Extract class attributes from a class definition."""
         attributes = []
         for child in node.body:
             if isinstance(child, (ast.Assign, ast.AnnAssign)):
@@ -190,22 +134,17 @@ class ClassExtractor:
         return attributes
 
     def _process_attribute(self, node: ast.AST) -> Optional[Dict[str, Any]]:
-        """Process a class-level attribute assignment.
-
-        Args:
-            node (ast.AST): The attribute node to process.
-
-        Returns:
-            Optional[Dict[str, Any]]: The processed attribute information, or None if processing fails.
-        """
+        """Process a class-level attribute assignment."""
         try:
             if isinstance(node, ast.Assign):
                 targets = [target.id for target in node.targets if isinstance(target, ast.Name)]
                 value = get_source_segment(self.context.source_code, node.value) if node.value else None
+                visitor = NodeNameVisitor()
+                visitor.visit(node.value)
                 return {
                     "name": targets[0] if targets else None,
                     "value": value,
-                    "type": get_node_name(node.value) if node.value else "Any",
+                    "type": visitor.name if node.value else "Any",
                 }
             return None
         except Exception as e:
@@ -213,21 +152,14 @@ class ClassExtractor:
             return None
 
     def _extract_decorators(self, node: ast.ClassDef) -> List[str]:
-        """Extract decorator names from a class definition.
-
-        Args:
-            node (ast.ClassDef): The class node to extract decorators from.
-
-        Returns:
-            List[str]: A list of decorator names.
-        """
-        self.logger.debug("Extracting decorators for class: %s", node.name)
+        """Extract decorator names from a class definition."""
         decorators = []
         for decorator in node.decorator_list:
             try:
-                decorator_name = get_node_name(decorator)
-                decorators.append(decorator_name)
-                self.logger.debug("Extracted decorator: %s", decorator_name)
+                visitor = NodeNameVisitor()
+                visitor.visit(decorator)
+                decorators.append(visitor.name)
+                self.logger.debug("Extracted decorator: %s", visitor.name)
             except Exception as e:
                 self.logger.error("Error extracting decorator: %s", e, exc_info=True)
                 decorators.append("unknown_decorator")
@@ -235,7 +167,6 @@ class ClassExtractor:
 
     def _extract_instance_attributes(self, node: ast.ClassDef) -> List[Dict[str, Any]]:
         """Extract instance attributes from the class definition and its parent classes."""
-        self.logger.debug(f"Extracting instance attributes for class: {node.name}")
         instance_attributes = []
         processed_attrs = set()
 
@@ -247,9 +178,11 @@ class ClassExtractor:
                         attr_name = stmt.targets[0].attr
                         if attr_name not in processed_attrs:
                             processed_attrs.add(attr_name)
+                            visitor = NodeNameVisitor()
+                            visitor.visit(stmt.value)
                             return {
                                 "name": attr_name,
-                                "type": get_node_name(stmt.value) if stmt.value else "Any",
+                                "type": visitor.name if stmt.value else "Any",
                                 "value": get_source_segment(self.context.source_code, stmt.value) if stmt.value else None,
                                 "defined_in": class_name,
                             }
@@ -266,9 +199,11 @@ class ClassExtractor:
                         attr_name = stmt.target.attr
                         if attr_name not in processed_attrs:
                             processed_attrs.add(attr_name)
+                            visitor = NodeNameVisitor()
+                            visitor.visit(stmt.annotation)
                             return {
                                 "name": attr_name,
-                                "type": get_node_name(stmt.annotation) if stmt.annotation else "Any",
+                                "type": visitor.name if stmt.annotation else "Any",
                                 "value": get_source_segment(self.context.source_code, stmt.value) if stmt.value else None,
                                 "defined_in": class_name,
                             }
@@ -298,7 +233,9 @@ class ClassExtractor:
 
         for base in node.bases:
             try:
-                base_name = get_node_name(base)
+                visitor = NodeNameVisitor()
+                visitor.visit(base)
+                base_name = visitor.name
                 for parent_node in ast.walk(self.context.tree):
                     if isinstance(parent_node, ast.ClassDef) and parent_node.name == base_name:
                         extract_from_class(parent_node, is_parent=True)
@@ -309,32 +246,20 @@ class ClassExtractor:
         return instance_attributes
 
     def _extract_metaclass(self, node: ast.ClassDef) -> Optional[str]:
-        """Extract the metaclass if specified in the class definition.
-
-        Args:
-            node (ast.ClassDef): The class node to extract the metaclass from.
-
-        Returns:
-            Optional[str]: The name of the metaclass, or None if not specified.
-        """
-        self.logger.debug("Extracting metaclass for class: %s", node.name)
+        """Extract the metaclass if specified in the class definition."""
         for keyword in node.keywords:
             if keyword.arg == "metaclass":
-                return get_node_name(keyword.value)
+                visitor = NodeNameVisitor()
+                visitor.visit(keyword.value)
+                return visitor.name
         return None
 
     def _is_exception_class(self, node: ast.ClassDef) -> bool:
-        """Check if a class is an exception class.
-
-        Args:
-            node (ast.ClassDef): The class node to check.
-
-        Returns:
-            bool: True if the class is an exception, False otherwise.
-        """
-        self.logger.debug("Checking if class is an exception: %s", node.name)
+        """Check if a class is an exception class."""
         for base in node.bases:
-            base_name = get_node_name(base)
+            visitor = NodeNameVisitor()
+            visitor.visit(base)
+            base_name = visitor.name
             if base_name in {"Exception", "BaseException"}:
                 return True
         return False

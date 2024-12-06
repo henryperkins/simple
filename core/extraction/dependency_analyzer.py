@@ -25,21 +25,13 @@ from typing import Dict, Set, Optional, List, Tuple, Union, Any
 
 from core.logger import LoggerSetup
 from core.types import ExtractionContext
-from core.utils import get_node_name
+from core.utils import NodeNameVisitor
 
 logger = LoggerSetup.get_logger(__name__)
 
-def extract_dependencies_from_node(node: ast.AST) -> Dict[str, Set[str]]:
-    """Extract dependencies from an AST node.
-
-    Args:
-        node (ast.AST): The AST node to extract dependencies from.
-
-    Returns:
-        Dict[str, Set[str]]: A dictionary with keys 'imports', 'calls', and 'attributes',
-        each containing a set of strings representing the dependencies.
-    """
-    dependencies = {"imports": set(), "calls": set(), "attributes": set()}
+def extract_dependencies_from_node(node: ast.AST) -> dict[str, set[str]]:
+    """Extract dependencies from an AST node."""
+    dependencies: dict[str, set[str]] = {"imports": set(), "calls": set(), "attributes": set()}
     for child in ast.walk(node):
         try:
             if isinstance(child, ast.Import):
@@ -48,9 +40,13 @@ def extract_dependencies_from_node(node: ast.AST) -> Dict[str, Set[str]]:
             elif isinstance(child, ast.ImportFrom) and child.module:
                 dependencies["imports"].add(child.module)
             elif isinstance(child, ast.Call):
-                dependencies["calls"].add(get_node_name(child.func))
+                visitor = NodeNameVisitor()
+                visitor.visit(child.func)
+                dependencies["calls"].add(visitor.name)
             elif isinstance(child, ast.Attribute):
-                dependencies["attributes"].add(get_node_name(child))
+                visitor = NodeNameVisitor()
+                visitor.visit(child)
+                dependencies["attributes"].add(visitor.name)
         except Exception as e:
             logger.warning(f"Unsupported AST node encountered: {e}")
     return dependencies
@@ -73,7 +69,7 @@ class DependencyAnalyzer:
         self.logger = logger
         self.context = context
         self.module_name = context.module_name
-        self._function_errors = []
+        self._function_errors: List[str] = []
         self.logger.debug("Initialized DependencyAnalyzer")
 
     def analyze_dependencies(self, node: ast.AST, module_name: Optional[str] = None) -> Dict[str, Set[str]]:
@@ -177,7 +173,7 @@ class DependencyAnalyzer:
             "description": "No description available"
         }
 
-    def _categorize_dependencies(self, raw_deps: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
+    def _categorize_dependencies(self, raw_deps: dict[str, set[str]]) -> dict[str, set[str]]:
         """Categorize raw dependencies into stdlib, third-party, or local.
 
         Args:
@@ -186,7 +182,7 @@ class DependencyAnalyzer:
         Returns:
             Dict[str, Set[str]]: A dictionary categorizing dependencies into 'stdlib', 'third_party', and 'local'.
         """
-        categorized_deps = {"stdlib": set(), "third_party": set(), "local": set()}
+        categorized_deps: Dict[str, Set[str]] = {"stdlib": set(), "third_party": set(), "local": set()}
 
         for module_name in raw_deps.get("imports", []):
             self._categorize_import(module_name, categorized_deps)

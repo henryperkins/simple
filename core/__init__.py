@@ -1,24 +1,59 @@
-"""Core functionality for documentation generation."""
+# core/__init__.py
+"""
+Core package for documentation generation and code analysis.
 
-# Import from dedicated modules
-from .cache import Cache
-from .config import AzureOpenAIConfig
-from .docs import DocumentationError, DocumentationContext
-from .docstring_processor import DocstringData, DocstringProcessor
-from .logger import LoggerSetup, log_debug, log_info, log_warning, log_error
-from .markdown_generator import MarkdownConfig, MarkdownGenerator
-from .metrics import Metrics
-from .monitoring import SystemMonitor
-from .response_parsing import ResponseParsingService
-from .schema_loader import load_schema
-from .types import *  # Types are an exception - OK to import * for type definitions
+This package provides the core functionality for:
+- Code extraction and analysis
+- Documentation generation
+- Response parsing
+- Schema validation
+- Metrics collection
+- Caching
+- Configuration management
 
-__version__ = "1.0.0"
+Main components:
+- DocstringProcessor: Process and validate docstrings
+- ResponseParsingService: Parse and validate AI responses  
+- CodeExtractor: Extract code elements from source
+- Cache: Caching system for generated content
+- Metrics: Performance and usage metrics
+- DocumentationOrchestrator: Orchestrate documentation generation
+"""
+
+from core.docstring_processor import DocstringProcessor
+from core.response_parsing import ResponseParsingService
+from core.extraction.code_extractor import CodeExtractor
+from core.cache import Cache
+from core.config import AzureOpenAIConfig
+from core.metrics import Metrics
+from core.logger import LoggerSetup
+from core.docs import DocumentationOrchestrator
+from core.schema_loader import load_schema
+from core.types import (
+    DocstringData,
+    ExtractedFunction,
+    ExtractedClass,
+    ExtractionResult,
+    ParsedResponse,
+    ProcessingResult,
+)
+
+__version__ = "0.1.0"
+
 __all__ = [
-    # Core components
-    'Cache', 'AzureOpenAIConfig', 'DocumentationError',
-    'DocumentationContext', 'DocstringData', 'DocstringProcessor',
-    'LoggerSetup', 'log_debug', 'log_info', 'log_warning', 'log_error',
-    'MarkdownConfig', 'MarkdownGenerator', 'Metrics', 'SystemMonitor',
-    'ResponseParsingService', 'load_schema',
+    "DocstringProcessor",
+    "ResponseParsingService", 
+    "CodeExtractor",
+    "Cache",
+    "AzureOpenAIConfig",
+    "Metrics",
+    "LoggerSetup",
+    "DocumentationOrchestrator",
+    "load_schema",
+    "DocstringData",
+    "ExtractedFunction",
+    "ExtractedClass", 
+    "ExtractionResult",
+    "ParsedResponse",
+    "ProcessingResult",
 ]

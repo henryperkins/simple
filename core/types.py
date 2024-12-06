@@ -59,52 +59,44 @@ class ExtractedArgument:
     default_value: Optional[str] = None
     is_required: bool = True
 
+@dataclass
+class ExtractedFunction(ExtractedElement):
+    """Represents an extracted function with its metadata."""
+    name: str
+    lineno: int
+    source: Optional[str] = None
+    docstring: Optional[str] = None
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    dependencies: Dict[str, Set[str]] = field(default_factory=dict)
+    decorators: List[str] = field(default_factory=list)
+    complexity_warnings: List[str] = field(default_factory=list)
+    raises: List[Dict[str, str]] = field(default_factory=list)
+    body_summary: Optional[str] = None
+    ast_node: Optional[ast.AST] = None
 
-class ExtractedFunction:
-    def __init__(self, name: str, lineno: int, source: str, docstring: str, metrics: Dict[str, Any],
-                 decorators: List[str], body_summary: str, raises: List[str], ast_node: Any):
-        self.name = name
-        self.lineno = lineno
-        self.source = source
-        self.docstring = docstring
-        self.metrics = metrics
-        self.decorators = decorators
-        self.body_summary = body_summary
-        self.raises = raises
-        self.ast_node = ast_node
-
-    # Add any utility methods if needed
     def to_dict(self) -> Dict[str, Any]:
+        """Convert the ExtractedFunction instance to a dictionary."""
         return {
             "name": self.name,
             "lineno": self.lineno,
             "source": self.source,
             "docstring": self.docstring,
             "metrics": self.metrics,
+            "dependencies": self.dependencies,
             "decorators": self.decorators,
-            "body_summary": self.body_summary,
-            "raises": self.raises,
+            "complexity_warnings": self.complexity_warnings,
+            "raises": [r.get('exception', 'Unknown') for r in self.raises],
+            "body_summary": self.body_summary
+            # ast_node intentionally excluded from dict conversion
         }
 
-
 @dataclass
-class ExtractedClass:
-    """
-    Represents extracted information about a class.
-
-    Args:
-        name: The name of the class
-        docstring: The class's docstring
-        raises: List of exceptions that this class can raise
-        methods: List of class methods
-        metrics: Dictionary of code metrics
-        bases: List of base classes
-        ast_node: Original AST node
-    """
+class ExtractedClass(ExtractedElement):
+    """Represents extracted information about a class."""
     name: str
     docstring: str
-    raises: List[str] = field(default_factory=list)
-    methods: List[Any] = field(default_factory=list)
+    raises: List[Dict[str, str]] = field(default_factory=list)
+    methods: List[ExtractedFunction] = field(default_factory=list)
     metrics: Dict[str, Any] = field(default_factory=dict)
     bases: List[str] = field(default_factory=list)
     lineno: int = 0
@@ -117,11 +109,27 @@ class ExtractedClass:
     metaclass: Optional[str] = None
     complexity_warnings: List[str] = field(default_factory=list)
     ast_node: Optional[ast.ClassDef] = None
-    
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get attribute with fallback to default."""
-        return getattr(self, key, default)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the ExtractedClass instance to a dictionary."""
+        return {
+            "name": self.name,
+            "docstring": self.docstring,
+            "raises": [r.get('exception', 'Unknown') for r in self.raises],
+            "methods": [method.to_dict() for method in self.methods],
+            "metrics": self.metrics,
+            "bases": self.bases,
+            "lineno": self.lineno,
+            "source": self.source,
+            "dependencies": self.dependencies,
+            "attributes": self.attributes,
+            "is_exception": self.is_exception,
+            "decorators": self.decorators,
+            "instance_attributes": self.instance_attributes,
+            "metaclass": self.metaclass,
+            "complexity_warnings": self.complexity_warnings
+            # ast_node intentionally excluded from dict conversion
+        }
 
 @dataclass
 class ParsedResponse:
@@ -189,6 +197,10 @@ class ExtractionContext:
     base_path: Optional[Path] = None
     source_code: Optional[str] = None
 
+    def __init__(self):
+        self.tree = None
+        self.metrics_enabled = True
+        self.include_private = False
 
 @dataclass
 class ExtractionResult:

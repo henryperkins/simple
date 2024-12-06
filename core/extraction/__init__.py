@@ -1,13 +1,33 @@
-"""Code extraction and analysis components."""
+# core/extraction/__init__.py
+"""
+Code extraction subpackage for analyzing Python source code.
 
-from .code_extractor import CodeExtractor
-from .class_extractor import ClassExtractor
-from .function_extractor import FunctionExtractor
-from .dependency_analyzer import DependencyAnalyzer
+This subpackage provides functionality for:
+- Extracting functions, classes and methods from source code
+- Analyzing code complexity and dependencies
+- Parsing docstrings and type hints
+- Building inheritance hierarchies
+- Generating code metadata
+
+Main components:
+- CodeExtractor: Main class for code extraction
+- ClassExtractor: Extract class definitions and methods
+- FunctionExtractor: Extract function and method definitions
+- ImportExtractor: Extract and analyze imports
+"""
+
+from core.extraction.code_extractor import CodeExtractor
+from core.types import (
+    ExtractedFunction,
+    ExtractedClass,
+    ExtractionResult,
+    ExtractionContext
+)
 
 __all__ = [
-    'CodeExtractor',
-    'ClassExtractor', 
-    'FunctionExtractor',
-    'DependencyAnalyzer'
+    "CodeExtractor",
+    "ExtractedFunction",
+    "ExtractedClass", 
+    "ExtractionResult",
+    "ExtractionContext"
 ]

@@ -166,7 +166,7 @@ class ResponseParsingService:
             error_message = f"Unexpected error during JSON response parsing: {e}"
             self.logger.error(error_message)
             return None
-
+        
     async def _validate_response(
         self, content: Dict[str, Any], format_type: str
     ) -> bool:

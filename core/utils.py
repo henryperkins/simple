@@ -359,41 +359,97 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
         logger.error(f"Error extracting source segment: {e}", exc_info=True)
         return None
 
-def get_node_name(node: Optional[ast.AST]) -> str:
-    """Get string representation of AST node name."""
-    if node is None:
-        return "Any"
 
-    try:
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute):
-            return f"{get_node_name(node.value)}.{node.attr}"
-        if isinstance(node, ast.Subscript):
-            value = get_node_name(node.value)
-            slice_val = get_node_name(node.slice)
-            return f"{value}[{slice_val}]"
-        if isinstance(node, ast.Call):
-            func_name = get_node_name(node.func)
-            args = ", ".join(get_node_name(arg) for arg in node.args)
-            return f"{func_name}({args})"
-        if isinstance(node, (ast.Tuple, ast.List)):
-            elements = ", ".join(get_node_name(e) for e in node.elts)
-            return f"({elements})" if isinstance(node, ast.Tuple) else f"[{elements}]"
-        if isinstance(node, ast.Constant):
-            return str(node.value)
-        if isinstance(node, ast.JoinedStr):  # f-strings
-            return "f-string"
-        if isinstance(node, ast.Dict):
-            return "dict"
-        if isinstance(node, ast.BinOp):
-            return f"{get_node_name(node.left)} {type(node.op).__name__} {get_node_name(node.right)}"
-        if isinstance(node, ast.Await):
-            return get_node_name(node.value)
-        return f"Unknown<{type(node).__name__}>"
-    except Exception as e:
-        logger.error(f"Error getting name from node {type(node).__name__}: {e}")
-        return f"Unknown<{type(node).__name__}>"
+import ast
+
+class NodeNameVisitor(ast.NodeVisitor):
+    def __init__(self):
+        self.name = ""
+
+    def visit_Name(self, node):
+        self.name = node.id
+
+    def visit_Attribute(self, node):
+        self.visit(node.value)
+        self.name += f".{node.attr}"
+
+    def visit_Call(self, node):
+        self.visit(node.func)
+        # Optionally, handle arguments if needed
+        self.name += "()"
+
+    def visit_Subscript(self, node):
+        self.visit(node.value)
+        self.name += "["
+        self.visit(node.slice)
+        self.name += "]"
+
+    def visit_Constant(self, node):
+        self.name = repr(node.value)
+
+    def visit_List(self, node):
+        self.name = "[" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + "]"
+
+    def visit_Tuple(self, node):
+        self.name = "(" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + ")"
+
+    def visit_Set(self, node):
+        self.name = "{" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + "}"
+
+    def visit_Dict(self, node):
+        self.name = "{" + ", ".join(f"{self.visit_and_get(k)}: {self.visit_and_get(v)}"
+                                    for k, v in zip(node.keys, node.values)) + "}"
+
+    def visit_BinOp(self, node):
+        left = self.visit_and_get(node.left)
+        op = type(node.op).__name__
+        right = self.visit_and_get(node.right)
+        self.name = f"{left} {op} {right}"
+
+    def visit_UnaryOp(self, node):
+        self.name = f"{type(node.op).__name__} {self.visit_and_get(node.operand)}"
+
+    def visit_BoolOp(self, node):
+        op = " and " if isinstance(node.op, ast.And) else " or "
+        self.name = op.join(self.visit_and_get(val) for val in node.values)
+
+    def visit_Compare(self, node):
+        left = self.visit_and_get(node.left)
+        ops = [type(op).__name__ for op in node.ops]
+        comparators = [self.visit_and_get(comp) for comp in node.comparators]
+        self.name = f"{left} " + " ".join(f"{op} {comp}" for op, comp in zip(ops, comparators))
+
+    def visit_Await(self, node):
+        self.name = f"await {self.visit_and_get(node.value)}"
+
+    def visit_JoinedStr(self, node):
+        self.name = 'f"' + "".join(self.visit_and_get(value) for value in node.values) + '"'
+
+    def visit_Assign(self, node):
+        targets = ", ".join(self.visit_and_get(t) for t in node.targets)
+        value = self.visit_and_get(node.value)
+        self.name = f"{targets} = {value}"
+
+    def visit_AugAssign(self, node):
+        target = self.visit_and_get(node.target)
+        op = type(node.op).__name__
+        value = self.visit_and_get(node.value)
+        self.name = f"{target} {op}= {value}"
+        
+    def visit_Import(self, node):
+        self.name = "import " + ", ".join(alias.name for alias in node.names)
+
+    def visit_ImportFrom(self, node):
+        self.name = f"from {node.module} import " + ", ".join(alias.name for alias in node.names)
+
+    def generic_visit(self, node):
+        self.name = type(node).__name__
+        logger.warning(f"Unsupported AST node type for extraction: {type(node).__name__}")
+
+    def visit_and_get(self, node):
+        visitor = NodeNameVisitor()
+        visitor.visit(node)
+        return visitor.name
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename for safe file system operations."""
