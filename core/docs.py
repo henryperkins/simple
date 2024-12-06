@@ -1,12 +1,12 @@
-"""
-Updated Documentation Orchestrator to manage end-to-end extraction, AI interaction, and validation.
-"""
-
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 from datetime import datetime
+import json
+
+if TYPE_CHECKING:
+    from ai_interaction import AIInteractionHandler
 from core.logger import LoggerSetup
-from core.types import DocumentationContext, ExtractionContext, ExtractionResult
+from core.types import DocumentationContext, ExtractionContext
 from core.extraction.code_extractor import CodeExtractor
 from core.docstring_processor import DocstringProcessor
 from core.response_parsing import ResponseParsingService
@@ -15,11 +15,11 @@ from exceptions import DocumentationError
 
 logger = LoggerSetup.get_logger(__name__)
 
-class DocumentationOrchestrator:
-    """Orchestrates the documentation generation process."""
 
+class DocumentationOrchestrator:
     def __init__(
         self,
+        ai_handler: Optional['AIInteractionHandler'] = None,  # Use forward reference
         docstring_processor: Optional[DocstringProcessor] = None,
         code_extractor: Optional[CodeExtractor] = None,
         metrics: Optional[Metrics] = None,
@@ -29,12 +29,19 @@ class DocumentationOrchestrator:
         Initialize the documentation orchestrator.
 
         Args:
+            ai_handler: Handler for AI interactions
             docstring_processor: Processor for docstrings
             code_extractor: Extractor for code elements
             metrics: Metrics calculator
             response_parser: Service for parsing AI responses
+
+        Raises:
+            ValueError: If ai_handler is not provided
         """
         self.logger = LoggerSetup.get_logger(__name__)
+        if ai_handler is None:
+            raise ValueError("ai_handler is required for DocumentationOrchestrator")
+        self.ai_handler = ai_handler
         self.docstring_schema = load_schema("docstring_schema")  # Load schema
         self.metrics = metrics or Metrics()
         self.code_extractor = code_extractor or CodeExtractor(ExtractionContext())
@@ -71,8 +78,10 @@ class DocumentationOrchestrator:
 
             # Step 2: Generate enriched prompt for AI model
             try:
-                from core.utils import create_dynamic_prompt  # Import utility function
-                prompt = create_dynamic_prompt(extraction_result)
+                extraction_dict = extraction_result.to_dict()
+                prompt = self.ai_handler.create_dynamic_prompt(
+                    extraction_dict
+                )
                 self.logger.info("Prompt generated successfully for AI model")
             except Exception as e:
                 error_msg = f"Prompt generation failed: {str(e)}"
@@ -104,8 +113,7 @@ class DocumentationOrchestrator:
 
             # Step 5: Integrate AI-generated docstrings
             try:
-                from core.utils import integrate_ai_response  # Import utility function
-                updated_code, updated_documentation = await integrate_ai_response(
+                updated_code, updated_documentation = await self.ai_handler._integrate_ai_response(
                     parsed_response.content, extraction_result
                 )
                 self.logger.info("Docstring integration completed successfully")
@@ -124,7 +132,6 @@ class DocumentationOrchestrator:
             error_msg = f"Unexpected error during documentation generation: {str(e)}"
             self.logger.error(error_msg, exc_info=True)
             raise DocumentationError(error_msg)
-
 
     async def generate_module_documentation(
         self, file_path: Path, output_dir: Path
@@ -188,6 +195,11 @@ class DocumentationOrchestrator:
         pass
 
 def load_schema(schema_name: str) -> Dict[str, Any]:
-    """Load the schema from a JSON file."""
-    with open(f"{schema_name}.json", "r") as file:
+    """Load the schema from a JSON file in the 'schemas' directory."""
+    schema_path = Path(__file__).parent.parent / 'schemas' / f"{schema_name}.json"
+    
+    if not schema_path.exists():
+        raise FileNotFoundError(f"Schema file not found: {schema_path}")
+    
+    with open(schema_path, "r", encoding="utf-8") as file:
         return json.load(file)

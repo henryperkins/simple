@@ -7,10 +7,10 @@ from core.logger import LoggerSetup
 from core.metrics import Metrics
 from core.types import ExtractedFunction, ExtractionContext
 from core.utils import handle_extraction_error, get_source_segment
-from core.docstringutils import DocstringUtils, get_node_name  # Ensure correct import
-from core.extraction.dependency_analyzer import extract_dependencies_from_node  # Ensure correct import
+from core.docstringutils import DocstringUtils  # Removed unused import
 
 logger = LoggerSetup.get_logger(__name__)
+
 
 class FunctionExtractor:
     """Handles extraction of functions from Python source code."""
@@ -49,14 +49,15 @@ class FunctionExtractor:
         try:
             metadata = DocstringUtils.extract_metadata(node)
             metrics = self.metrics_calculator.calculate_function_metrics(node)
+            source_code = self.context.source_code or ""
             return ExtractedFunction(
                 name=metadata["name"],
                 lineno=metadata["lineno"],
-                source=get_source_segment(self.context.source_code, node),
+                source=get_source_segment(source_code, node),
                 docstring=metadata["docstring_info"]["docstring"],
                 metrics=metrics,
                 decorators=metadata.get("decorators", []),
-                body_summary=get_source_segment(self.context.source_code, node),
+                body_summary=get_source_segment(source_code, node) or "",
                 raises=metadata["docstring_info"]["raises"],
                 ast_node=node,
             )
@@ -67,3 +68,14 @@ class FunctionExtractor:
                 'lineno': getattr(node, 'lineno', 'Unknown'),
                 'error': str(e)
             })
+            return ExtractedFunction(
+                name=node.name,
+                lineno=getattr(node, 'lineno', 0),
+                source="",
+                docstring="",
+                metrics={},
+                decorators=[],
+                body_summary="",
+                raises=[],
+                ast_node=node,
+            )

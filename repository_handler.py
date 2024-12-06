@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import asyncio
 import stat
+import re
 from pathlib import Path
 from typing import Optional, List, Tuple, Set, Any, Dict
 import git
@@ -126,111 +127,61 @@ class RepositoryHandler:
             raise
 
     async def clone_repository(self, repo_url: str) -> Path:
-        """
-        Clone a git repository to a temporary directory.
-
-        Args:
-            repo_url (str): URL of the git repository to clone.
-
-        Returns:
-            Path: Path to the cloned repository.
-
-        Raises:
-            GitCommandError: If cloning the repository fails.
-            ValueError: If the repository URL is invalid.
-            Exception: If an error occurs during cloning.
-        """
-        async with self._lock:
-            try:
-                # Validate URL
-                if not self.validate_repository(repo_url):
-                    raise ValueError(f"Invalid git repository URL: {repo_url}")
-
-                # Clone repository
-                logger.info(f"Cloning repository from {repo_url}")
-                self.repo = git.Repo.clone_from(
-                    repo_url,
-                    str(self.repo_path),  # Convert Path to string for git operations
-                    progress=self._get_git_progress(),
-                )
-
-                logger.info(f"Repository cloned to {self.repo_path}")
-                return self.repo_path
-
-            except GitCommandError as e:
-                error_msg = f"Failed to clone repository: {e}"
-                logger.error(error_msg)
-                await self.cleanup()
-                raise GitCommandError(e.command, e.status, e.stderr)
-            except Exception as e:
-                error_msg = f"Error cloning repository: {e}"
-                logger.error(error_msg)
-                await self.cleanup()
-                raise
-
-    def get_python_files(
-        self, exclude_patterns: Optional[Set[str]] = None
-    ) -> List[Path]:
-        """
-        Get all Python files from the repository.
-
-        Args:
-            exclude_patterns (Optional[Set[str]]): Set of patterns to exclude from the search.
-
-        Returns:
-            List[Path]: List of Python file paths.
-
-        Raises:
-            ValueError: If the repository path is not set.
-            Exception: If an error occurs while finding Python files.
-        """
-        if not self.repo_path:
-            raise ValueError("Repository path not set")
-
-        exclude_patterns = exclude_patterns or {
-            "*/venv/*",
-            "*/env/*",
-            "*/build/*",
-            "*/dist/*",
-            "*/.git/*",
-            "*/__pycache__/*",
-            "*/migrations/*",
-        }
-
+        """Clone a repository from URL."""
         try:
-            python_files = FileUtils.filter_files(
-                self.repo_path, pattern="*.py", exclude_patterns=exclude_patterns
-            )
-            logger.info(f"Found {len(python_files)} Python files")
-            return python_files
+            clone_dir = self.repo_path / Path(repo_url).stem
+            if clone_dir.exists():
+                self.logger.info(f"Repository exists at: {clone_dir}")
+                # Verify repository structure
+                if not self._verify_repository(clone_dir):
+                    self.logger.warning(f"Invalid repository structure at {clone_dir}, re-cloning")
+                    shutil.rmtree(clone_dir)
+                else:
+                    return clone_dir
+
+            self.logger.info(f"Cloning repository from {repo_url} to {clone_dir}")
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, Repo.clone_from, repo_url, clone_dir)
+            
+            # Verify cloned repository
+            if not self._verify_repository(clone_dir):
+                raise GitCommandError("clone", "Invalid repository structure after cloning")
+                
+            self.logger.info(f"Repository cloned successfully to {clone_dir}")
+            return clone_dir
+
         except Exception as e:
-            logger.error(f"Error finding Python files: {e}")
-            return []
+            self.logger.error(f"Failed to clone repository: {e}")
+            raise
+
+    def _verify_repository(self, path: Path) -> bool:
+        """Verify repository structure and content."""
+        try:
+            # Check if it's a git repository
+            if not (path / ".git").exists():
+                self.logger.error(f"No .git directory found in {path}")
+                return False
+
+            # Log repository structure
+            self.logger.debug("Repository structure:")
+            for item in path.rglob("*"):
+                self.logger.debug(f"  {item}")
+
+            return True
+        except Exception as e:
+            self.logger.error(f"Error verifying repository: {e}")
+            return False
+
+    def get_python_files(self, exclude_patterns: Optional[Set[str]] = None) -> List[Path]:
+        """Retrieve all Python files in the repository, excluding specified patterns."""
+        python_files = GitUtils.get_python_files(self.repo_path, exclude_patterns)
+        self.logger.info(f"Found {len(python_files)} Python files in the repository")
+        return python_files
 
     def get_file_content(self, file_path: Path) -> Tuple[str, str]:
-        """
-        Get the content of a file and its relative path.
-
-        Args:
-            file_path (Path): Path to the file.
-
-        Returns:
-            Tuple[str, str]: Tuple containing the file content and its relative path.
-
-        Raises:
-            FileNotFoundError: If the file is not found.
-            Exception: If an error occurs while reading the file.
-        """
-        if not file_path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        try:
-            content = FileUtils.read_file_safe(file_path)
-            relative_path = str(file_path.relative_to(self.repo_path))
-            return content, relative_path
-        except Exception as e:
-            logger.error(f"Error reading file {file_path}: {e}")
-            return "", str(file_path)
+        """Retrieve the content of the specified file."""
+        content = FileUtils.read_file_safe(file_path)
+        return content, file_path.name
 
     async def cleanup(self) -> None:
         """
@@ -339,25 +290,6 @@ class RepositoryHandler:
         except Exception as e:
             self.logger.error("Error getting file history: %s", str(e))
             return []
-
-    def validate_repository(self, path: str) -> bool:
-        """
-        Validate if the given path is a valid git repository URL.
-
-        Args:
-            path (str): URL or path to the git repository.
-
-        Returns:
-            bool: True if the path is a valid git repository, False otherwise.
-
-        Raises:
-            Exception: If an error occurs during validation.
-        """
-        try:
-            return GitUtils.is_valid_git_url(str(path))
-        except Exception as e:
-            self.logger.error("Error validating git URL: %s", str(e))
-            return False
 
     def _get_git_progress(self):
         """

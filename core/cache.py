@@ -201,11 +201,13 @@ class Cache:
             return {"enabled": False, "stats": None}
 
         try:
-            if not self.redis:
-                await self.connect()
+            if not self._redis:
+                await self._initialize_connection()
+                if not self._redis:
+                    return {"enabled": True, "stats": self._stats}
 
             try:
-                info = await self.redis.info()
+                info = await self._redis.info()
             except Exception as e:
                 log_error(f"Failed to get Redis info: {e}")
                 info = {}

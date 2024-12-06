@@ -4,7 +4,7 @@ import ast
 import importlib.util
 import os
 import sys
-from typing import Dict, Set, Optional, List, Tuple
+from typing import Dict, Set, Optional, List, Tuple, Union, Any
 
 from core.logger import LoggerSetup
 from core.types import ExtractionContext
@@ -16,16 +16,20 @@ def extract_dependencies_from_node(node: ast.AST) -> Dict[str, Set[str]]:
     """Extract dependencies from an AST node."""
     dependencies = {"imports": set(), "calls": set(), "attributes": set()}
     for child in ast.walk(node):
-        if isinstance(child, ast.Import):
-            for name in child.names:
-                dependencies["imports"].add(name.name)
-        elif isinstance(child, ast.ImportFrom) and child.module:
-            dependencies["imports"].add(child.module)
-        elif isinstance(child, ast.Call):
-            dependencies["calls"].add(get_node_name(child.func))
-        elif isinstance(child, ast.Attribute):
-            dependencies["attributes"].add(get_node_name(child))
+        try:
+            if isinstance(child, ast.Import):
+                for name in child.names:
+                    dependencies["imports"].add(name.name)
+            elif isinstance(child, ast.ImportFrom) and child.module:
+                dependencies["imports"].add(child.module)
+            elif isinstance(child, ast.Call):
+                dependencies["calls"].add(get_node_name(child.func))
+            elif isinstance(child, ast.Attribute):
+                dependencies["attributes"].add(get_node_name(child))
+        except Exception as e:
+            logger.warning(f"Unsupported AST node encountered: {e}")
     return dependencies
+
 
 class DependencyAnalyzer:
     """Analyzes and categorizes code dependencies."""
@@ -35,6 +39,7 @@ class DependencyAnalyzer:
         self.logger = logger
         self.context = context
         self.module_name = context.module_name
+        self._function_errors = []
         self.logger.debug("Initialized DependencyAnalyzer")
 
     def analyze_dependencies(
@@ -49,7 +54,9 @@ class DependencyAnalyzer:
             deps = self._categorize_dependencies(raw_deps)
             circular_deps = self._detect_circular_dependencies(deps)
             if circular_deps:
-                self.logger.warning(f"Circular dependencies detected: {circular_deps}")
+                self.logger.warning(
+                    f"Circular dependencies detected: {circular_deps}"
+                )
 
             self.logger.info(
                 f"Dependency analysis completed: {len(deps)} categories found"
@@ -59,6 +66,60 @@ class DependencyAnalyzer:
         except Exception as e:
             self.logger.error(f"Dependency analysis failed: {str(e)}", exc_info=True)
             return {"stdlib": set(), "third_party": set(), "local": set()}
+
+    def extract_function_metadata(
+        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
+    ) -> Dict[str, Any]:
+        """Extract function metadata including raises information."""
+        try:
+            metadata = {
+                "name": node.name,
+                "docstring": ast.get_docstring(node) or "",
+                "raises": self._extract_raises(node),
+                "args": self._extract_args(node),
+                "returns": self._extract_returns(node)
+            }
+            return metadata
+        except Exception as e:
+            self._function_errors.append(
+                f"Error extracting metadata for {getattr(node, 'name', 'unknown')}: {e}"
+            )
+            return {}
+
+    def _extract_raises(self, node: ast.AST) -> List[Dict[str, str]]:
+        """Extract raise statements from function body."""
+        raises = []
+        for child in ast.walk(node):
+            if isinstance(child, ast.Raise) and child.exc:
+                exc_name = get_node_name(child.exc)
+                if exc_name:
+                    raises.append({
+                        "exception": exc_name,
+                        "description": "Exception raised in function execution"
+                    })
+        return raises
+
+    def _extract_args(
+        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
+    ) -> List[Dict[str, str]]:
+        """Extract arguments from function definition."""
+        args = []
+        for arg in node.args.args:
+            args.append({
+                "name": arg.arg,
+                "type": "Unknown",  # Type inference can be added if needed
+                "description": "No description available"
+            })
+        return args
+
+    def _extract_returns(
+        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
+    ) -> Dict[str, str]:
+        """Extract return type from function definition."""
+        return {
+            "type": "Unknown",  # Type inference can be added if needed
+            "description": "No description available"
+        }
 
     def _categorize_dependencies(
         self, raw_deps: Dict[str, Set[str]]
@@ -71,7 +132,9 @@ class DependencyAnalyzer:
 
         return categorized_deps
 
-    def _categorize_import(self, module_name: str, deps: Dict[str, Set[str]]) -> None:
+    def _categorize_import(
+        self, module_name: str, deps: Dict[str, Set[str]]
+    ) -> None:
         """Categorize an import as stdlib, third-party, or local."""
         self.logger.debug(f"Categorizing import: {module_name}")
 
@@ -169,14 +232,30 @@ class DependencyAnalyzer:
             dot = Digraph(comment="Module Dependencies")
 
             for category, modules in dependencies.items():
-                with dot.subgraph(name=f"cluster_{category}") as sub:
-                    sub.attr(label=category)
-                    for module in modules:
-                        sub.node(module)
+                sub = Digraph(name=f"cluster_{category}")
+                sub.attr(label=category)
+                for module in modules:
+                    sub.node(module)
+                dot.subgraph(sub)
 
             dot.render(output_file, view=False, cleanup=True)
             self.logger.info(f"Dependency graph saved to {output_file}")
 
         except Exception as e:
             self.logger.error(f"Error generating dependency graph: {e}")
-            self.logger.error("Make sure Graphviz is installed and in your system PATH")
+            self.logger.error(
+                "Make sure Graphviz is installed and in your system PATH"
+            )
+
+    def extract_dependencies(self, tree: ast.AST) -> List[str]:
+        """
+        Extract dependencies from AST.
+        
+        Args:
+            tree: AST to analyze
+            
+        Returns:
+            List of dependency strings
+        """
+        deps = self.analyze_dependencies(tree)
+        return list({dep for deps in deps.values() for dep in deps})

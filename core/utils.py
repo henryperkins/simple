@@ -174,7 +174,58 @@ class GitUtils:
         except Exception as e:
             logger.error(f"Error validating git URL: {e}", exc_info=True)
             return False
+        
+    @staticmethod
+    def get_python_files(repo_path: Path, exclude_patterns: Optional[Set[str]] = None) -> List[Path]:
+        """
+        Get all Python files from the repository.
 
+        Args:
+            repo_path (Path): Path to the repository
+            exclude_patterns (Optional[Set[str]]): Set of patterns to exclude
+
+        Returns:
+            List[Path]: List of Python file paths
+        """
+        if not repo_path:
+            raise ValueError("Repository path not set")
+
+        exclude_patterns = exclude_patterns or {
+            "*/venv/*",
+            "*/env/*",
+            "*/build/*",
+            "*/dist/*",
+            "*/.git/*",
+            "*/__pycache__/*",
+            "*/migrations/*",
+        }
+
+        try:
+            # Log repository structure for debugging
+            logger.debug(f"Scanning repository at: {repo_path}")
+            logger.debug(f"Directory contents: {list(repo_path.iterdir())}")
+            
+            # Use rglob to find all Python files recursively
+            python_files = []
+            for file_path in repo_path.rglob("*.py"):
+                # Convert to string for pattern matching
+                file_str = str(file_path)
+                # Check if file should be excluded
+                if not any(fnmatch.fnmatch(file_str, pattern) for pattern in exclude_patterns):
+                    python_files.append(file_path)
+                    logger.debug(f"Found Python file: {file_path}")
+
+            logger.info(f"Found {len(python_files)} Python files in {repo_path}")
+            
+            if not python_files:
+                logger.warning(f"No Python files found in repository: {repo_path}")
+            
+            return python_files
+
+        except Exception as e:
+            logger.error(f"Error finding Python files in {repo_path}: {e}")
+            return []
+        
     @staticmethod
     async def cleanup_git_directory(path: Path) -> None:
         """Safely clean up a Git repository directory."""

@@ -341,8 +341,9 @@ class MetricsCollector:
     """Collects and manages operation metrics."""
 
     def __init__(self) -> None:
-        """Initialize metrics collector."""
-        self.metrics_store: List[Dict[str, Any]] = []
+        """Initialize MetricsCollector."""
+        self.metrics = []
+        self.logger = LoggerSetup.get_logger(__name__)
 
     async def track_operation(
         self,
@@ -353,31 +354,31 @@ class MetricsCollector:
         error: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Track detailed operation metrics."""
+        """Track an operation's metrics."""
         metric = {
             "operation_type": operation_type,
             "success": success,
             "duration": duration,
             "usage": usage or {},
-            "error": error,
-            "metadata": metadata or {},
-            "timestamp": datetime.now().isoformat(),
+            "validation_success": metadata.get("validation_success", False) if metadata else False,
+            "timestamp": datetime.utcnow().isoformat()
         }
-        self.metrics_store.append(metric)
+        if error:
+            metric["error"] = error
+        self.metrics.append(metric)
+        self.logger.debug(f"Tracked operation: {metric}")
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Get all metrics data."""
-        return {"operations": self.metrics_store.copy()}
+        """Retrieve collected metrics."""
+        return {"operations": self.metrics}
 
     def clear_metrics(self) -> None:
         """Clear all collected metrics."""
-        self.metrics_store.clear()
+        self.metrics.clear()
+        self.logger.info("Cleared all metrics.")
 
     async def close(self) -> None:
-        """Clean up and close the metrics collector."""
-        try:
-            self.clear_metrics()
-            logger.info("MetricsCollector closed successfully")
-        except Exception as e:
-            logger.error("Error closing MetricsCollector: %s", e)
-            raise
+        """Cleanup_metrics_collector resources (if any)."""
+        # If there are resources to clean up, handle them here.
+        # For now, it's a placeholder.
+        self.logger.info("MetricsCollector cleanup completed.")

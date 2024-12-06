@@ -7,6 +7,7 @@ from core.logger import LoggerSetup
 
 logger = LoggerSetup.get_logger(__name__)
 
+
 def get_env_int(var_name: str, default: int) -> int:
     value = os.getenv(var_name)
     try:
@@ -18,7 +19,26 @@ def get_env_int(var_name: str, default: int) -> int:
         )
         return default
 
+
 def get_env_float(var_name: str, default: float) -> float:
+    """Retrieve and convert an environment variable to float type.
+
+    Args:
+        var_name (str): The name of the environment variable to retrieve.
+        default (float): The default value to return if the environment variable is not set
+            or cannot be converted to float.
+
+    Returns:
+        float: The environment variable value converted to float if successful,
+        otherwise returns the default value.
+
+    Example:
+        >>> get_env_float("TIMEOUT", 5.0)
+        5.0
+        >>> # With environment variable TIMEOUT=10.5
+        >>> get_env_float("TIMEOUT", 5.0)
+        10.5
+    """
     value = os.getenv(var_name)
     try:
         return float(value) if value is not None else default
@@ -29,9 +49,30 @@ def get_env_float(var_name: str, default: float) -> float:
         )
         return default
 
+
 def get_env_bool(var_name: str, default: bool) -> bool:
+    """Get boolean value from environment variable.
+
+    Retrieves a boolean value from an environment variable, with a default fallback.
+    The function considers 'true', '1', and 'yes' (case-insensitive) as True values.
+
+    Args:
+        var_name (str): Name of the environment variable to retrieve
+        default (bool): Default value if environment variable is not set
+
+    Returns:
+        bool: The boolean value from environment variable or default if not set
+
+    Example:
+        >>> os.environ['DEBUG'] = 'true'
+        >>> get_env_bool('DEBUG', False)
+        True
+        >>> get_env_bool('NONEXISTENT', False)
+        False
+    """
     value = os.getenv(var_name, str(default)).lower()
     return value in ("true", "1", "yes")
+
 
 @dataclass
 class OpenAIModelConfig:
@@ -40,6 +81,7 @@ class OpenAIModelConfig:
     cost_per_1k_prompt: float = 0.03
     cost_per_1k_completion: float = 0.06
     chunk_size: int = 6144
+
 
 @dataclass
 class AzureOpenAIConfig:
@@ -64,15 +106,26 @@ class AzureOpenAIConfig:
     redis_host: str = field(default_factory=lambda: os.getenv("REDIS_HOST", "localhost"))
     redis_port: int = field(default_factory=lambda: get_env_int("REDIS_PORT", 6379))
     redis_db: int = field(default_factory=lambda: get_env_int("REDIS_DB", 0))
+    redis_password: Optional[str] = field(
+        default_factory=lambda: os.getenv("REDIS_PASSWORD", None)
+    )
+    cache_ttl: int = field(default_factory=lambda: get_env_int("CACHE_TTL", 3600))
 
     # API Key
     api_key: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_KEY", "40c4befe4179411999c14239f386e24d"))
+
+    # Logging settings
+    output_directory: str = field(default_factory=lambda: os.getenv("OUTPUT_DIRECTORY", "output"))
+    log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
+    log_format: str = field(default_factory=lambda: os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    log_directory: str = field(default_factory=lambda: os.getenv("LOG_DIRECTORY", "logs"))
 
     # Model Limits
     model_limits: Dict[str, OpenAIModelConfig] = field(default_factory=lambda: {
         "gpt-4": OpenAIModelConfig(),
         "gpt-3.5-turbo": OpenAIModelConfig(max_tokens=4096, cost_per_1k_prompt=0.02, cost_per_1k_completion=0.04)
     })
+
     def __post_init__(self):
         """Initialize cache if enabled."""
         self.cache: Optional[Cache] = None
@@ -153,6 +206,7 @@ class AzureOpenAIConfig:
         }
         return config_dict
 
+
 def check_required_env_vars() -> None:
     """
     Verify required environment variables are set.
@@ -167,7 +221,7 @@ def check_required_env_vars() -> None:
     }
 
     missing = [
-        f"{var} ({description})"
+        var
         for var, description in required_vars.items()
         if not os.getenv(var)
     ]
@@ -175,5 +229,5 @@ def check_required_env_vars() -> None:
     if missing:
         raise ValueError(
             "Missing required environment variables:\n" +
-            "\n".join(f"- {var} ({description})" for var in missing)
+            "\n".join(f"- {var} ({required_vars[var]})" for var in missing)
         )

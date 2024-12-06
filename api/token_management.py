@@ -13,6 +13,7 @@ import tiktoken
 
 logger = LoggerSetup.get_logger(__name__)
 
+
 class TokenManager:
     """Manages all token-related operations for Azure OpenAI API."""
 

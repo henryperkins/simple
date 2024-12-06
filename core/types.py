@@ -77,18 +77,18 @@ class ExtractedFunction(ExtractedElement):
 
 
 @dataclass
-class ExtractedClass(ExtractedElement):
-    """Represents an extracted class."""
-    bases: List[str] = field(default_factory=list)
-    methods: List[ExtractedFunction] = field(default_factory=list)
-    attributes: List[Dict[str, Any]] = field(default_factory=list)
-    is_exception: bool = False
-    instance_attributes: List[Dict[str, Any]] = field(default_factory=list)
-    metaclass: Optional[str] = None
-    ast_node: Optional[Any] = None
-    cognitive_complexity: Optional[int] = None
-    halstead_metrics: Optional[Dict[str, float]] = field(default_factory=dict)
-    complexity_warning: Optional[str] = None  # Added field for complexity warning
+class ExtractedClass:
+    """Class to hold extracted class information."""
+    name: str
+    docstring: str
+    methods: List[Dict[str, Any]]
+    bases: List[str]
+    metrics: Dict[str, Any]
+    raises: List[Dict[str, str]]
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get attribute with fallback to default."""
+        return getattr(self, key, default)
 
 
 @dataclass
@@ -169,8 +169,17 @@ class ExtractionResult:
     dependencies: Dict[str, Set[str]] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
     maintainability_index: Optional[float] = None
+    source_code: str = ""  # Added field for source code
+    imports: List[Any] = field(default_factory=list)  # Added imports field
 
-
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert extraction result to dictionary format."""
+        return {
+            'functions': self.functions if hasattr(self, 'functions') else [],
+            'classes': self.classes if hasattr(self, 'classes') else [],
+            'imports': self.imports if hasattr(self, 'imports') else [],
+            'dependencies': self.dependencies if hasattr(self, 'dependencies') else []
+        }
 @dataclass
 class DocumentationData:
     """Standardized documentation data structure."""
