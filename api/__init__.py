@@ -1,10 +1,12 @@
-# api/__init__.py
-from .api_client import APIClient
-from .token_management import (
-    TokenManager, TokenUsage, estimate_tokens, chunk_text
-)
+"""API module for Azure OpenAI service integration."""
 
+from .api_client import APIClient
+from .token_management import TokenManager
+from core.types import TokenUsage
+
+__version__ = "1.0.0"
 __all__ = [
-    'APIClient', 'TokenManager', 'TokenUsage',
-    'estimate_tokens', 'chunk_text'
+    'APIClient',
+    'TokenManager',
+    'TokenUsage'
 ]

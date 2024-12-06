@@ -1,38 +1,3 @@
-"""
-Repository handling module for cloning and managing git repositories.
-
-This module provides functionality to clone, manage, and interact with git repositories.
-It includes methods for cloning repositories, retrieving Python files, getting file content,
-cleaning up resources, and more.
-
-Usage Example:
-    ```python
-    from repository_handler import RepositoryHandler
-    from pathlib import Path
-
-    async def main():
-        repo_path = Path("/path/to/repo")
-        handler = RepositoryHandler(repo_path)
-        await handler.clone_repository("https://github.com/user/repo.git")
-        python_files = handler.get_python_files()
-        for file in python_files:
-            content, relative_path = handler.get_file_content(file)
-            print(f"File: {relative_path}\nContent:\n{content}")
-
-    import asyncio
-    asyncio.run(main())
-    ```
-
-Key Classes and Functions:
-- RepositoryHandler: Main class for handling repository operations.
-- clone_repository: Clone a git repository to a temporary directory.
-- get_python_files: Get all Python files from the repository.
-- get_file_content: Get the content of a file and its relative path.
-- cleanup: Clean up resources.
-- get_file_history: Get git history for a specific file.
-- validate_repository: Validate if the given path is a valid git repository.
-"""
-
 import os
 import sys
 import shutil
@@ -45,9 +10,10 @@ import git
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
 from core.logger import LoggerSetup
-from utils import FileUtils, GitUtils
+from core.utils import FileUtils, GitUtils
 
 logger = LoggerSetup.get_logger(__name__)
+
 
 class RepositoryHandler:
     """
@@ -67,9 +33,16 @@ class RepositoryHandler:
         _lock (asyncio.Lock): Asynchronous lock for thread safety.
     """
 
-    def __init__(self, repo_path: Path, repo_handler: Optional[Any] = None, ai_handler: Optional[Any] = None,
-                 token_manager: Optional[Any] = None, metrics: Optional[Any] = None,
-                 cache: Optional[Any] = None, system_monitor: Optional[Any] = None):
+    def __init__(
+        self,
+        repo_path: Path,
+        repo_handler: Optional[Any] = None,
+        ai_handler: Optional[Any] = None,
+        token_manager: Optional[Any] = None,
+        metrics: Optional[Any] = None,
+        cache: Optional[Any] = None,
+        system_monitor: Optional[Any] = None,
+    ):
         """
         Initialize the RepositoryHandler.
 
@@ -105,40 +78,49 @@ class RepositoryHandler:
         return self
 
     async def __aexit__(self, exc_type=None, exc_val=None, exc_tb=None) -> None:
-        """
-        Asynchronous context manager exit with proper argument handling.
-
-        Args:
-            exc_type: Exception type.
-            exc_val: Exception value.
-            exc_tb: Exception traceback.
-
-        Raises:
-            Exception: If an error occurs during cleanup.
-        """
+        """Asynchronous context manager exit with proper handling."""
         self.logger.info("Exiting RepositoryHandler context")
+        cleanup_exception = None
         try:
-            if hasattr(self, 'temp_dir') and self.temp_dir:
+            if hasattr(self, "temp_dir") and self.temp_dir:
                 await GitUtils.cleanup_git_directory(Path(self.temp_dir))
             await self.cleanup()
         except Exception as e:
             self.logger.error(f"Error during repository cleanup: {e}")
-            raise
+            cleanup_exception = e
+
+        if exc_type:
+            # If there was an exception in the block, we need to re-raise it.
+            if cleanup_exception:
+                # If there was also a cleanup exception, we can log or handle both
+                raise Exception("Exception during execution and cleanup") from exc_val
+            else:
+                # Re-raise the original exception
+                raise exc_val
+        elif cleanup_exception:
+            # If there was only a cleanup exception, raise it
+            raise cleanup_exception
 
     def initialize(self) -> None:
         """
         Initialize the repository handler.
 
         Raises:
-            InvalidGitRepositoryError: If the repository path is not a valid git repository.
-            Exception: If initialization fails.
+            InvalidGitRepositoryError: If the repository path is not a valid git repository
+            Exception: If initialization fails
         """
         try:
-            self.repo = git.Repo(self.repo_path)
-            self.logger.info("Repository initialized at %s", self.repo_path)
-        except git.exc.InvalidGitRepositoryError:
-            self.logger.error("Invalid Git repository at %s", self.repo_path)
-            raise
+            if Path(self.repo_path / ".git").exists():
+                self.repo = git.Repo(self.repo_path)
+                self.logger.info("Repository initialized at %s", self.repo_path)
+            else:
+                # Don't initialize git repo if it doesn't exist yet - will be created during clone
+                self.logger.debug(
+                    "No git repository found at %s, will be created during clone",
+                    self.repo_path,
+                )
+                self.repo = None
+
         except Exception as e:
             self.logger.error("Failed to initialize repository: %s", str(e))
             raise
@@ -161,25 +143,18 @@ class RepositoryHandler:
         async with self._lock:
             try:
                 # Validate URL
-                if not GitUtils.is_valid_git_url(repo_url):
+                if not self.validate_repository(repo_url):
                     raise ValueError(f"Invalid git repository URL: {repo_url}")
-
-                # Create temporary directory as string
-                self.temp_dir = tempfile.mkdtemp()
-                logger.info(f"Created temporary directory: {self.temp_dir}")
 
                 # Clone repository
                 logger.info(f"Cloning repository from {repo_url}")
                 self.repo = git.Repo.clone_from(
-                    repo_url, 
-                    self.temp_dir,
-                    progress=self._get_git_progress()
+                    repo_url,
+                    str(self.repo_path),  # Convert Path to string for git operations
+                    progress=self._get_git_progress(),
                 )
-                
-                # Convert to Path for return
-                self.repo_path = Path(self.temp_dir)
-                logger.info(f"Repository cloned to {self.repo_path}")
 
+                logger.info(f"Repository cloned to {self.repo_path}")
                 return self.repo_path
 
             except GitCommandError as e:
@@ -193,7 +168,9 @@ class RepositoryHandler:
                 await self.cleanup()
                 raise
 
-    def get_python_files(self, exclude_patterns: Optional[Set[str]] = None) -> List[Path]:
+    def get_python_files(
+        self, exclude_patterns: Optional[Set[str]] = None
+    ) -> List[Path]:
         """
         Get all Python files from the repository.
 
@@ -211,12 +188,19 @@ class RepositoryHandler:
             raise ValueError("Repository path not set")
 
         exclude_patterns = exclude_patterns or {
-            '*/venv/*', '*/env/*', '*/build/*', '*/dist/*',
-            '*/.git/*', '*/__pycache__/*', '*/migrations/*'
+            "*/venv/*",
+            "*/env/*",
+            "*/build/*",
+            "*/dist/*",
+            "*/.git/*",
+            "*/__pycache__/*",
+            "*/migrations/*",
         }
 
         try:
-            python_files = FileUtils.filter_files(self.repo_path, pattern='*.py', exclude_patterns=exclude_patterns)
+            python_files = FileUtils.filter_files(
+                self.repo_path, pattern="*.py", exclude_patterns=exclude_patterns
+            )
             logger.info(f"Found {len(python_files)} Python files")
             return python_files
         except Exception as e:
@@ -255,33 +239,58 @@ class RepositoryHandler:
         Raises:
             Exception: If an error occurs during cleanup.
         """
-        try:
-            if self.system_monitor:
+        exceptions = []
+        if self.system_monitor:
+            try:
                 await self.system_monitor.stop()
                 self.logger.info("System monitor stopped")
+            except Exception as e:
+                self.logger.error(f"Error stopping system monitor: {e}")
+                exceptions.append(e)
 
-            if self.repo_handler:
+        if self.repo_handler:
+            try:
                 await self.repo_handler.__aexit__(None, None, None)
                 self.logger.info("Repository handler cleaned up")
+            except Exception as e:
+                self.logger.error(f"Error cleaning up repository handler: {e}")
+                exceptions.append(e)
 
-            if self.ai_handler:
+        if self.ai_handler:
+            try:
                 await self.ai_handler.close()
                 self.logger.info("AI handler cleaned up")
+            except Exception as e:
+                self.logger.error(f"Error closing AI handler: {e}")
+                exceptions.append(e)
 
-            if self.token_manager:
+        if self.token_manager:
+            try:
                 await self.token_manager.close()
                 self.logger.info("Token manager cleaned up")
+            except Exception as e:
+                self.logger.error(f"Error closing token manager: {e}")
+                exceptions.append(e)
 
-            if self.metrics:
+        if self.metrics:
+            try:
                 await self.metrics.close()
                 self.logger.info("Metrics collector cleaned up")
+            except Exception as e:
+                self.logger.error(f"Error closing metrics collector: {e}")
+                exceptions.append(e)
 
-            if self.cache:
+        if self.cache:
+            try:
                 await self.cache.close()
                 self.logger.info("Cache cleaned up")
+            except Exception as e:
+                self.logger.error(f"Error closing cache: {e}")
+                exceptions.append(e)
 
-        except Exception as e:
-            self.logger.error("Cleanup failed: %s", str(e))
+        # Optionally, raise an aggregated exception if needed
+        if exceptions:
+            raise Exception("One or more errors occurred during cleanup.")
 
     async def get_file_history(self, file_path: Path) -> List[Dict[str, Any]]:
         """
@@ -318,23 +327,25 @@ class RepositoryHandler:
             # Convert Path to string for git operations
             str_path = str(file_path)
             for commit in self.repo.iter_commits(paths=str_path):
-                history.append({
-                    'hash': commit.hexsha[:8],
-                    'author': commit.author.name,
-                    'date': commit.committed_datetime.isoformat(),
-                    'message': commit.message.strip(),
-                })
+                history.append(
+                    {
+                        "hash": commit.hexsha[:8],
+                        "author": commit.author.name,
+                        "date": commit.committed_datetime.isoformat(),
+                        "message": commit.message.strip(),
+                    }
+                )
             return history
         except Exception as e:
             self.logger.error("Error getting file history: %s", str(e))
             return []
 
-    def validate_repository(self, path: Path) -> bool:
+    def validate_repository(self, path: str) -> bool:
         """
-        Validate if the given path is a valid git repository.
+        Validate if the given path is a valid git repository URL.
 
         Args:
-            path (Path): Path to the repository.
+            path (str): URL or path to the git repository.
 
         Returns:
             bool: True if the path is a valid git repository, False otherwise.
@@ -348,25 +359,24 @@ class RepositoryHandler:
             self.logger.error("Error validating git URL: %s", str(e))
             return False
 
-    def _get_git_progress(self) -> git.RemoteProgress:
+    def _get_git_progress(self):
         """
         Create a progress handler for git operations.
 
         Returns:
-            git.RemoteProgress: Progress handler for git operations.
+            Callable: Progress callback function for git operations.
         """
-        logger = self.logger  # Capture logger from outer scope
-        
-        class GitProgress(git.RemoteProgress):
-            def __init__(self):
-                super().__init__()
-                self.logger = logger  # Assign logger to instance
 
-            def update(self, op_code, cur_count, max_count=None, message=''):
-                if max_count:
-                    percentage = cur_count / max_count * 100
-                    self.logger.debug('Git progress: %.1f%% %s', percentage, message or "")
-                else:
-                    self.logger.debug('Git progress: %s', message or "")
+        def progress_callback(
+            op_code: int,
+            cur_count: str | float,
+            max_count: str | float | None = None,
+            message: str = "",
+        ):
+            if max_count:
+                percentage = float(cur_count) / float(max_count) * 100
+                self.logger.debug("Git progress: %.1f%% %s", percentage, message or "")
+            else:
+                self.logger.debug("Git progress: %s", message or "")
 
-        return GitProgress()
+        return progress_callback

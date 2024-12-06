@@ -1,45 +1,24 @@
-# core/__init__.py
+"""Core functionality for documentation generation."""
+
+# Import from dedicated modules
 from .cache import Cache
 from .config import AzureOpenAIConfig
-from .docs import DocumentationError, DocumentationContext, DocStringManager
-from .docstring_processor import (
-    DocstringData, DocstringProcessor
-)
+from .docs import DocumentationError, DocumentationContext
+from .docstring_processor import DocstringData, DocstringProcessor
 from .logger import LoggerSetup, log_debug, log_info, log_warning, log_error
 from .markdown_generator import MarkdownConfig, MarkdownGenerator
-from .metrics import MetricsError, Metrics, MetricsCollector
+from .metrics import Metrics
 from .monitoring import SystemMonitor
-from .utils import (
-    generate_hash, get_annotation, handle_exceptions, load_json_file,
-    ensure_directory, validate_file_path, create_error_result, add_parent_info,
-    get_file_stats, filter_files, get_all_files
-)
-from .types import ProcessingResult, AIHandler
+from .response_parsing import ResponseParsingService
+from .schema_loader import load_schema
+from .types import *  # Types are an exception - OK to import * for type definitions
 
-# Import specific classes and functions from core/extraction
-from .extraction.types import (
-    ExtractedArgument, ExtractionContext, ExtractedElement, ExtractedFunction,
-    ExtractedClass, ExtractionResult
-)
-from .extraction.utils import ASTUtils
-from .extraction.code_extractor import CodeExtractor
-from .extraction.function_extractor import FunctionExtractor
-from .extraction.class_extractor import ClassExtractor
-from .extraction.dependency_analyzer import DependencyAnalyzer
-
+__version__ = "1.0.0"
 __all__ = [
+    # Core components
     'Cache', 'AzureOpenAIConfig', 'DocumentationError',
-    'DocumentationContext', 'DocStringManager', 'DocstringData',
-    'DocstringProcessor', 'LoggerSetup', 'log_debug', 'log_info',
-    'log_warning', 'log_error', 'MarkdownConfig', 'MarkdownGenerator',
-    'MetricsError', 'Metrics', 'SystemMonitor', 'MetricsCollector',
-    'generate_hash', 'get_annotation', 'handle_exceptions', 'load_json_file',
-    'ensure_directory', 'validate_file_path', 'create_error_result',
-    'add_parent_info', 'get_file_stats', 'filter_files', 'get_all_files',
-    'ProcessingResult', 'AIHandler',
-    # New modules
-    'ExtractedArgument', 'ExtractionContext', 'ExtractedElement',
-    'ExtractedFunction', 'ExtractedClass', 'ExtractionResult', 'ASTUtils',
-    'CodeExtractor', 'FunctionExtractor', 'ClassExtractor',
-    'DependencyAnalyzer'
+    'DocumentationContext', 'DocstringData', 'DocstringProcessor',
+    'LoggerSetup', 'log_debug', 'log_info', 'log_warning', 'log_error',
+    'MarkdownConfig', 'MarkdownGenerator', 'Metrics', 'SystemMonitor',
+    'ResponseParsingService', 'load_schema',
 ]

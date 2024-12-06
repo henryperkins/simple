@@ -1,114 +1,107 @@
-"""
-Configuration module for Azure OpenAI service integration.
-Handles environment variables, validation, and configuration management.
-"""
-
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Any
-from pathlib import Path
-import urllib.parse
+from typing import Dict, Any, Optional
+
+from core.cache import Cache
 from core.logger import LoggerSetup
 
-# Configure logging
 logger = LoggerSetup.get_logger(__name__)
 
 def get_env_int(var_name: str, default: int) -> int:
-    """Get an integer environment variable or return the default."""
-    value = os.getenv(var_name, None)
+    value = os.getenv(var_name)
     try:
         return int(value) if value is not None else default
     except ValueError:
         logger.error(
-            "Environment variable %s must be an integer. Using default %s.",
+            "Environment variable %s must be an integer. Using default %s",
             var_name, default
         )
         return default
 
 def get_env_float(var_name: str, default: float) -> float:
-    """Get a float environment variable or return the default."""
-    value = os.getenv(var_name, None)
+    value = os.getenv(var_name)
     try:
         return float(value) if value is not None else default
     except ValueError:
         logger.error(
-            "Environment variable %s must be a float. Using default %s.",
+            "Environment variable %s must be a float. Using default %s",
             var_name, default
         )
         return default
 
 def get_env_bool(var_name: str, default: bool) -> bool:
-    """Get a boolean environment variable or return the default."""
     value = os.getenv(var_name, str(default)).lower()
     return value in ("true", "1", "yes")
 
-def check_required_env_vars() -> None:
-    """Verify required environment variables are set."""
-    required_vars = {
-        "AZURE_OPENAI_ENDPOINT": "Your Azure OpenAI endpoint URL",
-        "AZURE_OPENAI_KEY": "Your Azure OpenAI API key",
-        "AZURE_OPENAI_DEPLOYMENT_ID": "Your deployment ID"
-    }
+@dataclass
+class OpenAIModelConfig:
+    """Configuration for OpenAI model limits and costs."""
+    max_tokens: int = 8192
+    cost_per_1k_prompt: float = 0.03
+    cost_per_1k_completion: float = 0.06
+    chunk_size: int = 6144
 
-    missing = [
-        f"{var} ({description})"
-        for var, description in required_vars.items()
-        if not os.getenv(var)
-    ]
-
-    if missing:
-        raise ValueError(
-            "Missing required environment variables:\n" +
-            "\n".join(f"- {var}" for var in missing)
-        )
-
-@dataclass(frozen=True)
+@dataclass
 class AzureOpenAIConfig:
     """Configuration settings for Azure OpenAI service."""
 
-    model_type: str = field(default_factory=lambda: os.getenv("MODEL_TYPE", "azure"))
-    max_tokens: int = field(default_factory=lambda: get_env_int("MAX_TOKENS", 6000))
-    temperature: float = field(
-        default_factory=lambda: get_env_float("TEMPERATURE", 0.4)
-    )
+    # Model settings
+    model_type: str = "gpt"
+    endpoint: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_ENDPOINT", "https://openai-hp.openai.azure.com"))
+    api_version: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview"))
+    deployment_id: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_DEPLOYMENT_ID", "gpt-4op-deployment"))
+    model_name: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_MODEL_NAME", "gpt-4o-2024-08-06"))
+
+    # Token settings
+    max_tokens: int = field(default_factory=lambda: get_env_int("MAX_TOKENS", 8192))
+    temperature: float = field(default_factory=lambda: get_env_float("TEMPERATURE", 0.7))
     request_timeout: int = field(default_factory=lambda: get_env_int("REQUEST_TIMEOUT", 30))
     max_retries: int = field(default_factory=lambda: get_env_int("MAX_RETRIES", 3))
-    retry_delay: int = field(default_factory=lambda: get_env_int("RETRY_DELAY", 2))
+    retry_delay: int = field(default_factory=lambda: get_env_int("RETRY_DELAY", 5))
+
+    # Cache settings
     cache_enabled: bool = field(default_factory=lambda: get_env_bool("CACHE_ENABLED", False))
-
-    endpoint: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_ENDPOINT", ""))
-    api_key: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_KEY", ""))
-    api_version: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_API_VERSION", "2024-09-01-preview"))
-    deployment_id: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_DEPLOYMENT_ID", ""))
-    model_name: str = field(default_factory=lambda: os.getenv("MODEL_NAME", "gpt-4o-2024-08-06"))
-
-    max_tokens_per_minute: int = field(default_factory=lambda: get_env_int("MAX_TOKENS_PER_MINUTE", 150000))
-    token_buffer: int = field(default_factory=lambda: get_env_int("TOKEN_BUFFER", 100))
-    batch_size: int = field(default_factory=lambda: get_env_int("BATCH_SIZE", 5))
-
-    log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "DEBUG"))
-    log_format: str = field(default_factory=lambda: os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    log_directory: str = field(default_factory=lambda: os.getenv("LOG_DIRECTORY", "logs"))
-
     redis_host: str = field(default_factory=lambda: os.getenv("REDIS_HOST", "localhost"))
     redis_port: int = field(default_factory=lambda: get_env_int("REDIS_PORT", 6379))
     redis_db: int = field(default_factory=lambda: get_env_int("REDIS_DB", 0))
-    redis_password: str = field(default_factory=lambda: os.getenv("REDIS_PASSWORD", ""))
 
-    model_limits: Dict[str, Any] = field(default_factory=lambda: {
-        "gpt-4": {
-            "max_tokens": 8192,
-            "cost_per_1k_prompt": 0.03,
-            "cost_per_1k_completion": 0.06,
-            "chunk_size": 6144
-        }
+    # API Key
+    api_key: str = field(default_factory=lambda: os.getenv("AZURE_OPENAI_KEY", "40c4befe4179411999c14239f386e24d"))
+
+    # Model Limits
+    model_limits: Dict[str, OpenAIModelConfig] = field(default_factory=lambda: {
+        "gpt-4": OpenAIModelConfig(),
+        "gpt-3.5-turbo": OpenAIModelConfig(max_tokens=4096, cost_per_1k_prompt=0.02, cost_per_1k_completion=0.04)
     })
-
-    output_directory: str = field(default_factory=lambda: os.getenv("OUTPUT_DIR", "docs"))
+    def __post_init__(self):
+        """Initialize cache if enabled."""
+        self.cache: Optional[Cache] = None
+        if self.cache_enabled:
+            try:
+                self.cache = Cache(
+                    host=self.redis_host,
+                    port=self.redis_port,
+                    db=self.redis_db,
+                    password=self.redis_password,
+                    enabled=True,
+                    ttl=self.cache_ttl
+                )
+                logger.info("Cache initialized successfully.")
+            except Exception as e:
+                logger.error(f"Failed to initialize cache: {e}")
+                self.cache = None
 
     @classmethod
     def from_env(cls) -> "AzureOpenAIConfig":
-        """Create configuration from environment variables."""
+        """
+        Create configuration from environment variables.
+
+        Returns:
+            AzureOpenAIConfig instance
+
+        Raises:
+            ValueError: If configuration is invalid
+        """
         logger.debug("Loading Azure OpenAI configuration from environment variables")
         try:
             check_required_env_vars()
@@ -125,51 +118,17 @@ class AzureOpenAIConfig:
             raise
 
     def validate(self) -> bool:
-        """Validate the Azure OpenAI configuration settings."""
-        if not self.model_type:
-            logger.error("Model type is required")
+        """Validate required configuration settings."""
+        required_fields = ['endpoint', 'api_key', 'deployment_id']
+        missing = [field for field in required_fields if not getattr(self, field, None)]
+        if missing:
+            logger.error(f"Missing required configuration fields: {missing}")
             return False
-
-        if not isinstance(self.max_tokens, int) or self.max_tokens <= 0:
-            logger.error("Invalid max_tokens value: %s", self.max_tokens)
-            return False
-
-        if not isinstance(self.temperature, (int, float)) or not (0 <= self.temperature <= 1):
-            logger.error("Invalid temperature value: %s", self.temperature)
-            return False
-
-        if not self.endpoint:
-            logger.error("Azure OpenAI endpoint is required")
-            return False
-        else:
-            parsed_url = urllib.parse.urlparse(self.endpoint)
-            if not all([parsed_url.scheme, parsed_url.netloc]):
-                logger.error("Invalid Azure OpenAI endpoint URL: %s", self.endpoint)
-                return False
-
-        if not self.api_key:
-            logger.error("Azure OpenAI API key is required")
-            return False
-
-        if not self.deployment_id:
-            logger.error("Azure OpenAI deployment ID is required")
-            return False
-
-        if not isinstance(self.redis_port, int) or self.redis_port <= 0:
-            logger.error("Invalid Redis port value: %s", self.redis_port)
-            return False
-
-        try:
-            Path(self.output_directory).mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.error(f"Failed to create output directory: {e}")
-            return False
-
         return True
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration settings to a dictionary, excluding sensitive information."""
-        return {
+        """Convert configuration settings to a dictionary excluding sensitive info."""
+        config_dict = {
             "model_type": self.model_type,
             "endpoint": self.endpoint,
             "api_version": self.api_version,
@@ -181,15 +140,40 @@ class AzureOpenAIConfig:
             "max_retries": self.max_retries,
             "retry_delay": self.retry_delay,
             "cache_enabled": self.cache_enabled,
-            "max_tokens_per_minute": self.max_tokens_per_minute,
-            "token_buffer": self.token_buffer,
-            "batch_size": self.batch_size,
-            "log_level": self.log_level,
-            "log_format": self.log_format,
-            "log_directory": self.log_directory,
             "redis_host": self.redis_host,
             "redis_port": self.redis_port,
             "redis_db": self.redis_db,
+            "cache_ttl": self.cache_ttl,
             "model_limits": self.model_limits,
-            "output_directory": self.output_directory
+            "output_directory": self.output_directory,
+            "log_level": self.log_level,
+            "log_format": self.log_format,
+            "log_directory": self.log_directory,
+            # Exclude sensitive information
         }
+        return config_dict
+
+def check_required_env_vars() -> None:
+    """
+    Verify required environment variables are set.
+
+    Raises:
+        ValueError: If required variables are missing
+    """
+    required_vars = {
+        "AZURE_OPENAI_ENDPOINT": "Your Azure OpenAI endpoint URL",
+        "AZURE_OPENAI_KEY": "Your Azure OpenAI API key",
+        "AZURE_OPENAI_DEPLOYMENT_ID": "Your deployment ID"
+    }
+
+    missing = [
+        f"{var} ({description})"
+        for var, description in required_vars.items()
+        if not os.getenv(var)
+    ]
+
+    if missing:
+        raise ValueError(
+            "Missing required environment variables:\n" +
+            "\n".join(f"- {var} ({description})" for var in missing)
+        )

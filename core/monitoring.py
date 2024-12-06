@@ -1,29 +1,42 @@
 """
-Monitoring Module
+Monitoring Module.
 
 Provides system monitoring and performance tracking for Azure OpenAI operations.
-Focuses on essential metrics while maintaining efficiency.
 """
 
-import psutil
+# Standard library imports
 import asyncio
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
-from collections import defaultdict
 
+# Third-party imports
+import psutil
+
+# Local imports
 from core.logger import LoggerSetup
-from api.token_management import TokenManager
 from core.metrics import MetricsCollector
+from api.token_management import TokenManager
+
+logger = LoggerSetup.get_logger(__name__)
+
 
 class SystemMonitor:
     """Monitors system resources and performance metrics."""
 
-    def __init__(self, check_interval: int = 60, token_manager: Optional[TokenManager] = None) -> None:
-        """Initialize system monitor.
+    def __init__(
+        self,
+        check_interval: int = 60,
+        token_manager: Optional[TokenManager] = None,
+        metrics_collector: Optional[MetricsCollector] = None
+    ) -> None:
+        """
+        Initialize system monitor.
 
         Args:
-            check_interval (int): Interval in seconds between metric checks.
-            token_manager (Optional[TokenManager]): Optional token manager for tracking token usage.
+            check_interval: Interval in seconds between metric checks
+            token_manager: Optional token manager for tracking token usage
+            metrics_collector: Optional metrics collector for tracking metrics
         """
         self.logger = LoggerSetup.get_logger(__name__)
         self.check_interval = check_interval
@@ -32,7 +45,7 @@ class SystemMonitor:
         self._metrics: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self.metrics_collector = MetricsCollector()
+        self.metrics_collector = metrics_collector or MetricsCollector()
         self.logger.info("System monitor initialized")
 
     async def start(self) -> None:
@@ -60,98 +73,128 @@ class SystemMonitor:
         while self._running:
             try:
                 metrics = self._collect_system_metrics()
-                self._store_metrics(metrics)
+                await self._store_metrics(metrics)
                 await asyncio.sleep(self.check_interval)
             except Exception as e:
-                self.logger.error(f"Error in monitoring loop: {e}")
+                self.logger.error("Error in monitoring loop: %s", e)
                 await asyncio.sleep(self.check_interval)
 
     def _collect_system_metrics(self) -> Dict[str, Any]:
-        """Collect current system metrics.
+        """
+        Collect current system metrics.
 
         Returns:
-            Dict[str, Any]: A dictionary containing system metrics.
+            Dictionary containing system metrics
         """
         try:
             cpu_percent = psutil.cpu_percent(interval=1)
             memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
+            disk = psutil.disk_usage("/")
 
             metrics = {
-                'timestamp': datetime.now().isoformat(),
-                'cpu': {'percent': cpu_percent, 'count': psutil.cpu_count()},
-                'memory': {'total': memory.total, 'available': memory.available, 'percent': memory.percent},
-                'disk': {'total': disk.total, 'used': disk.used, 'free': disk.free, 'percent': disk.percent}
+                "timestamp": datetime.now().isoformat(),
+                "cpu": {
+                    "percent": cpu_percent,
+                    "count": psutil.cpu_count()
+                },
+                "memory": {
+                    "total": memory.total,
+                    "available": memory.available,
+                    "percent": memory.percent,
+                },
+                "disk": {
+                    "total": disk.total,
+                    "used": disk.used,
+                    "free": disk.free,
+                    "percent": disk.percent,
+                },
             }
 
             if self.token_manager:
                 token_stats = self.token_manager.get_usage_stats()
-                metrics['tokens'] = token_stats
+                metrics["tokens"] = token_stats
 
             return metrics
 
         except Exception as e:
-            self.logger.error(f"Error collecting system metrics: {e}")
+            self.logger.error("Error collecting system metrics: %s", e)
             return {}
 
-    def _store_metrics(self, metrics: Dict[str, Any]) -> None:
-        """Store collected metrics.
+    async def _store_metrics(self, metrics: Dict[str, Any]) -> None:
+        """
+        Store collected metrics.
 
         Args:
-            metrics (Dict[str, Any]): The metrics to store.
+            metrics: The metrics to store
         """
-        for key, value in metrics.items():
-            if key != 'timestamp':
-                self._metrics[key].append({'timestamp': metrics['timestamp'], 'value': value})
-                self.metrics_collector.track_operation(
-                    operation_type=f"system_{key}",
-                    success=True,
-                    duration=self.check_interval,
-                    usage=value
-                )
+        try:
+            for key, value in metrics.items():
+                if key != "timestamp":
+                    self._metrics[key].append({
+                        "timestamp": metrics["timestamp"],
+                        "value": value
+                    })
+                    await self.metrics_collector.track_operation(
+                        operation_type=f"system_{key}",
+                        success=True,
+                        duration=self.check_interval,
+                        usage=value,
+                    )
 
-        cutoff_time = datetime.now() - timedelta(hours=1)
-        for key in self._metrics:
-            self._metrics[key] = [m for m in self._metrics[key] if datetime.fromisoformat(m['timestamp']) >= cutoff_time]
+            # Clean up old metrics
+            cutoff_time = datetime.now() - timedelta(hours=1)
+            for key in self._metrics:
+                self._metrics[key] = [
+                    m for m in self._metrics[key]
+                    if datetime.fromisoformat(m["timestamp"]) >= cutoff_time
+                ]
+        except Exception as e:
+            self.logger.error("Error storing metrics: %s", e)
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Get current metrics summary.
+        """
+        Get current metrics summary.
 
         Returns:
-            Dict[str, Any]: A summary of current metrics.
+            Summary of current metrics
         """
         try:
             current_metrics = self._collect_system_metrics()
             runtime = (datetime.now() - self.start_time).total_seconds()
             collected_metrics = self.metrics_collector.get_metrics()
+
             return {
-                'current': current_metrics,
-                'runtime_seconds': runtime,
-                'averages': self._calculate_averages(),
-                'status': self._get_system_status(),
-                'collected_metrics': collected_metrics
+                "current": current_metrics,
+                "runtime_seconds": runtime,
+                "averages": self._calculate_averages(),
+                "status": self._get_system_status(),
+                "collected_metrics": collected_metrics,
             }
         except Exception as e:
-            self.logger.error(f"Error getting metrics summary: {e}")
-            return {'error': str(e)}
+            self.logger.error("Error getting metrics summary: %s", e)
+            return {"error": str(e)}
 
     def _calculate_averages(self) -> Dict[str, float]:
-        """Calculate average values for metrics.
+        """
+        Calculate average values for metrics.
 
         Returns:
-            Dict[str, float]: A dictionary of average metric values.
+            Dictionary of average metric values
         """
         averages = {}
         for key, values in self._metrics.items():
-            if values and key in ('cpu', 'memory', 'disk'):
-                averages[key] = sum(v['value']['percent'] for v in values) / len(values)
+            if values and key in ("cpu", "memory", "disk"):
+                averages[key] = sum(
+                    v["value"]["percent"] for v in values
+                ) / len(values)
         return averages
 
     def _get_system_status(self) -> str:
-        """Determine overall system status.
+        """
+        Determine overall system status.
 
         Returns:
-            str: The system status ('healthy', 'warning', 'critical', or 'unknown').
+            System status ('healthy', 'warning', 'critical', or 'unknown')
         """
         try:
             current = self._collect_system_metrics()
@@ -160,26 +203,28 @@ class SystemMonitor:
             memory_threshold = 90
             disk_threshold = 90
 
-            if (current.get('cpu', {}).get('percent', 0) > cpu_threshold or
-                current.get('memory', {}).get('percent', 0) > memory_threshold or
-                current.get('disk', {}).get('percent', 0) > disk_threshold):
-                return 'critical'
-            elif (current.get('cpu', {}).get('percent', 0) > cpu_threshold * 0.8 or
-                  current.get('memory', {}).get('percent', 0) > memory_threshold * 0.8 or
-                  current.get('disk', {}).get('percent', 0) > disk_threshold * 0.8):
-                return 'warning'
-            return 'healthy'
+            cpu_value = current.get("cpu", {}).get("percent", 0)
+            memory_value = current.get("memory", {}).get("percent", 0)
+            disk_value = current.get("disk", {}).get("percent", 0)
+
+            if (cpu_value > cpu_threshold or
+                memory_value > memory_threshold or
+                disk_value > disk_threshold):
+                return "critical"
+
+            if (cpu_value > cpu_threshold * 0.8 or
+                memory_value > memory_threshold * 0.8 or
+                disk_value > disk_threshold * 0.8):
+                return "warning"
+
+            return "healthy"
 
         except Exception as e:
-            self.logger.error(f"Error getting system status: {e}")
-            return 'unknown'
+            self.logger.error("Error getting system status: %s", e)
+            return "unknown"
 
-    async def __aenter__(self) -> 'SystemMonitor':
-        """Async context manager entry.
-
-        Returns:
-            SystemMonitor: The system monitor instance.
-        """
+    async def __aenter__(self) -> "SystemMonitor":
+        """Async context manager entry."""
         await self.start()
         return self
 

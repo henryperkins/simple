@@ -1,22 +1,13 @@
-# core/extraction/__init__.py
-from .types import (
-    ExtractedArgument,
-    ExtractionContext,
-    ExtractedElement,
-    ExtractedFunction,
-    ExtractedClass,
-    ExtractionResult
-)
+"""Code extraction and analysis components."""
+
 from .code_extractor import CodeExtractor
-from .utils import ASTUtils
+from .class_extractor import ClassExtractor
+from .function_extractor import FunctionExtractor
+from .dependency_analyzer import DependencyAnalyzer
 
 __all__ = [
-    'ExtractedArgument',
-    'ExtractionContext',
-    'ExtractedElement',
-    'ExtractedFunction',
-    'ExtractedClass',
-    'ExtractionResult',
     'CodeExtractor',
-    'ASTUtils'
+    'ClassExtractor', 
+    'FunctionExtractor',
+    'DependencyAnalyzer'
 ]

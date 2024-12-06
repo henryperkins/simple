@@ -2,15 +2,19 @@
 Response parsing service with consistent error handling and validation.
 """
 
+# Standard library imports
 import json
-import asyncio
-from typing import Dict, Any, Optional, List
 from datetime import datetime
+from typing import Dict, Any, Optional, List
+
+# Third-party imports
 from jsonschema import validate, ValidationError
+
+# Local imports
 from core.logger import LoggerSetup
 from core.schema_loader import load_schema
 from core.docstring_processor import DocstringProcessor
-from core.types import ParsedResponse, DocstringData
+from core.types import ParsedResponse
 from exceptions import ValidationError as CustomValidationError
 
 logger = LoggerSetup.get_logger(__name__)
@@ -18,24 +22,23 @@ logger = LoggerSetup.get_logger(__name__)
 class ResponseParsingService:
     """Centralized service for parsing and validating AI responses."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the response parsing service."""
         self.logger = LoggerSetup.get_logger(__name__)
         self.docstring_processor = DocstringProcessor()
-        self.docstring_schema = load_schema('docstring_schema')
-        self.function_schema = load_schema('function_tools_schema')
+        self.docstring_schema = load_schema("docstring_schema")
+        self.function_schema = load_schema("function_tools_schema")
         self._parsing_stats = {
-            'total_processed': 0,
-            'successful_parses': 0,
-            'failed_parses': 0,
-            'validation_failures': 0
+            "total_processed": 0,
+            "successful_parses": 0,
+            "failed_parses": 0,
+            "validation_failures": 0,
         }
 
     async def parse_response(
-        self, 
+        self,
         response: str,
-        expected_format: str = 'json',
-        max_retries: int = 3,
+        expected_format: str = "json",
         validate_schema: bool = True
     ) -> ParsedResponse:
         """
@@ -44,7 +47,6 @@ class ResponseParsingService:
         Args:
             response: Raw response string to parse
             expected_format: Expected format ('json', 'markdown', 'docstring')
-            max_retries: Maximum number of parsing attempts
             validate_schema: Whether to validate against schema
 
         Returns:
@@ -57,51 +59,34 @@ class ResponseParsingService:
         errors = []
         parsed_content = None
 
-        self._parsing_stats['total_processed'] += 1
+        self._parsing_stats["total_processed"] += 1
 
         try:
-            # Try parsing with retries
-            for attempt in range(max_retries):
-                try:
-                    if expected_format == 'json':
-                        parsed_content = await self._parse_json_response(response)
-                    elif expected_format == 'markdown':
-                        parsed_content = await self._parse_markdown_response(response)
-                    elif expected_format == 'docstring':
-                        parsed_content = await self._parse_docstring_response(response)
-                    else:
-                        raise ValueError(f"Unsupported format: {expected_format}")
+            if expected_format == "json":
+                parsed_content = await self._parse_json_response(response)
+            elif expected_format == "markdown":
+                parsed_content = await self._parse_markdown_response(response)
+            elif expected_format == "docstring":
+                parsed_content = await self._parse_docstring_response(response)
+            else:
+                raise ValueError(f"Unsupported format: {expected_format}")
 
-                    if parsed_content:
-                        break
-
-                except Exception as e:
-                    errors.append(f"Parsing attempt {attempt + 1} failed: {str(e)}")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)
-                    continue
-
-            # Validate if requested and content was parsed
             validation_success = False
             if parsed_content and validate_schema:
                 validation_success = await self._validate_response(
-                    parsed_content, 
-                    expected_format
+                    parsed_content, expected_format
                 )
                 if not validation_success:
                     errors.append("Schema validation failed")
-                    self._parsing_stats['validation_failures'] += 1
-                    # Provide default values if validation fails
+                    self._parsing_stats["validation_failures"] += 1
                     parsed_content = self._create_fallback_response()
 
-            # Update success/failure stats
             if parsed_content:
-                self._parsing_stats['successful_parses'] += 1
+                self._parsing_stats["successful_parses"] += 1
             else:
-                self._parsing_stats['failed_parses'] += 1
+                self._parsing_stats["failed_parses"] += 1
                 parsed_content = self._create_fallback_response()
 
-            # Calculate processing time
             processing_time = (datetime.now() - start_time).total_seconds()
 
             return ParsedResponse(
@@ -111,243 +96,134 @@ class ResponseParsingService:
                 validation_success=validation_success,
                 errors=errors,
                 metadata={
-                    'attempts': len(errors) + 1,
-                    'timestamp': datetime.now().isoformat(),
-                    'response_size': len(response)
-                }
+                    "timestamp": datetime.now().isoformat(),
+                    "response_size": len(response),
+                },
             )
 
         except Exception as e:
-            self.logger.error(f"Response parsing failed: {e}")
-            self._parsing_stats['failed_parses'] += 1
-            raise CustomValidationError(f"Failed to parse response: {str(e)}")
+            error_message = f"Response parsing failed: {e}"
+            self.logger.error(error_message, exc_info=True)
+            errors.append(error_message)
+            self._parsing_stats["failed_parses"] += 1
+            raise CustomValidationError(error_message) from e
 
     async def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
-        """Parse a JSON response, handling code blocks and cleaning."""
+        """
+        Parse a JSON response, handling code blocks and cleaning.
+
+        Args:
+            response: The response string to parse
+
+        Returns:
+            Parsed JSON content or None if parsing fails
+        """
         try:
             response = response.strip()
 
             # Extract JSON from code blocks if present
-            if '```json' in response and '```' in response:
-                start = response.find('```json') + 7
-                end = response.rfind('```')
+            if "```json" in response and "```" in response:
+                start = response.find("```json") + 7
+                end = response.rfind("```")
                 if start > 7 and end > start:
                     response = response[start:end].strip()
 
-            # Remove any non-JSON content
-            if not response.startswith('{') or not response.endswith('}'):
-                start = response.find('{')
-                end = response.rfind('}')
-                if start >= 0 and end >= 0:
-                    response = response[start:end+1]
-
             # Parse JSON into Python dictionary
-            parsed_content = json.loads(response.strip())
+            parsed_content = json.loads(response)
 
-            # Ensure required fields are present and valid
-            required_fields = {'summary', 'description', 'args', 'returns', 'raises'}
+            # Ensure required fields
+            required_fields = {"summary", "description", "args", "returns", "raises"}
             for field in required_fields:
                 if field not in parsed_content:
-                    if field in {'args', 'raises'}:
-                        parsed_content[field] = []  # Default to empty list
-                    elif field == 'returns':
-                        parsed_content[field] = {'type': 'Any', 'description': ''}  # Default returns value
+                    if field in {"args", "raises"}:
+                        parsed_content[field] = []
+                    elif field == "returns":
+                        parsed_content[field] = {
+                            "type": "Any",
+                            "description": "",
+                        }
                     else:
-                        parsed_content[field] = ''  # Default to empty string for other fields
+                        parsed_content[field] = ""
 
             # Validate field types
-            if not isinstance(parsed_content['args'], list):
-                parsed_content['args'] = []  # Ensure `args` is a list
-            if not isinstance(parsed_content['raises'], list):
-                parsed_content['raises'] = []  # Ensure `raises` is a list
-            if not isinstance(parsed_content['returns'], dict):
-                parsed_content['returns'] = {'type': 'Any', 'description': ''}  # Ensure `returns` is a dict
+            if not isinstance(parsed_content["args"], list):
+                parsed_content["args"] = []
+            if not isinstance(parsed_content["raises"], list):
+                parsed_content["raises"] = []
+            if not isinstance(parsed_content["returns"], dict):
+                parsed_content["returns"] = {
+                    "type": "Any",
+                    "description": "",
+                }
 
             return parsed_content
 
         except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse JSON response: {e}")
+            error_message = f"Failed to parse JSON response: {e}"
+            self.logger.error(error_message)
             return None
         except Exception as e:
-            self.logger.error(f"Unexpected error during JSON response parsing: {e}")
+            error_message = f"Unexpected error during JSON response parsing: {e}"
+            self.logger.error(error_message)
             return None
 
-    async def _parse_markdown_response(self, response: str) -> Dict[str, Any]:
-        """Parse markdown response into structured format."""
-        sections = {
-            'summary': '',
-            'description': '',
-            'args': [],
-            'returns': {'type': 'Any', 'description': ''},
-            'raises': []
-        }
-
-        current_section = None
-        section_content = []
-
-        for line in response.split('\n'):
-            line = line.strip()
-            
-            if line.lower().startswith('# '):
-                sections['summary'] = line[2:].strip()
-            elif line.lower().startswith('## arguments') or line.lower().startswith('## args'):
-                current_section = 'args'
-                section_content = []
-            elif line.lower().startswith('## returns'):
-                if section_content and current_section == 'args':
-                    sections['args'].extend(self._parse_arg_section(section_content))
-                current_section = 'returns'
-                section_content = []
-            elif line.lower().startswith('## raises'):
-                if current_section == 'returns':
-                    sections['returns'] = self._parse_return_section(section_content)
-                current_section = 'raises'
-                section_content = []
-            elif line:
-                section_content.append(line)
-
-        # Process final section
-        if section_content:
-            if current_section == 'args':
-                sections['args'].extend(self._parse_arg_section(section_content))
-            elif current_section == 'returns':
-                sections['returns'] = self._parse_return_section(section_content)
-            elif current_section == 'raises':
-                sections['raises'].extend(self._parse_raises_section(section_content))
-
-        return sections
-
-    async def _parse_docstring_response(self, response: str) -> Dict[str, Any]:
-        """Parse docstring response using DocstringProcessor."""
-        docstring_data = self.docstring_processor.parse(response)
-        return {
-            'summary': docstring_data.summary,
-            'description': docstring_data.description,
-            'args': docstring_data.args,
-            'returns': docstring_data.returns,
-            'raises': docstring_data.raises,
-            'complexity': docstring_data.complexity
-        }
-
-    def _parse_arg_section(self, lines: List[str]) -> List[Dict[str, str]]:
-        """Parse argument section content."""
-        args = []
-        current_arg = None
-
-        for line in lines:
-            if line.startswith('- ') or line.startswith('* '):
-                if current_arg:
-                    args.append(current_arg)
-                parts = line[2:].split(':')
-                if len(parts) >= 2:
-                    name = parts[0].strip()
-                    description = ':'.join(parts[1:]).strip()
-                    current_arg = {
-                        'name': name,
-                        'type': self._extract_type(name),
-                        'description': description
-                    }
-            elif current_arg and line:
-                current_arg['description'] += ' ' + line
-
-        if current_arg:
-            args.append(current_arg)
-
-        return args
-
-    def _parse_return_section(self, lines: List[str]) -> Dict[str, str]:
-        """Parse return section content."""
-        if not lines:
-            return {'type': 'None', 'description': ''}
-
-        return_text = ' '.join(lines)
-        if ':' in return_text:
-            type_str, description = return_text.split(':', 1)
-            return {
-                'type': type_str.strip(),
-                'description': description.strip()
-            }
-        return {
-            'type': 'Any',
-            'description': return_text.strip()
-        }
-
-    def _parse_raises_section(self, lines: List[str]) -> List[Dict[str, str]]:
-        """Parse raises section content."""
-        raises = []
-        current_exception = None
-
-        for line in lines:
-            if line.startswith('- ') or line.startswith('* '):
-                if current_exception:
-                    raises.append(current_exception)
-                parts = line[2:].split(':')
-                if len(parts) >= 2:
-                    exception = parts[0].strip()
-                    description = ':'.join(parts[1:]).strip()
-                    current_exception = {
-                        'exception': exception,
-                        'description': description
-                    }
-            elif current_exception and line:
-                current_exception['description'] += ' ' + line
-
-        if current_exception:
-            raises.append(current_exception)
-
-        return raises
-
-    def _extract_type(self, text: str) -> str:
-        """Extract type hints from text."""
-        if '(' in text and ')' in text:
-            type_hint = text[text.find('(') + 1:text.find(')')]
-            return type_hint
-        return 'Any'
-
-    def _create_fallback_response(self) -> Dict[str, Any]:
-        """Create a fallback response when parsing fails."""
-        return {
-            'summary': 'AI-generated documentation not available',
-            'description': 'Documentation could not be generated by AI service',
-            'args': [],
-            'returns': {
-                'type': 'Any',
-                'description': 'Return value not documented'
-            },
-            'raises': [],
-            'complexity': 1
-        }
-
     async def _validate_response(
-        self,
-        content: Dict[str, Any],
-        format_type: str
+        self, content: Dict[str, Any], format_type: str
     ) -> bool:
-        """Validate response against appropriate schema."""
-        try:
-            if format_type == 'docstring':
-                # Ensure the schema includes the required keys
-                schema = self.docstring_schema['schema']
-                required_keys = {'summary', 'description', 'args', 'returns', 'raises'}
-                if not all(key in schema['properties'] for key in required_keys):
-                    raise CustomValidationError("Schema does not include all required keys")
+        """
+        Validate response against appropriate schema.
 
+        Args:
+            content: Content to validate
+            format_type: Type of format to validate against
+
+        Returns:
+            True if validation succeeds, False otherwise
+        """
+        try:
+            if format_type == "docstring":
+                schema = self.docstring_schema["schema"]
                 validate(instance=content, schema=schema)
-            elif format_type == 'function':
-                validate(instance=content, schema=self.function_schema['schema'])
+            elif format_type == "function":
+                validate(instance=content, schema=self.function_schema["schema"])
             return True
         except ValidationError as e:
-            self.logger.error(f"Schema validation failed: {e}")
+            self.logger.error(f"Schema validation failed: {e.message}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Unexpected error during schema validation: {e}")
             return False
 
-    def get_stats(self) -> Dict[str, int]:
-        """Get current parsing statistics."""
-        return self._parsing_stats.copy()
+    def _create_fallback_response(self) -> Dict[str, Any]:
+        """
+        Create a fallback response when parsing fails.
 
-    async def __aenter__(self) -> 'ResponseParsingService':
-        """Async context manager entry."""
-        return self
+        Returns:
+            Default response structure
+        """
+        return {
+            "summary": "AI-generated documentation not available",
+            "description": "Documentation could not be generated by AI service",
+            "args": [],
+            "returns": {"type": "Any", "description": "Return value not documented"},
+            "raises": [],
+            "complexity": 1,
+        }
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        pass  # Cleanup if needed
+    async def _parse_docstring_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse a docstring response, handling common formatting issues.
+
+        Args:
+            response: The response string to parse
+
+        Returns:
+            Parsed docstring content or None if parsing fails
+        """
+        try:
+            response = response.strip()
+            parsed_content = self.docstring_processor.parse(response)
+            return parsed_content.__dict__ if parsed_content else None
+        except Exception as e:
+            self.logger.error(f"Failed to parse docstring response: {e}", exc_info=True)
+            return None
