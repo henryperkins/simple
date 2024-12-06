@@ -20,7 +20,7 @@ class FunctionExtractor:
         self.logger = logger
         self.context = context
         self.metrics_calculator = metrics_calculator
-        self.errors: List[Union[str, dict]] = []
+        self.errors: List[str] = []
 
     async def extract_functions(self, tree: ast.AST) -> List[ExtractedFunction]:
         """Extract top-level functions and async functions from the AST."""
