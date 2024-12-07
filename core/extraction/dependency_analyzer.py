@@ -93,6 +93,11 @@ class DependencyAnalyzer:
                 self.logger.warning(f"Circular dependencies detected: {circular_deps}")
 
             self.logger.info(f"Dependency analysis completed: {len(deps)} categories found")
+            
+            # Integrate dependency analysis results into the overall code analysis
+            maintainability_impact = self._calculate_maintainability_impact(deps)
+            deps["maintainability_impact"] = maintainability_impact
+
             return deps
 
         except Exception as e:
@@ -323,3 +328,28 @@ class DependencyAnalyzer:
         """
         deps = self.analyze_dependencies(tree)
         return list({dep for deps in deps.values() for dep in deps})
+
+    def _calculate_maintainability_impact(self, dependencies: Dict[str, Set[str]]) -> float:
+        """Calculate the impact of dependencies on maintainability.
+
+        Args:
+            dependencies (Dict[str, Set[str]]): The dependencies to analyze.
+
+        Returns:
+            float: The calculated maintainability impact score.
+        """
+        try:
+            stdlib_count = len(dependencies.get("stdlib", set()))
+            third_party_count = len(dependencies.get("third_party", set()))
+            local_count = len(dependencies.get("local", set()))
+
+            total_deps = stdlib_count + third_party_count + local_count
+            if total_deps == 0:
+                return 100.0  # No dependencies, highest maintainability
+
+            impact_score = 100.0 - (third_party_count * 2 + local_count * 1.5 + stdlib_count * 1.0)
+            return max(0.0, min(impact_score, 100.0))
+
+        except Exception as e:
+            self.logger.error(f"Error calculating maintainability impact: {e}", exc_info=True)
+            return 0.0

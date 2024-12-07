@@ -46,12 +46,16 @@ class APIClient:
     async def process_request(self, prompt: str) -> Dict[str, Any]:
         """Process a request to the Azure OpenAI API with token tracking."""
         try:
-            request_tokens = self.token_manager.estimate_tokens(prompt)
-            request_params = await self.token_manager.validate_and_prepare_request(prompt)
+            # Enhance prompt generation with context-specific information
+            context_info = "Provide detailed and context-specific information."
+            enhanced_prompt = f"{context_info}\n\n{prompt}"
+
+            request_tokens = self.token_manager.estimate_tokens(enhanced_prompt)
+            request_params = await self.token_manager.validate_and_prepare_request(enhanced_prompt)
             
             response = await self.client.chat.completions.create(
                 model=self.config.deployment_id,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": enhanced_prompt}],
                 max_tokens=request_params.get("max_tokens", 1000),
                 temperature=request_params.get("temperature", 0.7)
             )
@@ -66,7 +70,12 @@ class APIClient:
             return {"response": response_content, "usage": usage}
         except Exception as e:
             self.logger.error(f"Error processing request: {e}")
-            raise
+            # Add error handling and fallback mechanism
+            fallback_response = {
+                "response": "An error occurred while processing the request. Please try again later.",
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "estimated_cost": 0.0}
+            }
+            return fallback_response
 
     async def close(self) -> None:
         """Close the API client resources."""
