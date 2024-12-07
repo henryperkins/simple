@@ -9,6 +9,9 @@ import ast
 import math
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+import matplotlib.pyplot as plt
+import io
+import base64
 
 from core.logger import LoggerSetup, log_error, log_debug, log_info
 
@@ -58,6 +61,10 @@ class Metrics:
         # Add complexity warning if necessary
         if complexity > 10:
             metrics["complexity_warning"] = "⚠️ High complexity"
+        
+        # Add visual representation of metrics
+        metrics["complexity_graph"] = self.generate_complexity_graph(metrics)
+        
         return metrics
 
     def calculate_class_metrics(self, node: ast.AST) -> Dict[str, Any]:
@@ -85,6 +92,10 @@ class Metrics:
         # Add complexity warning if necessary
         if complexity > 10:
             metrics["complexity_warning"] = "⚠️ High complexity"
+        
+        # Add visual representation of metrics
+        metrics["complexity_graph"] = self.generate_complexity_graph(metrics)
+        
         return metrics
 
     def calculate_cyclomatic_complexity(self, node: ast.AST) -> int:
@@ -336,6 +347,36 @@ class Metrics:
             return str(node.value)
         return ""
 
+    def generate_complexity_graph(self, metrics: Dict[str, Any]) -> str:
+        """
+        Generate a visual representation of code metrics.
+
+        Args:
+            metrics: Dictionary containing code metrics
+
+        Returns:
+            Base64 encoded string of the generated graph
+        """
+        try:
+            fig, ax = plt.subplots()
+            labels = list(metrics.keys())
+            values = list(metrics.values())
+
+            ax.barh(labels, values, color='skyblue')
+            ax.set_xlabel('Values')
+            ax.set_title('Code Metrics')
+
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            buf.close()
+
+            return img_base64
+        except Exception as e:
+            logger.error(f"Error generating complexity graph: {e}")
+            return ""
+        
 
 class MetricsCollector:
     """Collects and manages operation metrics."""

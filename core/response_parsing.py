@@ -260,3 +260,67 @@ class ResponseParsingService:
             "raises": [],
             "complexity": 1,
         }
+
+    async def _parse_docstring_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse a docstring response, handling common formatting issues.
+
+        Args:
+            response: The response string to parse
+
+        Returns:
+            Parsed docstring content or None if parsing fails
+        """
+        try:
+            response = response.strip()
+            parsed_content = self.docstring_processor.parse(response)
+            return parsed_content.__dict__ if parsed_content else None
+        except Exception as e:
+            self.logger.error(f"Failed to parse docstring response: {e}", exc_info=True)
+            return None
+
+    async def _parse_markdown_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse a markdown response, handling common formatting issues.
+
+        Args:
+            response: The response string to parse
+
+        Returns:
+            Parsed markdown content or None if parsing fails
+        """
+        try:
+            response = response.strip()
+            parsed_content = self._extract_markdown_sections(response)
+            return parsed_content if parsed_content else None
+        except Exception as e:
+            self.logger.error(f"Failed to parse markdown response: {e}", exc_info=True)
+            return None
+
+    def _extract_markdown_sections(self, response: str) -> Dict[str, Any]:
+        """
+        Extract sections from a markdown response.
+
+        Args:
+            response: The response string to extract sections from
+
+        Returns:
+            Extracted sections as a dictionary
+        """
+        sections = {}
+        current_section = None
+        current_content = []
+
+        for line in response.splitlines():
+            if line.startswith("#"):
+                if current_section:
+                    sections[current_section] = "\n".join(current_content).strip()
+                current_section = line.strip("# ").strip()
+                current_content = []
+            else:
+                current_content.append(line)
+
+        if current_section:
+            sections[current_section] = "\n".join(current_content).strip()
+
+        return sections
