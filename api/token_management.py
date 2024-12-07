@@ -53,7 +53,8 @@ class TokenManager:
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Validate and prepare a request with token management.
+        """
+        Validate and prepare a request with token management.
 
         Args:
             prompt: The prompt to send to the API
@@ -68,19 +69,31 @@ class TokenManager:
         """
         try:
             prompt_tokens = self.estimate_tokens(prompt)
-            max_completion = max_tokens or (
-                self.model_config.chunk_size - prompt_tokens
+            # Calculate available tokens for completion
+            max_completion = max_tokens or min(
+                self.model_config.max_tokens - prompt_tokens,
+                self.model_config.chunk_size
             )
+            
+            # Ensure max_completion is at least 1
+            max_completion = max(1, max_completion)
+            
+            # Ensure total tokens don't exceed model limit
             total_tokens = prompt_tokens + max_completion
-
             if total_tokens > self.model_config.max_tokens:
-                raise TokenLimitError("Request exceeds model token limit")
+                # Adjust max_completion to fit within limits
+                max_completion = max(1, self.model_config.max_tokens - prompt_tokens)
+            
+            self.logger.debug(
+                f"Token calculation: prompt={prompt_tokens}, "
+                f"max_completion={max_completion}, total={prompt_tokens + max_completion}"
+            )
 
             request_params = {
                 "model": self.deployment_id or self.model,
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_completion,
-                "temperature": temperature or 0.3,
+                "temperature": temperature or 0.7,
             }
 
             # Track the request

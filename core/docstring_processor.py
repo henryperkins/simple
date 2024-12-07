@@ -3,24 +3,19 @@ Module for processing and validating docstrings.
 
 This module provides utilities for parsing, validating, and formatting docstrings in Python code.
 It supports parsing docstrings from various formats, validating them against a schema, integrating
-them into source code, and generating consolidated documentation.
+them into source code, and generating updated source code from modified ASTs.
 
-Functionality includes:
-- Parsing raw docstrings or docstring dictionaries into structured data.
-- Validating docstrings against a predefined schema.
-- Inserting or replacing docstrings in abstract syntax trees (ASTs) of source code.
-- Generating updated source code from modified ASTs.
-- Formatting docstrings in a consistent manner.
-- Generating consolidated documentation from docstring entries.
+Classes:
+    DocstringProcessor: Class for processing and validating docstrings.
 
 """
 
 import ast
 import json
 import sys
-from typing import Optional, Dict, Any, List, Union, Tuple
+from typing import Optional, Dict, Any, List, Union, Tuple, Type
 
-from docstring_parser import parse as parse_docstring
+from docstring_parser import parse as parse_docstring, Docstring
 
 from core.logger import LoggerSetup
 from core.metrics import Metrics
@@ -62,7 +57,22 @@ class DocstringProcessor:
         """
         self.logger = LoggerSetup.get_logger(__name__)
         self.metrics = metrics or Metrics()
-        self.docstring_schema = load_schema("docstring_schema")
+        self.docstring_schema: Dict[str, Any] = load_schema("docstring_schema")
+
+    def _validate_docstring_dict(self, docstring_dict: Dict[str, Any]) -> None:
+        """
+        Validate the structure of the docstring dictionary.
+
+        Args:
+            docstring_dict (Dict[str, Any]): The docstring dictionary to validate.
+
+        Raises:
+            DocumentationError: If required keys are missing in the docstring.
+        """
+        required_keys = {'summary', 'description', 'args', 'returns', 'raises'}  # Remove complexity as required
+        missing_keys = required_keys - docstring_dict.keys()
+        if missing_keys:
+            raise DocumentationError(f"Docstring dictionary missing keys: {missing_keys}")
 
     def parse(self, docstring: Union[Dict[str, Any], str]) -> DocstringData:
         """
@@ -76,12 +86,14 @@ class DocstringProcessor:
 
         Raises:
             DocumentationError: If the docstring is invalid or cannot be parsed.
-
         """
         try:
             if isinstance(docstring, dict):
                 # Validate dictionary structure
                 self._validate_docstring_dict(docstring)
+                # Add complexity if missing
+                if 'complexity' not in docstring:
+                    docstring['complexity'] = 1  # Default complexity
                 # Create DocstringData from dictionary
                 return self._create_docstring_data_from_dict(docstring)
             elif isinstance(docstring, str):
@@ -90,6 +102,8 @@ class DocstringProcessor:
                 if docstring_str.startswith('{') and docstring_str.endswith('}'):
                     try:
                         doc_dict = json.loads(docstring_str)
+                        if 'complexity' not in doc_dict:
+                            doc_dict['complexity'] = 1  # Default complexity
                         return self.parse(doc_dict)
                     except json.JSONDecodeError as e:
                         self.logger.error("JSON parsing error: %s", e)
@@ -98,8 +112,21 @@ class DocstringProcessor:
                         ) from e
                 # Fall back to standard docstring parsing
                 try:
-                    parsed = parse_docstring(docstring_str)
-                    return self._create_docstring_data_from_parsed(parsed)
+                    parsed: Docstring = parse_docstring(docstring_str)
+                    docstring_dict = {
+                        'summary': parsed.short_description or '',
+                        'description': parsed.long_description or '',
+                        'args': [{'name': p.arg_name, 'type': p.type_name or 'Any', 'description': p.description or ''}
+                                 for p in parsed.params],
+                        'returns': {
+                            'type': parsed.returns.type_name if parsed.returns else 'Any',
+                            'description': parsed.returns.description if parsed.returns else ''
+                        },
+                        'raises': [{'exception': e.type_name, 'description': e.description}
+                                   for e in (parsed.raises or [])],
+                        'complexity': 1  # Default complexity
+                    }
+                    return self._create_docstring_data_from_dict(docstring_dict)
                 except Exception as e:
                     self.logger.error("Docstring parsing error: %s", e)
                     raise DocumentationError(f"Failed to parse docstring: {e}") from e
@@ -110,22 +137,6 @@ class DocstringProcessor:
         except Exception as e:
             self.logger.error("Unexpected error in parse method: %s", e)
             raise DocumentationError(f"Unexpected error during parsing: {e}") from e
-
-    def _validate_docstring_dict(self, docstring_dict: Dict[str, Any]) -> None:
-        """
-        Validate the structure of the docstring dictionary.
-
-        Args:
-            docstring_dict (Dict[str, Any]): The docstring dictionary to validate.
-
-        Raises:
-            DocumentationError: If required keys are missing in the docstring.
-
-        """
-        required_keys = {'summary', 'description', 'args', 'returns', 'raises', 'complexity'}
-        missing_keys = required_keys - docstring_dict.keys()
-        if missing_keys:
-            raise DocumentationError(f"Docstring dictionary missing keys: {missing_keys}")
 
     def _create_docstring_data_from_dict(self, docstring_dict: Dict[str, Any]) -> DocstringData:
         """Create DocstringData from a validated dictionary."""
@@ -143,11 +154,8 @@ class DocstringProcessor:
             if not returns.get('description'):
                 returns['description'] = ''
 
-            # Validate with more lenient requirements
-            is_valid, errors = ValidationUtils.validate_docstring(docstring_dict, self.docstring_schema)
-            if not is_valid:
-                # Log errors but don't fail if only missing optional fields
-                self.logger.warning(f"Docstring validation warnings: {errors}")
+            # Ensure complexity has a default value
+            complexity = docstring_dict.get('complexity', 1)
 
             return DocstringData(
                 summary=docstring_dict.get('summary', ''),
@@ -155,18 +163,18 @@ class DocstringProcessor:
                 args=docstring_dict['args'],
                 returns=returns,
                 raises=docstring_dict['raises'],
-                complexity=docstring_dict.get('complexity', 1)
+                complexity=complexity
             )
         except Exception as e:
             self.logger.error("Error creating DocstringData from dict: %s", e)
             raise DocumentationError(f"Failed to create DocstringData from dict: {e}") from e
 
-    def _create_docstring_data_from_parsed(self, parsed_docstring) -> DocstringData:
+    def _create_docstring_data_from_parsed(self, parsed_docstring: Docstring) -> DocstringData:
         """
         Create DocstringData from parsed docstring object.
 
         Args:
-            parsed_docstring: The parsed docstring object from docstring_parser.
+            parsed_docstring (Docstring): The parsed docstring object from docstring_parser.
 
         Returns:
             DocstringData: The docstring data encapsulated in a DocstringData object.
@@ -198,147 +206,200 @@ class DocstringProcessor:
             self.logger.error("Error creating DocstringData: %s", e)
             raise DocumentationError(f"Failed to create DocstringData: {e}") from e
 
-    def process_batch(self, doc_entries: List[Dict[str, Any]], source_code: str) -> Dict[str, Any]:
+    def process_batch(self, doc_entries: List[Dict[str, Any]], source_code: str) -> Dict[str, str]:
         """Process a batch of documentation entries and integrate them into the source code."""
         try:
             # Parse the source code into an AST
             tree = ast.parse(source_code)
 
-            # Print doc_entries for debugging
-            self.logger.debug(f"Doc entries received: {doc_entries}")
+            self.logger.debug(f"Processing {len(doc_entries)} documentation entries")
+            self.logger.debug(f"Doc entries received: {json.dumps(doc_entries, indent=2)}")
 
             # Ensure each entry has required fields
-            processed_entries = []
+            processed_entries: List[Dict[str, Any]] = []
             for entry in doc_entries:
-                # If entry is a single docstring dict, wrap it with required fields
-                if 'summary' in entry and 'name' not in entry:
-                    # Try to extract name from AST
-                    for node in ast.walk(tree):
-                        if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
-                            processed_entries.append({
-                                'name': node.name,
-                                'docstring': self.format(DocstringData(**entry)),
-                                'type': type(node).__name__
-                            })
-                            break
-                else:
-                    processed_entries.append(entry)
+                try:
+                    self.logger.debug(f"Processing entry: {json.dumps(entry, indent=2)}")
 
-            # Insert or replace docstrings
-            tree = self._insert_docstrings(tree, processed_entries)
+                    # Handle both direct docstring dicts and wrapped entries
+                    if not isinstance(entry, dict):
+                        self.logger.error(f"Entry is not a dictionary: {type(entry)}")
+                        continue
 
-            # Generate the updated source code from the AST
-            updated_code = self._generate_code_from_ast(tree)
+                    # If entry is a docstring dict (has summary but no name)
+                    if 'summary' in entry and 'name' not in entry:
+                        # Look for a matching node in the AST
+                        for node in ast.walk(tree):
+                            if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                                docstring = self.format(DocstringData(**entry))
+                                processed_entries.append({
+                                    'name': node.name,
+                                    'docstring': docstring,
+                                    'type': type(node).__name__
+                                })
+                                self.logger.debug(f"Created processed entry for {node.name}")
+                                break
+                    else:
+                        # Entry already has a name
+                        if 'docstring' not in entry and 'summary' in entry:
+                            # Format the entry as a docstring
+                            entry['docstring'] = self.format(DocstringData(**entry))
+                        processed_entries.append(entry)
+                        self.logger.debug(f"Added entry with name: {entry.get('name')}")
 
-            # Generate the consolidated documentation
-            documentation = self._generate_documentation(processed_entries)
+                except Exception as e:
+                    self.logger.error(f"Error processing entry: {e}", exc_info=True)
+                    continue
 
+            if not processed_entries:
+                self.logger.error("No valid entries were processed")
+                return {'code': source_code, 'documentation': ""}
+
+            self.logger.debug(f"Processed entries: {json.dumps(processed_entries, indent=2)}")
+
+            # Insert docstrings into the AST
+            updated_tree: Optional[ast.AST] = self._insert_docstrings(tree, processed_entries)
+            if not updated_tree:
+                self.logger.error("Failed to update AST with docstrings")
+                return {'code': source_code, 'documentation': ""}
+
+            # Generate the updated source code
+            try:
+                updated_code: Optional[str] = self._generate_code_from_ast(updated_tree)
+                if not updated_code:
+                    self.logger.error("Failed to generate code from AST")
+                    return {'code': source_code, 'documentation': ""}
+            except Exception as e:
+                self.logger.error(f"Error generating code: {e}", exc_info=True)
+                return {'code': source_code, 'documentation': ""}
+
+            # Generate the documentation
+            try:
+                documentation: str = self._generate_documentation(processed_entries)
+                if not documentation:
+                    self.logger.error("Failed to generate documentation")
+                    return {'code': updated_code, 'documentation': ""}
+            except Exception as e:
+                self.logger.error(f"Error generating documentation: {e}", exc_info=True)
+                return {'code': updated_code, 'documentation': ""}
+
+            self.logger.info("Successfully processed batch")
             return {'code': updated_code, 'documentation': documentation}
+
         except Exception as e:
-            self.logger.error("Unexpected error processing batch: %s", e, exc_info=True)
-            raise DocumentationError(f"Failed to process batch: {e}") from e
-
-    def _insert_docstrings(self, tree: ast.AST, doc_entries: List[Dict[str, Any]]) -> ast.AST:
-        """Insert docstrings into the AST based on doc_entries."""
-        # Create a mapping from name to docstring with better error handling
-        docstring_map = {}
-        for entry in doc_entries:
-            if isinstance(entry, dict):
-                name = entry.get('name')
-                if name:
-                    docstring_map[name] = entry.get('docstring', 'No docstring provided')
-                else:
-                    self.logger.warning(f"Entry missing name field: {entry}")
-
-        self.logger.debug(f"Created docstring map: {docstring_map}")
-
-        class DocstringInserter(ast.NodeTransformer):
-            """An AST node transformer to insert docstrings into function, class, and module nodes."""
-
-            def visit_FunctionDef(self, node):
-                """Visit function definitions to insert docstrings."""
-                self.generic_visit(node)
-                self._insert_docstring(node)
-                return node
-
-            def visit_AsyncFunctionDef(self, node):
-                """Visit async function definitions to insert docstrings."""
-                self.generic_visit(node)
-                self._insert_docstring(node)
-                return node
-
-            def visit_ClassDef(self, node):
-                """Visit class definitions to insert docstrings."""
-                self.generic_visit(node)
-                self._insert_docstring(node)
-                return node
-
-            def visit_Module(self, node):
-                """Visit module nodes to insert docstrings."""
-                self.generic_visit(node)
-                if not ast.get_docstring(node, clean=False):
-                    docstring = docstring_map.get('__module__', 'No module docstring provided')
-                    docstring_node = ast.Expr(value=ast.Constant(value=docstring))
-                    node.body.insert(0, docstring_node)
-                return node
-
-            def _insert_docstring(self, node):
-                """Helper method to insert or replace docstrings."""
-                docstring = docstring_map.get(node.name, 'No docstring provided')
-                if sys.version_info >= (3, 8):
-                    docstring_value = ast.Constant(value=docstring)
-                else:
-                    docstring_value = ast.Str(s=docstring)
-
-                docstring_node = ast.Expr(value=docstring_value)
-
-                if ast.get_docstring(node, clean=False) is not None:
-                    # Replace existing docstring
-                    node.body[0] = docstring_node
-                else:
-                    # Insert docstring at the beginning
-                    node.body.insert(0, docstring_node)
-
-        return DocstringInserter().visit(tree)
-
-    def _generate_code_from_ast(self, tree: ast.AST) -> str:
-        """
-        Generate code from an AST.
-
-        Args:
-            tree (ast.AST): The abstract syntax tree from which to generate code.
-
-        Returns:
-            str: The generated source code as a string.
-
-        Raises:
-            DocumentationError: If code generation fails.
-
-        """
-        try:
-            if hasattr(ast, "unparse"):
-                return ast.unparse(tree)
-            return astor.to_source(tree)
-        except Exception as e:
-            self.logger.error("Error generating code from AST: %s", e)
-            raise DocumentationError(f"Failed to generate code from AST: {e}") from e
+            self.logger.error(f"Unexpected error processing batch: {e}", exc_info=True)
+            return {'code': source_code, 'documentation': ""}
 
     def _generate_documentation(self, doc_entries: List[Dict[str, Any]]) -> str:
-        """
-        Generate consolidated documentation from doc_entries.
+        """Generate consolidated documentation from doc_entries."""
+        try:
+            self.logger.debug(f"Generating documentation for {len(doc_entries)} entries")
 
-        Args:
-            doc_entries (List[Dict[str, Any]]): A list of documentation entries.
+            # Start with a header
+            doc_parts: List[str] = ["# API Documentation\n\n"]
 
-        Returns:
-            str: The consolidated documentation as a string.
+            # Add module-level documentation if present
+            module_entry = next((entry for entry in doc_entries if entry.get('name') == '__module__'), None)
+            if module_entry:
+                doc_parts.extend([
+                    "## Module Overview\n\n",
+                    f"{module_entry.get('docstring', '')}\n\n"
+                ])
 
-        """
-        # Placeholder for markdown generation logic
-        documentation = ""
-        for entry in doc_entries:
-            documentation += f"### {entry['name']}\n\n{entry['docstring']}\n\n"
-        return documentation
+            # Process classes
+            class_entries = [entry for entry in doc_entries
+                             if entry.get('type') == 'ClassDef']
+            if class_entries:
+                doc_parts.append("## Classes\n\n")
+                for entry in class_entries:
+                    doc_parts.extend([
+                        f"### {entry['name']}\n\n",
+                        f"{entry.get('docstring', '')}\n\n"
+                    ])
+
+            # Process functions
+            func_entries = [entry for entry in doc_entries
+                            if entry.get('type') in ('FunctionDef', 'AsyncFunctionDef')]
+            if func_entries:
+                doc_parts.append("## Functions\n\n")
+                for entry in func_entries:
+                    doc_parts.extend([
+                        f"### {entry['name']}\n\n",
+                        f"{entry.get('docstring', '')}\n\n"
+                    ])
+
+            documentation: str = ''.join(doc_parts)
+            self.logger.debug(f"Generated documentation length: {len(documentation)}")
+            return documentation
+
+        except Exception as e:
+            self.logger.error(f"Error generating documentation: {e}", exc_info=True)
+            return ""
+
+    def _insert_docstrings(self, tree: ast.AST, doc_entries: List[Dict[str, Any]]) -> Optional[ast.AST]:
+        """Insert docstrings into the AST."""
+        try:
+            # Create a mapping from name to docstring
+            docstring_map: Dict[str, str] = {
+                entry['name']: entry['docstring']
+                for entry in doc_entries
+                if 'name' in entry and 'docstring' in entry
+            }
+
+            self.logger.debug(f"Created docstring map with {len(docstring_map)} entries")
+
+            class DocstringInserter(ast.NodeTransformer):
+                def visit_Module(self, node: ast.Module) -> ast.AST:
+                    self.generic_visit(node)
+                    if '__module__' in docstring_map and not ast.get_docstring(node):
+                        docstring_node = ast.Expr(value=ast.Constant(value=docstring_map['__module__']))
+                        node.body.insert(0, docstring_node)
+                    return node
+
+                def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+                    self.generic_visit(node)
+                    if node.name in docstring_map:
+                        docstring = docstring_map[node.name]
+                        docstring_node = ast.Expr(value=ast.Constant(value=docstring))
+                        if len(node.body) > 0 and isinstance(node.body[0], ast.Expr):
+                            node.body[0] = docstring_node
+                        else:
+                            node.body.insert(0, docstring_node)
+                    return node
+
+                def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
+                    return self.visit_FunctionDef(node)  # Reuse FunctionDef logic
+
+                def visit_ClassDef(self, node: ast.ClassDef) -> ast.AST:
+                    self.generic_visit(node)
+                    if node.name in docstring_map:
+                        docstring = docstring_map[node.name]
+                        docstring_node = ast.Expr(value=ast.Constant(value=docstring))
+                        if len(node.body) > 0 and isinstance(node.body[0], ast.Expr):
+                            node.body[0] = docstring_node
+                        else:
+                            node.body.insert(0, docstring_node)
+                    return node
+
+            transformer = DocstringInserter()
+            new_tree = transformer.visit(tree)
+            return new_tree
+
+        except Exception as e:
+            self.logger.error(f"Error inserting docstrings: {e}", exc_info=True)
+            return None
+
+    def _generate_code_from_ast(self, tree: ast.AST) -> Optional[str]:
+        """Generate code from an AST."""
+        try:
+            if hasattr(ast, 'unparse'):  # Python 3.9+
+                return ast.unparse(tree)
+            else:
+                import astor
+                return astor.to_source(tree)
+        except Exception as e:
+            self.logger.error(f"Error generating code from AST: {e}", exc_info=True)
+            return None
 
     def format(self, data: DocstringData) -> str:
         """
@@ -358,7 +419,7 @@ class DocstringProcessor:
         Validate docstring data against requirements.
 
         Args:
-            data (DocstringData): The docstring data to validate.
+            data: The docstring data to validate.
 
         Returns:
             Tuple[bool, List[str]]: A tuple containing a boolean indicating validation success,

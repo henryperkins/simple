@@ -63,16 +63,25 @@ class ClassExtractor:
         try:
             metadata = DocstringUtils.extract_metadata(node)
             base_classes = self._extract_bases(node)
+            
+            # Get source segment only once for the entire class
+            class_source = get_source_segment(self.context.source_code, node)
+            if not class_source:
+                self.logger.warning(f"Could not extract source for class {node.name}")
+                class_source = ""
+            
             if "description" not in metadata["docstring_info"]:
                 metadata["docstring_info"]["description"] = ""
             if base_classes:
                 metadata["docstring_info"]["description"] += f"\n\nThis class inherits from: {', '.join(base_classes)}."
+            
             metrics = self.metrics_calculator.calculate_class_metrics(node)
+            
             extracted_class = ExtractedClass(
                 name=metadata["name"],
                 docstring=metadata["docstring_info"]["docstring"],
                 lineno=metadata["lineno"],
-                source=get_source_segment(self.context.source_code, node),
+                source=class_source,
                 metrics=metrics,
                 dependencies=extract_dependencies_from_node(node),
                 bases=base_classes,
@@ -166,24 +175,24 @@ class ClassExtractor:
         return decorators
 
     def _extract_instance_attributes(self, node: ast.ClassDef) -> List[Dict[str, Any]]:
-        """Extract instance attributes from the class definition and its parent classes."""
+        """Extract instance attributes from class methods."""
         instance_attributes = []
         processed_attrs = set()
 
-        def process_assignment(stmt: ast.Assign, class_name: str) -> Optional[Dict[str, Any]]:
-            """Process a single assignment statement."""
+        def process_assign(stmt: ast.Assign, class_name: str) -> Optional[Dict[str, Any]]:
             try:
                 if isinstance(stmt.targets[0], ast.Attribute) and isinstance(stmt.targets[0].value, ast.Name):
                     if stmt.targets[0].value.id == "self":
                         attr_name = stmt.targets[0].attr
                         if attr_name not in processed_attrs:
                             processed_attrs.add(attr_name)
-                            visitor = NodeNameVisitor()
-                            visitor.visit(stmt.value)
+                            value_visitor = NodeNameVisitor()
+                            if stmt.value:
+                                value_visitor.visit(stmt.value)
                             return {
                                 "name": attr_name,
-                                "type": visitor.name if stmt.value else "Any",
-                                "value": get_source_segment(self.context.source_code, stmt.value) if stmt.value else None,
+                                "type": value_visitor.name if stmt.value else "Any",
+                                "value": value_visitor.name if stmt.value else None,
                                 "defined_in": class_name,
                             }
                 return None
@@ -191,37 +200,34 @@ class ClassExtractor:
                 self.logger.error(f"Error processing assignment: {e}")
                 return None
 
-        def process_ann_assign(stmt: ast.AnnAssign, class_name: str) -> Optional[Dict[str, Any]]:
-            """Process a single annotated assignment statement."""
-            try:
-                if isinstance(stmt.target, ast.Attribute) and isinstance(stmt.target.value, ast.Name):
-                    if stmt.target.value.id == "self":
-                        attr_name = stmt.target.attr
-                        if attr_name not in processed_attrs:
-                            processed_attrs.add(attr_name)
-                            visitor = NodeNameVisitor()
-                            visitor.visit(stmt.annotation)
-                            return {
-                                "name": attr_name,
-                                "type": visitor.name if stmt.annotation else "Any",
-                                "value": get_source_segment(self.context.source_code, stmt.value) if stmt.value else None,
-                                "defined_in": class_name,
-                            }
-                return None
-            except Exception as e:
-                self.logger.error(f"Error processing annotated assignment: {e}")
-                return None
-
         def extract_from_class(class_node: ast.ClassDef, is_parent: bool = False) -> None:
-            """Extract attributes from a class and its methods."""
             for child in class_node.body:
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == "__init__":
                     for stmt in child.body:
                         attr_info = None
                         if isinstance(stmt, ast.Assign):
-                            attr_info = process_assignment(stmt, class_node.name)
+                            attr_info = process_assign(stmt, class_node.name)
                         elif isinstance(stmt, ast.AnnAssign):
-                            attr_info = process_ann_assign(stmt, class_node.name)
+                            # Handle annotated assignments
+                            if isinstance(stmt.target, ast.Attribute) and isinstance(stmt.target.value, ast.Name):
+                                if stmt.target.value.id == "self":
+                                    attr_name = stmt.target.attr
+                                    if attr_name not in processed_attrs:
+                                        processed_attrs.add(attr_name)
+                                        type_visitor = NodeNameVisitor()
+                                        value_visitor = NodeNameVisitor()
+                                        
+                                        if stmt.annotation:
+                                            type_visitor.visit(stmt.annotation)
+                                        if stmt.value:
+                                            value_visitor.visit(stmt.value)
+                                            
+                                        attr_info = {
+                                            "name": attr_name,
+                                            "type": type_visitor.name or "Any",
+                                            "value": value_visitor.name if stmt.value else None,
+                                            "defined_in": class_node.name,
+                                        }
 
                         if attr_info:
                             if is_parent:
@@ -229,13 +235,16 @@ class ClassExtractor:
                             instance_attributes.append(attr_info)
                             self.logger.debug(f"Extracted instance attribute: {attr_info['name']}")
 
+        # Process the current class
         extract_from_class(node)
 
+        # Process parent classes
         for base in node.bases:
             try:
                 visitor = NodeNameVisitor()
                 visitor.visit(base)
                 base_name = visitor.name
+                # Find and process parent class if it's in the same module
                 for parent_node in ast.walk(self.context.tree):
                     if isinstance(parent_node, ast.ClassDef) and parent_node.name == base_name:
                         extract_from_class(parent_node, is_parent=True)

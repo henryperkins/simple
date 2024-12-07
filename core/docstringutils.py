@@ -33,30 +33,44 @@ class DocstringUtils:
     @staticmethod
     def extract_metadata(node: ast.AST) -> Dict[str, Any]:
         """Extract common metadata and docstring information from an AST node."""
-        if isinstance(node, ast.AsyncFunctionDef):
-            node_type = "async function"
-        elif isinstance(node, ast.FunctionDef):
-            node_type = "function"
-        elif isinstance(node, ast.ClassDef):
-            node_type = "class"
-        else:
-            node_type = "unknown"
+        try:
+            metadata = {
+                "name": getattr(node, "name", None),
+                "lineno": getattr(node, "lineno", None),
+                "type": DocstringUtils._get_node_type(node),
+                "docstring_info": DocstringUtils.extract_docstring_info(node),
+                "decorators": [],
+                "bases": [],
+                "raises": []
+            }
 
-        if isinstance(node, ast.ClassDef):
-            bases = [DocstringUtils._get_node_name(base) for base in getattr(node, "bases", [])]
-        else:
-            bases = []
+            # Handle decorators
+            if hasattr(node, "decorator_list"):
+                metadata["decorators"] = [
+                    DocstringUtils._get_decorator_name(d) for d in node.decorator_list
+                ]
 
-        metadata = {
-            "name": getattr(node, "name", None),
-            "lineno": getattr(node, "lineno", None),
-            "type": node_type,
-            "docstring_info": DocstringUtils.extract_docstring_info(node),
-            "decorators": [DocstringUtils._get_node_name(d) for d in getattr(node, "decorator_list", [])],
-            "bases": bases,
-            "raises": DocstringUtils.extract_raises(node)
-        }
-        return metadata
+            # Handle bases for classes
+            if isinstance(node, ast.ClassDef):
+                metadata["bases"] = [
+                    DocstringUtils._get_node_name(base) for base in node.bases
+                ]
+
+            # Extract raises information
+            metadata["raises"] = DocstringUtils.extract_raises(node)
+
+            return metadata
+        except Exception as e:
+            logger.error(f"Error extracting metadata: {e}")
+            return {
+                "name": getattr(node, "name", "unknown"),
+                "lineno": getattr(node, "lineno", 0),
+                "type": "unknown",
+                "docstring_info": {"docstring": "", "args": [], "returns": {}, "raises": []},
+                "decorators": [],
+                "bases": [],
+                "raises": []
+            }
 
     @staticmethod
     def extract_docstring_info(node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef]) -> Dict[str, Any]:
@@ -118,13 +132,39 @@ class DocstringUtils:
         return [{"exception": exc, "description": ""} for exc in raises]
 
     @staticmethod
+    def _get_decorator_name(node: ast.AST) -> str:
+        """Extract decorator name using NodeNameVisitor."""
+        visitor = NodeNameVisitor()
+        try:
+            visitor.visit(node)
+            return visitor.name
+        except Exception as e:
+            logger.error(f"Error getting decorator name: {e}")
+            return "unknown_decorator"
+
+    @staticmethod
+    def _get_node_type(node: ast.AST) -> str:
+        """Determine the type of the node."""
+        if isinstance(node, ast.AsyncFunctionDef):
+            return "async function"
+        elif isinstance(node, ast.FunctionDef):
+            return "function"
+        elif isinstance(node, ast.ClassDef):
+            return "class"
+        return "unknown"
+
+    @staticmethod
     def _get_node_name(node: Optional[ast.AST]) -> str:
-        """Helper method to get the name of an AST node using NodeNameVisitor."""
+        """Use NodeNameVisitor to get node name."""
         if node is None:
             return "Any"
         visitor = NodeNameVisitor()
-        visitor.visit(node)
-        return visitor.name
+        try:
+            visitor.visit(node)
+            return visitor.name
+        except Exception as e:
+            logger.error(f"Error getting node name: {e}")
+            return "unknown"
 
     @staticmethod
     def get_exception_name(node: ast.AST) -> Optional[str]:

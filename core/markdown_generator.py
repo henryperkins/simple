@@ -1,4 +1,6 @@
-"""Markdown documentation generator module."""
+"""
+Markdown documentation generator module.
+"""
 
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -75,7 +77,15 @@ class MarkdownGenerator:
         )
 
     def _generate_ai_doc_section(self, ai_documentation: Dict[str, Any]) -> str:
-        """Generates the AI documentation section."""
+        """
+        Generate the AI documentation section using docstring data and AI enhancements.
+        
+        Args:
+            ai_documentation: Dictionary containing AI-enhanced documentation
+        
+        Returns:
+            str: Generated markdown documentation
+        """
         if not ai_documentation:
             return ""
 
@@ -89,29 +99,31 @@ class MarkdownGenerator:
             + "\n\n",
         ]
 
-        if ai_documentation.get("args"):
+        # Format arguments section
+        if args := ai_documentation.get("args"):
             sections.append("**Arguments:**")
-            for arg in ai_documentation["args"]:
+            for arg in args:
                 sections.append(
-                    f"- **{arg.get('name', 'Unknown Name')}** "
-                    f"({arg.get('type', 'Unknown Type')}): "
+                    f"- **{arg.get('name', 'Unknown')}** "
+                    f"({arg.get('type', 'Any')}): "
                     f"{arg.get('description', 'No description.')}"
                 )
             sections.append("\n")
 
-        if ai_documentation.get("returns"):
-            returns = ai_documentation["returns"]
+        # Format returns section
+        if returns := ai_documentation.get("returns"):
             sections.append(
                 f"**Returns:** {returns.get('type', 'Unknown Type')} - "
                 f"{returns.get('description', 'No description.')}\n\n"
             )
 
-        if ai_documentation.get("raises"):
+        # Format raises section
+        if raises := ai_documentation.get("raises"):
             sections.append("**Raises:**")
-            for raise_ in ai_documentation["raises"]:
+            for exc in raises:
                 sections.append(
-                    f"- **{raise_.get('exception', 'Unknown Exception')}**: "
-                    f"{raise_.get('description', 'No description.')}"
+                    f"- **{exc.get('exception', 'Unknown Exception')}**: "
+                    f"{exc.get('description', 'No description.')}"
                 )
             sections.append("\n")
 

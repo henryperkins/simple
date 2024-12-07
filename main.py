@@ -3,67 +3,82 @@ import asyncio
 import re
 from pathlib import Path
 from typing import Optional
+
 from dotenv import load_dotenv
 
 from ai_interaction import AIInteractionHandler
+from api.api_client import APIClient
+from api.token_management import TokenManager
 from core.cache import Cache
 from core.config import AzureOpenAIConfig
-from core.logger import LoggerSetup
-from core.metrics import Metrics, MetricsCollector
-from core.response_parsing import ResponseParsingService
+from core.docs import DocumentationOrchestrator
 from core.docstring_processor import DocstringProcessor
 from core.extraction.code_extractor import CodeExtractor
-from core.types import ExtractionContext
-from core.docs import DocumentationOrchestrator
+from core.logger import LoggerSetup
+from core.metrics import Metrics, MetricsCollector
 from core.monitoring import SystemMonitor
-from exceptions import ConfigurationError, DocumentationError
+from core.response_parsing import ResponseParsingService
 from core.schema_loader import load_schema
-from api.token_management import TokenManager
-from api.api_client import APIClient
-from repository_handler import RepositoryHandler
+from core.types import ExtractionContext
 from core.utils import GitUtils
+from exceptions import ConfigurationError, DocumentationError
+from repository_handler import RepositoryHandler
 
 load_dotenv()
 logger = LoggerSetup.get_logger(__name__)
 
 class DocumentationGenerator:
     def __init__(self, config: Optional[AzureOpenAIConfig] = None) -> None:
+        """Initialize the documentation generator."""
         self.config = config or AzureOpenAIConfig.from_env()
         self.logger = LoggerSetup.get_logger(__name__)
+        self._initialized = False
         
-        self.api_client = APIClient(
-            config=self.config,
-            response_parser=ResponseParsingService(),
-            token_manager=TokenManager()
-        )
-        
-        self.ai_handler = AIInteractionHandler(
-            config=self.config,
-            cache=Cache(),
-            token_manager=TokenManager(),
-            response_parser=ResponseParsingService(),
-            metrics=Metrics(),
-            docstring_schema=load_schema("docstring_schema")
-        )
-        
-        self.doc_orchestrator = DocumentationOrchestrator(
-            ai_handler=self.ai_handler,
-            docstring_processor=DocstringProcessor(metrics=Metrics()),
-            code_extractor=CodeExtractor(ExtractionContext()),
-            metrics=Metrics(),
-            response_parser=ResponseParsingService()
-        )
-        
-        self.system_monitor = SystemMonitor()
-        self.metrics_collector = MetricsCollector()
-
-        self.logger.info("All components initialized successfully")
+        # Store components but don't initialize them yet
+        self.api_client: Optional[APIClient] = None
+        self.ai_handler: Optional[AIInteractionHandler] = None
+        self.doc_orchestrator: Optional[DocumentationOrchestrator] = None
+        self.system_monitor: Optional[SystemMonitor] = None
+        self.metrics_collector: Optional[MetricsCollector] = None
 
     async def initialize(self) -> None:
+        """Initialize all components."""
+        if self._initialized:
+            return
+            
         try:
+            # Initialize components
+            self.api_client = APIClient(
+                config=self.config,
+                response_parser=ResponseParsingService(),
+                token_manager=TokenManager()
+            )
+            
+            self.ai_handler = AIInteractionHandler(
+                config=self.config,
+                cache=Cache(),
+                token_manager=TokenManager(),
+                response_parser=ResponseParsingService(),
+                metrics=Metrics(),
+                docstring_schema=load_schema("docstring_schema")
+            )
+            
+            self.doc_orchestrator = DocumentationOrchestrator(
+                ai_handler=self.ai_handler,
+                docstring_processor=DocstringProcessor(metrics=Metrics()),
+                code_extractor=CodeExtractor(ExtractionContext()),
+                metrics=Metrics(),
+                response_parser=ResponseParsingService()
+            )
+            
+            self.system_monitor = SystemMonitor()
+            self.metrics_collector = MetricsCollector()
+
+            # Start monitoring
             await self.system_monitor.start()
             self._initialized = True
             self.logger.info("All components initialized successfully")
+            
         except Exception as e:
             error_msg = f"Initialization failed: {e}"
             self.logger.error(error_msg, exc_info=True)
@@ -71,16 +86,10 @@ class DocumentationGenerator:
             raise ConfigurationError(error_msg) from e
 
     async def process_file(self, file_path: Path, output_path: Path) -> bool:
-        """
-        Processes a single Python source code file and generates documentation.
-
-        Args:
-            file_path (Path): The path to the Python source code file to process.
-            output_path (Path): The path to the output file where documentation will be saved.
-
-        Returns:
-            bool: True if the file was processed successfully and documentation was generated, False otherwise.
-        """
+        """Process a single file."""
+        if not self._initialized:
+            await self.initialize()
+            
         try:
             self.logger.info(f"Processing file: {file_path}")
 
@@ -88,10 +97,24 @@ class DocumentationGenerator:
                 self.logger.error(f"File not found: {file_path}")
                 return False
 
-            source_code = file_path.read_text(encoding="utf-8")
-            if not source_code.strip():
-                self.logger.error(f"Empty file: {file_path}")
-                return False
+            try:
+                source_code = file_path.read_text(encoding='utf-8')
+                
+                # Try to fix any inconsistent indentation
+                source_code = self._fix_indentation(source_code)
+                
+                if not source_code.strip():
+                    self.logger.error(f"Empty file: {file_path}")
+                    return False
+                
+            except UnicodeDecodeError:
+                try:
+                    # Try alternate encoding if UTF-8 fails
+                    source_code = file_path.read_text(encoding='latin-1')
+                    source_code = self._fix_indentation(source_code)
+                except Exception as e:
+                    self.logger.error(f"Failed to read file {file_path}: {e}")
+                    return False
 
             result = await self.ai_handler.process_code(source_code)
             if not result:
@@ -116,6 +139,26 @@ class DocumentationGenerator:
         except Exception as e:
             self.logger.error(f"Error processing {file_path}: {e}", exc_info=True)
             return False
+
+    def _fix_indentation(self, source_code: str) -> str:
+        """Fix inconsistent indentation in source code."""
+        lines = source_code.splitlines()
+        fixed_lines: List[str] = []
+        
+        for line in lines:
+            # Convert tabs to spaces
+            fixed_line = line.expandtabs(4)
+            
+            # Detect and fix mixed indentation
+            indent_count = len(fixed_line) - len(fixed_line.lstrip())
+            if indent_count > 0:
+                # Ensure indentation is a multiple of 4 spaces
+                proper_indent = (indent_count // 4) * 4
+                fixed_line = (" " * proper_indent) + fixed_line.lstrip()
+            
+            fixed_lines.append(fixed_line)
+            
+        return "\n".join(fixed_lines)
 
     async def process_repository(self, repo_path: str, output_dir: Path = Path("docs")) -> bool:
         try:
@@ -193,10 +236,14 @@ class DocumentationGenerator:
 
     async def cleanup(self) -> None:
         try:
-            await self.api_client.close()
-            await self.ai_handler.close()
-            await self.metrics_collector.close()
-            await self.system_monitor.stop()
+            if self.api_client:
+                await self.api_client.close()
+            if self.ai_handler:
+                await self.ai_handler.close()
+            if self.metrics_collector:
+                await self.metrics_collector.close()
+            if self.system_monitor:
+                await self.system_monitor.stop()
             
             self.logger.info("Cleanup completed successfully")
         except AttributeError as ae:
