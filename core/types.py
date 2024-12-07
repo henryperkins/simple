@@ -1,9 +1,9 @@
+# core/types.py
 """
 Core type definitions for code analysis and documentation generation.
 Provides dataclass definitions for structured data handling throughout the application.
 """
 
-# Standard library imports
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,7 +16,6 @@ class BaseData:
     description: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-
 @dataclass
 class DocstringData:
     """Structured representation of a docstring."""
@@ -28,7 +27,6 @@ class DocstringData:
     metadata: Dict[str, Any] = field(default_factory=dict)
     complexity: int = 1
 
-
 @dataclass
 class TokenUsage:
     """Token usage statistics and cost calculation."""
@@ -36,7 +34,6 @@ class TokenUsage:
     completion_tokens: int
     total_tokens: int
     estimated_cost: float
-
 
 @dataclass
 class ExtractedElement:
@@ -49,7 +46,6 @@ class ExtractedElement:
     dependencies: Dict[str, Set[str]] = field(default_factory=dict)
     decorators: List[str] = field(default_factory=list)
     complexity_warnings: List[str] = field(default_factory=list)
-
 
 @dataclass
 class ExtractedArgument:
@@ -87,28 +83,34 @@ class ExtractedFunction(ExtractedElement):
             "complexity_warnings": self.complexity_warnings,
             "raises": [r.get('exception', 'Unknown') for r in self.raises],
             "body_summary": self.body_summary
-            # ast_node intentionally excluded from dict conversion
         }
 
 @dataclass
-class ExtractedClass(ExtractedElement):
-    """Represents extracted information about a class."""
+class ExtractedClass:
     name: str
     docstring: str
-    raises: List[Dict[str, str]] = field(default_factory=list)
-    methods: List[ExtractedFunction] = field(default_factory=list)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    bases: List[str] = field(default_factory=list)
-    lineno: int = 0
-    source: str = ""
-    dependencies: List[str] = field(default_factory=list)
-    attributes: List[str] = field(default_factory=list)
+    lineno: int
+    source: str
+    metrics: Dict[str, Any]
+    dependencies: List[str]
+    decorators: List[str]
+    complexity_warnings: List[str]
+    raises: List[Dict[str, str]] = None  # Make 'raises' optional
+    bases: List[str] = None
+    methods: List[Any] = None
+    attributes: List[Any] = None
     is_exception: bool = False
-    decorators: List[str] = field(default_factory=list)
-    instance_attributes: List[str] = field(default_factory=list)
+    instance_attributes: List[Any] = None
     metaclass: Optional[str] = None
-    complexity_warnings: List[str] = field(default_factory=list)
-    ast_node: Optional[ast.ClassDef] = None
+    ast_node: Optional[ast.AST] = None
+
+    def __post_init__(self):
+        """Initialize default values for optional fields."""
+        self.bases = self.bases or []
+        self.methods = self.methods or []
+        self.attributes = self.attributes or []
+        self.instance_attributes = self.instance_attributes or []
+        self.raises = self.raises or []
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the ExtractedClass instance to a dictionary."""
@@ -128,7 +130,6 @@ class ExtractedClass(ExtractedElement):
             "instance_attributes": self.instance_attributes,
             "metaclass": self.metaclass,
             "complexity_warnings": self.complexity_warnings
-            # ast_node intentionally excluded from dict conversion
         }
 
 @dataclass
@@ -141,7 +142,6 @@ class ParsedResponse:
     errors: List[str]
     metadata: Dict[str, Any]
 
-
 @dataclass
 class ProcessingResult:
     """Result of AI processing operation."""
@@ -150,7 +150,6 @@ class ProcessingResult:
     metrics: Optional[Dict[str, Any]] = None
     is_cached: bool = False
     processing_time: float = 0.0
-
 
 @dataclass
 class DocumentationContext:
@@ -182,7 +181,6 @@ class DocumentationContext:
         combined = "|".join(key_parts).encode("utf-8")
         return hashlib.sha256(combined).hexdigest()
 
-
 @dataclass
 class ExtractionContext:
     """Context for code extraction operations."""
@@ -196,6 +194,12 @@ class ExtractionContext:
     ignore_decorators: Set[str] = field(default_factory=set)
     base_path: Optional[Path] = None
     source_code: Optional[str] = None
+    tree: Optional[ast.AST] = None
+
+    def __post_init__(self):
+        """Initialize additional attributes after dataclass initialization."""
+        if not hasattr(self, 'tree'):
+            self.tree = None
 
     def __init__(self):
         self.tree = None
@@ -206,6 +210,8 @@ class ExtractionContext:
 class ExtractionResult:
     """Result of code extraction."""
     module_docstring: Dict[str, Any]
+    module_name: str = ""
+    file_path: str = ""
     classes: List[Any] = field(default_factory=list)
     functions: List[Any] = field(default_factory=list)
     variables: List[Dict[str, Any]] = field(default_factory=list)
@@ -213,8 +219,8 @@ class ExtractionResult:
     dependencies: Dict[str, Set[str]] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
     maintainability_index: Optional[float] = None
-    source_code: str = ""  # Added field for source code
-    imports: List[Any] = field(default_factory=list)  # Added imports field
+    source_code: str = ""
+    imports: List[Any] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert extraction result to dictionary format."""
@@ -224,6 +230,7 @@ class ExtractionResult:
             'imports': self.imports if hasattr(self, 'imports') else [],
             'dependencies': self.dependencies if hasattr(self, 'dependencies') else []
         }
+
 @dataclass
 class DocumentationData:
     """Standardized documentation data structure."""

@@ -148,7 +148,7 @@ class CodeExtractor:
 
     def _extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:
         """Extract variables from the AST."""
-        variables = []
+        variables: List[Dict[str, Any]] = []
         for node in ast.walk(tree):
             if isinstance(node, (ast.Assign, ast.AnnAssign)):
                 targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -173,7 +173,7 @@ class CodeExtractor:
         Returns:
             List[Dict[str, Any]]: A list of extracted constants.
         """
-        constants = []
+        constants: List[Dict[str, Any]] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
                 for target in node.targets:

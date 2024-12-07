@@ -16,7 +16,7 @@ Example usage:
     analyzer = DependencyAnalyzer(context)
     dependencies = analyzer.analyze_dependencies(ast_tree)
 """
-
+import sysconfig
 import ast
 import importlib.util
 import os
@@ -73,7 +73,8 @@ class DependencyAnalyzer:
         self.logger.debug("Initialized DependencyAnalyzer")
 
     def analyze_dependencies(self, node: ast.AST, module_name: Optional[str] = None) -> Dict[str, Set[str]]:
-        """Analyze module dependencies, including circular dependency detection.
+        """
+        Analyze module dependencies, including circular dependency detection.
 
         Args:
             node (ast.AST): The AST node to analyze.
@@ -83,7 +84,13 @@ class DependencyAnalyzer:
             Dict[str, Set[str]]: A dictionary categorizing dependencies into 'stdlib', 'third_party', and 'local'.
         """
         self.logger.info("Starting dependency analysis")
-        self.module_name = module_name or self.module_name
+        
+        # Set module name with validation
+        if module_name:
+            self.module_name = module_name
+        elif not self.module_name:
+            self.logger.warning("No module name provided for dependency analysis")
+            self.module_name = "<unknown_module>"  # Set a default value
 
         try:
             raw_deps = extract_dependencies_from_node(node)
@@ -91,7 +98,7 @@ class DependencyAnalyzer:
             circular_deps = self._detect_circular_dependencies(deps)
             if circular_deps:
                 self.logger.warning(f"Circular dependencies detected: {circular_deps}")
-
+            
             self.logger.info(f"Dependency analysis completed: {len(deps)} categories found")
             
             # Integrate dependency analysis results into the overall code analysis
@@ -127,22 +134,22 @@ class DependencyAnalyzer:
             return {}
 
     def _extract_raises(self, node: ast.AST) -> List[Dict[str, str]]:
-        """Extract raise statements from function body.
-
-        Args:
-            node (ast.AST): The function node to extract raise statements from.
-
-        Returns:
-            List[Dict[str, str]]: A list of dictionaries containing exception names and descriptions.
-        """
-        raises = []
+        raises: List[Dict[str, str]] = []
         for child in ast.walk(node):
             if isinstance(child, ast.Raise) and child.exc:
-                exc_name = get_node_name(child.exc)
-                if exc_name:
+                visitor = NodeNameVisitor()
+                visitor.visit(child.exc)
+                if visitor.name:
+                    description = "Exception raised in function execution"
+                    # Try to extract message from raise statement if it's a Call
+                    if isinstance(child.exc, ast.Call) and child.exc.args:
+                        msg_visitor = NodeNameVisitor()
+                        msg_visitor.visit(child.exc.args[0])
+                        if msg_visitor.name:
+                            description = msg_visitor.name.strip("'\"")
                     raises.append({
-                        "exception": exc_name,
-                        "description": "Exception raised in function execution"
+                        "exception": visitor.name,
+                        "description": description
                     })
         return raises
 
@@ -155,7 +162,7 @@ class DependencyAnalyzer:
         Returns:
             List[Dict[str, str]]: A list of dictionaries containing argument names, types, and descriptions.
         """
-        args = []
+        args: List[Dict[str, str]] = []
         for arg in node.args.args:
             args.append({
                 "name": arg.arg,
@@ -173,9 +180,33 @@ class DependencyAnalyzer:
         Returns:
             Dict[str, str]: A dictionary containing the return type and description.
         """
+        return_type = "Any"  # Default return type
+        description = "No description available"
+
+        try:
+            # Check for return annotation
+            if node.returns:
+                visitor = NodeNameVisitor()
+                visitor.visit(node.returns)
+                if visitor.name:
+                    return_type = visitor.name
+
+            # Try to extract return description from docstring
+            docstring = ast.get_docstring(node)
+            if docstring:
+                # Look for return/returns section in docstring
+                import re
+                returns_match = re.search(r'(?:Returns?|->):\s*(.+?)(?:\n\n|\Z)', 
+                                        docstring, re.DOTALL)
+                if returns_match:
+                    description = returns_match.group(1).strip()
+
+        except Exception as e:
+            self.logger.debug(f"Error extracting return type: {e}")
+
         return {
-            "type": "Unknown",  # Type inference can be added if needed
-            "description": "No description available"
+            "type": return_type,
+            "description": description
         }
 
     def _categorize_dependencies(self, raw_deps: dict[str, set[str]]) -> dict[str, set[str]]:
@@ -243,29 +274,33 @@ class DependencyAnalyzer:
         Returns:
             Set[str]: A set of standard library module names.
         """
-        if hasattr(sys, "stdlib_module_names"):  # Python 3.10+
+        # For Python 3.10+, use built-in stdlib_module_names
+        if hasattr(sys, "stdlib_module_names"):
             return set(sys.stdlib_module_names)
         
         try:
-            import sysconfig
             paths = sysconfig.get_paths()
             stdlib_dir = paths.get("stdlib")
             if not stdlib_dir:
                 return set()
                 
-            modules = set()
-            for root, _, files in os.walk(stdlib_dir):
+            # Explicitly type-annotate the set
+            modules: Set[str] = set()
+            
+            # Walk through standard library directory
+            for _, _, files in os.walk(stdlib_dir):
                 for file in files:
                     if file.endswith(".py"):
                         module = os.path.splitext(file)[0]
                         modules.add(module)
             return modules
+            
         except Exception as e:
             logger.error("Error getting stdlib modules: %s", e)
             return set()
 
     def _detect_circular_dependencies(self, dependencies: Dict[str, Set[str]]) -> List[Tuple[str, str]]:
-        """Detect circular dependencies.
+        """Detect direct and indirect circular dependencies.
 
         Args:
             dependencies (Dict[str, Set[str]]): The dependencies to check for circular references.
@@ -273,20 +308,40 @@ class DependencyAnalyzer:
         Returns:
             List[Tuple[str, str]]: A list of tuples representing circular dependencies.
         """
-        self.logger.debug("Detecting circular dependencies")
-        circular_dependencies = []
+        circular_dependencies: List[Tuple[str, str]] = []
+        visited: Set[str] = set()
+        path: Set[str] = set()
+        
+        # Guard against None module_name
+        if self.module_name is None:
+            self.logger.warning("No module name set for dependency analysis")
+            return circular_dependencies
+
+        def visit(module: str) -> None:
+            if module in path:
+                # Now we know self.module_name is str, not None
+                if self.module_name is not None:
+                    circular_dependencies.append((module, self.module_name))
+                return
+            if module in visited:
+                return
+                
+            visited.add(module)
+            path.add(module)
+            
+            for dep in dependencies.get(module, set()):
+                visit(dep)
+                
+            path.remove(module)
+
         try:
-            for dep in dependencies.get("local", set()):
-                if dep == self.module_name:
-                    circular_dependencies.append((self.module_name, dep))
+            visit(self.module_name)
         except Exception as e:
             self.logger.error(f"Error detecting circular dependencies: {e}", exc_info=True)
 
-        if circular_dependencies:
-            self.logger.debug(f"Circular dependencies: {circular_dependencies}")
         return circular_dependencies
 
-    def generate_dependency_graph(self, dependencies: Dict[str, Set[str]], output_file: str) -> None:
+    def generate_dependency_graph(self, dependencies: Dict[str, Set[str]], output_file: Union[str, os.PathLike]) -> None:
         """Generates a visual dependency graph.
 
         Args:
@@ -305,10 +360,10 @@ class DependencyAnalyzer:
 
             for category, modules in dependencies.items():
                 sub = Digraph(name=f"cluster_{category}")
-                sub.attr(label=category)
+                sub.attr(label=str(category))
                 for module in modules:
-                    sub.node(module)
-                dot.subgraph(sub)
+                    sub.node(module, label=module, _attributes=None)
+                dot.subgraph(sub)  # type: ignore
 
             dot.render(output_file, view=False, cleanup=True)
             self.logger.info(f"Dependency graph saved to {output_file}")

@@ -5,7 +5,7 @@ Response parsing service with consistent error handling and validation.
 # Standard library imports
 import json
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 
 # Third-party imports
 from jsonschema import validate, ValidationError
@@ -35,9 +35,50 @@ class ResponseParsingService:
             "validation_failures": 0,
         }
 
+    async def _parse_docstring_response(self, response: Union[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Parse a docstring response, handling both string and dictionary inputs.
+
+        Args:
+            response: The response to parse (either a string or dictionary)
+
+        Returns:
+            Optional[Dict[str, Any]]: Parsed docstring content or None if parsing fails
+        """
+        try:
+            # If response is already a dictionary, use it directly
+            if isinstance(response, dict):
+                # Process using DocstringProcessor
+                parsed_content = self.docstring_processor.parse(response)
+                return parsed_content.__dict__ if parsed_content else None
+
+            # If response is a string, process it
+            if isinstance(response, str):
+                response = response.strip()
+                # Try parsing as JSON first
+                if response.startswith('{') and response.endswith('}'):
+                    try:
+                        parsed_dict = json.loads(response)
+                        parsed_content = self.docstring_processor.parse(parsed_dict)
+                        return parsed_content.__dict__ if parsed_content else None
+                    except json.JSONDecodeError:
+                        pass
+
+                # If not JSON, parse as regular docstring
+                parsed_content = self.docstring_processor.parse(response)
+                return parsed_content.__dict__ if parsed_content else None
+
+            self.logger.error(f"Unsupported response type: {type(response)}")
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Failed to parse docstring response: {e}", exc_info=True)
+            return None
+
+    # Update the parse_response method to handle the _parse_docstring_response results better
     async def parse_response(
         self,
-        response: str,
+        response: Union[str, Dict[str, Any]],
         expected_format: str = "json",
         validate_schema: bool = True
     ) -> ParsedResponse:
@@ -45,18 +86,15 @@ class ResponseParsingService:
         Parse and validate an AI response.
 
         Args:
-            response: Raw response string to parse
+            response: Raw response to parse (string or dictionary)
             expected_format: Expected format ('json', 'markdown', 'docstring')
             validate_schema: Whether to validate against schema
 
         Returns:
             ParsedResponse: Structured response data with metadata
-
-        Raises:
-            CustomValidationError: If validation fails
         """
         start_time = datetime.now()
-        errors = []
+        errors: List[str] = []
         parsed_content = None
 
         self._parsing_stats["total_processed"] += 1
@@ -97,7 +135,7 @@ class ResponseParsingService:
                 errors=errors,
                 metadata={
                     "timestamp": datetime.now().isoformat(),
-                    "response_size": len(response),
+                    "response_size": len(str(response)),
                 },
             )
 
@@ -106,7 +144,20 @@ class ResponseParsingService:
             self.logger.error(error_message, exc_info=True)
             errors.append(error_message)
             self._parsing_stats["failed_parses"] += 1
-            raise CustomValidationError(error_message) from e
+            
+            # Return a ParsedResponse with error information instead of raising
+            return ParsedResponse(
+                content=self._create_fallback_response(),
+                format_type=expected_format,
+                parsing_time=(datetime.now() - start_time).total_seconds(),
+                validation_success=False,
+                errors=errors,
+                metadata={
+                    "timestamp": datetime.now().isoformat(),
+                    "response_size": len(str(response)),
+                    "error": str(e)
+                },
+            )
 
     async def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
         """

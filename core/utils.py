@@ -4,19 +4,14 @@ Utility functions and classes for code analysis, extraction, Git repository hand
 
 import ast
 import os
-import re
 import sys
-import json
-import stat
 import asyncio
 import shutil
 import fnmatch
 import hashlib
-import logging
-from datetime import datetime
-from collections import defaultdict
+import stat
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple, Optional, Union
+from typing import Any, List, Set, Optional
 from urllib.parse import urlparse
 from core.logger import LoggerSetup
 
@@ -90,9 +85,9 @@ class ValidationUtils:
     """Utility methods for validation."""
 
     @staticmethod
-    def validate_docstring(docstring: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    def validate_docstring(docstring: dict[str, Any], schema: dict[str, Any]) -> tuple[bool, list[str]]:
         """Validate the docstring but allow empty lists for args and raises."""
-        errors = []
+        errors: list[str] = []
         required_fields = {"summary", "description", "args", "returns", "raises"}
 
         for field in required_fields:
@@ -121,7 +116,7 @@ class ValidationUtils:
         return len(errors) == 0, errors
     
     @staticmethod
-    def validate_code(source_code: str) -> Tuple[bool, Optional[str]]:
+    def validate_code(source_code: str) -> tuple[bool, Optional[str]]:
         """Validate Python code syntax."""
         try:
             ast.parse(source_code)
@@ -135,7 +130,7 @@ class AsyncUtils:
 
     @staticmethod
     async def with_retry(
-        func, *args, max_retries: int = 3, delay: float = 1.0, **kwargs
+        func: Any, *args: Any, max_retries: int = 3, delay: float = 1.0, **kwargs: Any
     ) -> Any:
         """Execute function with retry logic."""
         last_error = None
@@ -184,7 +179,7 @@ class GitUtils:
             return False
         
     @staticmethod
-    def get_python_files(repo_path: Path, exclude_patterns: Optional[Set[str]] = None) -> List[Path]:
+    def get_python_files(repo_path: Path, exclude_patterns: Optional[Set[str]] = None) -> list[Path]:
         """
         Get all Python files from the repository.
 
@@ -214,7 +209,7 @@ class GitUtils:
             logger.debug(f"Directory contents: {list(repo_path.iterdir())}")
             
             # Use rglob to find all Python files recursively
-            python_files = []
+            python_files: list[Path] = []
             for file_path in repo_path.rglob("*.py"):
                 # Convert to string for pattern matching
                 file_str = str(file_path)
@@ -244,7 +239,7 @@ class GitUtils:
 
             await asyncio.sleep(1)
 
-            def handle_rm_error(func, path, exc_info):
+            def handle_rm_error(func: Any, path: Any, exc_info: Any) -> None:
                 """Handle errors during rmtree."""
                 try:
                     path_obj = Path(path)
@@ -259,7 +254,7 @@ class GitUtils:
             for attempt in range(max_retries):
                 try:
                     if path.exists():
-                        shutil.rmtree(str(path), onerror=handle_rm_error)
+                        shutil.rmtree(str(path), onexc=handle_rm_error)
                     break
                 except PermissionError:
                     if attempt < max_retries - 1:
@@ -275,10 +270,10 @@ class FormattingUtils:
     """Utility methods for text formatting."""
 
     @staticmethod
-    def format_docstring(docstring_data: Dict[str, Any]) -> str:
+    def format_docstring(docstring_data: dict[str, Any]) -> str:
         """Format docstring data into Google style string."""
         try:
-            lines = []
+            lines: list[str] = []
 
             if docstring_data.get("summary"):
                 lines.append(docstring_data["summary"])
@@ -318,7 +313,7 @@ class FormattingUtils:
 
 # Utility functions
 
-def handle_extraction_error(logger_instance, errors_list: List[str], item_name: str, error: Exception) -> None:
+def handle_extraction_error(logger_instance: Any, errors_list: list[str], item_name: str, error: Exception) -> None:
     """Handle extraction errors consistently."""
     error_msg = f"Failed to process {item_name}: {str(error)}"
     logger_instance.error(error_msg, exc_info=True)
@@ -328,18 +323,19 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
     """Extract the source segment for a given AST node."""
     try:
         if not source_code or not node:
-            logger.warning("Source code or node is None.")
+            logger.debug("Source code or node is None.")
             return None
 
-        if not isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef, ast.Module, ast.stmt)):
-            logger.warning(f"Unsupported AST node type for extraction: {type(node).__name__}")
+        # Only log for complex definitions that we actually want to extract
+        if not isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef, ast.Module)):
+            # Return None silently for other node types - they should use NodeNameVisitor instead
             return None
 
         start_line = getattr(node, 'lineno', None)
         end_line = getattr(node, 'end_lineno', None)
 
         if start_line is None:
-            logger.warning(f"Node {type(node).__name__} has no start line.")
+            logger.debug(f"Node {type(node).__name__} has no start line.")
             return None
 
         start = start_line - 1  # Convert to 0-based index
@@ -351,7 +347,7 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
 
         lines = source_code.splitlines()
         if start >= len(lines):
-            logger.warning(f"Start line {start} exceeds available lines in the source.")
+            logger.debug(f"Start line {start} exceeds available lines in the source.")
             return None
 
         segment = '\n'.join(lines[start:end])
@@ -368,125 +364,84 @@ class NodeNameVisitor(ast.NodeVisitor):
     def __init__(self):
         self.name = ""
 
-    def visit_Name(self, node):
+    def visit_Name(self, node: ast.Name) -> None:
         """Visit a Name node."""
         self.name = node.id
 
-    def visit_Attribute(self, node):
+    def visit_Attribute(self, node: ast.Attribute) -> None:
         """Visit an Attribute node."""
         self.visit(node.value)
         self.name += f".{node.attr}"
 
-    def visit_Constant(self, node):
+    def visit_Constant(self, node: ast.Constant) -> None:
         """Visit a Constant node."""
         self.name = repr(node.value)
 
-    def visit_Subscript(self, node):
+    def visit_Subscript(self, node: ast.Subscript) -> None:
         """Visit a Subscript node."""
         try:
             value = self.visit_and_get(node.value)
             slice_val = self.visit_and_get(node.slice)
             self.name = f"{value}[{slice_val}]"
         except Exception as e:
-            logger.error(f"Error visiting Subscript node: {e}", exc_info=True)
+            logger.debug(f"Error visiting Subscript node: {e}")
+            self.name = "unknown_subscript"
     
-    def visit_List(self, node):
+    def visit_List(self, node: ast.List) -> None:
         """Visit a List node."""
-        self.name = "[" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + "]"
+        try:
+            elements = [self.visit_and_get(elt) for elt in node.elts]
+            self.name = f"[{', '.join(elements)}]"
+        except Exception as e:
+            logger.debug(f"Error visiting List node: {e}")
+            self.name = "[]"
 
-    def visit_Tuple(self, node):
+    def visit_Tuple(self, node: ast.Tuple) -> None:
         """Visit a Tuple node."""
-        self.name = "(" + ", ".join(self.visit_and_get(elt) for elt in node.elts) + ")"
+        try:
+            elements = [self.visit_and_get(elt) for elt in node.elts]
+            self.name = f"({', '.join(elements)})"
+        except Exception as e:
+            logger.debug(f"Error visiting Tuple node: {e}")
+            self.name = "()"
 
-    def visit_Call(self, node):
+    def visit_Call(self, node: ast.Call) -> None:
         """Visit a Call node."""
-        func_name = self.visit_and_get(node.func)
-        args = ", ".join(self.visit_and_get(arg) for arg in node.args)
-        self.name = f"{func_name}({args})"
+        try:
+            func_name = self.visit_and_get(node.func)
+            args = [self.visit_and_get(arg) for arg in node.args]
+            self.name = f"{func_name}({', '.join(args)})"
+        except Exception as e:
+            logger.debug(f"Error visiting Call node: {e}")
+            self.name = "unknown_call"
 
-    def visit_BinOp(self, node):
+    def visit_BinOp(self, node: ast.BinOp) -> None:
         """Visit a BinOp node."""
-        left = self.visit_and_get(node.left)
-        op = type(node.op).__name__
-        right = self.visit_and_get(node.right)
-        self.name = f"{left} {op} {right}"
+        try:
+            left = self.visit_and_get(node.left)
+            op = type(node.op).__name__
+            right = self.visit_and_get(node.right)
+            self.name = f"{left} {op} {right}"
+        except Exception as e:
+            logger.debug(f"Error visiting BinOp node: {e}")
+            self.name = "unknown_operation"
 
-    def visit_Import(self, node):
-        """Visit an Import node."""
-        self.name = "import " + ", ".join(alias.name for alias in node.names)
-
-    def visit_ImportFrom(self, node):
-        """Visit an ImportFrom node."""
-        self.name = f"from {node.module} import " + ", ".join(alias.name for alias in node.names)
-
-    def visit_FunctionDef(self, node):
-        """Visit a FunctionDef node."""
-        self.name = f"def {node.name}(" + ", ".join(a.arg for a in node.args.args) + ")"
-
-    def visit_AsyncFunctionDef(self, node):
-        """Visit an AsyncFunctionDef node."""
-        self.name = f"async def {node.name}(" + ", ".join(a.arg for a in node.args.args) + ")"
-
-    def visit_ClassDef(self, node):
-        """Visit a ClassDef node."""
-        bases = ", ".join(self.visit_and_get(base) for base in node.bases)
-        self.name = f"class {node.name}({bases})"
-
-    def visit_Assign(self, node):
-        """Visit an Assign node."""
-        targets = ", ".join(self.visit_and_get(t) for t in node.targets)
-        value = self.visit_and_get(node.value)
-        self.name = f"{targets} = {value}"
-
-    def visit_AnnAssign(self, node):
-        """Visit an AnnAssign node."""
-        target = self.visit_and_get(node.target)
-        annotation = self.visit_and_get(node.annotation)
-        value = self.visit_and_get(node.value) if node.value else None
-        self.name = f"{target}: {annotation}" + (f" = {value}" if value else "")
-
-    def visit_Dict(self, node):
-        """Visit a Dict node."""
-        self.name = "{" + ", ".join(f"{self.visit_and_get(k)}: {self.visit_and_get(v)}"
-                                    for k, v in zip(node.keys, node.values)) + "}"
-
-    def visit_IfExp(self, node):
-        """Visit an IfExp node."""
-        test = self.visit_and_get(node.test)
-        body = self.visit_and_get(node.body)
-        orelse = self.visit_and_get(node.orelse)
-        self.name = f"{body} if {test} else {orelse}"
-
-    def visit_JoinedStr(self, node):
-        """Visit a JoinedStr node."""
-        self.name = 'f"' + "".join(self.visit_and_get(value) for value in node.values) + '"'
-
-    def visit_Await(self, node):
-        """Visit an Await node."""
-        self.name = f"await {self.visit_and_get(node.value)}"
-
-    def visit_BoolOp(self, node):
-        """Visit a BoolOp node."""
-        op = " and " if isinstance(node.op, ast.And) else " or "
-        self.name = op.join(self.visit_and_get(val) for val in node.values)
-
-    def visit_ListComp(self, node):
-        """Visit a ListComp node."""
-        elt = self.visit_and_get(node.elt)
-        generators = " ".join(self.visit_and_get(gen) for gen in node.generators)
-        self.name = f"[{elt} {generators}]"
-
-    def generic_visit(self, node):
-        """Log skipped nodes silently at DEBUG level."""
-        logger.debug(f"Skipped node type: {type(node).__name__}")
-        self.name = ""  # Set an empty string for unhandled nodes
-
-    def visit_and_get(self, node):
+    def visit_and_get(self, node: ast.AST) -> str:
         """Helper method to visit a node and return its name."""
         visitor = NodeNameVisitor()
         visitor.visit(node)
-        return visitor.name
+        return visitor.name or "unknown"
 
+    def generic_visit(self, node: ast.AST) -> None:
+        """Handle any unhandled node types."""
+        logger.debug(f"Unhandled node type in NodeNameVisitor: {type(node).__name__}")
+        self.name = f"unknown_{type(node).__name__.lower()}"
+
+    def _extract_type_info(self, node: ast.AST) -> str:
+        """Extract accurate type information from AST node."""
+        visitor = NodeNameVisitor()
+        visitor.visit(node)
+        return visitor.name or "Any"
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename for safe file system operations."""

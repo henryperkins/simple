@@ -61,6 +61,8 @@ class APIClient:
             )
 
             response_content = response.choices[0].message.content
+            if response_content is None:
+                raise ValueError("Response content is None")
             response_tokens = self.token_manager.estimate_tokens(response_content)
             
             self.token_manager.track_request(request_tokens, response_tokens)

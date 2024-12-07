@@ -15,7 +15,7 @@ Example usage:
 """
 
 import ast
-from typing import List, Union
+from typing import List, Union, Optional
 
 from core.logger import LoggerSetup
 from core.metrics import Metrics
@@ -47,24 +47,14 @@ class FunctionExtractor:
         self.errors: List[Union[str, dict]] = []
 
     async def extract_functions(self, tree: Union[ast.AST, List]) -> List[ExtractedFunction]:
-        """Extract top-level functions and async functions from the AST.
-
-        Args:
-            tree: Either an AST node or a list of nodes to extract functions from.
-
-        Returns:
-            List[ExtractedFunction]: A list of extracted function information.
-        """
-        self.logger.info("Starting function extraction")
+        """Extract function definitions from AST nodes."""
         functions = []
         try:
-            # Handle both single nodes and lists of nodes
             if isinstance(tree, list):
-                nodes_to_process = tree  # Use the list directly
+                nodes_to_process = tree
             else:
-                nodes_to_process = list(ast.walk(tree))  # Convert AST walk iterator to list
+                nodes_to_process = list(ast.walk(tree))
 
-            # Process each node
             for node in nodes_to_process:
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     self.logger.debug(f"Found function: {node.name}")
@@ -72,40 +62,37 @@ class FunctionExtractor:
                         continue
                     try:
                         extracted_function = self._process_function(node)
-                        functions.append(extracted_function)
+                        if extracted_function:  # Only append if extraction was successful
+                            functions.append(extracted_function)
                     except Exception as e:
                         handle_extraction_error(self.logger, self.errors, node.name, e)
 
-            self.logger.info(f"Function extraction completed: {len(functions)} functions extracted")
             return functions
         except Exception as e:
             self.logger.error(f"Error in extract_functions: {str(e)}", exc_info=True)
             return functions
 
-    def _process_function(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> ExtractedFunction:
-        """Process and extract information from a function AST node.
-
-        Args:
-            node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The function node to process.
-
-        Returns:
-            ExtractedFunction: The extracted function information.
-
-        Raises:
-            Exception: If an error occurs during function processing.
-        """
+    def _process_function(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> Optional[ExtractedFunction]:
+        """Process a function node to extract information."""
         try:
             metadata = DocstringUtils.extract_metadata(node)
             metrics = self.metrics_calculator.calculate_function_metrics(node)
             source_code = self.context.source_code or ""
+            
+            # Get source segment only once
+            function_source = get_source_segment(source_code, node)
+            if not function_source:
+                self.logger.warning(f"Could not extract source for function {node.name}")
+                function_source = ""
+            
             return ExtractedFunction(
                 name=metadata["name"],
                 lineno=metadata["lineno"],
-                source=get_source_segment(source_code, node),
+                source=function_source,
                 docstring=metadata["docstring_info"]["docstring"],
                 metrics=metrics,
                 decorators=metadata.get("decorators", []),
-                body_summary=get_source_segment(source_code, node) or "",
+                body_summary=function_source,
                 raises=metadata["docstring_info"]["raises"],
                 ast_node=node,
             )
@@ -116,14 +103,4 @@ class FunctionExtractor:
                 'lineno': getattr(node, 'lineno', 'Unknown'),
                 'error': str(e)
             })
-            return ExtractedFunction(
-                name=node.name,
-                lineno=getattr(node, 'lineno', 0),
-                source="",
-                docstring="",
-                metrics={},
-                decorators=[],
-                body_summary="",
-                raises=[],
-                ast_node=node,
-            )
+            return None
