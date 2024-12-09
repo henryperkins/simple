@@ -8,6 +8,7 @@ using AI services and managing the overall documentation workflow.
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import json
 
 from core.extraction.code_extractor import CodeExtractor
 from core.markdown_generator import MarkdownGenerator
@@ -171,6 +172,21 @@ class DocumentationOrchestrator:
             # Generate markdown
             markdown_doc = self.markdown_generator.generate(documentation_data)
 
+            # Add search bar to the documentation HTML
+            search_bar_html = """
+            <div id="search-bar">
+                <input type="text" id="search-input" placeholder="Search...">
+                <button id="search-button">Search</button>
+            </div>
+            <script>
+                document.getElementById('search-button').addEventListener('click', function() {
+                    var query = document.getElementById('search-input').value;
+                    // Implement search functionality here
+                });
+            </script>
+            """
+            markdown_doc += search_bar_html
+
             self.logger.info("Documentation generation completed successfully", extra={'correlation_id': self.correlation_id})
             return context.source_code, markdown_doc
 
@@ -257,6 +273,53 @@ class DocumentationOrchestrator:
                 self.logger.error(f"Unexpected error for {file_path}: {e}", extra={'correlation_id': self.correlation_id})
                 results[file_path] = False
         return results
+
+    def generate_sidebar(self, modules: List[str]) -> str:
+        """
+        Generate a sidebar with a list of modules.
+
+        Args:
+            modules: List of module names
+
+        Returns:
+            Sidebar HTML string
+        """
+        sidebar_html = "<div id='sidebar'><ul>"
+        for module in modules:
+            sidebar_html += f"<li><a href='#{module}'>{module}</a></li>"
+        sidebar_html += "</ul></div>"
+        return sidebar_html
+
+    def generate_search_index(self, documentation_data: DocumentationData) -> str:
+        """
+        Generate a search index for the documentation.
+
+        Args:
+            documentation_data: Documentation data
+
+        Returns:
+            Search index JSON string
+        """
+        search_index = []
+        for cls in documentation_data.code_metadata.get("classes", []):
+            search_index.append({
+                "name": cls["name"],
+                "type": "class",
+                "description": cls.get("docstring", "")
+            })
+        for func in documentation_data.code_metadata.get("functions", []):
+            search_index.append({
+                "name": func["name"],
+                "type": "function",
+                "description": func.get("docstring", "")
+            })
+        for const in documentation_data.code_metadata.get("constants", []):
+            search_index.append({
+                "name": const["name"],
+                "type": "constant",
+                "description": const.get("docstring", "")
+            })
+        return json.dumps(search_index, indent=2)
 
     async def __aenter__(self) -> "DocumentationOrchestrator":
         """Enter the async context manager."""

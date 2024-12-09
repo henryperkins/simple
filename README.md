@@ -47,3 +47,16 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Contact
 For any questions or issues, please open an issue in this repository or contact the maintainer at henryperkins@example.com.
+
+## Search Feature Logic
+The search feature in the generated documentation allows users to quickly find relevant information within the documentation. The search logic works as follows:
+
+1. **Indexing**: During the documentation generation process, a search index is created. This index contains metadata about classes, functions, and constants, including their names, descriptions, and other relevant information.
+
+2. **Search Input**: The generated documentation includes a search bar where users can enter their search queries.
+
+3. **Search Execution**: When a user enters a query and initiates a search, the search logic scans the search index for matches. It looks for occurrences of the query in the names, descriptions, and other metadata fields.
+
+4. **Results Display**: The search results are displayed to the user, highlighting the relevant sections of the documentation that match the query.
+
+This search feature enhances the usability of the documentation by making it easier for users to locate specific information quickly.
