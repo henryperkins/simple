@@ -27,12 +27,22 @@ from api.token_management import TokenManager
 class AIService:
     """Service for interacting with OpenAI API."""
 
-    def __init__(self, config: AIConfig, correlation_id: Optional[str] = None) -> None:
-        """Initialize AI service.
+    def __init__(
+        self,
+        config: AIConfig,
+        correlation_id: Optional[str] = None,
+        docstring_processor: DocstringProcessor = None,
+        response_parser: ResponseParsingService = None,
+        token_manager: TokenManager = None
+    ) -> None:
+        """Initialize AI service with dependency injection.
 
         Args:
             config: AI service configuration
             correlation_id: Optional correlation ID for tracking related operations
+            docstring_processor: Docstring processor instance
+            response_parser: Response parsing service instance
+            token_manager: Token manager instance
         """
         self.config = config
         self.correlation_id = correlation_id
@@ -40,9 +50,11 @@ class AIService:
         self.cache = Cache()
         self.semaphore = asyncio.Semaphore(5)  # Limit concurrent API calls
         self._client = None
-        self.docstring_processor = DocstringProcessor()
-        self.response_parser = ResponseParsingService(correlation_id)
-        self.token_manager = TokenManager(model=self.config.model, config=self.config)
+
+        # Inject dependencies
+        self.docstring_processor = docstring_processor or DocstringProcessor()
+        self.response_parser = response_parser or ResponseParsingService(correlation_id)
+        self.token_manager = token_manager or TokenManager(model=self.config.model, config=self.config)
         # Define the function schema for structured output
         self.function_schema = {
             "name": "generate_docstring",
