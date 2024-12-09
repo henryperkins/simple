@@ -1,7 +1,7 @@
 """Base type definitions for code extraction."""
 
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Set
 
