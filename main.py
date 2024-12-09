@@ -2,6 +2,7 @@
 Main documentation generation coordinator with monitoring.
 """
 
+import ast
 import argparse
 import asyncio
 import sys
