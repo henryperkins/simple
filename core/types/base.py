@@ -33,16 +33,6 @@ class Injector:
             return func(*args, **kwargs)
         return wrapper
 
-    @classmethod
-    def inject(cls, func: Callable) -> Callable:
-        """Decorator to inject dependencies into a function."""
-        def wrapper(*args, **kwargs):
-            for param in func.__code__.co_varnames:
-                if param in cls._dependencies:
-                    kwargs[param] = cls._dependencies[param]
-            return func(*args, **kwargs)
-        return wrapper
-
 @dataclass
 class BaseData:
     """Base class for data structures with common fields."""
