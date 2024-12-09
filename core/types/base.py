@@ -12,7 +12,7 @@ class BaseData:
     """Base class for data structures with common fields."""
     name: str
     description: Optional[str] = None
-    metadata: Dict[str, Any] = default_factory(dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class ParsedResponse:
@@ -32,10 +32,10 @@ class DocstringData:
     returns: Dict[str, str] = default_factory(lambda: {"type": "None", "description": ""})  # type and description of return value
     raises: List[Dict[str, str]] = default_factory(list)  # exception type and description
     description: Optional[str] = None  # Detailed description
-    metadata: Dict[str, Any] = default_factory(dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
     complexity: Optional[int] = None
     validation_status: bool = False
-    validation_errors: List[str] = default_factory(list)
+    validation_errors: List[str] = field(default_factory=list)
 
 @dataclass
 class TokenUsage:
@@ -62,17 +62,17 @@ class ExtractedElement:
     source: Optional[str] = None
     docstring: Optional[str] = None
     metrics: MetricData = default_factory(MetricData)
-    dependencies: Dict[str, Set[str]] = default_factory(dict)
-    decorators: List[str] = default_factory(list)
-    complexity_warnings: List[str] = default_factory(list)
+    dependencies: Dict[str, Set[str]] = field(default_factory=dict)
+    decorators: List[str] = field(default_factory=list)
+    complexity_warnings: List[str] = field(default_factory=list)
     ast_node: Optional[ast.AST] = None
 
 @dataclass
 class ExtractedFunction(ExtractedElement):
     """Represents an extracted function with its metadata."""
-    args: List[ExtractedArgument] = default_factory(list)
-    returns: Dict[str, str] = default_factory(lambda: {"type": "Any", "description": ""})
-    raises: List[Dict[str, str]] = default_factory(list)
+    args: List[ExtractedArgument] = field(default_factory=list)
+    returns: Dict[str, str] = field(default_factory=lambda: {"type": "Any", "description": ""})
+    raises: List[Dict[str, str]] = field(default_factory=list)
     body_summary: Optional[str] = None
     docstring_info: Optional[DocstringData] = None
     is_async: bool = False
@@ -102,10 +102,10 @@ class ExtractedFunction(ExtractedElement):
 @dataclass
 class ExtractedClass(ExtractedElement):
     """Represents a class extracted from code."""
-    methods: List[ExtractedFunction] = default_factory(list)
-    attributes: List[Dict[str, Any]] = default_factory(list)
-    instance_attributes: List[Dict[str, Any]] = default_factory(list)
-    bases: List[str] = default_factory(list)
+    methods: List[ExtractedFunction] = field(default_factory=list)
+    attributes: List[Dict[str, Any]] = field(default_factory=list)
+    instance_attributes: List[Dict[str, Any]] = field(default_factory=list)
+    bases: List[str] = field(default_factory=list)
     metaclass: Optional[str] = None
     is_exception: bool = False
     docstring_info: Optional[DocstringData] = None
@@ -132,18 +132,18 @@ class ExtractedClass(ExtractedElement):
 @dataclass
 class ExtractionResult:
     """Result of code extraction process."""
-    module_docstring: Dict[str, Any] = default_factory(dict)
+    module_docstring: Dict[str, Any] = field(default_factory=dict)
     module_name: str = ""
     file_path: str = ""
-    classes: List[ExtractedClass] = default_factory(list)
-    functions: List[ExtractedFunction] = default_factory(list)
-    variables: List[Dict[str, Any]] = default_factory(list)
-    constants: List[Dict[str, Any]] = default_factory(list)
-    dependencies: Dict[str, Set[str]] = default_factory(dict)
-    errors: List[str] = default_factory(list)
+    classes: List[ExtractedClass] = field(default_factory=list)
+    functions: List[ExtractedFunction] = field(default_factory=list)
+    variables: List[Dict[str, Any]] = field(default_factory=list)
+    constants: List[Dict[str, Any]] = field(default_factory=list)
+    dependencies: Dict[str, Set[str]] = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
     maintainability_index: Optional[float] = None
     source_code: str = ""
-    imports: List[Any] = default_factory(list)
+    imports: List[Any] = field(default_factory=list)
     metrics: MetricData = default_factory(MetricData)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -169,12 +169,12 @@ class ProcessingResult:
     """Result of AI processing operation."""
     content: Dict[str, Any]
     usage: Dict[str, Any]
-    metrics: Dict[str, Any] = default_factory(dict)
+    metrics: Dict[str, Any] = field(default_factory=dict)
     is_cached: bool = False
     processing_time: float = 0.0
     validation_status: bool = False
-    validation_errors: List[str] = default_factory(list)
-    schema_errors: List[str] = default_factory(list)
+    validation_errors: List[str] = field(default_factory=list)
+    schema_errors: List[str] = field(default_factory=list)
 
 @dataclass
 class DocumentationContext:
@@ -182,12 +182,12 @@ class DocumentationContext:
     source_code: str
     module_path: Path
     include_source: bool = True
-    metadata: Optional[Dict[str, Any]] = None
-    ai_generated: Optional[Dict[str, Any]] = None
-    classes: Optional[List[ExtractedClass]] = None
-    functions: Optional[List[ExtractedFunction]] = None
-    constants: Optional[List[Any]] = None
-    changes: Optional[List[Any]] = None
+    metadata: Optional[Dict[str, Any]] = field(default_factory=dict)
+    ai_generated: Optional[Dict[str, Any]] = field(default_factory=dict)
+    classes: Optional[List[ExtractedClass]] = field(default_factory=list)
+    functions: Optional[List[ExtractedFunction]] = field(default_factory=list)
+    constants: Optional[List[Any]] = field(default_factory=list)
+    changes: Optional[List[Any]] = field(default_factory=list)
 
     def get_cache_key(self) -> str:
         """Generate cache key."""
@@ -210,7 +210,7 @@ class ExtractionContext:
     include_nested: bool = True
     include_source: bool = True
     max_line_length: int = 88
-    ignore_decorators: Set[str] = default_factory(set)
+    ignore_decorators: Set[str] = field(default_factory=set)
     base_path: Optional[Path] = None
     source_code: Optional[str] = None
     tree: Optional[ast.AST] = None
@@ -252,10 +252,10 @@ class DocumentationData:
     docstring_data: DocstringData
     ai_content: Dict[str, Any]
     code_metadata: Dict[str, Any]
-    glossary: Dict[str, Dict[str, str]] = default_factory(dict)
-    changes: List[Dict[str, Any]] = default_factory(list)
-    complexity_scores: Dict[str, float] = default_factory(dict)
-    metrics: Dict[str, Any] = default_factory(dict)
+    glossary: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    changes: List[Dict[str, Any]] = field(default_factory=list)
+    complexity_scores: Dict[str, float] = field(default_factory=dict)
+    metrics: Dict[str, Any] = field(default_factory=dict)
     validation_status: bool = False
     validation_errors: List[str] = default_factory(list)
 
