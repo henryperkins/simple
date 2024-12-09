@@ -298,3 +298,34 @@ class MarkdownGenerator:
         except Exception as e:
             log_error(f"Error generating search index: {e}", exc_info=True)
             return "An error occurred while generating search index."
+
+    def generate_search_index(self, documentation_data: DocumentationData) -> str:
+        """
+        Generate a search index for the documentation.
+
+        Args:
+            documentation_data: Documentation data
+
+        Returns:
+            Search index JSON string
+        """
+        search_index = []
+        for cls in documentation_data.code_metadata.get("classes", []):
+            search_index.append({
+                "name": cls["name"],
+                "type": "class",
+                "description": cls.get("docstring", "")
+            })
+        for func in documentation_data.code_metadata.get("functions", []):
+            search_index.append({
+                "name": func["name"],
+                "type": "function",
+                "description": func.get("docstring", "")
+            })
+        for const in documentation_data.code_metadata.get("constants", []):
+            search_index.append({
+                "name": const["name"],
+                "type": "constant",
+                "description": const.get("docstring", "")
+            })
+        return json.dumps(search_index, indent=2)

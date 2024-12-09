@@ -138,6 +138,15 @@ class DocumentationGenerator:
             self.doc_orchestrator.code_extractor.context.base_path = local_path
             success = await self._process_local_repository(local_path, output_dir)
 
+            # Generate sidebar and search index
+            modules = [str(file.relative_to(local_path)) for file in local_path.rglob("*.py")]
+            sidebar_html = self.doc_orchestrator.generate_sidebar(modules)
+            search_index_json = self.doc_orchestrator.generate_search_index()
+
+            # Save sidebar and search index to output directory
+            (output_dir / "sidebar.html").write_text(sidebar_html, encoding="utf-8")
+            (output_dir / "search_index.json").write_text(search_index_json, encoding="utf-8")
+
         except Exception as e:
             self.logger.error(f"Error processing repository {repo_path}: {e}", exc_info=True)
             success = False
