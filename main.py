@@ -93,6 +93,11 @@ class DocumentationGenerator:
             source_code: str = read_file_safe(file_path)
             source_code = self._fix_indentation(source_code)
 
+            # Analyze syntax before processing
+            if not self.analyze_syntax(source_code, file_path):
+                self.logger.warning(f"Skipping file due to syntax errors: {file_path}")
+                return False
+
             try:
                 await self.doc_orchestrator.generate_module_documentation(
                     file_path,
@@ -120,6 +125,15 @@ class DocumentationGenerator:
 
         except (FileNotFoundError, ValueError, IOError) as process_error:
             self.logger.error(f"Error processing file: {process_error}", exc_info=True)
+            return False
+
+    def analyze_syntax(self, source_code: str, file_path: Path) -> bool:
+        """Analyze the syntax of the given source code."""
+        try:
+            ast.parse(source_code)
+            return True
+        except SyntaxError as e:
+            self.logger.error(f"Syntax error in {file_path}: {e}")
             return False
 
     def _fix_indentation(self, source_code: str) -> str:
