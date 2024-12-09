@@ -61,7 +61,7 @@ class ExtractedElement:
     lineno: int
     source: Optional[str] = None
     docstring: Optional[str] = None
-    metrics: MetricData = default_factory(MetricData)
+    metrics: MetricData = field(default_factory=MetricData)
     dependencies: Dict[str, Set[str]] = field(default_factory=dict)
     decorators: List[str] = field(default_factory=list)
     complexity_warnings: List[str] = field(default_factory=list)
@@ -144,7 +144,7 @@ class ExtractionResult:
     maintainability_index: Optional[float] = None
     source_code: str = ""
     imports: List[Any] = field(default_factory=list)
-    metrics: MetricData = default_factory(MetricData)
+    metrics: MetricData = field(default_factory=MetricData)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
@@ -257,7 +257,7 @@ class DocumentationData:
     complexity_scores: Dict[str, float] = field(default_factory=dict)
     metrics: Dict[str, Any] = field(default_factory=dict)
     validation_status: bool = False
-    validation_errors: List[str] = default_factory(list)
+    validation_errors: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
