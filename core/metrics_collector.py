@@ -14,7 +14,9 @@ from core.console import console
 class MetricsCollector:
     """Collects and stores metrics data for code analysis."""
     
+    # Class variables for singleton pattern
     _instance = None
+    _initialized = False
     
     def __new__(cls, correlation_id: Optional[str] = None) -> 'MetricsCollector':
         """Ensure only one instance exists (singleton pattern).
@@ -26,21 +28,7 @@ class MetricsCollector:
             The singleton MetricsCollector instance
         """
         if cls._instance is None:
-            instance = super().__new__(cls)
-            # Initialize instance variables here
-            instance._initialized = False
-            instance.logger = None
-            instance.correlation_id = None
-            instance.metrics_history = {}
-            instance.operations = []
-            instance.current_module_metrics = {}
-            instance.accumulated_functions = 0
-            instance.accumulated_classes = 0
-            instance.progress = None
-            instance.current_task_id = None
-            instance.current_module = None
-            instance.has_metrics = False
-            cls._instance = instance
+            cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self, correlation_id: Optional[str] = None) -> None:
@@ -50,7 +38,7 @@ class MetricsCollector:
             correlation_id: Optional correlation ID for tracking related operations
         """
         # Only initialize once
-        if self._initialized:
+        if MetricsCollector._initialized:
             return
             
         self.logger = LoggerSetup.get_logger(__name__)
@@ -68,7 +56,7 @@ class MetricsCollector:
         self.current_task_id: Optional[TaskID] = None
         self.current_module = None
         self.has_metrics = False
-        self._initialized = True
+        MetricsCollector._initialized = True
 
     def _format_progress_desc(
         self,
