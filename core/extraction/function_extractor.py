@@ -7,11 +7,10 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 
 import ast
 from typing import List, Dict, Any, Optional, Union
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error
 from core.metrics import Metrics
 from core.types import ExtractedFunction, ExtractedArgument, ExtractionContext, MetricData
 from utils import handle_extraction_error, get_source_segment, get_node_name, NodeNameVisitor
-
 
 class FunctionExtractor:
     """Handles extraction of functions from Python source code."""
@@ -29,10 +28,10 @@ class FunctionExtractor:
             metrics_calculator (Metrics): The metrics calculator for analyzing function complexity.
             correlation_id (Optional[str]): An optional correlation ID for logging purposes.
         """
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id)
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id=correlation_id)
         self.context = context
         self.metrics_calculator = metrics_calculator
-        self.errors: List[str] = []  # Changed to List[str]
+        self.errors: List[str] = []
 
     async def extract_functions(
         self,
@@ -62,11 +61,27 @@ class FunctionExtractor:
                         extracted_function = await self._process_function(node)
                         if extracted_function:
                             functions.append(extracted_function)
-                            self.logger.info(f"Successfully extracted function: {node.name}")
+                            # Update scan progress
+                            if self.metrics_calculator.metrics_collector:
+                                self.metrics_calculator.metrics_collector.update_scan_progress(
+                                    self.context.module_name or "unknown",
+                                    "function",
+                                    node.name
+                                )
                     except Exception as e:
-                        handle_extraction_error(self.logger, self.errors, f"Function {node.name}", e)
+                        log_error(
+                            f"Error extracting function {node.name if hasattr(node, 'name') else 'unknown'}: {e}",
+                            exc_info=True,
+                            extra={'function_name': node.name if hasattr(node, 'name') else 'unknown'}
+                        )
+                        self.errors.append(f"Error extracting function {node.name if hasattr(node, 'name') else 'unknown'}: {e}")
+                        continue
+
+            if self.errors:
+                self.logger.warning(f"Encountered {len(self.errors)} errors during function extraction")
 
             return functions
+
         except Exception as e:
             self.logger.error(f"Error extracting functions: {e}", exc_info=True)
             return []
@@ -88,19 +103,43 @@ class FunctionExtractor:
             docstring = ast.get_docstring(node) or ""
             source = get_source_segment(self.context.source_code or "", node) or ""
 
+            # Get the number of default arguments
+            num_defaults = len(node.args.defaults)
+            # Calculate the offset for matching defaults with arguments
+            default_offset = len(node.args.args) - num_defaults
+
             # Extract function components
-            args = [
-                ExtractedArgument(
+            args = []
+            for i, arg in enumerate(node.args.args):
+                if not isinstance(arg, ast.arg):
+                    continue
+
+                # Check if this argument has a default value
+                has_default = i >= default_offset
+                default_index = i - default_offset if has_default else -1
+                default_value = None
+
+                if has_default and default_index < len(node.args.defaults):
+                    default_node = node.args.defaults[default_index]
+                    if isinstance(default_node, ast.Constant):
+                        default_value = repr(default_node.value)
+                    elif isinstance(default_node, ast.Name):
+                        default_value = default_node.id
+                    else:
+                        # For more complex default values, use a generic representation
+                        default_value = "..."
+
+                args.append(ExtractedArgument(
                     name=arg.arg,
                     type=get_node_name(arg.annotation),
-                    default_value="None" if arg.arg in (a.arg for a in node.args.defaults) else None,
-                    is_required=arg.arg not in (a.arg for a in node.args.defaults)
-                ) for arg in node.args.args if isinstance(arg, ast.arg)
-            ]
+                    default_value=default_value,
+                    is_required=not has_default
+                ))
+
             return_type = get_node_name(node.returns) or "Any"
             decorators = [NodeNameVisitor().visit(decorator) for decorator in node.decorator_list]
 
-            # Calculate metrics
+            # Initialize metrics
             metrics = MetricData()
             extracted_function = ExtractedFunction(
                 name=node.name,
@@ -123,8 +162,8 @@ class FunctionExtractor:
 
             return extracted_function
         except Exception as e:
-            self.logger.error(f"Failed to process function {node.name}: {e}", exc_info=True)
-            return None
+            log_error(f"Failed to process function {node.name}: {e}", exc_info=True, extra={'function_name': node.name})
+            raise
 
     def _should_process_function(
         self,

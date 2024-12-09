@@ -6,12 +6,12 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from core.ai_service import AIService
 from core.config import Config
 from core.docs import DocumentationOrchestrator
-from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info
+from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info, log_debug
 from core.metrics_collector import MetricsCollector
 from core.monitoring import SystemMonitor
 from utils import (
@@ -19,168 +19,181 @@ from utils import (
     read_file_safe,
     RepositoryManager
 )
-from exceptions import ConfigurationError, DocumentationError
+from core.exceptions import ConfigurationError, DocumentationError
 import uuid
 
 # Configure logger globally with dynamic settings
 log_dir = "logs"  # This could be set via an environment variable or command-line argument
 LoggerSetup.configure(level="DEBUG", log_dir=log_dir)
 
-# Optionally, set the global exception handler
+# Set global exception handler
 sys.excepthook = LoggerSetup.handle_exception
 
 class DocumentationGenerator:
-    """
-    Main documentation generation coordinator with monitoring.
-    Manages the overall documentation generation process while monitoring
-    system resources and collecting performance metrics.
-    """
+    """Main documentation generation coordinator with monitoring."""
 
     def __init__(self) -> None:
         """Initialize the documentation generator."""
-        self.config = Config()
-        base_logger = LoggerSetup.get_logger(__name__)
-        correlation_id = str(uuid.uuid4())
-        self.logger = CorrelationLoggerAdapter(base_logger, correlation_id=correlation_id)
+        self.config: Config = Config()
+        self.correlation_id: str = str(uuid.uuid4())
+        self.logger: CorrelationLoggerAdapter = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__), 
+            correlation_id=self.correlation_id
+        )
 
         # Initialize core components
-        self.ai_service = AIService(config=self.config.ai)
-        self.doc_orchestrator = DocumentationOrchestrator(ai_service=self.ai_service)
-        self.system_monitor = SystemMonitor()
-        self.metrics_collector = MetricsCollector()
+        self.metrics_collector: MetricsCollector = MetricsCollector(correlation_id=self.correlation_id)
+        self.ai_service: AIService = AIService(config=self.config.ai, correlation_id=self.correlation_id)
+        self.doc_orchestrator: DocumentationOrchestrator = DocumentationOrchestrator(
+            ai_service=self.ai_service,
+            correlation_id=self.correlation_id
+        )
+        self.system_monitor: SystemMonitor = SystemMonitor(
+            token_manager=self.ai_service.token_manager,
+            metrics_collector=self.metrics_collector,
+            correlation_id=self.correlation_id
+        )
+        self.repo_manager: Optional[RepositoryManager] = None
 
     async def initialize(self) -> None:
         """Start systems that require asynchronous setup."""
         try:
-            self.logger.info("Initializing system components", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info("Initializing system components")
             await self.system_monitor.start()
-            self.logger.info("All components initialized successfully", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info("All components initialized successfully")
         except Exception as e:
             error_msg = f"Initialization failed: {e}"
-            self.logger.error(error_msg, exc_info=True, extra={'correlation_id': self.logger.correlation_id})
+            self.logger.error(error_msg, exc_info=True)
             await self.cleanup()
             raise ConfigurationError(error_msg) from e
 
     async def process_file(self, file_path: Path, output_path: Path) -> bool:
         """Process a single file and generate documentation."""
         try:
-            self.logger.info(f"Processing file: {file_path}", extra={'correlation_id': self.logger.correlation_id})
-
-            # Track operation metrics
-            start_time = asyncio.get_event_loop().time()
-
-            source_code = read_file_safe(file_path)
+            self.logger.info(f"Processing file: {file_path}")
+            start_time: float = asyncio.get_event_loop().time()
+            
+            source_code: str = read_file_safe(file_path)
             source_code = self._fix_indentation(source_code)
 
-            # Pass the fixed source_code to the orchestrator
-            await self.doc_orchestrator.generate_module_documentation(
-                file_path,
-                output_path.parent,
-                source_code=source_code  # Pass the updated source code
-            )
+            try:
+                await self.doc_orchestrator.generate_module_documentation(
+                    file_path,
+                    output_path.parent,
+                    source_code=source_code
+                )
+                success = True
+            except DocumentationError as e:
+                self.logger.error(f"Failed to generate documentation for {file_path}: {e}")
+                success = False
+            except Exception as e:
+                self.logger.error(f"Unexpected error processing file {file_path}: {e}", exc_info=True)
+                success = False
 
-            # Record metrics
-            processing_time = asyncio.get_event_loop().time() - start_time
+            processing_time: float = asyncio.get_event_loop().time() - start_time
             await self.metrics_collector.track_operation(
                 operation_type="file_processing",
-                success=True,
+                success=success,
                 duration=processing_time,
                 metadata={"file_path": str(file_path)}
             )
-
-            self.logger.info(f"Successfully processed file: {file_path}", extra={'correlation_id': self.logger.correlation_id})
-            return True
+            
+            self.logger.info(f"Finished processing file: {file_path}")
+            return success
 
         except Exception as e:
-            self.logger.error(f"Error processing file: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-
-            # Record failure metrics
-            await self.metrics_collector.track_operation(
-                operation_type="file_processing",
-                success=False,
-                duration=0,
-                error=str(e),
-                metadata={"file_path": str(file_path)}
-            )
-
+            self.logger.error(f"Error processing file: {e}", exc_info=True)
             return False
 
     def _fix_indentation(self, source_code: str) -> str:
         """Fix inconsistent indentation using autopep8."""
-        import autopep8
-        return autopep8.fix_code(source_code)
+        try:
+            import autopep8
+            return autopep8.fix_code(source_code)
+        except ImportError:
+            self.logger.warning("autopep8 not installed. Skipping indentation fix.")
+            return source_code
 
     async def process_repository(self, repo_path: str, output_dir: Path = Path("docs")) -> bool:
         """Process a repository for documentation."""
+        start_time = asyncio.get_event_loop().time()
+        success = False
+        local_path: Optional[Path] = None
+        
         try:
-            self.logger.info(f"Starting repository processing: {repo_path}", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info(f"Starting repository processing: {repo_path}")
+            repo_path = repo_path.strip()
+
             if self._is_url(repo_path):
-                self.logger.info(f"Processing repository from URL: {repo_path}", extra={'correlation_id': self.logger.correlation_id})
-                repo_path = await self._clone_repository(repo_path)
+                local_path = await self._clone_repository(repo_path)
             else:
-                self.logger.info(f"Processing local repository: {repo_path}", extra={'correlation_id': self.logger.correlation_id})
-                repo_path = Path(repo_path)
+                local_path = Path(repo_path)
 
-            if not repo_path.exists():
-                raise FileNotFoundError(f"Repository path does not exist: {repo_path}")
+            if not local_path or not local_path.exists():
+                raise FileNotFoundError(f"Repository path not found: {local_path or repo_path}")
 
-            start_time = asyncio.get_event_loop().time()
+            if not self.repo_manager:
+                self.repo_manager = RepositoryManager(local_path)
 
-            # Process repository
-            success = await self._process_local_repository(repo_path, output_dir)
+            self.doc_orchestrator.code_extractor.context.base_path = local_path
+            success = await self._process_local_repository(local_path, output_dir)
 
-            # Record metrics
-            processing_time = asyncio.get_event_loop().time() - start_time
+        except Exception as e:
+            self.logger.error(f"Error processing repository {repo_path}: {e}", exc_info=True)
+            success = False
+        finally:
+            processing_time: float = asyncio.get_event_loop().time() - start_time
             await self.metrics_collector.track_operation(
                 operation_type="repository_processing",
                 success=success,
                 duration=processing_time,
                 metadata={"repo_path": str(repo_path)}
             )
-
-            self.logger.info(f"Repository processing completed: {repo_path}", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info(f"Finished repository processing: {repo_path}")
             return success
 
+    def _is_url(self, path: Union[str, Path]) -> bool:
+        """Check if the path is a URL."""
+        path_str = str(path)
+        return path_str.startswith(('http://', 'https://', 'git@', 'ssh://', 'ftp://'))
+
+    async def _clone_repository(self, repo_url: str) -> Path:
+        """Clone a repository and return its local path."""
+        self.logger.info(f"Cloning repository: {repo_url}")
+        try:
+            if not self.repo_manager:
+                self.repo_manager = RepositoryManager(Path('.'))
+            repo_path = await self.repo_manager.clone_repository(repo_url)
+            self.logger.info(f"Successfully cloned repository to {repo_path}")
+            return repo_path
         except Exception as e:
-            self.logger.error(f"Repository processing failed: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-
-            # Record failure metrics
-            await self.metrics_collector.track_operation(
-                operation_type="repository_processing",
-                success=False,
-                duration=0,
-                error=str(e),
-                metadata={"repo_path": repo_path}
-            )
-
-            return False
-
-    def _is_url(self, path: str) -> bool:
-        """Simple check to determine if the path is a URL."""
-        return path.startswith(('http://', 'https://', 'git@', 'ssh://', 'ftp://'))
+            self.logger.error(f"Failed to clone repository: {e}", exc_info=True)
+            raise DocumentationError(f"Repository cloning failed: {e}")
 
     async def _process_local_repository(self, repo_path: Path, output_dir: Path) -> bool:
-        """Process a local repository for documentation."""
+        """Process a local repository."""
         try:
+            self.logger.info(f"Processing local repository: {repo_path}")
             output_dir = ensure_directory(output_dir)
-            python_files = list(repo_path.rglob("*.py"))
+            python_files = repo_path.rglob("*.py")
 
             for file_path in python_files:
                 output_file = output_dir / (file_path.stem + ".md")
                 success = await self.process_file(file_path, output_file)
                 if not success:
-                    self.logger.error(f"Failed to process file: {file_path}", extra={'correlation_id': self.logger.correlation_id})
+                    self.logger.error(f"Failed to process file: {file_path}")
 
+            self.logger.info(f"Finished processing local repository: {repo_path}")
             return True
 
         except Exception as e:
-            self.logger.error(f"Error processing local repository: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
+            self.logger.error(f"Error processing local repository: {e}", exc_info=True)
             return False
 
     async def display_metrics(self) -> None:
         """Display collected metrics and system performance metrics."""
         try:
-            self.logger.info("Displaying metrics", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info("Displaying metrics")
             collected_metrics = self.metrics_collector.get_metrics()
             system_metrics = self.system_monitor.get_metrics()
 
@@ -201,37 +214,30 @@ class DocumentationGenerator:
             print("-" * 40)
 
         except Exception as e:
-            self.logger.error(f"Error displaying metrics: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
+            self.logger.error(f"Error displaying metrics: {e}", exc_info=True)
 
     async def cleanup(self) -> None:
         """Cleanup resources used by the DocumentationGenerator."""
         try:
-            self.logger.info("Starting cleanup process", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info("Starting cleanup process")
             if self.ai_service:
                 await self.ai_service.close()
             if self.metrics_collector:
                 await self.metrics_collector.close()
             if self.system_monitor:
                 await self.system_monitor.stop()
-
-            self.logger.info("Cleanup completed successfully", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info("Cleanup completed successfully")
         except Exception as e:
-            self.logger.error(f"Error during cleanup: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-
-    async def _clone_repository(self, repo_url: str) -> Path:
-        """Clone a repository and return its local path."""
-        self.logger.info(f"Cloning repository from URL: {repo_url}", extra={'correlation_id': self.logger.correlation_id})
-        repo_manager = RepositoryManager(Path('.'))
-        cloned_path = await repo_manager.clone_repository(repo_url)
-        self.logger.info(f"Repository cloned to: {cloned_path}", extra={'correlation_id': self.logger.correlation_id})
-        return cloned_path
-
+            self.logger.error(f"Error during cleanup: {e}", exc_info=True)
 
 async def main(args: argparse.Namespace) -> int:
     """Main function to manage documentation generation process."""
-    log_info("Starting main documentation generation process")
-    doc_generator = DocumentationGenerator()
+    exit_code = 1
+    doc_generator: Optional[DocumentationGenerator] = None
+
     try:
+        log_info("Starting documentation generation")
+        doc_generator = DocumentationGenerator()
         await doc_generator.initialize()
 
         if args.repository:
@@ -257,17 +263,17 @@ async def main(args: argparse.Namespace) -> int:
                     log_error(f"Failed to generate documentation for {file}")
 
         await doc_generator.display_metrics()
-        return 0
+        exit_code = 0
 
     except DocumentationError as de:
         log_error(f"Documentation generation failed: {de}")
-        return 1
     except Exception as e:
         log_error(f"Unexpected error: {e}")
-        return 1
     finally:
-        await doc_generator.cleanup()
-
+        if doc_generator:
+            await doc_generator.cleanup()
+        log_info("Exiting documentation generation")
+        return exit_code
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
@@ -291,7 +297,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Output directory for documentation (default: docs)",
     )
     return parser.parse_args()
-
 
 if __name__ == "__main__":
     try:

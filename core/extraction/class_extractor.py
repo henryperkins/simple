@@ -60,10 +60,13 @@ class ClassExtractor:
                         extracted_class = await self._process_class(node)
                         if extracted_class:
                             classes.append(extracted_class)
-                            self.logger.info(
-                                f"Successfully extracted class: {node.name}",
-                                extra={'class_name': node.name}
-                            )
+                            # Update scan progress
+                            if self.metrics_calculator.metrics_collector:
+                                self.metrics_calculator.metrics_collector.update_scan_progress(
+                                    self.context.module_name or "unknown",
+                                    "class",
+                                    node.name
+                                )
                     except Exception as e:
                         handle_extraction_error(
                             self.logger,

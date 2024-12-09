@@ -3,7 +3,7 @@ Markdown documentation generator module.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 from core.logger import LoggerSetup, log_debug, log_error
 from core.types import DocumentationData, ExtractedClass, ExtractedFunction
 
@@ -19,21 +19,21 @@ class MarkdownGenerator:
         try:
             log_debug("Generating markdown documentation.")
 
-            # Accessing context elements safely
-            module_info = documentation_data.module_info
-            ai_content = documentation_data.ai_content
-            docstring_data = documentation_data.docstring_data
-            code_metadata = documentation_data.code_metadata
-            source_code = documentation_data.source_code
+            # Create module info from DocumentationData fields
+            module_info = {
+                "module_name": documentation_data.module_name,
+                "file_path": str(documentation_data.module_path),
+                "description": documentation_data.module_summary
+            }
 
             sections = [
-                self._generate_header(module_info.get("module_name", "Unknown Module")),
-                self._generate_overview(module_info.get("file_path", "Unknown File"), docstring_data.description),
-                self._generate_ai_doc_section(ai_content),
-                self._generate_class_tables(code_metadata.get("classes", [])),
-                self._generate_function_tables(code_metadata.get("functions", [])),
-                self._generate_constants_table(code_metadata.get("constants", [])),
-                self._generate_source_code(source_code),
+                self._generate_header(module_info["module_name"]),
+                self._generate_overview(module_info["file_path"], module_info["description"]),
+                self._generate_ai_doc_section(documentation_data.ai_content),
+                self._generate_class_tables(documentation_data.code_metadata.get("classes", [])),
+                self._generate_function_tables(documentation_data.code_metadata.get("functions", [])),
+                self._generate_constants_table(documentation_data.code_metadata.get("constants", [])),
+                self._generate_source_code(documentation_data.source_code),
             ]
             log_debug("Markdown generation completed successfully.")
             return "\n\n".join(filter(None, sections))
@@ -57,7 +57,7 @@ class MarkdownGenerator:
             ]
         )
 
-    def _generate_ai_doc_section(self, ai_documentation: dict) -> str:
+    def _generate_ai_doc_section(self, ai_documentation: Dict[str, Any]) -> str:
         """
         Generate the AI documentation section using docstring data and AI enhancements.
 
@@ -133,10 +133,10 @@ class MarkdownGenerator:
 
             for cls in classes:
                 # Safely retrieve class properties
-                class_name = cls.name
-                complexity = cls.metrics.get("complexity", 0)
+                class_name = cls.get("name", "Unknown")
+                complexity = cls.get("metrics", {}).get("complexity", 0)
                 warning = " ⚠️" if complexity > 10 else ""
-                bases = ", ".join(cls.bases)
+                bases = ", ".join(cls.get("bases", []))
 
                 # Add a row for the class
                 classes_table.append(
@@ -144,17 +144,17 @@ class MarkdownGenerator:
                 )
 
                 # Check if the class has methods and iterate over them safely
-                for method in cls.methods:
-                    method_name = method.name
-                    method_complexity = method.metrics.get("complexity", 0)
+                for method in cls.get("methods", []):
+                    method_name = method.get("name", "Unknown")
+                    method_complexity = method.get("metrics", {}).get("complexity", 0)
                     method_warning = " ⚠️" if method_complexity > 10 else ""
-                    return_type = method.metrics.get("return_type", "Any")
+                    return_type = method.get("returns", {}).get("type", "Any")
 
                     # Generate parameters safely
                     params = ", ".join(
-                        f"{arg.name}: {arg.type}"
-                        + (f" = {arg.default_value}" if arg.default_value else "")
-                        for arg in method.args
+                        f"{arg.get('name', 'unknown')}: {arg.get('type', 'Any')}"
+                        + (f" = {arg.get('default_value', '')}" if arg.get('default_value') else "")
+                        for arg in method.get("args", [])
                     )
 
                     # Add a row for the method
@@ -185,21 +185,21 @@ class MarkdownGenerator:
 
             for func in functions:
                 # Safely get the complexity
-                complexity = func.metrics.get("complexity", 0)
+                complexity = func.get("metrics", {}).get("complexity", 0)
                 warning = " ⚠️" if complexity > 10 else ""
 
                 # Generate parameters safely
                 params = ", ".join(
-                    f"{arg.name}: {arg.type}"
-                    + (f" = {arg.default_value}" if arg.default_value else "")
-                    for arg in func.args
+                    f"{arg.get('name', 'unknown')}: {arg.get('type', 'Any')}"
+                    + (f" = {arg.get('default_value', '')}" if arg.get('default_value') else "")
+                    for arg in func.get("args", [])
                 )
 
                 # Safely get the return type
-                return_type = func.metrics.get("return_type", "Any")
+                return_type = func.get("returns", {}).get("type", "Any")
 
                 lines.append(
-                    f"| `{func.name}` | `({params})` | "
+                    f"| `{func.get('name', 'Unknown')}` | `({params})` | "
                     f"`{return_type}` | {complexity}{warning} |"
                 )
 

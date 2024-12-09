@@ -1,0 +1,1055 @@
+{
+  "unknown": [
+    {
+      "timestamp": "2024-12-09T10:23:58.406333",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 36.49561398674886, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.012165204662249619}, lines_of_code=6, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:58.410200",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=79.67269722649148, halstead_metrics={'volume': 262.70527509086565, 'difficulty': 3.5625, 'effort': 935.887542511209, 'time': 51.99375236173383, 'bugs': 0.08756842503028855}, lines_of_code=45, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:58.412617",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=1, maintainability_index=95.033885777846, halstead_metrics={'volume': 101.43760004615399, 'difficulty': 1.8125, 'effort': 183.8556500836541, 'time': 10.214202782425227, 'bugs': 0.033812533348718}, lines_of_code=23, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:58.426721",
+      "metrics": "MetricData(cyclomatic_complexity=29, cognitive_complexity=211, maintainability_index=36.56921835228094, halstead_metrics={'volume': 1776.0180752293277, 'difficulty': 6.413043478260869, 'effort': 11389.681134622862, 'time': 632.7600630346035, 'bugs': 0.5920060250764425}, lines_of_code=241, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.467462",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 44.37895002019237, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.014792983340064124}, lines_of_code=18, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.468697",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 10.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0033333333333333335}, lines_of_code=9, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.470029",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 25.84962500721156, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.00861654166907052}, lines_of_code=11, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.471426",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 16.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.005333333333333333}, lines_of_code=9, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.472943",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 20.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.006666666666666667}, lines_of_code=10, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.476746",
+      "metrics": "MetricData(cyclomatic_complexity=10, cognitive_complexity=10, maintainability_index=72.32588895395237, halstead_metrics={'volume': 218.78587335407704, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.07292862445135902}, lines_of_code=68, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.558371",
+      "metrics": "MetricData(cyclomatic_complexity=10, cognitive_complexity=12, maintainability_index=83.12357850908694, halstead_metrics={'volume': 237.70604521880495, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.07923534840626832}, lines_of_code=34, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.562325",
+      "metrics": "MetricData(cyclomatic_complexity=10, cognitive_complexity=12, maintainability_index=78.19975953182416, halstead_metrics={'volume': 294.80302513413505, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.09826767504471169}, lines_of_code=43, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.565296",
+      "metrics": "MetricData(cyclomatic_complexity=8, cognitive_complexity=15, maintainability_index=92.35352956609755, halstead_metrics={'volume': 114.71363126237385, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.038237877087457954}, lines_of_code=25, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.569235",
+      "metrics": "MetricData(cyclomatic_complexity=11, cognitive_complexity=15, maintainability_index=78.05984609655499, halstead_metrics={'volume': 311.77745004903863, 'difficulty': 1.4130434782608696, 'effort': 440.5550924605981, 'time': 24.47528291447767, 'bugs': 0.10392581668301287}, lines_of_code=42, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.621709",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 50.718800023076994, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.016906266674359}, lines_of_code=10, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.623735",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 36.49561398674886, 'difficulty': 6.0, 'effort': 218.97368392049316, 'time': 12.16520466224962, 'bugs': 0.012165204662249619}, lines_of_code=9, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.625083",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 16.0, 'difficulty': 1.0, 'effort': 16.0, 'time': 0.8888888888888888, 'bugs': 0.005333333333333333}, lines_of_code=4, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.627997",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=89.12742430750629, halstead_metrics={'volume': 148.75555960140377, 'difficulty': 6.5625, 'effort': 976.2083598842123, 'time': 54.23379777134513, 'bugs': 0.049585186533801257}, lines_of_code=31, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.632483",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=73.03697746628774, halstead_metrics={'volume': 423.0472331410691, 'difficulty': 6.166666666666667, 'effort': 2608.791271036593, 'time': 144.93284839092183, 'bugs': 0.14101574438035638}, lines_of_code=59, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.634959",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=3, maintainability_index=100.0, halstead_metrics={'volume': 60.228575027403934, 'difficulty': 0.9375, 'effort': 56.46428908819119, 'time': 3.136904949343955, 'bugs': 0.02007619167580131}, lines_of_code=17, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.636595",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 18.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.006}, lines_of_code=5, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.640497",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=77.8331161770393, halstead_metrics={'volume': 218.78587335407704, 'difficulty': 5.75, 'effort': 1258.018771785943, 'time': 69.88993176588572, 'bugs': 0.07292862445135902}, lines_of_code=55, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.646533",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=6, maintainability_index=62.9694490077553, halstead_metrics={'volume': 628.9628640446076, 'difficulty': 6.0, 'effort': 3773.7771842676457, 'time': 209.6542880148692, 'bugs': 0.2096542880148692}, lines_of_code=94, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.648613",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 70.30835464468075, 'difficulty': 0.7083333333333334, 'effort': 49.801751206648866, 'time': 2.766763955924937, 'bugs': 0.02343611821489358}, lines_of_code=10, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.650012",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 24.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.008}, lines_of_code=4, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.651228",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 8.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0026666666666666666}, lines_of_code=3, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.653859",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=92.66116520165595, halstead_metrics={'volume': 134.88627376126118, 'difficulty': 0.96875, 'effort': 130.67107770622178, 'time': 7.259504317012321, 'bugs': 0.04496209125375373}, lines_of_code=25, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.773500",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 5.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0016666666666666668}, lines_of_code=4, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.775122",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 11.094737505048093, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.003698245835016031}, lines_of_code=5, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.776666",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 20.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.006666666666666667}, lines_of_code=8, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.778571",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 33.60451250937503, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.011201504169791677}, lines_of_code=9, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.782492",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=6, maintainability_index=79.37273824051438, halstead_metrics={'volume': 237.88394075284077, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.07929464691761359}, lines_of_code=46, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.789804",
+      "metrics": "MetricData(cyclomatic_complexity=8, cognitive_complexity=10, maintainability_index=70.3890350706692, halstead_metrics={'volume': 303.2413500673362, 'difficulty': 1.5714285714285714, 'effort': 476.52212153438546, 'time': 26.47345119635475, 'bugs': 0.10108045002244541}, lines_of_code=71, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.792059",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=90.18863713676676, halstead_metrics={'volume': 91.3765181293825, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.030458839376460836}, lines_of_code=33, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.794179",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=99.13176780324726, halstead_metrics={'volume': 81.40967379910403, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.027136557933034676}, lines_of_code=20, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.796281",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 71.69925001442311, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.023899750004807704}, lines_of_code=19, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.799914",
+      "metrics": "MetricData(cyclomatic_complexity=9, cognitive_complexity=18, maintainability_index=78.4521335643251, halstead_metrics={'volume': 195.40466561840492, 'difficulty': 2.4705882352941178, 'effort': 482.76446799841216, 'time': 26.82024822213401, 'bugs': 0.0651348885394683}, lines_of_code=49, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.803924",
+      "metrics": "MetricData(cyclomatic_complexity=8, cognitive_complexity=13, maintainability_index=75.93462700114932, halstead_metrics={'volume': 196.0, 'difficulty': 1.6, 'effort': 313.6, 'time': 17.422222222222224, 'bugs': 0.06533333333333333}, lines_of_code=58, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.807021",
+      "metrics": "MetricData(cyclomatic_complexity=9, cognitive_complexity=26, maintainability_index=83.82858022141741, halstead_metrics={'volume': 121.0801066523054, 'difficulty': 3.5555555555555554, 'effort': 430.50704587486365, 'time': 23.917058104159093, 'bugs': 0.04036003555076847}, lines_of_code=41, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.809243",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=2, maintainability_index=100.0, halstead_metrics={'volume': 33.60451250937503, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.011201504169791677}, lines_of_code=19, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.811512",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 41.3594000115385, 'difficulty': 3.0, 'effort': 124.07820003461549, 'time': 6.893233335256416, 'bugs': 0.013786466670512832}, lines_of_code=16, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.813875",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=3, maintainability_index=100.0, halstead_metrics={'volume': 59.79470570797252, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.01993156856932417}, lines_of_code=12, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.837620",
+      "metrics": "MetricData(cyclomatic_complexity=60, cognitive_complexity=1046, maintainability_index=15.653873968030709, halstead_metrics={'volume': 2884.999618457772, 'difficulty': 8.82, 'effort': 25445.69663479755, 'time': 1413.6498130443083, 'bugs': 0.9616665394859241}, lines_of_code=483, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.886258",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 71.69925001442311, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.023899750004807704}, lines_of_code=11, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.888003",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 34.86917501586544, 'difficulty': 0.625, 'effort': 21.7932343849159, 'time': 1.2107352436064387, 'bugs': 0.011623058338621813}, lines_of_code=4, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.889960",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 38.039100017307746, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.012679700005769248}, lines_of_code=11, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.893915",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=87.02088684528458, halstead_metrics={'volume': 202.04660144782298, 'difficulty': 1.125, 'effort': 227.30242662880084, 'time': 12.627912590488936, 'bugs': 0.06734886714927432}, lines_of_code=32, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.977033",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=3, maintainability_index=100.0, halstead_metrics={'volume': 25.541209043760983, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.008513736347920327}, lines_of_code=14, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.979644",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=3, maintainability_index=94.7963247081947, halstead_metrics={'volume': 116.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.03866666666666667}, lines_of_code=23, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.983409",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=1, maintainability_index=88.66698162464685, halstead_metrics={'volume': 128.92738965508113, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.04297579655169371}, lines_of_code=32, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.987633",
+      "metrics": "MetricData(cyclomatic_complexity=7, cognitive_complexity=10, maintainability_index=75.63124048571919, halstead_metrics={'volume': 195.40466561840492, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0651348885394683}, lines_of_code=60, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.993339",
+      "metrics": "MetricData(cyclomatic_complexity=10, cognitive_complexity=15, maintainability_index=62.056540768233134, halstead_metrics={'volume': 407.2719194355071, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.13575730647850237}, lines_of_code=105, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.996091",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=3, maintainability_index=100.0, halstead_metrics={'volume': 66.56842503028855, 'difficulty': 1.25, 'effort': 83.21053128786069, 'time': 4.622807293770038, 'bugs': 0.022189475010096184}, lines_of_code=15, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:23:59.998141",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 33.60451250937503, 'difficulty': 1.2, 'effort': 40.32541501125003, 'time': 2.240300833958335, 'bugs': 0.011201504169791677}, lines_of_code=12, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.002105",
+      "metrics": "MetricData(cyclomatic_complexity=7, cognitive_complexity=7, maintainability_index=78.94638057205985, halstead_metrics={'volume': 236.34987578777677, 'difficulty': 2.5, 'effort': 590.8746894694419, 'time': 32.826371637191215, 'bugs': 0.07878329192925893}, lines_of_code=46, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.008095",
+      "metrics": "MetricData(cyclomatic_complexity=10, cognitive_complexity=18, maintainability_index=63.11566541758175, halstead_metrics={'volume': 501.4827251399043, 'difficulty': 2.7058823529411766, 'effort': 1356.9532562609177, 'time': 75.38629201449542, 'bugs': 0.1671609083799681}, lines_of_code=92, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.013361",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=0, maintainability_index=78.05559850724724, halstead_metrics={'volume': 236.34987578777677, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.07878329192925893}, lines_of_code=50, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.025458",
+      "metrics": "MetricData(cyclomatic_complexity=27, cognitive_complexity=65, maintainability_index=41.96359104803983, halstead_metrics={'volume': 1138.2415647232904, 'difficulty': 5.462264150943396, 'effort': 6217.376094101746, 'time': 345.40978300565257, 'bugs': 0.37941385490776347}, lines_of_code=205, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.071839",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=94.3368589546102, halstead_metrics={'volume': 116.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.03866666666666667}, lines_of_code=24, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.074014",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 62.26976913547135, 'difficulty': 0.85, 'effort': 52.92930376515065, 'time': 2.940516875841703, 'bugs': 0.020756589711823783}, lines_of_code=18, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.076407",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 71.69925001442311, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.023899750004807704}, lines_of_code=11, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.081233",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=3, maintainability_index=73.45198982185715, halstead_metrics={'volume': 354.63261264431276, 'difficulty': 1.2857142857142858, 'effort': 455.95621625697356, 'time': 25.330900903165197, 'bugs': 0.11821087088143759}, lines_of_code=60, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.154063",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 9.509775004326936, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.003169925001442312}, lines_of_code=5, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.155848",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 3.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.001}, lines_of_code=4, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.159030",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=3, maintainability_index=91.24238846135036, halstead_metrics={'volume': 177.19905189038187, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.05906635063012729}, lines_of_code=25, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.161354",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 101.57915548582149, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.033859718495273826}, lines_of_code=9, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.164700",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=4, maintainability_index=95.25976882646019, halstead_metrics={'volume': 150.11730005192322, 'difficulty': 3.3000000000000003, 'effort': 495.3870901713467, 'time': 27.52150500951926, 'bugs': 0.05003910001730774}, lines_of_code=20, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.168132",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=4, maintainability_index=89.32630448803977, halstead_metrics={'volume': 184.47733175670794, 'difficulty': 3.25, 'effort': 599.5513282093008, 'time': 33.308407122738934, 'bugs': 0.06149244391890265}, lines_of_code=27, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.175649",
+      "metrics": "MetricData(cyclomatic_complexity=7, cognitive_complexity=4, maintainability_index=62.16688345494671, halstead_metrics={'volume': 530.040678857802, 'difficulty': 5.647058823529412, 'effort': 2993.1708923734705, 'time': 166.28727179852615, 'bugs': 0.17668022628593402}, lines_of_code=100, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.177473",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 18.094737505048094, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.006031579168349364}, lines_of_code=3, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.179750",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 30.18506523353571, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.01006168841117857}, lines_of_code=12, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.182195",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 33.60451250937503, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.011201504169791677}, lines_of_code=22, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.192107",
+      "metrics": "MetricData(cyclomatic_complexity=11, cognitive_complexity=14, maintainability_index=49.87381273527684, halstead_metrics={'volume': 973.7464772757438, 'difficulty': 6.73469387755102, 'effort': 6557.884438795825, 'time': 364.32691326643476, 'bugs': 0.3245821590919146}, lines_of_code=166, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.277860",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 8.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0026666666666666666}, lines_of_code=5, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.279960",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 46.50699332842307, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.015502331109474358}, lines_of_code=7, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.284477",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 72.90827503317318, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.02430275834439106}, lines_of_code=14, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.288277",
+      "metrics": "MetricData(cyclomatic_complexity=8, cognitive_complexity=6, maintainability_index=83.47497723919632, halstead_metrics={'volume': 203.13062045970605, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.06771020681990202}, lines_of_code=36, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.291161",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=1, maintainability_index=97.19890798335638, halstead_metrics={'volume': 88.81055323538621, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.029603517745128736}, lines_of_code=21, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.293540",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 57.3594000115385, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.019119800003846166}, lines_of_code=10, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.297581",
+      "metrics": "MetricData(cyclomatic_complexity=7, cognitive_complexity=6, maintainability_index=83.45258718578388, halstead_metrics={'volume': 232.7928234072743, 'difficulty': 1.275, 'effort': 296.81084984427474, 'time': 16.489491658015265, 'bugs': 0.07759760780242476}, lines_of_code=35, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.299544",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 25.26619429851844, 'difficulty': 0.6666666666666666, 'effort': 16.844129532345626, 'time': 0.9357849740192015, 'bugs': 0.008422064766172813}, lines_of_code=5, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.303657",
+      "metrics": "MetricData(cyclomatic_complexity=6, cognitive_complexity=2, maintainability_index=82.55035465464948, halstead_metrics={'volume': 224.0081885617168, 'difficulty': 1.225, 'effort': 274.4100309881031, 'time': 15.245001721561282, 'bugs': 0.07466939618723893}, lines_of_code=38, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.305531",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 3.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.001}, lines_of_code=5, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.308314",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 78.86917501586544, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.026289725005288478}, lines_of_code=15, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.311048",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 75.28421251514428, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.025094737505048093}, lines_of_code=16, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.313823",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 59.79470570797252, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.01993156856932417}, lines_of_code=14, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.331519",
+      "metrics": "MetricData(cyclomatic_complexity=40, cognitive_complexity=90, maintainability_index=32.255566970903345, halstead_metrics={'volume': 1884.0234745752114, 'difficulty': 5.781818181818182, 'effort': 10893.081180271223, 'time': 605.1711766817347, 'bugs': 0.6280078248584038}, lines_of_code=264, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.375494",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=5, maintainability_index=96.04496949131232, halstead_metrics={'volume': 57.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.019}, lines_of_code=26, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.377856",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 38.039100017307746, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.012679700005769248}, lines_of_code=17, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.380119",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=3, maintainability_index=100.0, halstead_metrics={'volume': 33.60451250937503, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.011201504169791677}, lines_of_code=15, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.384845",
+      "metrics": "MetricData(cyclomatic_complexity=9, cognitive_complexity=16, maintainability_index=68.31630266433092, halstead_metrics={'volume': 237.88394075284077, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.07929464691761359}, lines_of_code=86, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.440034",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 3.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.001}, lines_of_code=4, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.442085",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 4.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0013333333333333333}, lines_of_code=4, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.445443",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=3, maintainability_index=88.0531009322739, halstead_metrics={'volume': 197.1533875310097, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.06571779584366991}, lines_of_code=29, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.589466",
+      "metrics": "MetricData(cyclomatic_complexity=6, cognitive_complexity=4, maintainability_index=77.98169331059037, halstead_metrics={'volume': 394.8369363238517, 'difficulty': 3.2916666666666665, 'effort': 1299.6715820660118, 'time': 72.20397678144509, 'bugs': 0.13161231210795057}, lines_of_code=42, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.602404",
+      "metrics": "MetricData(cyclomatic_complexity=12, cognitive_complexity=31, maintainability_index=52.266797538277714, halstead_metrics={'volume': 1459.001977115304, 'difficulty': 8.428571428571429, 'effort': 12297.302378543278, 'time': 683.1834654746266, 'bugs': 0.486333992371768}, lines_of_code=124, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.610128",
+      "metrics": "MetricData(cyclomatic_complexity=10, cognitive_complexity=28, maintainability_index=71.98482516924754, halstead_metrics={'volume': 507.79901867755166, 'difficulty': 2.8484848484848486, 'effort': 1446.4578107784805, 'time': 80.35876726547114, 'bugs': 0.16926633955918388}, lines_of_code=53, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.622762",
+      "metrics": "MetricData(cyclomatic_complexity=26, cognitive_complexity=171, maintainability_index=47.21151158040948, halstead_metrics={'volume': 1488.0, 'difficulty': 3.8548387096774195, 'effort': 5736.0, 'time': 318.6666666666667, 'bugs': 0.496}, lines_of_code=138, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.715750",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=91.64439633525066, halstead_metrics={'volume': 134.88627376126118, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.04496209125375373}, lines_of_code=27, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.718267",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 62.26976913547135, 'difficulty': 0.85, 'effort': 52.92930376515065, 'time': 2.940516875841703, 'bugs': 0.020756589711823783}, lines_of_code=18, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.721045",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 71.69925001442311, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.023899750004807704}, lines_of_code=11, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.726780",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=3, maintainability_index=71.33787792249107, halstead_metrics={'volume': 415.0, 'difficulty': 1.3225806451612903, 'effort': 548.8709677419355, 'time': 30.49283154121864, 'bugs': 0.13833333333333334}, lines_of_code=65, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.854196",
+      "metrics": "MetricData(cyclomatic_complexity=25, cognitive_complexity=92, maintainability_index=44.61596908168194, halstead_metrics={'volume': 1179.864471130071, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.393288157043357}, lines_of_code=177, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.857434",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=0, maintainability_index=96.75717188811902, halstead_metrics={'volume': 91.3765181293825, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.030458839376460836}, lines_of_code=22, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.860943",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=1, maintainability_index=90.10674897871887, halstead_metrics={'volume': 88.81055323538621, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.029603517745128736}, lines_of_code=33, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.876743",
+      "metrics": "MetricData(cyclomatic_complexity=30, cognitive_complexity=107, maintainability_index=36.924940961742536, halstead_metrics={'volume': 1607.5136354713095, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.5358378784904365}, lines_of_code=240, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.880422",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=6, maintainability_index=100.0, halstead_metrics={'volume': 41.79470570797252, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.013931568569324173}, lines_of_code=10, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.883261",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=6, maintainability_index=100.0, halstead_metrics={'volume': 41.79470570797252, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.013931568569324173}, lines_of_code=10, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.885963",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=6, maintainability_index=100.0, halstead_metrics={'volume': 37.150849518197795, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.012383616506065932}, lines_of_code=10, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.888541",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=1, maintainability_index=100.0, halstead_metrics={'volume': 24.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.008}, lines_of_code=7, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.896305",
+      "metrics": "MetricData(cyclomatic_complexity=23, cognitive_complexity=171, maintainability_index=63.79340179508094, halstead_metrics={'volume': 531.5971556711456, 'difficulty': 3.0, 'effort': 1594.7914670134369, 'time': 88.59952594519093, 'bugs': 0.17719905189038188}, lines_of_code=72, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.900371",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=6, maintainability_index=100.0, halstead_metrics={'volume': 89.69205856195877, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.02989735285398626}, lines_of_code=12, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.902343",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 2.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0006666666666666666}, lines_of_code=2, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.904268",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 2.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0006666666666666666}, lines_of_code=2, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.907486",
+      "metrics": "MetricData(cyclomatic_complexity=2, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 56.86917501586544, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.018956391671955147}, lines_of_code=17, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.910688",
+      "metrics": "MetricData(cyclomatic_complexity=6, cognitive_complexity=8, maintainability_index=94.67596571349378, halstead_metrics={'volume': 103.96391252091352, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.034654637506971175}, lines_of_code=23, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.919774",
+      "metrics": "MetricData(cyclomatic_complexity=18, cognitive_complexity=64, maintainability_index=55.319119816640324, halstead_metrics={'volume': 765.7896447474557, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.25526321491581855}, lines_of_code=116, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.989988",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=0, maintainability_index=80.61665697523016, halstead_metrics={'volume': 175.1368500605771, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.05837895002019237}, lines_of_code=47, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.993910",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=0, maintainability_index=84.26185067553268, halstead_metrics={'volume': 138.97373660251154, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.046324578867503845}, lines_of_code=41, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:00.997308",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=1, maintainability_index=91.74741420981184, halstead_metrics={'volume': 56.47277761308516, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.018824259204361718}, lines_of_code=34, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.004577",
+      "metrics": "MetricData(cyclomatic_complexity=12, cognitive_complexity=1, maintainability_index=56.71255611114226, halstead_metrics={'volume': 465.3435320959681, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.15511451069865603}, lines_of_code=136, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.052547",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=0, maintainability_index=82.0576062486974, halstead_metrics={'volume': 175.1368500605771, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.05837895002019237}, lines_of_code=43, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.056513",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=0, maintainability_index=85.49282236857502, halstead_metrics={'volume': 138.97373660251154, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.046324578867503845}, lines_of_code=38, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.059922",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=1, maintainability_index=92.72953308323808, halstead_metrics={'volume': 56.47277761308516, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.018824259204361718}, lines_of_code=32, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.067087",
+      "metrics": "MetricData(cyclomatic_complexity=12, cognitive_complexity=1, maintainability_index=57.82173445943714, halstead_metrics={'volume': 465.3435320959681, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.15511451069865603}, lines_of_code=127, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.120179",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=0, maintainability_index=80.89988847686146, halstead_metrics={'volume': 155.32358796751288, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.051774529322504294}, lines_of_code=48, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.124205",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=0, maintainability_index=83.87147033995191, halstead_metrics={'volume': 138.97373660251154, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.046324578867503845}, lines_of_code=42, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.129092",
+      "metrics": "MetricData(cyclomatic_complexity=7, cognitive_complexity=7, maintainability_index=75.75191200777134, halstead_metrics={'volume': 164.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.05466666666666667}, lines_of_code=63, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.138200",
+      "metrics": "MetricData(cyclomatic_complexity=14, cognitive_complexity=7, maintainability_index=51.74572767599595, halstead_metrics={'volume': 583.9199808774138, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.19463999362580459}, lines_of_code=167, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.200019",
+      "metrics": "MetricData(cyclomatic_complexity=5, cognitive_complexity=0, maintainability_index=82.68190297933359, halstead_metrics={'volume': 155.32358796751288, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.051774529322504294}, lines_of_code=43, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.204145",
+      "metrics": "MetricData(cyclomatic_complexity=4, cognitive_complexity=0, maintainability_index=85.49282236857502, halstead_metrics={'volume': 138.97373660251154, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.046324578867503845}, lines_of_code=38, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.208760",
+      "metrics": "MetricData(cyclomatic_complexity=7, cognitive_complexity=7, maintainability_index=79.7089209262925, halstead_metrics={'volume': 148.0, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.04933333333333333}, lines_of_code=51, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.217132",
+      "metrics": "MetricData(cyclomatic_complexity=14, cognitive_complexity=7, maintainability_index=54.100595262163395, halstead_metrics={'volume': 564.2924184949796, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.18809747283165987}, lines_of_code=146, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.279174",
+      "metrics": "MetricData(cyclomatic_complexity=7, cognitive_complexity=3, maintainability_index=74.46251328110658, halstead_metrics={'volume': 220.89223069906643, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.07363074356635547}, lines_of_code=62, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.284255",
+      "metrics": "MetricData(cyclomatic_complexity=6, cognitive_complexity=3, maintainability_index=76.65039471537582, halstead_metrics={'volume': 208.14844815873568, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.0693828160529119}, lines_of_code=56, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.288404",
+      "metrics": "MetricData(cyclomatic_complexity=6, cognitive_complexity=4, maintainability_index=81.62952027691318, halstead_metrics={'volume': 121.11360846386408, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.040371202821288026}, lines_of_code=49, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.298083",
+      "metrics": "MetricData(cyclomatic_complexity=17, cognitive_complexity=22, maintainability_index=48.93140715466855, halstead_metrics={'volume': 683.6790908333887, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.22789303027779625}, lines_of_code=181, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.386626",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 4.754887502163468, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.001584962500721156}, lines_of_code=3, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.389301",
+      "metrics": "MetricData(cyclomatic_complexity=1, cognitive_complexity=0, maintainability_index=100.0, halstead_metrics={'volume': 44.37895002019237, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.014792983340064124}, lines_of_code=5, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.397464",
+      "metrics": "MetricData(cyclomatic_complexity=10, cognitive_complexity=13, maintainability_index=70.65659747099274, halstead_metrics={'volume': 301.60285345449455, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.10053428448483151}, lines_of_code=68, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.401184",
+      "metrics": "MetricData(cyclomatic_complexity=3, cognitive_complexity=0, maintainability_index=88.07507456956135, halstead_metrics={'volume': 114.22064766172812, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.03807354922057604}, lines_of_code=35, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.405836",
+      "metrics": "MetricData(cyclomatic_complexity=8, cognitive_complexity=6, maintainability_index=79.50526814722201, halstead_metrics={'volume': 166.7970000576925, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.05559900001923083}, lines_of_code=49, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T10:24:01.428970",
+      "metrics": "MetricData(cyclomatic_complexity=46, cognitive_complexity=319, maintainability_index=22.44487844732798, halstead_metrics={'volume': 2260.6034006400614, 'difficulty': 0.0, 'effort': 0.0, 'time': 0.0, 'bugs': 0.7535344668800205}, lines_of_code=419, complexity_graph=None)",
+      "correlation_id": null
+    },
+    {
+      "timestamp": "2024-12-09T11:42:29.744121",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 30.761144082707073,
+          "difficulty": 0.9285714285714286,
+          "effort": 28.563919505370855,
+          "time": 1.5868844169650476,
+          "bugs": 0.01025371469423569
+        },
+        "lines_of_code": 6,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:29.750716",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 81.09817653378384,
+        "halstead_metrics": {
+          "volume": 185.49965568748573,
+          "difficulty": 3.5625,
+          "effort": 660.842523386668,
+          "time": 36.71347352148155,
+          "bugs": 0.06183321856249524
+        },
+        "lines_of_code": 45,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:29.753853",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 1,
+        "maintainability_index": 95.93663429275969,
+        "halstead_metrics": {
+          "volume": 73.68272297580947,
+          "difficulty": 1.8125,
+          "effort": 133.54993539365466,
+          "time": 7.419440855203037,
+          "bugs": 0.024560907658603158
+        },
+        "lines_of_code": 23,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:29.770811",
+      "metrics": {
+        "cyclomatic_complexity": 29,
+        "cognitive_complexity": 211,
+        "maintainability_index": 38.376181303926614,
+        "halstead_metrics": {
+          "volume": 1237.5988547991792,
+          "difficulty": 6.413043478260869,
+          "effort": 7936.775264472996,
+          "time": 440.9319591373887,
+          "bugs": 0.4125329515997264
+        },
+        "lines_of_code": 241,
+        "total_functions": 8,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:36.197073",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 35.96842909197556,
+          "difficulty": 0.7777777777777778,
+          "effort": 27.975444849314325,
+          "time": 1.5541913805174625,
+          "bugs": 0.011989476363991853
+        },
+        "lines_of_code": 18,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:36.198902",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 10.75055681536833,
+          "difficulty": 0.625,
+          "effort": 6.719098009605206,
+          "time": 0.3732832227558448,
+          "bugs": 0.00358351893845611
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:36.200816",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 22.873856958478193,
+          "difficulty": 0.8333333333333334,
+          "effort": 19.061547465398494,
+          "time": 1.0589748591888053,
+          "bugs": 0.007624618986159398
+        },
+        "lines_of_code": 11,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:36.203270",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 16.125835223052494,
+          "difficulty": 1.0,
+          "effort": 16.125835223052494,
+          "time": 0.8958797346140275,
+          "bugs": 0.005375278407684165
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:36.205323",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 19.709354161508603,
+          "difficulty": 1.25,
+          "effort": 24.636692701885753,
+          "time": 1.368705150104764,
+          "bugs": 0.006569784720502868
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:36.210093",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 10,
+        "maintainability_index": 73.6361678813688,
+        "halstead_metrics": {
+          "volume": 161.49316061120433,
+          "difficulty": 1.8666666666666667,
+          "effort": 301.4538998075814,
+          "time": 16.747438878198967,
+          "bugs": 0.05383105353706811
+        },
+        "lines_of_code": 68,
+        "total_functions": 6,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:39.291242",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 12,
+        "maintainability_index": 84.27333466486984,
+        "halstead_metrics": {
+          "volume": 173.0983773880657,
+          "difficulty": 1.375,
+          "effort": 238.01026890859035,
+          "time": 13.222792717143909,
+          "bugs": 0.057699459129355236
+        },
+        "lines_of_code": 34,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:39.296542",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 12,
+        "maintainability_index": 79.51400080030558,
+        "halstead_metrics": {
+          "volume": 212.13963728914788,
+          "difficulty": 1.1481481481481481,
+          "effort": 243.567731702355,
+          "time": 13.531540650130832,
+          "bugs": 0.07071321242971595
+        },
+        "lines_of_code": 43,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:39.300359",
+      "metrics": {
+        "cyclomatic_complexity": 8,
+        "cognitive_complexity": 15,
+        "maintainability_index": 93.11695645853908,
+        "halstead_metrics": {
+          "volume": 86.65760643527072,
+          "difficulty": 1.1923076923076923,
+          "effort": 103.32253074974587,
+          "time": 5.740140597208104,
+          "bugs": 0.028885868811756907
+        },
+        "lines_of_code": 25,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:42:39.335857",
+      "metrics": {
+        "cyclomatic_complexity": 11,
+        "cognitive_complexity": 15,
+        "maintainability_index": 79.49444792395053,
+        "halstead_metrics": {
+          "volume": 218.88355609103763,
+          "difficulty": 1.4130434782608696,
+          "effort": 309.291981432988,
+          "time": 17.182887857388224,
+          "bugs": 0.07296118536367921
+        },
+        "lines_of_code": 42,
+        "total_functions": 2,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    }
+  ]
+}

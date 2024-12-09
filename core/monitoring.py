@@ -15,10 +15,6 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics_collector import MetricsCollector
 from api.token_management import TokenManager
 
-# Set up the logger with correlation ID
-base_logger = LoggerSetup.get_logger(__name__)
-logger = CorrelationLoggerAdapter(base_logger)
-
 class SystemMonitor:
     """Monitors system resources and performance metrics."""
 
@@ -26,7 +22,8 @@ class SystemMonitor:
         self,
         check_interval: int = 60,
         token_manager: Optional[TokenManager] = None,
-        metrics_collector: Optional[MetricsCollector] = None
+        metrics_collector: Optional[MetricsCollector] = None,
+        correlation_id: Optional[str] = None
     ) -> None:
         """
         Initialize system monitor.
@@ -35,15 +32,20 @@ class SystemMonitor:
             check_interval: Interval in seconds between metric checks
             token_manager: Optional token manager for tracking token usage
             metrics_collector: Optional metrics collector for tracking metrics
+            correlation_id: Optional correlation ID for tracking related operations
         """
-        self.logger = CorrelationLoggerAdapter(base_logger)
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__),
+            correlation_id=correlation_id
+        )
+        self.correlation_id = correlation_id
         self.check_interval = check_interval
         self.token_manager = token_manager
         self.start_time = datetime.now()
         self._metrics: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self.metrics_collector = metrics_collector or MetricsCollector()
+        self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
         self.logger.info("System monitor initialized")
 
     async def start(self) -> None:

@@ -1,456 +1,280 @@
-"""
-Metrics module for calculating code complexity and performance metrics.
-
-Provides comprehensive code analysis metrics including cyclomatic complexity,
-cognitive complexity, and Halstead metrics, integrated with system monitoring.
-"""
-
+"""Metrics module for calculating code complexity and performance metrics."""
 import ast
-import math
-from typing import Dict, Any, Optional
-from datetime import datetime
-import matplotlib.pyplot as plt
-import io
 import base64
+import io
+import math
+from datetime import datetime
+from typing import Any, Dict, Optional
 
-# Import LoggerSetup and module-level logging functions from logger.py
-from core.logger import LoggerSetup, log_error, log_debug, log_info
-from core.monitoring import SystemMonitor
+from core.logger import LoggerSetup
 from core.metrics_collector import MetricsCollector
-from core.types import ExtractedFunction, ExtractedClass
+from core.types.metrics_types import MetricData
 
-class MetricsError(Exception):
-    """Base exception for metrics calculation errors."""
+# Try to import matplotlib, but provide fallback if not available
+try:
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
 
 
 class Metrics:
     """Calculates various code complexity metrics for Python code."""
-
-    MAINTAINABILITY_THRESHOLDS: Dict[str, int] = {
-        "good": 80,
-        "moderate": 60,
-        "poor": 40,
-    }
-
     def __init__(self, metrics_collector: Optional[MetricsCollector] = None) -> None:
-        """Initialize the Metrics class."""
         self.module_name: Optional[str] = None
         self.logger = LoggerSetup.get_logger(__name__)
         self.error_counts: Dict[str, int] = {}
         self.metrics_collector = metrics_collector or MetricsCollector()
 
-    def calculate_metrics_for_function(self, function: ExtractedFunction) -> ExtractedFunction:
-        """
-        Calculate metrics for a function.
-
-        Args:
-            function: The ExtractedFunction instance
-
-        Returns:
-            ExtractedFunction with updated metrics
-        """
-        self.logger.debug("Calculating metrics for function: %s", function.name)
-        function.metrics["cyclomatic_complexity"] = self.calculate_cyclomatic_complexity(function.ast_node)
-        function.metrics["cognitive_complexity"] = self.calculate_cognitive_complexity(function.ast_node)
-        function.metrics["halstead_metrics"] = self.calculate_halstead_metrics(function.ast_node)
-        function.metrics["maintainability_index"] = self.calculate_maintainability_index(function.ast_node)
-
-        # Add complexity warning if necessary
-        if function.metrics["cyclomatic_complexity"] > 10:
-            function.complexity_warnings.append("⚠️ High complexity")
+    def calculate_metrics(self, code: str, module_name: Optional[str] = None) -> MetricData:
+        """Calculate all metrics for the given code.
         
-        # Add visual representation of metrics
-        function.metrics["complexity_graph"] = self.generate_complexity_graph(function.metrics)
-        
-        # Store metrics via MetricsCollector
-        self.metrics_collector.track_operation(
-            operation_type="function_metrics",
-            success=True,
-            duration=0,  # Duration can be updated based on actual metrics
-            usage=function.metrics,
-        )
-
-        return function
-
-    def calculate_metrics_for_class(self, cls: ExtractedClass) -> ExtractedClass:
-        """
-        Calculate metrics for a class.
-
         Args:
-            cls: The ExtractedClass instance
-
-        Returns:
-            ExtractedClass with updated metrics
-        """
-        self.logger.debug("Calculating metrics for class: %s", cls.name)
-        cls.metrics["method_count"] = self.count_methods(cls.ast_node)
-        cls.metrics["cyclomatic_complexity"] = self.calculate_cyclomatic_complexity(cls.ast_node)
-        cls.metrics["cognitive_complexity"] = self.calculate_cognitive_complexity(cls.ast_node)
-        cls.metrics["halstead_metrics"] = self.calculate_halstead_metrics(cls.ast_node)
-        cls.metrics["maintainability_index"] = self.calculate_maintainability_index(cls.ast_node)
-
-        if cls.metrics["cyclomatic_complexity"] > 10:
-            cls.complexity_warnings.append("⚠️ High complexity")
-        
-        cls.metrics["complexity_graph"] = self.generate_complexity_graph(cls.metrics)
-
-        self.metrics_collector.track_operation(
-            operation_type="class_metrics",
-            success=True,
-            duration=0,
-            usage=cls.metrics,
-        )
-
-        return cls
-
-    def calculate_cyclomatic_complexity(self, node: ast.AST) -> int:
-        """
-        Calculate cyclomatic complexity for a function or class.
-
-        Args:
-            node: The AST node to analyze
-
-        Returns:
-            The cyclomatic complexity score
-        """
-        complexity = 1
-        for child in ast.walk(node):
-            if isinstance(
-                child,
-                (
-                    ast.If,
-                    ast.For,
-                    ast.While,
-                    ast.AsyncFor,
-                    ast.Try,
-                    ast.ExceptHandler,
-                    ast.With,
-                    ast.AsyncWith,
-                    ast.BoolOp,
-                ),
-            ):
-                complexity += 1
-        self.logger.debug("Cyclomatic complexity: %d", complexity)
-        return complexity
-
-    def calculate_cognitive_complexity(self, node: ast.AST) -> int:
-        """
-        Calculate cognitive complexity for a function or class.
-
-        Args:
-            node: The AST node to analyze
-
-        Returns:
-            The cognitive complexity score
-        """
-        complexity = 0
-
-        def _increment_complexity(node: ast.AST, nesting: int) -> None:
-            nonlocal complexity
-            if isinstance(
-                node, (ast.If, ast.For, ast.While, ast.Try, ast.ExceptHandler, ast.With)
-            ):
-                complexity += 1
-                nesting += 1
-            elif isinstance(
-                node,
-                (
-                    ast.BoolOp,
-                    ast.Break,
-                    ast.Continue,
-                    ast.Raise,
-                    ast.Return,
-                    ast.Yield,
-                    ast.YieldFrom,
-                ),
-            ):
-                complexity += nesting + 1
-
-            for child in ast.iter_child_nodes(node):
-                _increment_complexity(child, nesting)
-
-        _increment_complexity(node, 0)
-        self.logger.debug("Cognitive complexity: %d", complexity)
-        return complexity
-
-    def calculate_halstead_metrics(self, node: ast.AST) -> Dict[str, float]:
-        """
-        Calculate Halstead metrics for the given AST node.
-
-        Args:
-            node: The AST node to analyze
-
-        Returns:
-            Dict containing Halstead metrics
-        """
-        self.logger.debug("Calculating Halstead metrics.")
-        operators = set()
-        operands = set()
-        operator_count = 0
-        operand_count = 0
-
-        operator_nodes = (
-            ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod,
-            ast.Pow, ast.MatMult, ast.LShift, ast.RShift, ast.BitOr,
-            ast.BitXor, ast.BitAnd, ast.And, ast.Or, ast.Not, ast.Eq,
-            ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Is, ast.IsNot,
-            ast.In, ast.NotIn, ast.UAdd, ast.USub, ast.Invert, ast.Assign,
-            ast.AugAssign, ast.AnnAssign, ast.Call, ast.Attribute,
-            ast.Subscript, ast.Index, ast.Slice
-        )
-
-        operand_nodes = (
-            ast.Constant, ast.Name, ast.List, ast.Tuple, ast.Set, ast.Dict,
-            ast.JoinedStr, ast.FormattedValue, ast.Bytes, ast.NameConstant,
-            ast.Num, ast.Str
-        )
-
-        for n in ast.walk(node):
-            if isinstance(n, operator_nodes):
-                operator_name = type(n).__name__
-                operators.add(operator_name)
-                operator_count += 1
-
-                if isinstance(n, ast.AugAssign):
-                    op_type = type(n.op).__name__
-                    operators.add(op_type)
-                    operator_count += 1
-            elif isinstance(n, operand_nodes):
-                operand_name = self._get_operand_name(n)
-                operands.add(operand_name)
-                operand_count += 1
-
-        try:
-            n1 = len(operators)
-            n2 = len(operands)
-            program_length = operator_count + operand_count
-            vocabulary_size = n1 + n2
-
-            program_volume = (program_length * math.log2(vocabulary_size)
-                            if vocabulary_size > 0 else 0)
+            code: The source code to analyze
+            module_name: Optional name of the module being analyzed
             
-            difficulty = ((n1 * operand_count) / (2 * n2)) if n2 > 0 else 0
-            effort = difficulty * program_volume
-
-            metrics = {
-                "program_length": program_length,
-                "vocabulary_size": vocabulary_size,
-                "program_volume": program_volume,
-                "difficulty": difficulty,
-                "effort": effort,
-                "time_to_program": effort / 18,
-                "bugs_delivered": program_volume / 3000,
-            }
-
-            self.logger.info(
-                "Calculated Halstead metrics - Length=%d, Vocabulary=%d, Volume=%f",
-                program_length, vocabulary_size, program_volume
-            )
+        Returns:
+            MetricData containing all calculated metrics
+        """
+        self.module_name = module_name
+        try:
+            tree = ast.parse(code)
+            
+            metrics = MetricData()
+            metrics.cyclomatic_complexity = self._calculate_cyclomatic_complexity(tree)
+            metrics.cognitive_complexity = self._calculate_cognitive_complexity(tree)
+            metrics.maintainability_index = self._calculate_maintainability_index(code)
+            metrics.halstead_metrics = self._calculate_halstead_metrics(code)
+            metrics.lines_of_code = len(code.splitlines())
+            
+            # Count total functions and classes
+            total_functions = sum(1 for node in ast.walk(tree) 
+                                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))
+            total_classes = sum(1 for node in ast.walk(tree) 
+                              if isinstance(node, ast.ClassDef))
+            
+            metrics.total_functions = total_functions
+            metrics.total_classes = total_classes
+            
+            # Note: scanned_functions and scanned_classes will be set by the extractors
+            # Default to 0 here as they'll be updated during extraction
+            metrics.scanned_functions = 0
+            metrics.scanned_classes = 0
+            
+            if MATPLOTLIB_AVAILABLE:
+                metrics.complexity_graph = self._generate_complexity_graph()
+            else:
+                metrics.complexity_graph = None
+            
+            # Log metrics collection
+            self.metrics_collector.collect_metrics(module_name or "unknown", metrics)
+            
             return metrics
-
+            
         except Exception as e:
-            self.logger.error(
-                "Error calculating Halstead metrics: %s",
-                e,
-                exc_info=True,
-                extra={"sanitized_info": {"error": str(e)}}
-            )
-            return {
-                "program_length": 0,
-                "vocabulary_size": 0,
-                "program_volume": 0,
-                "difficulty": 0,
-                "effort": 0,
-                "time_to_program": 0,
-                "bugs_delivered": 0,
-            }
+            self.logger.error(f"Error calculating metrics: {str(e)}", exc_info=True)
+            # Return default metrics on error
+            return MetricData()
 
-    def calculate_maintainability_index(self, node: ast.AST) -> float:
-        """
-        Calculate maintainability index.
-
+    def calculate_maintainability_index(self, code: str) -> float:
+        """Calculate maintainability index for the given code.
+        
         Args:
-            node: The AST node to analyze
-
+            code: The source code to analyze
+            
         Returns:
-            The maintainability index score
+            float: The maintainability index score (0-100)
         """
-        halstead = self.calculate_halstead_metrics(node)
-        complexity = self.calculate_cyclomatic_complexity(node)
-        sloc = self._count_source_lines(node)
-        volume = halstead["program_volume"]
+        return self._calculate_maintainability_index(code)
 
-        if volume == 0 or sloc == 0:
-            return 100.0
-
-        mi = 171 - 5.2 * math.log(volume) - 0.23 * complexity - 16.2 * math.log(sloc)
-        mi = max(0, mi)
-        mi = min(100, mi * 100 / 171)
-
-        self.logger.debug("Maintainability index: %f", mi)
-        return round(mi, 2)
-
-    def count_methods(self, node: ast.ClassDef) -> int:
-        """
-        Count the number of methods in a class.
-
+    def calculate_metrics_for_class(self, class_data: Any) -> MetricData:
+        """Calculate metrics for a class.
+        
         Args:
-            node: The AST node representing a class
-
+            class_data: The class data to analyze
+            
         Returns:
-            Number of methods in the class
-        """
-        method_count = len(
-            [
-                n
-                for n in node.body
-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-            ]
-        )
-        self.logger.debug("Number of methods in class '%s': %d", node.name, method_count)
-        return method_count
-
-    def _count_source_lines(self, node: ast.AST) -> int:
-        """
-        Count source lines of code (excluding comments and blank lines).
-
-        Args:
-            node: The AST node to analyze
-
-        Returns:
-            Number of source lines
+            MetricData containing the calculated metrics
         """
         try:
-            if hasattr(ast, "unparse"):
-                source = ast.unparse(node)
-            else:
-                source = self._get_source_code(node)
+            source_code = class_data.source
+            if not source_code:
+                return MetricData()
                 
-            lines = [line.strip() for line in source.splitlines()]
-            sloc = len([line for line in lines if line and not line.startswith("#")])
-            self.logger.debug("Source lines of code: %d", sloc)
-            return sloc
+            metrics = self.calculate_metrics(source_code)
+            # Mark this as a successfully scanned class
+            metrics.scanned_classes = 1
+            metrics.total_classes = 1
+            return metrics
+            
         except Exception as e:
-            self.logger.error(
-                "Error counting source lines: %s",
-                e,
-                exc_info=True,
-                extra={"sanitized_info": {"error": str(e)}}
-            )
+            self.logger.error(f"Error calculating class metrics: {str(e)}", exc_info=True)
+            return MetricData()
+
+    def calculate_metrics_for_function(self, function_data: Any) -> MetricData:
+        """Calculate metrics for a function.
+        
+        Args:
+            function_data: The function data to analyze
+            
+        Returns:
+            MetricData containing the calculated metrics
+        """
+        try:
+            source_code = function_data.source
+            if not source_code:
+                return MetricData()
+                
+            metrics = self.calculate_metrics(source_code)
+            # Mark this as a successfully scanned function
+            metrics.scanned_functions = 1
+            metrics.total_functions = 1
+            return metrics
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating function metrics: {str(e)}", exc_info=True)
+            return MetricData()
+
+    def _calculate_cyclomatic_complexity(self, tree: ast.AST) -> int:
+        """Calculate cyclomatic complexity."""
+        try:
+            complexity = 1  # Base complexity
+            
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.If, ast.While, ast.For, ast.Assert,
+                                ast.Try, ast.ExceptHandler)):
+                    complexity += 1
+                elif isinstance(node, ast.BoolOp):
+                    complexity += len(node.values) - 1
+                    
+            return complexity
+        except Exception as e:
+            self.logger.error(f"Error calculating cyclomatic complexity: {str(e)}", exc_info=True)
+            return 1
+
+    def _calculate_cognitive_complexity(self, tree: ast.AST) -> int:
+        """Calculate cognitive complexity."""
+        try:
+            complexity = 0
+            nesting_level = 0
+            
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.If, ast.While, ast.For)):
+                    complexity += (1 + nesting_level)
+                    nesting_level += 1
+                elif isinstance(node, ast.Try):
+                    complexity += nesting_level
+                    
+            return complexity
+        except Exception as e:
+            self.logger.error(f"Error calculating cognitive complexity: {str(e)}", exc_info=True)
             return 0
 
-    def _get_source_code(self, node: ast.AST) -> str:
-        """
-        Extract source code for Python < 3.9.
-
-        Args:
-            node: The AST node to analyze
-
-        Returns:
-            The source code as a string
-        """
-        return ast.dump(node)
-
-    def _get_operand_name(self, node: ast.AST) -> str:
-        """
-        Get the name of an operand node.
-
-        Args:
-            node: The AST node to analyze
-
-        Returns:
-            The operand name as a string
-        """
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Constant):
-            return str(node.value)
-        return ""
-    
-    def generate_complexity_graph(self, metrics: Dict[str, Any]) -> str:
-        """
-        Generate a visual representation of code metrics.
-
-        Args:
-            metrics: Dictionary containing code metrics
-
-        Returns:
-            Base64 encoded string of the generated graph
-        """
+    def _calculate_maintainability_index(self, code: str) -> float:
+        """Calculate maintainability index."""
         try:
-            # Filter and flatten metrics
-            filtered_metrics: Dict[str, float] = {}
+            loc = max(1, len(code.splitlines()))  # Ensure non-zero LOC
+            volume = max(1, self._calculate_halstead_volume(code))  # Ensure non-zero volume
+            cyclomatic = max(1, self._calculate_cyclomatic_complexity(ast.parse(code)))  # Ensure non-zero complexity
             
-            # Process Halstead metrics
-            halstead = metrics.get("halstead_metrics")
-            if halstead:
-                key_metrics = ["program_volume", "difficulty", "effort"]
-                for key in key_metrics:
-                    if isinstance(halstead.get(key), (int, float)):
-                        filtered_metrics[f"halstead_{key}"] = float(halstead[key])
+            # Use log1p to handle small values safely
+            mi = 171 - 5.2 * math.log1p(volume) - 0.23 * cyclomatic - 16.2 * math.log1p(loc)
+            return max(0.0, min(100.0, mi))
             
-            # Process other numeric metrics
-            core_metrics = [
-                "cyclomatic_complexity",
-                "cognitive_complexity",
-                "maintainability_index",
-                "method_count"
-            ]
-            
-            for key in core_metrics:
-                if isinstance(metrics.get(key), (int, float)):
-                    filtered_metrics[key] = float(metrics[key])
-
-            if not filtered_metrics:
-                self.logger.warning(
-                    "No valid metrics available for graph generation",
-                    extra={"sanitized_info": {}}
-                )
-                return ""
-
-            # Create plot
-            plt.clf()
-            fig, ax = plt.subplots(figsize=(10, 6))
-            
-            # Sort metrics by value
-            sorted_items = sorted(filtered_metrics.items(), key=lambda x: x[1])
-            labels, values = zip(*sorted_items)
-
-            # Create horizontal bar chart
-            bars = ax.barh(labels, values, color='skyblue')
-            
-            # Customize plot
-            ax.set_xlabel('Metric Value')
-            ax.set_title('Code Complexity Metrics')
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-
-            # Add value labels
-            for bar in bars:
-                width = bar.get_width()
-                ax.text(width, bar.get_y() + bar.get_height()/2,
-                    f'{width:.2f}', 
-                    ha='left', va='center', fontsize=8)
-
-            # Adjust layout and convert to base64
-            plt.tight_layout()
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
-            buf.seek(0)
-            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-            
-            # Cleanup
-            buf.close()
-            plt.close(fig)
-
-            return img_base64
-
         except Exception as e:
-            self.logger.error(
-                f"Error generating complexity graph: {e}",
-                exc_info=True,
-                extra={"sanitized_info": {"error": str(e)}}
-            )
-            return ""
-        finally:
-            plt.close('all')
+            self.logger.error(f"Error calculating maintainability index: {str(e)}", exc_info=True)
+            return 50.0  # Return a neutral value on error
+
+    def _calculate_halstead_metrics(self, code: str) -> Dict[str, float]:
+        """Calculate Halstead metrics."""
+        try:
+            operators = set()
+            operands = set()
+            
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.operator):
+                    operators.add(node.__class__.__name__)
+                elif isinstance(node, ast.Name):
+                    operands.add(node.id)
+                    
+            n1 = max(1, len(operators))  # Ensure non-zero values
+            n2 = max(1, len(operands))
+            N1 = max(1, sum(1 for node in ast.walk(tree) if isinstance(node, ast.operator)))
+            N2 = max(1, sum(1 for node in ast.walk(tree) if isinstance(node, ast.Name)))
+            
+            # Use log1p for safe logarithm calculation
+            volume = (N1 + N2) * math.log1p(n1 + n2)
+            difficulty = (n1 / 2) * (N2 / n2)
+            effort = difficulty * volume
+            
+            return {
+                'volume': max(0.0, volume),
+                'difficulty': max(0.0, difficulty),
+                'effort': max(0.0, effort),
+                'time': max(0.0, effort / 18),
+                'bugs': max(0.0, volume / 3000)
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating Halstead metrics: {str(e)}", exc_info=True)
+            return {
+                'volume': 0.0,
+                'difficulty': 0.0,
+                'effort': 0.0,
+                'time': 0.0,
+                'bugs': 0.0
+            }
+
+    def _calculate_halstead_volume(self, code: str) -> float:
+        """Calculate Halstead volume metric."""
+        try:
+            metrics = self._calculate_halstead_metrics(code)
+            return max(0.0, metrics['volume'])
+        except Exception as e:
+            self.logger.error(f"Error calculating Halstead volume: {str(e)}", exc_info=True)
+            return 0.0
+
+    def _generate_complexity_graph(self) -> Optional[str]:
+        """Generate a base64 encoded PNG of the complexity metrics graph."""
+        if not MATPLOTLIB_AVAILABLE:
+            self.logger.warning("Matplotlib not available, skipping complexity graph generation")
+            return None
+
+        try:
+            plt.figure(figsize=(10, 6))
+            plt.clf()
+            
+            # Get historical metrics from collector
+            if self.module_name and self.metrics_collector:
+                history = self.metrics_collector.get_metrics_history(self.module_name)
+                if history:
+                    dates = []
+                    complexities = []
+                    for entry in history:
+                        try:
+                            dates.append(entry['timestamp'])
+                            complexities.append(entry['metrics']['cyclomatic_complexity'])
+                        except (KeyError, TypeError) as e:
+                            self.logger.warning(f"Skipping invalid metrics entry: {e}")
+                            continue
+                    
+                    if dates and complexities:
+                        plt.plot(dates, complexities, marker='o')
+                        plt.title(f'Complexity Trend: {self.module_name}')
+                        plt.xlabel('Time')
+                        plt.ylabel('Cyclomatic Complexity')
+                        plt.xticks(rotation=45)
+                        plt.tight_layout()
+                        
+                        # Convert plot to base64 string
+                        buf = io.BytesIO()
+                        plt.savefig(buf, format='png')
+                        buf.seek(0)
+                        return base64.b64encode(buf.getvalue()).decode('utf-8')
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error generating complexity graph: {str(e)}", exc_info=True)
+            return None

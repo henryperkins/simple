@@ -5,13 +5,13 @@ Provides structured, contextual, and robust logging across the application.
 
 import logging
 import sys
+import re
 from pathlib import Path
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, MutableMapping, Optional
 from logging.handlers import RotatingFileHandler
 import uuid
-from collections.abc import MutableMapping
-import re
+from collections.abc import Mapping, Sequence
 
 class SanitizedLogFormatter(logging.Formatter):
     """Custom formatter to sanitize and format log records."""
@@ -21,12 +21,10 @@ class SanitizedLogFormatter(logging.Formatter):
         record.correlation_id = getattr(record, 'correlation_id', "N/A")
         record.sanitized_info = getattr(record, 'sanitized_info', {"info": "[Sanitized]"})
 
-        # Sanitize the message
-        record.msg = self.sanitize_message(record.msg)
-
-        # Sanitize arguments if present
+        # Sanitize the message and arguments recursively
+        record.msg = self._sanitize(record.msg)
         if record.args:
-            record.args = self.sanitize_args(record.args)
+            record.args = tuple(self._sanitize(arg) for arg in record.args)
 
         # Format the timestamp in ISO8601 format
         if self.usesTime():
@@ -35,20 +33,17 @@ class SanitizedLogFormatter(logging.Formatter):
         # Now format the message using the parent class
         return super().format(record)
 
-    def sanitize_message(self, message: str) -> str:
-        """Sanitize sensitive information from the log message."""
-        # Implement sanitation logic as needed
-        sanitized_message = message
-        # Replace any sensitive data patterns using regex
-        sanitized_message = re.sub(r'(/[a-zA-Z0-9_\-./]+)', '[Sanitized_Path]', sanitized_message)
-        sanitized_message = re.sub(r'secret_key=[^&\s]+', 'secret_key=[REDACTED]', sanitized_message)
-        return sanitized_message
-
-    def sanitize_args(self, args: Any) -> Any:
-        """Sanitize sensitive information from the log arguments."""
-        # Implement sanitation logic for arguments
-        return args
-
+    def _sanitize(self, item: Any) -> Any:  # Generalized sanitization
+        if isinstance(item, Mapping):
+            return {k: self._sanitize(v) for k, v in item.items()}
+        elif isinstance(item, Sequence) and not isinstance(item, str):
+            return [self._sanitize(it) for it in item]
+        elif isinstance(item, str):
+            # Example sanitization: Redact file paths and secrets (customize as needed)
+            item = re.sub(r'(/[a-zA-Z0-9_\-./]+)', '[SANITIZED_PATH]', item)  # File paths
+            item = re.sub(r'(secret_key|password|token)=[^&\s]+', r'\1=[REDACTED]', item) # Secrets
+            return item
+        return item
 
 class LoggerSetup:
     """Configures and manages application logging."""
@@ -59,6 +54,8 @@ class LoggerSetup:
     _configured: bool = False
     _default_level: int = logging.INFO
     _default_format: str = "%(levelname)s: %(message)s"
+    _max_bytes: int = 10 * 1024 * 1024  # 10MB default
+    _backup_count: int = 5
 
     @classmethod
     def get_logger(cls, name: Optional[str] = None) -> logging.Logger:
@@ -75,43 +72,58 @@ class LoggerSetup:
         logger = logging.getLogger(name)
 
         if not logger.hasHandlers():
+
+            # Correlation ID handling: generate or retrieve from logger's existing context
+            extra = getattr(logger, '_extra_context', {}) # retrieve existing context from logger object if it exists
+
+            correlation_id = extra.get('correlation_id')
+            if not correlation_id:
+                correlation_id = str(uuid.uuid4())
+                extra['correlation_id'] = correlation_id
+                logger._extra_context = extra  # Attach context to logger
+
             logger.setLevel(cls._default_level)
 
-            # Console handler
+            # Console handler (using extra now)
             console_handler = logging.StreamHandler(sys.stdout)
             console_formatter = logging.Formatter(cls._default_format)
             console_handler.setFormatter(console_formatter)
             logger.addHandler(console_handler)
 
-            # File handler
+            # File handler (enhanced error handling and extra usage)
             if cls._file_logging_enabled:
                 try:
                     cls._log_dir.mkdir(parents=True, exist_ok=True)
                     file_handler = RotatingFileHandler(
                         cls._log_dir / f"{name}.log",
-                        maxBytes=1024 * 1024,
-                        backupCount=5
+                        maxBytes=cls._max_bytes,
+                        backupCount=cls._backup_count
                     )
-                    # Inside LoggerSetup.get_logger()
                     sanitized_formatter = SanitizedLogFormatter(
                         fmt='{"timestamp": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", '
                             '"message": "%(message)s", "correlation_id": "%(correlation_id)s", '
-                            '"sanitized_info": "%(sanitized_info)s"}',
+                            '"sanitized_info": %(sanitized_info)s}', # no quotes around sanitized_info because the .format method handles dicts
                         datefmt='%Y-%m-%dT%H:%M:%S'
                     )
-
                     file_handler.setFormatter(sanitized_formatter)
                     logger.addHandler(file_handler)
                 except Exception as e:
-                    # Log the exception using the console handler
-                    logger.error(f"Failed to set up file handler: {e}")
+                    log_error(f"Failed to set up file handler: {e}", exc_info=True) # Log the exception to console or elsewhere
+                    # Fallback mechanism (e.g., write to a temporary file) if needed.
 
         cls._loggers[name] = logger
         return logger
 
     @classmethod
-    def configure(cls, level: str = "INFO", format_str: Optional[str] = None,
-                  log_dir: Optional[str] = None, file_logging_enabled: bool = True) -> None:
+    def configure(
+        cls,
+        level: str = "INFO",
+        format_str: Optional[str] = None,
+        log_dir: Optional[str] = None,
+        file_logging_enabled: bool = True,
+        max_bytes: int = 10 * 1024 * 1024,  # 10MB default
+        backup_count: int = 5,
+    ) -> None:
         """Configure global logging settings."""
         if cls._configured:
             return
@@ -119,6 +131,8 @@ class LoggerSetup:
         cls._default_level = getattr(logging, level.upper(), logging.INFO)
         cls._default_format = format_str or cls._default_format
         cls._file_logging_enabled = file_logging_enabled
+        cls._max_bytes = max_bytes
+        cls._backup_count = backup_count
 
         if log_dir:
             cls._log_dir = Path(log_dir)
@@ -164,7 +178,6 @@ class CorrelationLoggerAdapter(logging.LoggerAdapter):
         extra['correlation_id'] = self.correlation_id
         kwargs['extra'] = extra
         return msg, kwargs
-
 
 # Module-level utility functions (optional)
 def log_error(msg: str, *args: Any, exc_info: bool = True, **kwargs: Any) -> None:

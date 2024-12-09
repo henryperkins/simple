@@ -1,11 +1,7 @@
-"""
-Core type definitions for Python code analysis and documentation generation.
-Handles all data structures needed for code extraction, analysis, metrics,
-and documentation generation throughout the application.
-"""
+"""Type definitions package."""
 
-from core.types import (
-    MetricData,
+from core.types.metrics_types import MetricData
+from core.types.base import (
     BaseData,
     ParsedResponse,
     DocstringData,

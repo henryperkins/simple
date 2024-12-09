@@ -6,6 +6,7 @@ them against specified schemas, and managing parsing statistics.
 """
 
 import json
+import os
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Union
 from jsonschema import validate, ValidationError
@@ -31,8 +32,8 @@ class ResponseParsingService:
         """Initialize the response parsing service."""
         self.logger = CorrelationLoggerAdapter(base_logger, correlation_id)  # Use correlation logger adapter
         self.docstring_processor = DocstringProcessor()
-        self.docstring_schema = self._load_schema("docstring_schema")
-        self.function_schema = self._load_schema("function_tools_schema")
+        self.docstring_schema = self._load_schema("docstring_schema.json")
+        self.function_schema = self._load_schema("function_tools_schema.json")
         self._parsing_stats = {
             "total_processed": 0,
             "successful_parses": 0,
@@ -41,9 +42,21 @@ class ResponseParsingService:
         }
 
     def _load_schema(self, schema_name: str) -> Dict[str, Any]:
-        """Load a JSON schema for validation."""
-        # Implement schema loading logic here
-        return {}
+        """Load a JSON schema for validation.
+        
+        Args:
+            schema_name: Name of the schema file to load
+            
+        Returns:
+            Dictionary containing the loaded schema
+        """
+        try:
+            schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'schemas', schema_name)
+            with open(schema_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            self.logger.error(f"Error loading schema {schema_name}: {e}")
+            return {}
 
     async def _parse_docstring_response(self, response: Union[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Parse a docstring response, handling both string and dictionary inputs.
@@ -211,9 +224,14 @@ class ResponseParsingService:
         """
         try:
             if format_type == "docstring":
-                schema = self.docstring_schema["schema"]
-                validate(instance=content, schema=schema)
+                if not self.docstring_schema:
+                    self.logger.error("Docstring schema not loaded")
+                    return False
+                validate(instance=content, schema=self.docstring_schema["schema"])
             elif format_type == "function":
+                if not self.function_schema:
+                    self.logger.error("Function schema not loaded")
+                    return False
                 validate(instance=content, schema=self.function_schema["schema"])
             self.logger.debug("Schema validation successful")
             return True

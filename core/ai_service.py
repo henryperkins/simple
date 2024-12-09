@@ -1,296 +1,559 @@
-# core/ai_service.py
-from typing import Optional, Dict, Any, List, Tuple
-from openai import AsyncAzureOpenAI
+"""AI service module for interacting with OpenAI API."""
 import json
-import ast
-import asyncio
+from typing import Dict, Any, List, Optional, Tuple
 import aiohttp
+import asyncio
+from datetime import datetime
+from urllib.parse import urljoin
 from pathlib import Path
+
+from core.logger import LoggerSetup
 from core.config import AIConfig
-from core.response_parsing import ResponseParsingService
 from core.cache import Cache
-from core.metrics import Metrics
-from core.types import DocumentationContext, ExtractionResult, ExtractionContext
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.extraction.code_extractor import CodeExtractor
+from core.exceptions import ProcessingError, ConnectionError
+from core.types.extraction_types import ExtractionResult
 from core.docstring_processor import DocstringProcessor
-from exceptions import ConfigurationError, ProcessingError
-from api.token_management import TokenCounter
-import uuid
+from core.response_parsing import ResponseParsingService
+from core.types.base import (
+    DocumentationContext, 
+    ProcessingResult, 
+    ExtractedClass, 
+    ExtractedFunction,
+    DocstringData,
+    DocumentationData
+)
+from api.token_management import TokenManager
 
 class AIService:
-    """
-    Handles all AI interactions and API management.
-    
-    This class provides a unified interface for AI operations including:
-    - API communication
-    - Token management
-    - Response processing
-    - Cache management
-    - Resource cleanup
-    """
+    """Service for interacting with OpenAI API."""
 
-    def __init__(
-        self,
-        config: AIConfig | None = None,
-        cache: Cache | None = None,
-        metrics: Metrics | None = None,
-        response_parser: ResponseParsingService | None = None,
-    ) -> None:
-        """Initialize the AI service."""
-        # Initialize the logger with a correlation ID
-        base_logger = LoggerSetup.get_logger(__name__)
-        correlation_id = str(uuid.uuid4())  # Generate a unique correlation ID
-        self.logger = CorrelationLoggerAdapter(base_logger, correlation_id=correlation_id)
+    def __init__(self, config: AIConfig, correlation_id: Optional[str] = None) -> None:
+        """Initialize AI service.
         
-        try:
-            self.config = config or AIConfig.from_env()
-            if not hasattr(self.config, 'model'):
-                raise ConfigurationError("model is not defined in AIConfig")
-            
-            self._client = AsyncAzureOpenAI(
-                api_key=self.config.api_key,
-                azure_endpoint=self.config.endpoint,
-                api_version=self.config.api_version
-            )
-            self.cache = cache or None
-            self.metrics = metrics or Metrics()
-            self.response_parser = response_parser or ResponseParsingService()
-            self.token_counter = TokenCounter(self.config.model)
-            self.docstring_processor = DocstringProcessor()
-            
-            self.logger.info("AI service initialized successfully", extra={'correlation_id': self.logger.correlation_id})
-        except Exception as e:
-            self.logger.error("Failed to initialize AI service", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-            raise ConfigurationError(f"AI service initialization failed: {e}") from e
+        Args:
+            config: AI service configuration
+            correlation_id: Optional correlation ID for tracking related operations
+        """
+        self.config = config
+        self.correlation_id = correlation_id
+        self.logger = LoggerSetup.get_logger(__name__)
+        self.cache = Cache()
+        self.semaphore = asyncio.Semaphore(5)  # Limit concurrent API calls
+        self._client = None
+        self.docstring_processor = DocstringProcessor()
+        self.response_parser = ResponseParsingService(correlation_id)
+        self.token_manager = TokenManager(
+            model=self.config.model,
+            config=self.config
+        )
+        # Define the function schema for structured output
+        self.function_schema = {
+            "name": "generate_docstring",
+            "description": "Generate Google-style documentation for code",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary": {
+                        "type": "string",
+                        "description": "A brief one-line summary of what the code does"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed explanation of the functionality and purpose"
+                    },
+                    "args": {
+                        "type": "array",
+                        "description": "List of arguments for the method or function",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "description": "The name of the argument"
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "description": "The data type of the argument"
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "description": "A brief description of the argument"
+                                }
+                            },
+                            "required": ["name", "type", "description"]
+                        }
+                    },
+                    "returns": {
+                        "type": "object",
+                        "description": "Details about the return value",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "description": "The data type of the return value"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "A brief description of the return value"
+                            }
+                        },
+                        "required": ["type", "description"]
+                    },
+                    "raises": {
+                        "type": "array",
+                        "description": "List of exceptions that may be raised",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "exception": {
+                                    "type": "string",
+                                    "description": "The name of the exception that may be raised"
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "description": "A brief description of when this exception is raised"
+                                }
+                            },
+                            "required": ["exception", "description"]
+                        }
+                    },
+                    "complexity": {
+                        "type": "integer",
+                        "description": "McCabe complexity score"
+                    }
+                },
+                "required": ["summary", "description", "args", "returns", "raises", "complexity"]
+            }
+        }
 
-    async def process_code(self, source_code: str) -> Tuple[str, str] | None:
-        """Process source code through the AI service."""
-        try:
-            self.logger.info("Starting code processing", extra={'correlation_id': self.logger.correlation_id})
+    def _format_function_info(self, func: ExtractedFunction) -> str:
+        """Format function information for prompt.
+        
+        Args:
+            func: The extracted function information
             
-            tree = ast.parse(source_code)
-            context = self._create_extraction_context(source_code, Path("module_path_placeholder"))
-            
-            extraction_result = await self._extract_code(context)
-            if not extraction_result:
-                return None
+        Returns:
+            Formatted function string
+        """
+        args_str = ", ".join(f"{arg.name}: {arg.type or 'Any'}" for arg in func.args)
+        return (
+            f"Function: {func.name}\n"
+            f"Arguments: ({args_str})\n"
+            f"Returns: {func.returns.get('type', 'Any')}\n"
+            f"Existing Docstring: {func.docstring if func.docstring else 'None'}\n"
+            f"Decorators: {', '.join(func.decorators) if func.decorators else 'None'}\n"
+            f"Is Async: {'Yes' if func.is_async else 'No'}\n"
+            f"Complexity Score: {func.metrics.cyclomatic_complexity if func.metrics else 'Unknown'}\n"
+        )
 
-            prompt = self._create_dynamic_prompt(extraction_result)
-            ai_response = await self._interact_with_ai(prompt)
+    def _format_class_info(self, cls: ExtractedClass) -> str:
+        """Format class information for prompt.
+        
+        Args:
+            cls: The extracted class information
             
-            parsed_response = await self.response_parser.parse_response(
-                ai_response, 
-                expected_format="docstring"
+        Returns:
+            Formatted class string
+        """
+        methods_str = "\n    ".join(
+            f"- {m.name}({', '.join(a.name for a in m.args)})" 
+            for m in cls.methods
+        )
+        return (
+            f"Class: {cls.name}\n"
+            f"Base Classes: {', '.join(cls.bases) if cls.bases else 'None'}\n"
+            f"Existing Docstring: {cls.docstring if cls.docstring else 'None'}\n"
+            f"Methods:\n    {methods_str}\n"
+            f"Attributes: {', '.join(a['name'] for a in cls.attributes)}\n"
+            f"Instance Attributes: {', '.join(a['name'] for a in cls.instance_attributes)}\n"
+            f"Decorators: {', '.join(cls.decorators) if cls.decorators else 'None'}\n"
+            f"Is Exception: {'Yes' if cls.is_exception else 'No'}\n"
+            f"Complexity Score: {cls.metrics.cyclomatic_complexity if cls.metrics else 'Unknown'}\n"
+        )
+
+    async def enhance_and_format_docstring(self, context: DocumentationContext) -> ProcessingResult:
+        """Enhance and format docstrings using AI.
+        
+        Args:
+            context: Documentation context containing source code and metadata
+            
+        Returns:
+            ProcessingResult containing enhanced documentation
+            
+        Raises:
+            ProcessingError: If enhancement fails
+        """
+        try:
+            # Create cache key based on source code and metadata
+            cache_key = context.get_cache_key()
+            cached = self.cache.get(cache_key)
+            if cached:
+                # Validate cached content through docstring processor
+                docstring_data = self.docstring_processor.parse(cached)
+                is_valid, validation_errors = self.docstring_processor.validate(docstring_data)
+                
+                if is_valid:
+                    return ProcessingResult(
+                        content=cached,
+                        usage={},
+                        metrics={},
+                        is_cached=True,
+                        processing_time=0.0,
+                        validation_status=True,
+                        validation_errors=[],
+                        schema_errors=[]
+                    )
+                else:
+                    self.logger.warning(f"Cached content failed validation: {validation_errors}")
+                    # Remove invalid entry from cache dictionary
+                    del self.cache.cache[cache_key]
+
+            # Extract relevant information from context
+            module_name = context.metadata.get("module_name", "")
+            file_path = context.metadata.get("file_path", "")
+            
+            # Build comprehensive prompt with detailed code structure
+            prompt = (
+                f"Generate comprehensive Google-style documentation for the following Python module.\n\n"
+                f"Module Name: {module_name}\n"
+                f"File Path: {file_path}\n\n"
+                "Code Structure:\n\n"
             )
+
+            # Add class information
+            if context.classes:
+                prompt += "Classes:\n"
+                for cls in context.classes:
+                    prompt += self._format_class_info(cls)
+                prompt += "\n"
+
+            # Add function information
+            if context.functions:
+                prompt += "Functions:\n"
+                for func in context.functions:
+                    prompt += self._format_function_info(func)
+                prompt += "\n"
+
+            # Add source code
+            prompt += (
+                "Source Code:\n"
+                f"{context.source_code}\n\n"
+                "Analyze the code and generate comprehensive Google-style documentation. "
+                "Include a brief summary, detailed description, arguments, return values, and possible exceptions. "
+                "Ensure all descriptions are clear and technically accurate."
+            )
+
+            # Get AI response using function calling
+            start_time = datetime.now()
+            response = await self._make_api_call(prompt)
+            
+            # Extract the function call response
+            if "choices" in response and response["choices"]:
+                message = response["choices"][0]["message"]
+                if "function_call" in message:
+                    function_args = json.loads(message["function_call"]["arguments"])
+                    parsed_response = await self.response_parser.parse_response(
+                        function_args,
+                        expected_format="docstring"
+                    )
+                else:
+                    raise ProcessingError("No function call in response")
+            else:
+                raise ProcessingError("Invalid response format")
 
             if not parsed_response.validation_success:
-                self.logger.error("Failed to validate AI response", extra={'correlation_id': self.logger.correlation_id})
-                return None
+                raise ProcessingError("Failed to validate AI response")
 
-            result = await self._integrate_ai_response(
-                parsed_response.content,
-                extraction_result
+            # Process through docstring processor for additional validation
+            docstring_data = self.docstring_processor.parse(parsed_response.content)
+            is_valid, validation_errors = self.docstring_processor.validate(docstring_data)
+
+            if not is_valid:
+                self.logger.warning(f"Generated docstring failed validation: {validation_errors}")
+                # Try to fix common issues
+                fixed_content = self._fix_common_docstring_issues(parsed_response.content)
+                docstring_data = self.docstring_processor.parse(fixed_content)
+                is_valid, validation_errors = self.docstring_processor.validate(docstring_data)
+                
+                if not is_valid:
+                    raise ProcessingError(f"Failed to generate valid docstring: {validation_errors}")
+                parsed_response.content = fixed_content
+
+            processing_time = (datetime.now() - start_time).total_seconds()
+
+            # Create DocumentationData
+            doc_data = DocumentationData(
+                module_name=module_name,
+                module_path=Path(file_path),
+                module_summary=docstring_data.summary,
+                source_code=context.source_code,
+                docstring_data=docstring_data,
+                ai_content=parsed_response.content,
+                code_metadata={
+                    "classes": [cls.to_dict() for cls in (context.classes or [])],
+                    "functions": [func.to_dict() for func in (context.functions or [])],
+                    "constants": context.constants or []
+                },
+                validation_status=is_valid,
+                validation_errors=validation_errors
             )
 
-            self.logger.info("Code processing completed successfully", extra={'correlation_id': self.logger.correlation_id})
+            # Create ProcessingResult
+            result = ProcessingResult(
+                content=doc_data.to_dict(),
+                usage=response.get("usage", {}),
+                metrics={
+                    "processing_time": processing_time,
+                    "response_size": len(str(response)),
+                    "validation_success": is_valid
+                },
+                is_cached=False,
+                processing_time=processing_time,
+                validation_status=is_valid,
+                validation_errors=validation_errors,
+                schema_errors=[]
+            )
+
+            # Only cache if validation passed
+            if is_valid:
+                self.cache.set(cache_key, parsed_response.content)
+
             return result
 
         except Exception as e:
-            self.logger.error(f"Error processing code: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-            return None
+            self.logger.error(f"Error enhancing docstring: {str(e)}", exc_info=True)
+            raise ProcessingError(f"Failed to enhance docstring: {str(e)}")
 
-    def _create_extraction_context(self, source_code: str, module_path: Path) -> ExtractionContext:
-        """Create an extraction context for code processing."""
-        return ExtractionContext(source_code=source_code)
-
-    async def _extract_code(self, context: ExtractionContext) -> ExtractionResult | None:
-        """Extract code elements for AI processing."""
-        try:
-            code_extractor = CodeExtractor(context)
-            if context.source_code is None:
-                raise ProcessingError("Source code is None")
-            extraction_result = await code_extractor.extract_code(context.source_code)
-            if not extraction_result:
-                raise ProcessingError("Code extraction failed")
-            return extraction_result
-        except Exception as e:
-            self.logger.error(f"Error extracting code: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-            raise
-
-    async def _interact_with_ai(
-        self, 
-        prompt: str, 
-        retries: int = 3,
-        delay: int = 5
-    ) -> str:
-        """Interact with the AI model."""
-        if self.cache:
-            cache_key = f"ai_response:{hash(prompt)}"
-            cached_response = await self.cache.get_cached_docstring(cache_key)
-            if cached_response:
-                return cached_response["content"]
-
-        for attempt in range(retries):
-            try:
-                token_count = self.token_counter.estimate_tokens(prompt)
-                request_params = {
-                    "model": self.config.model,
-                    "messages": [
-                        {"role": "system", "content": "You are a Python documentation expert."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "max_tokens": min(
-                        self.config.max_tokens - token_count,
-                        1000
-                    ),
-                    "temperature": 0.7
-                }
-
-                response = await self._client.chat.completions.create(
-                    model=str(request_params["model"]),
-                    messages=[{"role": msg["role"], "content": msg["content"]} for msg in request_params.get("messages", [])],
-                    max_tokens=int(request_params["max_tokens"]),
-                    temperature=float(request_params["temperature"]) if isinstance(request_params["temperature"], (int, float)) else 0.7
-                )
-                response_content = response.choices[0].message.content
-
-                if self.cache:
-                    await self.cache.save_docstring(cache_key, {"content": response_content})
-
-                if response_content is not None:
-                    return response_content
-                else:
-                    raise ProcessingError("AI response content is None")
-
-            except Exception as e:
-                self.logger.error(f"AI interaction error on attempt {attempt + 1}: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-                if attempt < retries - 1:
-                    await asyncio.sleep(delay)
-                else:
-                    raise
-
-    async def generate_docstring(
-        self,
-        func_name: str,
-        is_class: bool,
-        params: list[dict[str, Any]] | None = None,
-        return_type: str = "Any",
-        complexity_score: int = 0,
-        existing_docstring: str = "",
-        decorators: list[str] | None = None,
-        exceptions: list[dict[str, str]] | None = None,
-    ) -> dict[str, Any]:
-        """Generate a docstring for a function or class."""
-        params = params or []
-        decorators = decorators or []
-        exceptions = exceptions or []
-
-        try:
-            prompt = self._create_docstring_prompt({
-                "name": func_name,
-                "params": params,
-                "returns": {"type": return_type},
-                "complexity": complexity_score,
-                "existing_docstring": existing_docstring,
-                "decorators": decorators,
-                "raises": exceptions,
-                "is_class": is_class,
-            })
-
-            response = await self._interact_with_ai(prompt)
-            parsed_response = await self.response_parser.parse_response(
-                response,
-                expected_format="docstring"
-            )
-
-            if not parsed_response.validation_success:
-                raise ProcessingError("AI response validation failed")
-
-            return parsed_response.content
-
-        except Exception as e:
-            self.logger.error(f"Error generating docstring: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-            raise
-
-    def _create_docstring_prompt(self, details: dict[str, Any]) -> str:
-        """Create a prompt for generating docstrings."""
-        return json.dumps(details, indent=2)
-
-    def _create_dynamic_prompt(self, extraction_result: ExtractionResult) -> str:
-        """Create a dynamic prompt for AI interaction."""
-        try:
-            module_docstring = extraction_result.module_docstring
-            classes = extraction_result.classes
-            functions = extraction_result.functions
-
-            prompt = (
-                "Generate enhanced documentation following this JSON schema:\n\n"
-                "{\n"
-                '  "summary": "Brief overview of the module",\n'
-                '  "description": "Detailed explanation of functionality",\n'
-                '  "args": [{"name": "param_name", "type": "param_type", "description": "param_desc"}],\n'
-                '  "returns": {"type": "return_type", "description": "return_description"},\n'
-                '  "raises": [{"exception": "error_type", "description": "error_description"}],\n'
-                '  "complexity": integer\n'
-                "}\n\n"
-                f"Current Documentation:\n{json.dumps(module_docstring, indent=2)}\n\n"
-                "Available Classes:\n"
-                + "\n".join(f"- {cls.name}" for cls in classes)
-                + "\n\nAvailable Functions:\n"
-                + "\n".join(f"- {func.name}" for func in functions)
-                + "\n\nProvide the enhanced documentation as a JSON object matching the schema."
-            )
-            return prompt
-        except Exception as e:
-            self.logger.error(f"Error creating prompt: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
-            raise
-
-    async def _integrate_ai_response(
-        self, 
-        ai_response: dict[str, Any],
-        extraction_result: ExtractionResult
-    ) -> tuple[str, str]:
-        """Integrate AI response into the source code."""
-        try:
-            ai_response = self._ensure_required_fields(ai_response)
-            processed_response = [{
-                "name": "__module__",
-                "docstring": ai_response,
-                "type": "Module"
-            }]
-
-            integration_result = self.docstring_processor.process_batch(
-                processed_response,
-                extraction_result.source_code
-            )
+    def _fix_common_docstring_issues(self, content: Dict[str, Any]) -> Dict[str, Any]:
+        """Fix common docstring validation issues.
+        
+        Args:
+            content: The docstring content to fix
             
-            if not integration_result:
-                raise ProcessingError("Docstring integration failed")
+        Returns:
+            Fixed docstring content
+        """
+        fixed = content.copy()
+        
+        # Ensure required fields exist
+        if "summary" not in fixed:
+            fixed["summary"] = ""
+        if "description" not in fixed:
+            fixed["description"] = fixed.get("summary", "")
+        if "args" not in fixed:
+            fixed["args"] = []
+        if "returns" not in fixed:
+            fixed["returns"] = {"type": "None", "description": ""}
+        if "raises" not in fixed:
+            fixed["raises"] = []
+        if "complexity" not in fixed:
+            fixed["complexity"] = 1
 
-            code = integration_result.get("code", "")
-            documentation = self._generate_markdown_documentation(
-                ai_response,
-                extraction_result
-            )
+        # Ensure args have required fields
+        for arg in fixed["args"]:
+            if "name" not in arg:
+                arg["name"] = "unknown"
+            if "type" not in arg:
+                arg["type"] = "Any"
+            if "description" not in arg:
+                arg["description"] = ""
+
+        # Ensure returns has required fields
+        if isinstance(fixed["returns"], dict):
+            if "type" not in fixed["returns"]:
+                fixed["returns"]["type"] = "None"
+            if "description" not in fixed["returns"]:
+                fixed["returns"]["description"] = ""
+        else:
+            fixed["returns"] = {"type": "None", "description": ""}
+
+        # Ensure raises have required fields
+        for exc in fixed["raises"]:
+            if "exception" not in exc:
+                exc["exception"] = "Exception"
+            if "description" not in exc:
+                exc["description"] = ""
+
+        return fixed
+
+    async def generate_documentation(self, code: str, context: Dict[str, Any] = None) -> str:
+        """Generate documentation for code using AI.
+        
+        Args:
+            code: Source code to generate documentation for
+            context: Optional additional context for generation
             
-            return code, documentation
+        Returns:
+            Generated documentation string
+        """
+        cache_key = f"doc_{hash(code)}_{hash(str(context))}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            return cached
 
+        prompt = self._build_prompt(code, context)
+        
+        try:
+            async with self.semaphore:
+                response = await self._make_api_call(prompt)
+                documentation = self._parse_response(response)
+                
+            self.cache.set(cache_key, documentation)
+            return documentation
+            
         except Exception as e:
-            self.logger.error(f"Error integrating AI response: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
+            self.logger.error(f"Documentation generation failed: {str(e)}")
             raise
 
-    def _ensure_required_fields(self, ai_response: dict[str, Any]) -> dict[str, Any]:
-        """Ensure required fields are present in the AI response."""
-        return ai_response
+    def _build_prompt(self, code: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """Build prompt for AI model.
+        
+        Args:
+            code: Source code to document
+            context: Optional additional context
+            
+        Returns:
+            Formatted prompt string
+        """
+        prompt = f"Generate Google-style documentation for the following code:\n\n{code}\n"
+        
+        if context:
+            prompt += f"\nAdditional context:\n{json.dumps(context, indent=2)}"
+            
+        return prompt
 
-    def _generate_markdown_documentation(
-        self, 
-        ai_response: dict[str, Any],
-        extraction_result: ExtractionResult
-    ) -> str:
-        """Generate markdown documentation from AI response."""
-        return "Generated Markdown Documentation"
+    async def _make_api_call(self, prompt: str) -> Dict[str, Any]:
+        """Make API call to OpenAI.
+        
+        Args:
+            prompt: The prompt to send to the API
+            
+        Returns:
+            API response dictionary
+            
+        Raises:
+            Exception: If API call fails
+        """
+        headers = {
+            "api-key": self.config.api_key,
+            "Content-Type": "application/json"
+        }
+        
+        if self.correlation_id:
+            headers["x-correlation-id"] = self.correlation_id
+
+        request_params = await self.token_manager.validate_and_prepare_request(
+            prompt,
+            max_tokens=self.config.max_tokens,
+            temperature=self.config.temperature
+        )
+
+        # Add function calling parameters
+        request_params["functions"] = [self.function_schema]
+        request_params["function_call"] = {"name": "generate_docstring"}
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Ensure endpoint ends with a slash for proper URL joining
+                endpoint = self.config.endpoint.rstrip('/') + '/'
+                # Construct the URL path
+                path = f"openai/deployments/{self.config.deployment}/chat/completions"
+                # Join the URL properly
+                url = urljoin(endpoint, path) + "?api-version=2024-02-15-preview"
+                
+                async with session.post(
+                    url,
+                    headers=headers,
+                    json=request_params,
+                    timeout=self.config.timeout
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(f"API call failed with status {response.status}: {error_text}")
+                        
+                    response_data = await response.json()
+                    content, usage = await self.token_manager.process_completion(response_data)
+                    return response_data
+                    
+        except asyncio.TimeoutError:
+            raise Exception(f"API call timed out after {self.config.timeout} seconds")
+        except Exception as e:
+            raise Exception(f"API call failed: {str(e)}")
+
+    def _parse_response(self, response: Dict[str, Any]) -> str:
+        """Parse API response to extract documentation.
+        
+        Args:
+            response: Raw API response dictionary
+            
+        Returns:
+            Extracted documentation string
+            
+        Raises:
+            Exception: If response parsing fails
+        """
+        try:
+            if "choices" in response and response["choices"]:
+                message = response["choices"][0]["message"]
+                if "function_call" in message:
+                    return message["function_call"]["arguments"]
+                else:
+                    return message["content"].strip()
+            raise Exception("Invalid response format")
+        except (KeyError, IndexError) as e:
+            raise Exception(f"Failed to parse API response: {str(e)}")
+
+    async def analyze_code_quality(self, code: str) -> Dict[str, Any]:
+        """Analyze code quality using AI.
+        
+        Args:
+            code: Source code to analyze
+            
+        Returns:
+            Dictionary containing quality metrics and suggestions
+        """
+        prompt = f"Analyze the following code for quality and provide specific improvements:\n\n{code}"
+        
+        try:
+            async with self.semaphore:
+                response = await self._make_api_call(prompt)
+                
+            analysis = self._parse_response(response)
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "analysis": analysis,
+                "correlation_id": self.correlation_id
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Code quality analysis failed: {str(e)}")
+            raise
+
+    async def batch_process(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process multiple items concurrently.
+        
+        Args:
+            items: List of items to process, each containing 'code' and optional 'context'
+            
+        Returns:
+            List of results corresponding to input items
+        """
+        tasks = []
+        for item in items:
+            if "code" not in item:
+                raise ValueError("Each item must contain 'code' key")
+                
+            task = self.generate_documentation(
+                item["code"],
+                item.get("context")
+            )
+            tasks.append(task)
+            
+        try:
+            results = await asyncio.gather(*tasks)
+            return [{"documentation": result} for result in results]
+        except Exception as e:
+            self.logger.error(f"Batch processing failed: {str(e)}")
+            raise
 
     async def test_connection(self) -> None:
         """Test the connection to the AI service."""
@@ -304,9 +567,9 @@ class AIService:
                     if response.status != 200:
                         response_text = await response.text()
                         raise ConnectionError(f"Connection failed: {response_text}")
-            self.logger.info("Connection test successful", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info("Connection test successful", extra={'correlation_id': self.correlation_id})
         except Exception as e:
-            self.logger.error(f"Connection test failed: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
+            self.logger.error(f"Connection test failed: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             raise
 
     async def close(self) -> None:
@@ -316,15 +579,15 @@ class AIService:
                 await self._client.close()
             if self.cache:
                 await self.cache.close()
-            self.logger.info("AI service cleanup completed", extra={'correlation_id': self.logger.correlation_id})
+            self.logger.info("AI service cleanup completed", extra={'correlation_id': self.correlation_id})
         except Exception as e:
-            self.logger.error(f"Error during cleanup: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
+            self.logger.error(f"Error during cleanup: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
 
     async def __aenter__(self) -> "AIService":
         """Async context manager entry."""
         await self.test_connection()
         return self
 
-    async def __aexit__(self, exc_type: BaseException, exc_val: BaseException, exc_tb: Any) -> None:
+    async def __aexit__(self, exc_type: Optional[BaseException], exc_val: Optional[BaseException], exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.close()

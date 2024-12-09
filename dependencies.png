@@ -1,0 +1,12 @@
+// Module Dependencies
+digraph {
+	stdlib [label=stdlib]
+	stdlib -> time
+	third_party [label=third_party]
+	third_party -> json
+	third_party -> typing
+	local [label=local]
+	local -> "api.base_client"
+	local -> "core.config"
+	local -> "core.logger"
+}

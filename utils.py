@@ -114,7 +114,7 @@ def get_node_name(node: Optional[ast.AST]) -> str:
     return visitor.name or "unknown"
 
 def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
-    """Extract source code segment for a given AST node."""
+    """Extract source code segment for a given AST node with proper indentation."""
     try:
         if not source_code or not node:
             return None
@@ -129,7 +129,28 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
         if start_line >= len(lines):
             return None
 
-        return '\n'.join(lines[start_line:end_line]).rstrip()
+        # Get the lines for this node
+        node_lines = lines[start_line:end_line]
+        if not node_lines:
+            return None
+
+        # Find the minimum indentation level (excluding empty lines)
+        indentation_levels = [len(line) - len(line.lstrip()) 
+                            for line in node_lines if line.strip()]
+        if not indentation_levels:
+            return None
+        min_indent = min(indentation_levels)
+
+        # Remove the common indentation from all lines
+        normalized_lines = []
+        for line in node_lines:
+            if line.strip():  # If line is not empty
+                # Remove only the common indentation level
+                normalized_lines.append(line[min_indent:])
+            else:
+                normalized_lines.append('')  # Preserve empty lines
+
+        return '\n'.join(normalized_lines).rstrip()
     except Exception as e:
         logger.error(f"Error extracting source segment: {e}")
         return None
