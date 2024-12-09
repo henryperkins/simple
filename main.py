@@ -2,30 +2,31 @@
 Main documentation generation coordinator with monitoring.
 """
 
-import argparse
-import asyncio
-import sys
-from pathlib import Path
-from typing import Optional, Union
-
 from core.ai_service import AIService
 from core.config import Config
 from core.docs import DocumentationOrchestrator
-from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info, log_debug
+from core.exceptions import ConfigurationError, DocumentationError
+from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info
 from core.metrics_collector import MetricsCollector
 from core.monitoring import SystemMonitor
+from core.types.base import Injector, MetricData, DocstringData
+import uuid
+
 from utils import (
     ensure_directory,
     read_file_safe,
     RepositoryManager
 )
-from core.exceptions import ConfigurationError, DocumentationError
-from core.types.base import Injector, MetricData, DocstringData
-import uuid
 
 # Register dependencies
 Injector.register('metric_calculator', lambda element: MetricData())
 Injector.register('docstring_parser', lambda docstring: DocstringData(summary=docstring))
+
+import argparse
+import asyncio
+import sys
+from pathlib import Path
+from typing import Optional, Union
 
 # Configure logger globally with dynamic settings
 LOG_DIR = "logs"  # This could be set via an environment variable or command-line argument
