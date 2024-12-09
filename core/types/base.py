@@ -277,4 +277,5 @@ class DocumentationData:
             "docstring_data": {
                 "summary": self.docstring_data.summary,
                 "description": self.docstring_data.description,
+            }
         }
