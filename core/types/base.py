@@ -98,7 +98,7 @@ class ExtractedElement:
         """Initialize dependencies."""
         if self.metric_calculator is None:
             self.metric_calculator = Injector.get('metric_calculator')
-        self.metrics = Injector.get('metric_calculator')(self)
+        self.metrics = self.metric_calculator(self)
 
 @dataclass
 class ExtractedFunction(ExtractedElement):
@@ -118,10 +118,6 @@ class ExtractedFunction(ExtractedElement):
         super().__post_init__()
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_info = self.docstring_parser(self.docstring)
 
 @dataclass
@@ -164,7 +160,7 @@ class ExtractionResult:
         """Initialize dependencies."""
         if self.metric_calculator is None:
             self.metric_calculator = Injector.get('metric_calculator')
-        self.metrics = Injector.get('metric_calculator')(self)
+        self.metrics = self.metric_calculator(self)
 
 @dataclass
 class ProcessingResult:
