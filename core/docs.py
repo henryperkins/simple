@@ -171,6 +171,21 @@ class DocumentationOrchestrator:
             # Generate markdown
             markdown_doc = self.markdown_generator.generate(documentation_data)
 
+            # Add search bar to the documentation HTML
+            search_bar_html = """
+            <div id="search-bar">
+                <input type="text" id="search-input" placeholder="Search...">
+                <button id="search-button">Search</button>
+            </div>
+            <script>
+                document.getElementById('search-button').addEventListener('click', function() {
+                    var query = document.getElementById('search-input').value;
+                    // Implement search functionality here
+                });
+            </script>
+            """
+            markdown_doc += search_bar_html
+
             self.logger.info("Documentation generation completed successfully", extra={'correlation_id': self.correlation_id})
             return context.source_code, markdown_doc
 
