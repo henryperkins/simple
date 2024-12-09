@@ -20,7 +20,12 @@ from utils import (
     RepositoryManager
 )
 from core.exceptions import ConfigurationError, DocumentationError
+from core.types.base import Injector
 import uuid
+
+# Register dependencies
+Injector.register('metric_calculator', lambda element: MetricData())
+Injector.register('docstring_parser', lambda docstring: DocstringData(summary=docstring))
 
 # Configure logger globally with dynamic settings
 log_dir = "logs"  # This could be set via an environment variable or command-line argument
