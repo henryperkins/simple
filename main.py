@@ -20,7 +20,7 @@ from utils import (
     RepositoryManager
 )
 from core.exceptions import ConfigurationError, DocumentationError
-from core.types.base import Injector
+from core.types.base import Injector, MetricData, DocstringData
 import uuid
 
 # Register dependencies
