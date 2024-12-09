@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Optional, Union
 
 import uuid
+import autopep8
+import git
 
 from core.ai_service import AIService
 from core.config import Config
@@ -18,6 +20,9 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_in
 from core.metrics_collector import MetricsCollector
 from core.monitoring import SystemMonitor
 from core.types.base import Injector, MetricData, DocstringData
+from core.docstring_processor import DocstringProcessor
+from core.response_parsing import ResponseParsingService
+from api.token_management import TokenManager
 
 from utils import (
     ensure_directory,
