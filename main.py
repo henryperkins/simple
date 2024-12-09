@@ -40,7 +40,7 @@ class DocumentationGenerator:
     """Main documentation generation coordinator with monitoring."""
 
     def __init__(self) -> None:
-        """Initialize the documentation generator."""
+        """Initialize the documentation generator with dependency injection."""
         self.config = Config()
         self.correlation_id = str(uuid.uuid4())
         self.logger = CorrelationLoggerAdapter(
@@ -48,8 +48,14 @@ class DocumentationGenerator:
             correlation_id=self.correlation_id
         )
 
-        # Initialize core components
-        self.ai_service = AIService(config=self.config.ai, correlation_id=self.correlation_id, docstring_processor=DocstringProcessor(), response_parser=ResponseParsingService(correlation_id=self.correlation_id), token_manager=TokenManager(model=self.config.ai.model, config=self.config.ai))
+        # Initialize core components with dependency injection
+        self.ai_service = AIService(
+            config=self.config.ai, 
+            correlation_id=self.correlation_id,
+            docstring_processor=DocstringProcessor(),
+            response_parser=ResponseParsingService(correlation_id=self.correlation_id),
+            token_manager=TokenManager(model=self.config.ai.model, config=self.config.ai)
+        )
         self.doc_orchestrator = DocumentationOrchestrator(
             ai_service=self.ai_service,
             correlation_id=self.correlation_id
