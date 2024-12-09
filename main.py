@@ -249,10 +249,7 @@ async def main(args: argparse.Namespace) -> int:
                 args.repository,
                 Path(args.output)
             )
-            if success:
-                log_info("Repository documentation generated successfully")
-            else:
-                log_error("Failed to generate repository documentation")
+            log_info("Repository documentation generated successfully" if success else "Failed to generate repository documentation")
 
         if args.files:
             for file in args.files:
@@ -260,10 +257,7 @@ async def main(args: argparse.Namespace) -> int:
                 file_path = Path(file)
                 output_path = Path(args.output) / (file_path.stem + ".md")
                 success = await doc_generator.process_file(file_path, output_path)
-                if success:
-                    log_info(f"Documentation for {file} generated successfully")
-                else:
-                    log_error(f"Failed to generate documentation for {file}")
+                log_info(f"Documentation for {file} generated successfully" if success else f"Failed to generate documentation for {file}")
 
         await doc_generator.display_metrics()
         exit_code = 0
