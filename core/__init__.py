@@ -9,6 +9,7 @@ This package provides the core functionality for:
 - Metrics collection
 - Caching
 - Configuration management
+- System monitoring
 
 Main components:
 - DocstringProcessor: Process and validate docstrings
@@ -17,7 +18,11 @@ Main components:
 - Cache: Caching system for generated content
 - Metrics: Performance and usage metrics
 - DocumentationOrchestrator: Orchestrate documentation generation
+- AIService: Service for interacting with AI for documentation generation
+- MetricsCollector: Collects and manages metrics
+- SystemMonitor: Monitors system resources and performance
 """
+
 from core.docstring_processor import DocstringProcessor
 from core.response_parsing import ResponseParsingService
 from core.extraction.code_extractor import CodeExtractor

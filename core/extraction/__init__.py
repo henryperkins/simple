@@ -1,9 +1,8 @@
-# core/extraction/__init__.py
 """
 Code extraction subpackage for analyzing Python source code.
 
 This subpackage provides functionality for:
-- Extracting functions, classes and methods from source code
+- Extracting functions, classes, and methods from source code
 - Analyzing code complexity and dependencies
 - Parsing docstrings and type hints
 - Building inheritance hierarchies
