@@ -5,11 +5,13 @@ Provides Redis-based caching functionality with connection management.
 
 import json
 from typing import Optional, Any, Dict
-
 from redis.asyncio import Redis, ConnectionError
 from exceptions import CacheError
-from core.logger import LoggerSetup, log_error
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 
+# Setup logging with correlation ID
+logger = LoggerSetup.get_logger(__name__)
+adapter = CorrelationLoggerAdapter(logger)
 
 class Cache:
     """Redis-based caching system for AI-generated docstrings."""
@@ -26,17 +28,10 @@ class Cache:
     ) -> None:
         """
         Initialize the cache with Redis connection parameters.
-
-        Args:
-            host (str): Redis server host.
-            port (int): Redis server port.
-            db (int): Redis database number.
-            password (Optional[str]): Password for Redis server.
-            enabled (bool): Enable or disable the cache.
-            ttl (int): Time-to-live for cache entries in seconds.
-            prefix (str): Prefix for cache keys.
         """
-        self.logger = LoggerSetup.get_logger(__name__)  # Initialize logger
+        self.logger = LoggerSetup.get_logger(__name__)
+        self.adapter = CorrelationLoggerAdapter(self.logger)
+        self.correlation_id = self.adapter.correlation_id
         self.enabled = enabled
         self.host = host
         self.port = port
@@ -60,18 +55,15 @@ class Cache:
                 decode_responses=True,
             )
             await self._redis.ping()
-            self.logger.info("Successfully connected to Redis")
+            self.adapter.info("Successfully connected to Redis", extra={'correlation_id': self.correlation_id})
         except ConnectionError as e:
             self._redis = None
-            self.logger.error(f"Failed to connect to Redis: {e}")
+            self.adapter.error(f"Failed to connect to Redis: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             raise CacheError("Failed to connect to Redis") from e
 
     async def is_connected(self) -> bool:
         """
         Check if Redis connection is active.
-
-        Returns:
-            bool: True if connected, False otherwise.
         """
         if not self.enabled or not self._redis:
             return False
@@ -79,19 +71,13 @@ class Cache:
             await self._redis.ping()
             return True
         except ConnectionError:
-            self.logger.warning("Redis connection lost")
+            self.adapter.warning("Redis connection lost", extra={'correlation_id': self.correlation_id})
             self._redis = None
             return False
 
     async def get_cached_docstring(self, key: str) -> Optional[Dict[str, Any]]:
         """
         Retrieve cached docstring by key.
-
-        Args:
-            key (str): The cache key to retrieve.
-
-        Returns:
-            Optional[Dict[str, Any]]: Cached data if available, otherwise None.
         """
         if not self.enabled:
             return None
@@ -109,16 +95,16 @@ class Cache:
 
             if cached_data:
                 self._stats["hits"] += 1
-                self.logger.debug(f"Cache hit for key: {cache_key}")
+                self.adapter.debug(f"Cache hit for key: {cache_key}", extra={'correlation_id': self.correlation_id})
                 return json.loads(cached_data)
 
             self._stats["misses"] += 1
-            self.logger.debug(f"Cache miss for key: {cache_key}")
+            self.adapter.debug(f"Cache miss for key: {cache_key}", extra={'correlation_id': self.correlation_id})
             return None
 
         except Exception as e:
             self._stats["errors"] += 1
-            self.logger.error(f"Cache get error for key {cache_key}: {e}")
+            self.adapter.error(f"Cache get error for key {cache_key}: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             return None
 
     async def save_docstring(
@@ -126,14 +112,6 @@ class Cache:
     ) -> bool:
         """
         Save docstring data to cache.
-
-        Args:
-            key (str): The cache key.
-            data (Dict[str, Any]): The data to cache.
-            expire (Optional[int]): Optional expiration time in seconds.
-
-        Returns:
-            bool: True on success, False on failure.
         """
         if not self.enabled:
             return False
@@ -151,23 +129,17 @@ class Cache:
 
         try:
             await self._redis.set(cache_key, serialized_data, ex=expiration)
-            self.logger.debug(f"Cached data for key: {cache_key}")
+            self.adapter.debug(f"Cached data for key: {cache_key}", extra={'correlation_id': self.correlation_id})
             return True
 
         except Exception as e:
             self._stats["errors"] += 1
-            self.logger.error(f"Cache save error for key {cache_key}: {e}")
+            self.adapter.error(f"Cache save error for key {cache_key}: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             return False
 
     async def invalidate(self, key: str) -> bool:
         """
         Invalidate a cached entry.
-
-        Args:
-            key (str): The cache key to invalidate.
-
-        Returns:
-            bool: True on success, False on failure.
         """
         if not self.enabled:
             return False
@@ -182,20 +154,17 @@ class Cache:
         cache_key = f"{self.prefix}{key}"
         try:
             await self._redis.delete(cache_key)
-            self.logger.debug(f"Invalidated cache key: {cache_key}")
+            self.adapter.debug(f"Invalidated cache key: {cache_key}", extra={'correlation_id': self.correlation_id})
             return True
 
         except Exception as e:
             self._stats["errors"] += 1
-            self.logger.error(f"Cache invalidation error for key {cache_key}: {e}")
+            self.adapter.error(f"Cache invalidation error for key {cache_key}: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             return False
 
     async def get_stats(self) -> Dict[str, Any]:
         """
         Get cache statistics.
-
-        Returns:
-            Dict[str, Any]: Dictionary containing cache statistics
         """
         if not self.enabled:
             return {"enabled": False, "stats": None}
@@ -203,16 +172,13 @@ class Cache:
         try:
             if not self._redis:
                 await self._initialize_connection()
-                if not self._redis:
-                    return {"enabled": True, "stats": self._stats}
 
-            try:  
+            try:
                 info = await self._redis.info()
             except Exception as e:
-                log_error(f"Failed to get Redis info: {e}")
+                self.adapter.error(f"Failed to get Redis info: {e}", extra={'correlation_id': self.correlation_id})
                 info = {}
 
-            # Build stats even if Redis info fails
             stats = {
                 "hits": self._stats["hits"],
                 "misses": self._stats["misses"],
@@ -221,45 +187,37 @@ class Cache:
                 "uptime_seconds": info.get("uptime_in_seconds", 0),
             }
 
-            # Add Redis-specific metrics if available
             if info:
                 stats.update(
                     {
                         "memory_used": info.get("used_memory_human", "N/A"),
                         "connected_clients": info.get("connected_clients", 0),
-                        "total_connections_received": info.get(
-                            "total_connections_received", 0
-                        ),
-                        "total_commands_processed": info.get(
-                            "total_commands_processed", 0
-                        ),
+                        "total_connections_received": info.get("total_connections_received", 0),
+                        "total_commands_processed": info.get("total_commands_processed", 0),
                     }
                 )
 
+            self.adapter.info(f"Cache stats: {stats}", extra={'correlation_id': self.correlation_id})
             return {"enabled": True, "stats": stats}
 
         except Exception as e:
-            log_error(f"Error getting cache stats: {str(e)}")
+            self.adapter.error(f"Error getting cache stats: {str(e)}", extra={'correlation_id': self.correlation_id})
             return {"enabled": True, "stats": self._stats}
 
     def _calculate_hit_rate(self) -> float:
         """
         Calculate the cache hit rate.
-
-        Returns:
-            float: The hit rate as a percentage.
         """
         total = self._stats["hits"] + self._stats["misses"]
         if total == 0:
             return 0.0
-        return round((self._stats["hits"] / total) * 100, 2)
+        hit_rate = round((self._stats["hits"] / total) * 100, 2)
+        self.adapter.debug(f"Calculated hit rate: {hit_rate}", extra={'correlation_id': self.correlation_id})
+        return hit_rate
 
     async def clear(self) -> bool:
         """
         Clear all cached entries with the configured prefix.
-
-        Returns:
-            bool: True on success, False on failure.
         """
         if not self.enabled:
             return False
@@ -273,30 +231,27 @@ class Cache:
 
         pattern = f"{self.prefix}*"
         try:
-            # Use asynchronous scan and delete
             async for key in self._redis.scan_iter(match=pattern):
                 await self._redis.delete(key)
-            self.logger.info("Cache cleared successfully")
+            self.adapter.info("Cache cleared successfully", extra={'correlation_id': self.correlation_id})
             return True
 
         except Exception as e:
             self._stats["errors"] += 1
-            self.logger.error(f"Error clearing cache: {e}")
+            self.adapter.error(f"Error clearing cache: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             return False
 
     async def close(self) -> None:
         """
         Close Redis connection and perform cleanup.
-
-        Ensures that the Redis connection is properly closed asynchronously.
         """
         if self.enabled and self._redis:
             try:
                 await self._redis.close()
-                self.logger.info("Redis connection closed")
+                self.adapter.info("Redis connection closed", extra={'correlation_id': self.correlation_id})
             except Exception as e:
                 self._stats["errors"] += 1
-                self.logger.error(f"Error closing Redis connection: {e}")
+                self.adapter.error(f"Error closing Redis connection: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             finally:
                 self._redis = None
 

@@ -2,21 +2,22 @@
 Metrics module for calculating code complexity and performance metrics.
 
 Provides comprehensive code analysis metrics including cyclomatic complexity,
-cognitive complexity, and Halstead metrics.
+cognitive complexity, and Halstead metrics, integrated with system monitoring.
 """
 
 import ast
 import math
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from datetime import datetime
 import matplotlib.pyplot as plt
 import io
 import base64
 
+# Import LoggerSetup and module-level logging functions from logger.py
 from core.logger import LoggerSetup, log_error, log_debug, log_info
-
-logger = LoggerSetup.get_logger(__name__)
-
+from core.monitoring import SystemMonitor
+from core.metrics_collector import MetricsCollector
+from core.types import ExtractedFunction, ExtractedClass
 
 class MetricsError(Exception):
     """Base exception for metrics calculation errors."""
@@ -31,72 +32,76 @@ class Metrics:
         "poor": 40,
     }
 
-    def __init__(self) -> None:
+    def __init__(self, metrics_collector: Optional[MetricsCollector] = None) -> None:
         """Initialize the Metrics class."""
         self.module_name: Optional[str] = None
         self.logger = LoggerSetup.get_logger(__name__)
         self.error_counts: Dict[str, int] = {}
+        self.metrics_collector = metrics_collector or MetricsCollector()
 
-    def calculate_function_metrics(self, node: ast.AST) -> Dict[str, Any]:
+    def calculate_metrics_for_function(self, function: ExtractedFunction) -> ExtractedFunction:
         """
         Calculate metrics for a function.
 
         Args:
-            node: The AST node representing a function
+            function: The ExtractedFunction instance
 
         Returns:
-            Dict containing function metrics
+            ExtractedFunction with updated metrics
         """
-        logger.debug(
-            "Calculating metrics for function: %s",
-            getattr(node, 'name', 'unknown')
-        )
-        complexity = self.calculate_cyclomatic_complexity(node)
-        metrics = {
-            "cyclomatic_complexity": complexity,
-            "cognitive_complexity": self.calculate_cognitive_complexity(node),
-            "halstead_metrics": self.calculate_halstead_metrics(node),
-            "maintainability_index": self.calculate_maintainability_index(node),
-        }
+        self.logger.debug("Calculating metrics for function: %s", function.name)
+        function.metrics["cyclomatic_complexity"] = self.calculate_cyclomatic_complexity(function.ast_node)
+        function.metrics["cognitive_complexity"] = self.calculate_cognitive_complexity(function.ast_node)
+        function.metrics["halstead_metrics"] = self.calculate_halstead_metrics(function.ast_node)
+        function.metrics["maintainability_index"] = self.calculate_maintainability_index(function.ast_node)
+
         # Add complexity warning if necessary
-        if complexity > 10:
-            metrics["complexity_warning"] = "⚠️ High complexity"
+        if function.metrics["cyclomatic_complexity"] > 10:
+            function.complexity_warnings.append("⚠️ High complexity")
         
         # Add visual representation of metrics
-        metrics["complexity_graph"] = self.generate_complexity_graph(metrics)
+        function.metrics["complexity_graph"] = self.generate_complexity_graph(function.metrics)
         
-        return metrics
+        # Store metrics via MetricsCollector
+        self.metrics_collector.track_operation(
+            operation_type="function_metrics",
+            success=True,
+            duration=0,  # Duration can be updated based on actual metrics
+            usage=function.metrics,
+        )
 
-    def calculate_class_metrics(self, node: ast.AST) -> Dict[str, Any]:
+        return function
+
+    def calculate_metrics_for_class(self, cls: ExtractedClass) -> ExtractedClass:
         """
         Calculate metrics for a class.
 
         Args:
-            node: The AST node representing a class
+            cls: The ExtractedClass instance
 
         Returns:
-            Dict containing class metrics
+            ExtractedClass with updated metrics
         """
-        logger.debug(
-            "Calculating metrics for class: %s",
-            getattr(node, 'name', 'unknown')
+        self.logger.debug("Calculating metrics for class: %s", cls.name)
+        cls.metrics["method_count"] = self.count_methods(cls.ast_node)
+        cls.metrics["cyclomatic_complexity"] = self.calculate_cyclomatic_complexity(cls.ast_node)
+        cls.metrics["cognitive_complexity"] = self.calculate_cognitive_complexity(cls.ast_node)
+        cls.metrics["halstead_metrics"] = self.calculate_halstead_metrics(cls.ast_node)
+        cls.metrics["maintainability_index"] = self.calculate_maintainability_index(cls.ast_node)
+
+        if cls.metrics["cyclomatic_complexity"] > 10:
+            cls.complexity_warnings.append("⚠️ High complexity")
+        
+        cls.metrics["complexity_graph"] = self.generate_complexity_graph(cls.metrics)
+
+        self.metrics_collector.track_operation(
+            operation_type="class_metrics",
+            success=True,
+            duration=0,
+            usage=cls.metrics,
         )
-        complexity = self.calculate_cyclomatic_complexity(node)
-        metrics = {
-            "method_count": self.count_methods(node),
-            "cyclomatic_complexity": complexity,
-            "cognitive_complexity": self.calculate_cognitive_complexity(node),
-            "halstead_metrics": self.calculate_halstead_metrics(node),
-            "maintainability_index": self.calculate_maintainability_index(node),
-        }
-        # Add complexity warning if necessary
-        if complexity > 10:
-            metrics["complexity_warning"] = "⚠️ High complexity"
-        
-        # Add visual representation of metrics
-        metrics["complexity_graph"] = self.generate_complexity_graph(metrics)
-        
-        return metrics
+
+        return cls
 
     def calculate_cyclomatic_complexity(self, node: ast.AST) -> int:
         """
@@ -125,7 +130,7 @@ class Metrics:
                 ),
             ):
                 complexity += 1
-        logger.debug("Cyclomatic complexity: %d", complexity)
+        self.logger.debug("Cyclomatic complexity: %d", complexity)
         return complexity
 
     def calculate_cognitive_complexity(self, node: ast.AST) -> int:
@@ -165,7 +170,7 @@ class Metrics:
                 _increment_complexity(child, nesting)
 
         _increment_complexity(node, 0)
-        logger.debug("Cognitive complexity: %d", complexity)
+        self.logger.debug("Cognitive complexity: %d", complexity)
         return complexity
 
     def calculate_halstead_metrics(self, node: ast.AST) -> Dict[str, float]:
@@ -178,7 +183,7 @@ class Metrics:
         Returns:
             Dict containing Halstead metrics
         """
-        log_debug("Calculating Halstead metrics.")
+        self.logger.debug("Calculating Halstead metrics.")
         operators = set()
         operands = set()
         operator_count = 0
@@ -210,7 +215,6 @@ class Metrics:
                     op_type = type(n.op).__name__
                     operators.add(op_type)
                     operator_count += 1
-
             elif isinstance(n, operand_nodes):
                 operand_name = self._get_operand_name(n)
                 operands.add(operand_name)
@@ -238,14 +242,19 @@ class Metrics:
                 "bugs_delivered": program_volume / 3000,
             }
 
-            log_info(
+            self.logger.info(
                 "Calculated Halstead metrics - Length=%d, Vocabulary=%d, Volume=%f",
                 program_length, vocabulary_size, program_volume
             )
             return metrics
 
         except Exception as e:
-            log_error("Error calculating Halstead metrics: %s", e)
+            self.logger.error(
+                "Error calculating Halstead metrics: %s",
+                e,
+                exc_info=True,
+                extra={"sanitized_info": {"error": str(e)}}
+            )
             return {
                 "program_length": 0,
                 "vocabulary_size": 0,
@@ -278,7 +287,7 @@ class Metrics:
         mi = max(0, mi)
         mi = min(100, mi * 100 / 171)
 
-        logger.debug("Maintainability index: %f", mi)
+        self.logger.debug("Maintainability index: %f", mi)
         return round(mi, 2)
 
     def count_methods(self, node: ast.ClassDef) -> int:
@@ -291,13 +300,15 @@ class Metrics:
         Returns:
             Number of methods in the class
         """
-        return len(
+        method_count = len(
             [
                 n
                 for n in node.body
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
             ]
         )
+        self.logger.debug("Number of methods in class '%s': %d", node.name, method_count)
+        return method_count
 
     def _count_source_lines(self, node: ast.AST) -> int:
         """
@@ -309,15 +320,24 @@ class Metrics:
         Returns:
             Number of source lines
         """
-        if hasattr(ast, "unparse"):
-            source = ast.unparse(node)
-        else:
-            source = self._get_source_code(node)
-            
-        lines = [line.strip() for line in source.splitlines()]
-        sloc = len([line for line in lines if line and not line.startswith("#")])
-        logger.debug("Source lines of code: %d", sloc)
-        return sloc
+        try:
+            if hasattr(ast, "unparse"):
+                source = ast.unparse(node)
+            else:
+                source = self._get_source_code(node)
+                
+            lines = [line.strip() for line in source.splitlines()]
+            sloc = len([line for line in lines if line and not line.startswith("#")])
+            self.logger.debug("Source lines of code: %d", sloc)
+            return sloc
+        except Exception as e:
+            self.logger.error(
+                "Error counting source lines: %s",
+                e,
+                exc_info=True,
+                extra={"sanitized_info": {"error": str(e)}}
+            )
+            return 0
 
     def _get_source_code(self, node: ast.AST) -> str:
         """
@@ -346,7 +366,7 @@ class Metrics:
         if isinstance(node, ast.Constant):
             return str(node.value)
         return ""
-
+    
     def generate_complexity_graph(self, metrics: Dict[str, Any]) -> str:
         """
         Generate a visual representation of code metrics.
@@ -358,68 +378,79 @@ class Metrics:
             Base64 encoded string of the generated graph
         """
         try:
-            fig, ax = plt.subplots()
-            labels = list(metrics.keys())
-            values = list(metrics.values())
+            # Filter and flatten metrics
+            filtered_metrics: Dict[str, float] = {}
+            
+            # Process Halstead metrics
+            halstead = metrics.get("halstead_metrics")
+            if halstead:
+                key_metrics = ["program_volume", "difficulty", "effort"]
+                for key in key_metrics:
+                    if isinstance(halstead.get(key), (int, float)):
+                        filtered_metrics[f"halstead_{key}"] = float(halstead[key])
+            
+            # Process other numeric metrics
+            core_metrics = [
+                "cyclomatic_complexity",
+                "cognitive_complexity",
+                "maintainability_index",
+                "method_count"
+            ]
+            
+            for key in core_metrics:
+                if isinstance(metrics.get(key), (int, float)):
+                    filtered_metrics[key] = float(metrics[key])
 
-            ax.barh(labels, values, color='skyblue')
-            ax.set_xlabel('Values')
-            ax.set_title('Code Metrics')
+            if not filtered_metrics:
+                self.logger.warning(
+                    "No valid metrics available for graph generation",
+                    extra={"sanitized_info": {}}
+                )
+                return ""
 
+            # Create plot
+            plt.clf()
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            # Sort metrics by value
+            sorted_items = sorted(filtered_metrics.items(), key=lambda x: x[1])
+            labels, values = zip(*sorted_items)
+
+            # Create horizontal bar chart
+            bars = ax.barh(labels, values, color='skyblue')
+            
+            # Customize plot
+            ax.set_xlabel('Metric Value')
+            ax.set_title('Code Complexity Metrics')
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+
+            # Add value labels
+            for bar in bars:
+                width = bar.get_width()
+                ax.text(width, bar.get_y() + bar.get_height()/2,
+                    f'{width:.2f}', 
+                    ha='left', va='center', fontsize=8)
+
+            # Adjust layout and convert to base64
+            plt.tight_layout()
             buf = io.BytesIO()
-            plt.savefig(buf, format='png')
+            plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
             buf.seek(0)
             img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            
+            # Cleanup
             buf.close()
+            plt.close(fig)
 
             return img_base64
+
         except Exception as e:
-            logger.error(f"Error generating complexity graph: {e}")
+            self.logger.error(
+                f"Error generating complexity graph: {e}",
+                exc_info=True,
+                extra={"sanitized_info": {"error": str(e)}}
+            )
             return ""
-        
-
-class MetricsCollector:
-    """Collects and manages operation metrics."""
-
-    def __init__(self) -> None:
-        """Initialize MetricsCollector."""
-        self.metrics = []
-        self.logger = LoggerSetup.get_logger(__name__)
-
-    async def track_operation(
-        self,
-        operation_type: str,
-        success: bool,
-        duration: float,
-        usage: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """Track an operation's metrics."""
-        metric = {
-            "operation_type": operation_type,
-            "success": success,
-            "duration": duration,
-            "usage": usage or {},
-            "validation_success": metadata.get("validation_success", False) if metadata else False,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        if error:
-            metric["error"] = error
-        self.metrics.append(metric)
-        self.logger.debug(f"Tracked operation: {metric}")
-
-    def get_metrics(self) -> Dict[str, Any]:
-        """Retrieve collected metrics."""
-        return {"operations": self.metrics}
-
-    def clear_metrics(self) -> None:
-        """Clear all collected metrics."""
-        self.metrics.clear()
-        self.logger.info("Cleared all metrics.")
-
-    async def close(self) -> None:
-        """Cleanup_metrics_collector resources (if any)."""
-        # If there are resources to clean up, handle them here.
-        # For now, it's a placeholder.
-        self.logger.info("MetricsCollector cleanup completed.")
+        finally:
+            plt.close('all')

@@ -1,25 +1,23 @@
 """
 Monitoring Module.
 
-Provides system monitoring and performance tracking for Azure OpenAI operations.
+Provides system monitoring and performance tracking for operations, integrating detailed logging.
 """
 
-# Standard library imports
 import asyncio
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
-# Third-party imports
 import psutil
 
-# Local imports
-from core.logger import LoggerSetup
-from core.metrics import MetricsCollector
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.metrics_collector import MetricsCollector
 from api.token_management import TokenManager
 
-logger = LoggerSetup.get_logger(__name__)
-
+# Set up the logger with correlation ID
+base_logger = LoggerSetup.get_logger(__name__)
+logger = CorrelationLoggerAdapter(base_logger)
 
 class SystemMonitor:
     """Monitors system resources and performance metrics."""
@@ -38,7 +36,7 @@ class SystemMonitor:
             token_manager: Optional token manager for tracking token usage
             metrics_collector: Optional metrics collector for tracking metrics
         """
-        self.logger = LoggerSetup.get_logger(__name__)
+        self.logger = CorrelationLoggerAdapter(base_logger)
         self.check_interval = check_interval
         self.token_manager = token_manager
         self.start_time = datetime.now()
@@ -51,6 +49,7 @@ class SystemMonitor:
     async def start(self) -> None:
         """Start monitoring system resources."""
         if self._running:
+            self.logger.warning("System monitoring is already running")
             return
 
         self._running = True
@@ -65,7 +64,7 @@ class SystemMonitor:
             try:
                 await self._task
             except asyncio.CancelledError:
-                pass
+                self.logger.debug("Monitoring task was cancelled")
         self.logger.info("System monitoring stopped")
 
     async def _monitor_loop(self) -> None:
@@ -74,9 +73,10 @@ class SystemMonitor:
             try:
                 metrics = self._collect_system_metrics()
                 await self._store_metrics(metrics)
+                self.logger.debug("System metrics collected and stored")
                 await asyncio.sleep(self.check_interval)
             except Exception as e:
-                self.logger.error("Error in monitoring loop: %s", e)
+                self.logger.error("Error in monitoring loop: %s", e, exc_info=True)
                 await asyncio.sleep(self.check_interval)
 
     def _collect_system_metrics(self) -> Dict[str, Any]:
@@ -114,10 +114,11 @@ class SystemMonitor:
                 token_stats = self.token_manager.get_usage_stats()
                 metrics["tokens"] = token_stats
 
+            self.logger.debug("Collected system metrics", extra={"metrics": metrics})
             return metrics
 
         except Exception as e:
-            self.logger.error("Error collecting system metrics: %s", e)
+            self.logger.error("Error collecting system metrics: %s", e, exc_info=True)
             return {}
 
     async def _store_metrics(self, metrics: Dict[str, Any]) -> None:
@@ -138,7 +139,7 @@ class SystemMonitor:
                         operation_type=f"system_{key}",
                         success=True,
                         duration=self.check_interval,
-                        usage=value,
+                        usage=value
                     )
 
             # Clean up old metrics
@@ -148,8 +149,9 @@ class SystemMonitor:
                     m for m in self._metrics[key]
                     if datetime.fromisoformat(m["timestamp"]) >= cutoff_time
                 ]
+            self.logger.info("Stored and cleaned up metrics")
         except Exception as e:
-            self.logger.error("Error storing metrics: %s", e)
+            self.logger.error("Error storing metrics: %s", e, exc_info=True)
 
     def get_metrics(self) -> Dict[str, Any]:
         """
@@ -163,6 +165,7 @@ class SystemMonitor:
             runtime = (datetime.now() - self.start_time).total_seconds()
             collected_metrics = self.metrics_collector.get_metrics()
 
+            self.logger.debug("Retrieved metrics summary")
             return {
                 "current": current_metrics,
                 "runtime_seconds": runtime,
@@ -171,7 +174,7 @@ class SystemMonitor:
                 "collected_metrics": collected_metrics,
             }
         except Exception as e:
-            self.logger.error("Error getting metrics summary: %s", e)
+            self.logger.error("Error getting metrics summary: %s", e, exc_info=True)
             return {"error": str(e)}
 
     def _calculate_averages(self) -> Dict[str, float]:
@@ -187,6 +190,7 @@ class SystemMonitor:
                 averages[key] = sum(
                     v["value"]["percent"] for v in values
                 ) / len(values)
+        self.logger.debug("Calculated averages", extra={"averages": averages})
         return averages
 
     def _get_system_status(self) -> str:
@@ -218,9 +222,8 @@ class SystemMonitor:
                 return "warning"
 
             return "healthy"
-
         except Exception as e:
-            self.logger.error("Error getting system status: %s", e)
+            self.logger.error("Error getting system status: %s", e, exc_info=True)
             return "unknown"
 
     async def __aenter__(self) -> "SystemMonitor":

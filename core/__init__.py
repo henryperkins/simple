@@ -1,4 +1,3 @@
-# core/__init__.py
 """
 Core package for documentation generation and code analysis.
 
@@ -19,16 +18,14 @@ Main components:
 - Metrics: Performance and usage metrics
 - DocumentationOrchestrator: Orchestrate documentation generation
 """
-
 from core.docstring_processor import DocstringProcessor
 from core.response_parsing import ResponseParsingService
 from core.extraction.code_extractor import CodeExtractor
 from core.cache import Cache
-from core.config import AzureOpenAIConfig
 from core.metrics import Metrics
 from core.logger import LoggerSetup
 from core.docs import DocumentationOrchestrator
-from core.schema_loader import load_schema
+from core.ai_service import AIService
 from core.types import (
     DocstringData,
     ExtractedFunction,
@@ -37,6 +34,8 @@ from core.types import (
     ParsedResponse,
     ProcessingResult,
 )
+from core.metrics_collector import MetricsCollector
+from core.monitoring import SystemMonitor
 
 __version__ = "0.1.0"
 
@@ -45,15 +44,16 @@ __all__ = [
     "ResponseParsingService", 
     "CodeExtractor",
     "Cache",
-    "AzureOpenAIConfig",
     "Metrics",
     "LoggerSetup",
     "DocumentationOrchestrator",
-    "load_schema",
+    "AIService",
     "DocstringData",
     "ExtractedFunction",
     "ExtractedClass", 
     "ExtractionResult",
     "ParsedResponse",
     "ProcessingResult",
+    "MetricsCollector",
+    "SystemMonitor",
 ]

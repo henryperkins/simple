@@ -3,71 +3,52 @@ Markdown documentation generator module.
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
-from pathlib import Path
-from core.logger import LoggerSetup  # Import the LoggerSetup utility
-
-@dataclass
-class MarkdownConfig:
-    """Configuration for markdown generation."""
-
-    include_toc: bool = True
-    include_timestamp: bool = True
-    code_language: str = "python"
-    include_source: bool = True
-
+from typing import Optional
+from core.logger import LoggerSetup, log_debug, log_error
+from core.types import DocumentationData, ExtractedClass, ExtractedFunction
 
 class MarkdownGenerator:
     """Generates formatted markdown documentation."""
 
-    def __init__(self, config: Optional[MarkdownConfig] = None):
+    def __init__(self) -> None:
         """Initialize the markdown generator."""
-        self.config = config or MarkdownConfig()
-        self.logger = LoggerSetup.get_logger(
-            name=__name__
-        )  # Use LoggerSetup to initialize logger
+        self.logger = LoggerSetup.get_logger(__name__)
 
-    def generate(self, context: Dict[str, Any]) -> str:
+    def generate(self, documentation_data: DocumentationData) -> str:
         """Generate markdown documentation."""
         try:
-            self.logger.debug("Generating markdown documentation.")
+            log_debug("Generating markdown documentation.")
 
             # Accessing context elements safely
-            module_name = context.get("module_name", "Unknown Module")
-            file_path = context.get("file_path", "Unknown File")
-            description = context.get("description", "No description provided.")
-            classes = context.get("classes", [])
-            functions = context.get("functions", [])
-            constants = context.get("constants", [])
-            changes = context.get("changes", [])
-            source_code = context.get("source_code", "")
-            ai_documentation = context.get("ai_documentation", {})
+            module_info = documentation_data.module_info
+            ai_content = documentation_data.ai_content
+            docstring_data = documentation_data.docstring_data
+            code_metadata = documentation_data.code_metadata
+            source_code = documentation_data.source_code
 
             sections = [
-                self._generate_header(module_name),
-                self._generate_overview(file_path, description),
-                self._generate_ai_doc_section(ai_documentation),
-                self._generate_class_tables(classes),
-                self._generate_function_tables(functions),
-                self._generate_constants_table(constants),
-                self._generate_changes(changes),
-                self._generate_source_code(source_code, context),  # Pass the context
+                self._generate_header(module_info.get("module_name", "Unknown Module")),
+                self._generate_overview(module_info.get("file_path", "Unknown File"), docstring_data.description),
+                self._generate_ai_doc_section(ai_content),
+                self._generate_class_tables(code_metadata.get("classes", [])),
+                self._generate_function_tables(code_metadata.get("functions", [])),
+                self._generate_constants_table(code_metadata.get("constants", [])),
+                self._generate_source_code(source_code),
             ]
-            self.logger.debug("Markdown generation completed successfully.")
+            log_debug("Markdown generation completed successfully.")
             return "\n\n".join(filter(None, sections))
         except Exception as e:
-            self.logger.error(f"Error generating markdown: {e}", exc_info=True)
+            log_error(f"Error generating markdown: {e}", exc_info=True)
             return f"# Error Generating Documentation\n\nAn error occurred: {e}"
 
     def _generate_header(self, module_name: str) -> str:
         """Generate the module header."""
-        self.logger.debug(f"Generating header for module_name: {module_name}.")
+        log_debug(f"Generating header for module_name: {module_name}.")
         return f"# Module: {module_name}"
 
     def _generate_overview(self, file_path: str, description: str) -> str:
         """Generate the overview section."""
-        self.logger.debug(f"Generating overview for file_path: {file_path}")
+        log_debug(f"Generating overview for file_path: {file_path}")
         return "\n".join(
             [
                 "## Overview",
@@ -76,13 +57,13 @@ class MarkdownGenerator:
             ]
         )
 
-    def _generate_ai_doc_section(self, ai_documentation: Dict[str, Any]) -> str:
+    def _generate_ai_doc_section(self, ai_documentation: dict) -> str:
         """
         Generate the AI documentation section using docstring data and AI enhancements.
-        
+
         Args:
             ai_documentation: Dictionary containing AI-enhanced documentation
-        
+
         Returns:
             str: Generated markdown documentation
         """
@@ -129,7 +110,7 @@ class MarkdownGenerator:
 
         return "\n".join(sections)
 
-    def _generate_class_tables(self, classes: List[Any]) -> str:
+    def _generate_class_tables(self, classes: list) -> str:
         """Generate the classes section with tables."""
         try:
             if not classes:
@@ -152,17 +133,10 @@ class MarkdownGenerator:
 
             for cls in classes:
                 # Safely retrieve class properties
-                class_name = getattr(cls, "name", "Unknown Class")
-                metrics = getattr(cls, "metrics", {})
-                complexity = (
-                    metrics.get("complexity", 0) if isinstance(metrics, dict) else 0
-                )
+                class_name = cls.name
+                complexity = cls.metrics.get("complexity", 0)
                 warning = " ⚠️" if complexity > 10 else ""
-                bases = (
-                    ", ".join(getattr(cls, "bases", []))
-                    if isinstance(getattr(cls, "bases", None), list)
-                    else "None"
-                )
+                bases = ", ".join(cls.bases)
 
                 # Add a row for the class
                 classes_table.append(
@@ -170,46 +144,33 @@ class MarkdownGenerator:
                 )
 
                 # Check if the class has methods and iterate over them safely
-                if hasattr(cls, "methods") and isinstance(cls.methods, list):
-                    for method in cls.methods:
-                        method_name = getattr(method, "name", "Unknown Method")
-                        method_metrics = getattr(method, "metrics", {})
-                        method_complexity = (
-                            method_metrics.get("complexity", 0)
-                            if isinstance(method_metrics, dict)
-                            else 0
-                        )
-                        method_warning = " ⚠️" if method_complexity > 10 else ""
-                        return_type = getattr(method, "return_type", "Any")
+                for method in cls.methods:
+                    method_name = method.name
+                    method_complexity = method.metrics.get("complexity", 0)
+                    method_warning = " ⚠️" if method_complexity > 10 else ""
+                    return_type = method.metrics.get("return_type", "Any")
 
-                        # Generate parameters safely
-                        if hasattr(method, "args") and isinstance(method.args, list):
-                            params = ", ".join(
-                                f"{getattr(arg, 'name', 'Unknown')}: {getattr(arg, 'type', 'Any')}"
-                                + (
-                                    f" = {getattr(arg, 'default_value', '')}"
-                                    if getattr(arg, "default_value", None)
-                                    else ""
-                                )
-                                for arg in method.args
-                            )
-                        else:
-                            params = "None"
+                    # Generate parameters safely
+                    params = ", ".join(
+                        f"{arg.name}: {arg.type}"
+                        + (f" = {arg.default_value}" if arg.default_value else "")
+                        for arg in method.args
+                    )
 
-                        # Add a row for the method
-                        methods_table.append(
-                            f"| `{class_name}` | `{method_name}` | "
-                            f"`({params})` | `{return_type}` | "
-                            f"{method_complexity}{method_warning} |"
-                        )
+                    # Add a row for the method
+                    methods_table.append(
+                        f"| `{class_name}` | `{method_name}` | "
+                        f"`({params})` | `{return_type}` | "
+                        f"{method_complexity}{method_warning} |"
+                    )
 
             # Combine the tables and return the final markdown string
             return "\n".join(classes_table + [""] + methods_table)
         except Exception as e:
-            self.logger.error(f"Error generating class tables: {e}", exc_info=True)
+            log_error(f"Error generating class tables: {e}", exc_info=True)
             return "An error occurred while generating class documentation."
 
-    def _generate_function_tables(self, functions: List[Any]) -> str:
+    def _generate_function_tables(self, functions: list) -> str:
         """Generate the functions section."""
         try:
             if not functions:
@@ -224,42 +185,30 @@ class MarkdownGenerator:
 
             for func in functions:
                 # Safely get the complexity
-                complexity = 0
-                warning = ""
-                if hasattr(func, "metrics") and isinstance(func.metrics, dict):
-                    complexity = func.metrics.get("complexity", 0)
-                    warning = " ⚠️" if complexity > 10 else ""
+                complexity = func.metrics.get("complexity", 0)
+                warning = " ⚠️" if complexity > 10 else ""
 
-                # Safely generate parameters
-                params = ""
-                if hasattr(func, "args") and isinstance(func.args, list):
-                    param_list = []
-                    for arg in func.args:
-                        arg_name = getattr(arg, "name", "Unknown")
-                        arg_type = getattr(arg, "type", "Any")
-                        default_value = getattr(arg, "default_value", None)
-                        param_str = f"{arg_name}: {arg_type}"
-                        if default_value is not None:
-                            param_str += f" = {default_value}"
-                        param_list.append(param_str)
-                    params = ", ".join(param_list)
-                else:
-                    params = "None"
+                # Generate parameters safely
+                params = ", ".join(
+                    f"{arg.name}: {arg.type}"
+                    + (f" = {arg.default_value}" if arg.default_value else "")
+                    for arg in func.args
+                )
 
                 # Safely get the return type
-                return_type = getattr(func, "return_type", "Any")
+                return_type = func.metrics.get("return_type", "Any")
 
                 lines.append(
-                    f"| `{getattr(func, 'name', 'Unknown')}` | `({params})` | "
+                    f"| `{func.name}` | `({params})` | "
                     f"`{return_type}` | {complexity}{warning} |"
                 )
 
             return "\n".join(lines)
         except Exception as e:
-            self.logger.error(f"Error generating function tables: {e}", exc_info=True)
+            log_error(f"Error generating function tables: {e}", exc_info=True)
             return "An error occurred while generating function documentation."
 
-    def _generate_constants_table(self, constants: List[Any]) -> str:
+    def _generate_constants_table(self, constants: list) -> str:
         """Generate the constants section."""
         try:
             if not constants:
@@ -281,73 +230,23 @@ class MarkdownGenerator:
 
             return "\n".join(lines)
         except Exception as e:
-            self.logger.error(f"Error generating constants table: {e}", exc_info=True)
+            log_error(f"Error generating constants table: {e}", exc_info=True)
             return "An error occurred while generating constants documentation."
 
-    def _generate_changes(self, changes: List[Any]) -> str:
-        """Generate the recent changes section."""
-        try:
-            if not changes:
-                return ""
-
-            lines = ["## Recent Changes"]
-
-            for change in changes:
-                date = change.get("date", datetime.now().strftime("%Y-%m-%d"))
-                description = change.get("description", "No description.")
-                lines.append(f"- [{date}] {description}")
-
-            return "\n".join(lines)
-        except Exception as e:
-            self.logger.error(f"Error generating changes section: {e}", exc_info=True)
-            return "An error occurred while generating changes documentation."
-
-    def _generate_source_code(self, source_code: str, context: Dict[str, Any]) -> str:
+    def _generate_source_code(self, source_code: Optional[str]) -> str:
         """Generate the source code section."""
         try:
-            if not self.config.include_source or not source_code:
+            if not source_code:
                 return ""
-
-            complexity_scores = []
-
-            # Access context elements safely and handle potential missing data
-            functions = context.get("functions", [])
-            classes = context.get("classes", [])
-            description = context.get("description", "[description]")
-
-            for func in functions:
-                complexity = (
-                    func.metrics.get("complexity", 0) if hasattr(func, "metrics") else 0
-                )
-                warning = " ⚠️" if complexity > 10 else ""
-                complexity_scores.append(f"    {func.name}: {complexity}{warning}")
-
-            for cls in classes:
-                if hasattr(cls, "methods"):
-                    for method in cls.methods:
-                        complexity = (
-                            method.metrics.get("complexity", 0)
-                            if hasattr(method, "metrics")
-                            else 0
-                        )
-                        warning = " ⚠️" if complexity > 10 else ""
-                        complexity_scores.append(
-                            f"    {method.name}: {complexity}{warning}"
-                        )
-
-            docstring = f'"""Module for handling {description}.\n\n'
-            if complexity_scores:
-                docstring += "Complexity Scores:\n" + "\n".join(complexity_scores) + "\n"
-            docstring += '"""\n\n'
 
             return "\n".join(
                 [
                     "## Source Code",
-                    f"```{self.config.code_language}",
-                    docstring + source_code,
+                    f"```python",
+                    source_code,
                     "```",
                 ]
             )
         except Exception as e:
-            self.logger.error(f"Error generating source code section: {e}", exc_info=True)
+            log_error(f"Error generating source code section: {e}", exc_info=True)
             return "An error occurred while generating source code documentation."

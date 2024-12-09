@@ -1,17 +1,20 @@
-"""Token Management Module.
+"""
+Token Management Module.
 
 Centralizes all token-related operations for Azure OpenAI API.
 """
 
 from typing import Optional, Dict, Any, Tuple, Union
-from core.config import AzureOpenAIConfig
-from core.logger import LoggerSetup
-from core.metrics import MetricsCollector
+from core.config import AIConfig
+from core.logger import LoggerSetup, log_debug, log_error, log_info
+from utils import (
+    TokenCounter,
+    serialize_for_logging,
+    get_env_var
+)
 from exceptions import TokenLimitError
 from core.types import TokenUsage
 import tiktoken
-
-logger = LoggerSetup.get_logger(__name__)
 
 
 class TokenManager:
@@ -21,9 +24,18 @@ class TokenManager:
         self,
         model: str = "gpt-4",
         deployment_id: Optional[str] = None,
-        config: Optional[AzureOpenAIConfig] = None,
-        metrics_collector: Optional[MetricsCollector] = None,
+        config: Optional[AIConfig] = None,
+        metrics_collector: Optional[Any] = None,
     ) -> None:
+        """
+        Initialize the TokenManager.
+
+        Args:
+            model (str): The model name to use. Defaults to "gpt-4".
+            deployment_id (Optional[str]): The deployment ID for the model.
+            config (Optional[AzureOpenAIConfig]): Configuration for Azure OpenAI.
+            metrics_collector (Optional[Any]): Collector for metrics.
+        """
         self.logger = LoggerSetup.get_logger(__name__)
         self.config = config or AzureOpenAIConfig.from_env()
         self.model = self._get_model_name(deployment_id, model)
@@ -33,6 +45,7 @@ class TokenManager:
         try:
             self.encoding = tiktoken.encoding_for_model(self.model)
         except KeyError:
+            self.logger.warning(f"Model {self.model} not found. Falling back to 'cl100k_base' encoding.")
             self.encoding = tiktoken.get_encoding("cl100k_base")
 
         self.model_config = self.config.model_limits.get(
@@ -42,10 +55,22 @@ class TokenManager:
         # Initialize counters
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
+        self.logger.info("TokenManager initialized.")
 
     def _get_model_name(self, deployment_id: Optional[str], model: str) -> str:
-        """Determine the model name based on deployment ID or default model."""
-        return deployment_id or model
+        """
+        Determine the model name based on deployment ID or default model.
+
+        Args:
+            deployment_id (Optional[str]): The deployment ID for the model.
+            model (str): The default model name.
+
+        Returns:
+            str: The resolved model name.
+        """
+        resolved_model = deployment_id or model
+        self.logger.debug(f"Resolved model name: {resolved_model}")
+        return resolved_model
 
     async def validate_and_prepare_request(
         self,
@@ -57,36 +82,32 @@ class TokenManager:
         Validate and prepare a request with token management.
 
         Args:
-            prompt: The prompt to send to the API
-            max_tokens: Optional maximum tokens for completion
-            temperature: Optional temperature setting
+            prompt (str): The prompt to send to the API.
+            max_tokens (Optional[int]): Optional maximum tokens for completion.
+            temperature (Optional[float]): Optional temperature setting.
 
         Returns:
-            Dict containing the validated request parameters
+            Dict[str, Any]: Validated request parameters.
 
         Raises:
-            TokenLimitError: If request exceeds token limits
+            TokenLimitError: If request exceeds token limits.
         """
         try:
             prompt_tokens = self.estimate_tokens(prompt)
-            # Calculate available tokens for completion
             max_completion = max_tokens or min(
                 self.model_config.max_tokens - prompt_tokens,
-                self.model_config.chunk_size
+                self.model_config.chunk_size,
             )
-            
-            # Ensure max_completion is at least 1
             max_completion = max(1, max_completion)
-            
-            # Ensure total tokens don't exceed model limit
             total_tokens = prompt_tokens + max_completion
             if total_tokens > self.model_config.max_tokens:
-                # Adjust max_completion to fit within limits
                 max_completion = max(1, self.model_config.max_tokens - prompt_tokens)
-            
+                self.logger.warning(
+                    f"Total tokens ({total_tokens}) exceed model max tokens ({self.model_config.max_tokens}). Adjusting max_completion to {max_completion}."
+                )
+
             self.logger.debug(
-                f"Token calculation: prompt={prompt_tokens}, "
-                f"max_completion={max_completion}, total={prompt_tokens + max_completion}"
+                f"Token calculation: prompt={prompt_tokens}, max_completion={max_completion}, total={total_tokens}"
             )
 
             request_params = {
@@ -96,75 +117,57 @@ class TokenManager:
                 "temperature": temperature or 0.7,
             }
 
-            # Track the request
             self.track_request(prompt_tokens, max_completion)
 
             return request_params
 
         except Exception as e:
-            self.logger.error(f"Error preparing request: {e}")
+            self.logger.error(f"Error preparing request: {e}", exc_info=True)
             raise
 
-    def _calculate_usage(
-        self, prompt_tokens: int, completion_tokens: int, cached: bool = False
-    ) -> TokenUsage:
+    def get_usage_stats(self) -> Dict[str, Union[int, float]]:
         """
-        Calculate token usage and cost.
-
-        Args:
-            prompt_tokens (int): Number of tokens in the prompt
-            completion_tokens (int): Number of tokens in the completion
-            cached (bool): Whether to use cached pricing rates
+        Get current token usage statistics.
 
         Returns:
-            TokenUsage: Token usage statistics including cost
+            Dict[str, Union[int, float]]: Current token usage and estimated cost.
         """
-        total_tokens = prompt_tokens + completion_tokens
-
-        prompt_cost = (prompt_tokens / 1000) * self.model_config.cost_per_1k_prompt
-        completion_cost = (completion_tokens / 1000) * self.model_config.cost_per_1k_completion
-
-        return TokenUsage(
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-            estimated_cost=prompt_cost + completion_cost,
+        usage = self._calculate_usage(
+            self.total_prompt_tokens, self.total_completion_tokens
         )
-
-    def get_usage_stats(self) -> Dict[str, Union[int, float]]:
-        """Get current token usage statistics."""
-        return {
+        stats = {
             "total_prompt_tokens": self.total_prompt_tokens,
             "total_completion_tokens": self.total_completion_tokens,
             "total_tokens": self.total_prompt_tokens + self.total_completion_tokens,
-            "estimated_cost": self._calculate_usage(
-                self.total_prompt_tokens, self.total_completion_tokens
-            ).estimated_cost,
+            "estimated_cost": usage.estimated_cost,
         }
-
-    def estimate_tokens(self, text: str) -> int:
-        """Estimate token count for text."""
-        try:
-            tokens = len(self.encoding.encode(text))
-            return tokens
-        except Exception as e:
-            self.logger.error(f"Error estimating tokens: {e}")
-            raise
+        self.logger.info(f"Current Usage Stats: {stats}")
+        return stats
 
     def track_request(self, prompt_tokens: int, max_completion: int) -> None:
-        """Track token usage for a request."""
-        self.total_prompt_tokens += prompt_tokens
-        self.total_completion_tokens += max_completion
-        self.logger.info(f"Tracked request: {prompt_tokens} prompt tokens, {max_completion} max completion tokens")
-
-    async def process_completion(self, completion: Any) -> Tuple[str, Dict[str, int]]:
-        """Process completion response and track token usage.
+        """
+        Track token usage for a request.
 
         Args:
-            completion: The completion response from the API
+            prompt_tokens (int): Number of tokens in the prompt.
+            max_completion (int): Number of tokens allocated for completion.
+        """
+        self.total_prompt_tokens += prompt_tokens
+        self.total_completion_tokens += max_completion
+        self.logger.info(
+            f"Tracked request - Prompt Tokens: {prompt_tokens}, "
+            f"Max Completion Tokens: {max_completion}"
+        )
+
+    async def process_completion(self, completion: Any) -> Tuple[str, Dict[str, int]]:
+        """
+        Process completion response and track token usage.
+
+        Args:
+            completion (Any): The completion response from the API.
 
         Returns:
-            Tuple of (completion content, usage statistics)
+            Tuple[str, Dict[str, int]]: Completion content and usage statistics.
         """
         try:
             content = completion.choices[0].message.content
@@ -172,7 +175,6 @@ class TokenManager:
                 completion.usage.model_dump() if hasattr(completion, "usage") else {}
             )
 
-            # Update token counts
             if usage:
                 self.total_completion_tokens += usage.get("completion_tokens", 0)
                 self.total_prompt_tokens += usage.get("prompt_tokens", 0)
@@ -180,17 +182,21 @@ class TokenManager:
                 if self.metrics_collector:
                     await self.metrics_collector.track_operation(
                         "token_usage",
-                        True,
-                        0,
-                        usage,
+                        success=True,
+                        duration=0,  # Duration can be updated based on actual metrics
+                        usage=usage,
                         metadata={
                             "model": self.model,
                             "deployment_id": self.deployment_id,
                         },
                     )
 
+                self.logger.info(
+                    f"Processed completion - Content Length: {len(content)}, Usage: {usage}"
+                )
+
             return content, usage
 
         except Exception as e:
-            self.logger.error(f"Error processing completion: {e}")
+            self.logger.error(f"Error processing completion: {e}", exc_info=True)
             raise

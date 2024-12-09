@@ -1,163 +1,137 @@
-from typing import Optional, Tuple, Dict, Any, TYPE_CHECKING, Type
-from pathlib import Path
+"""
+Documentation generation orchestrator.
+
+Coordinates the process of generating documentation from source code files,
+using AI services and managing the overall documentation workflow.
+"""
+
 from datetime import datetime
-import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-if TYPE_CHECKING:
-    from ai_interaction import AIInteractionHandler
-from core.logger import LoggerSetup
-from core.types import DocumentationContext, ExtractionContext, ExtractionResult
 from core.extraction.code_extractor import CodeExtractor
-from core.docstring_processor import DocstringProcessor
-from core.response_parsing import ResponseParsingService
-from core.metrics import Metrics
-from core.schema_loader import load_schema
+from core.markdown_generator import MarkdownGenerator
+
+from core.ai_service import AIService
+from core.cache import Cache
+from core.config import Config
+from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info
+from core.metrics_collector import MetricsCollector
+from core.types import (DocstringData, DocumentationContext, DocumentationData,
+                        ExtractionContext, ProcessingResult)
 from exceptions import DocumentationError
+from utils import ensure_directory, handle_extraction_error, read_file_safe
+import uuid
 
-logger = LoggerSetup.get_logger(__name__)
-
+# Initialize the logger with a correlation ID
+base_logger = LoggerSetup.get_logger(__name__)
+correlation_id = str(uuid.uuid4())
+logger = CorrelationLoggerAdapter(base_logger, correlation_id=correlation_id)
 
 class DocumentationOrchestrator:
-    def __init__(
-        self,
-        ai_handler: Optional['AIInteractionHandler'] = None,  # Use forward reference
-        docstring_processor: Optional[DocstringProcessor] = None,
-        code_extractor: Optional[CodeExtractor] = None,
-        metrics: Optional[Metrics] = None,
-        response_parser: Optional[ResponseParsingService] = None
-    ) -> None:
+    """
+    Orchestrates the process of generating documentation from source code.
+
+    This class manages the end-to-end process of analyzing source code,
+    generating documentation using AI, and producing formatted output.
+    """
+
+    def __init__(self, ai_service: Optional[AIService] = None) -> None:
         """
-        Initialize the documentation orchestrator.
+        Initialize the DocumentationOrchestrator.
 
         Args:
-            ai_handler: Handler for AI interactions
-            docstring_processor: Processor for docstrings
-            code_extractor: Extractor for code elements
-            metrics: Metrics calculator
-            response_parser: Service for parsing AI responses
-
-        Raises:
-            ValueError: If ai_handler is not provided
+            ai_service: Service for AI interactions. Created if not provided.
         """
-        self.logger = LoggerSetup.get_logger(__name__)
-        if ai_handler is None:
-            raise ValueError("ai_handler is required for DocumentationOrchestrator")
-        self.ai_handler: 'AIInteractionHandler' = ai_handler
-        self.docstring_schema: Dict[str, Any] = load_schema("docstring_schema")  # Load schema
-        self.metrics: Metrics = metrics or Metrics()
-        self.code_extractor: CodeExtractor = code_extractor or CodeExtractor(ExtractionContext())
-        self.docstring_processor: DocstringProcessor = docstring_processor or DocstringProcessor(metrics=self.metrics)
-        self.response_parser: ResponseParsingService = response_parser or ResponseParsingService()
+        self.logger = logger
+        self.config = Config()
+        self.ai_service = ai_service or AIService(config=self.config.ai)
 
-    async def generate_documentation(self, context: DocumentationContext) -> Tuple[str, str]:
+    async def generate_documentation(self, context: DocumentationContext) -> Tuple[str, DocumentationData]:
         """
-        Generate documentation for the provided source code.
+        Generate documentation for the given source code.
 
         Args:
-            context: DocumentationContext containing the source code and metadata.
+            context: Information about the source code and its environment.
 
         Returns:
-            Tuple containing the updated source code and generated documentation.
+            Updated source code and generated documentation.
 
         Raises:
             DocumentationError: If documentation generation fails.
         """
         try:
-            self.logger.info("Starting documentation generation process")
+            self.logger.info("Starting documentation generation process", extra={'correlation_id': self.logger.correlation_id})
 
-            # Step 1: Extract code elements
-            try:
-                extraction_result: Optional[ExtractionResult] = await self.code_extractor.extract_code(context.source_code)
-                if not extraction_result:
-                    self.logger.error("Failed to extract code elements.")
-                    raise DocumentationError("Failed to extract code elements")
-                self.logger.info("Code extraction completed successfully")
-            except Exception as e:
-                error_msg = f"Code extraction failed: {str(e)}"
-                self.logger.error(error_msg, exc_info=True)
-                raise DocumentationError(error_msg) from e
-
-            # Step 2: Generate enriched prompt for AI model
-            try:
-                extraction_dict = extraction_result.to_dict()
-                prompt: str = await self.ai_handler.create_dynamic_prompt(
-                    extraction_dict
+            # Extract code information
+            extraction_result = await self.code_extractor.extract_code(
+                context.source_code, 
+                ExtractionContext(
+                    module_name=context.metadata.get("module_name"),
+                    source_code=context.source_code
                 )
-                self.logger.info("Prompt generated successfully for AI model")
-            except Exception as e:
-                error_msg = f"Prompt generation failed: {str(e)}"
-                self.logger.error(error_msg, exc_info=True)
-                raise DocumentationError(error_msg) from e
+            )
 
-            # Step 3: Interact with AI to generate docstrings
-            try:
-                ai_response: Union[str, Dict[str, Any]] = await self.ai_handler._interact_with_ai(prompt)
-                self.logger.info("AI interaction completed successfully")
-            except Exception as e:
-                error_msg = f"AI interaction failed: {str(e)}"
-                self.logger.error(error_msg, exc_info=True)
-                raise DocumentationError(error_msg) from e
+            # Enhance with AI
+            processing_result = await self.ai_service.enhance_and_format_docstring(context)
 
-            # Step 4: Parse AI response and validate
-            try:
-                parsed_response = await self.response_parser.parse_response(
-                    ai_response, expected_format="docstring"
-                )
-                if not parsed_response.validation_success:
-                    self.logger.error("Validation failed for AI response.")
-                    raise DocumentationError("Failed to validate AI response.")
-                self.logger.info("AI response parsed and validated successfully")
-            except Exception as e:
-                error_msg = f"AI response parsing or validation failed: {str(e)}"
-                self.logger.error(error_msg, exc_info=True)
-                raise DocumentationError(error_msg) from e
+            # Process and validate
+            docstring_data = DocstringData(
+                summary=processing_result.content.get("summary", ""),
+                description=processing_result.content.get("description", ""),
+                args=processing_result.content.get("args", []),
+                returns=processing_result.content.get("returns", {"type": "None", "description": ""}),
+                raises=processing_result.content.get("raises", []),
+                complexity=extraction_result.maintainability_index or 1
+            )
 
-            # Step 5: Integrate AI-generated docstrings
-            try:
-                updated_code, updated_documentation = await self.ai_handler._integrate_ai_response(
-                    parsed_response.content, extraction_result
-                )
-                self.logger.info("Docstring integration completed successfully")
-            except Exception as e:
-                error_msg = f"AI response integration failed: {str(e)}"
-                self.logger.error(error_msg, exc_info=True)
-                raise DocumentationError(error_msg) from e
+            # Create documentation data
+            documentation_data = DocumentationData(
+                module_info=context.metadata or {},
+                ai_content=processing_result.content,
+                docstring_data=docstring_data,
+                code_metadata={
+                    "maintainability_index": extraction_result.maintainability_index,
+                    "dependencies": extraction_result.dependencies
+                },
+                source_code=context.source_code,
+                metrics=processing_result.metrics
+            )
 
-            self.logger.info("Documentation generation completed successfully")
-            return updated_code, updated_documentation
+            # Generate markdown
+            markdown_doc = self.markdown_generator.generate(documentation_data)
 
-        except DocumentationError as de:
-            self.logger.error(f"DocumentationError encountered: {de}")
-            raise
+            self.logger.info("Documentation generation completed successfully", extra={'correlation_id': self.logger.correlation_id})
+            return context.source_code, documentation_data
+
         except Exception as e:
-            error_msg = f"Unexpected error during documentation generation: {str(e)}"
-            self.logger.error(error_msg, exc_info=True)
-            raise DocumentationError(error_msg)
+            self.logger.error(f"Documentation generation failed: {e}", exc_info=True, extra={'correlation_id': self.logger.correlation_id})
+            raise DocumentationError(f"Failed to generate documentation: {e}")
 
-    async def generate_module_documentation(
-        self, file_path: Path, output_dir: Path
-    ) -> None:
+    async def generate_module_documentation(self, file_path: Path, output_dir: Path, source_code: Optional[str] = None) -> None:
         """
         Generate documentation for a single module.
 
         Args:
-            file_path: Path to the Python file
-            output_dir: Output directory for documentation
+            file_path: Path to the module file
+            output_dir: Directory where documentation will be output
+            source_code: The source code to use (optional)
 
         Raises:
-            DocumentationError: If module documentation generation fails
+            DocumentationError: If documentation generation fails
         """
         try:
-            self.logger.info(f"Generating documentation for {file_path}")
-
-            # Create output directory
-            output_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.info(f"Generating documentation for {file_path}", extra={'correlation_id': self.logger.correlation_id})
+            output_dir = ensure_directory(output_dir)
             output_path = output_dir / file_path.with_suffix(".md").name
 
-            # Read source code
-            source_code = file_path.read_text(encoding="utf-8")
+            # Use the provided source_code if available
+            if source_code is None:
+                source_code = read_file_safe(file_path)
+            else:
+                # Optionally, write the fixed source code back to the file
+                file_path.write_text(source_code, encoding="utf-8")
 
-            # Create documentation context
             context = DocumentationContext(
                 source_code=source_code,
                 module_path=file_path,
@@ -166,21 +140,25 @@ class DocumentationOrchestrator:
                     "file_path": str(file_path),
                     "module_name": file_path.stem,
                     "creation_time": datetime.now().isoformat(),
-                },
+                }
             )
 
-            # Generate documentation
             updated_code, documentation = await self.generate_documentation(context)
 
-            # Write output
-            output_path.write_text(documentation, encoding="utf-8")
+            # Write output files
+            output_path.write_text(documentation.to_dict(), encoding="utf-8")
             file_path.write_text(updated_code, encoding="utf-8")
-            self.logger.info(f"Documentation written to {output_path}")
 
+            self.logger.info(f"Documentation written to {output_path}", extra={'correlation_id': self.logger.correlation_id})
+
+        except DocumentationError as de:
+            error_msg = f"Module documentation generation failed for {file_path}: {de}"
+            self.logger.error(error_msg, extra={'correlation_id': self.logger.correlation_id})
+            raise DocumentationError(error_msg) from de
         except Exception as e:
-            error_msg = f"Module documentation generation failed for {file_path}: {e}"
-            self.logger.error(error_msg, exc_info=True)
-            raise DocumentationError(error_msg)
+            error_msg = f"Unexpected error generating documentation for {file_path}: {e}"
+            self.logger.error(error_msg, extra={'correlation_id': self.logger.correlation_id})
+            raise DocumentationError(error_msg) from e
 
     async def generate_batch_documentation(
         self,
@@ -191,11 +169,11 @@ class DocumentationOrchestrator:
         Generate documentation for multiple files.
 
         Args:
-            file_paths: List of Python file paths
+            file_paths: List of file paths to process
             output_dir: Output directory for documentation
 
         Returns:
-            Dict mapping file paths to success status
+            Dictionary mapping file paths to success status
         """
         results = {}
         for file_path in file_paths:
@@ -203,35 +181,18 @@ class DocumentationOrchestrator:
                 await self.generate_module_documentation(file_path, output_dir)
                 results[file_path] = True
             except DocumentationError as e:
-                self.logger.error(f"Failed to generate docs for {file_path}: {e}")
+                self.logger.error(f"Failed to generate docs for {file_path}: {e}", extra={'correlation_id': self.logger.correlation_id})
+                results[file_path] = False
+            except Exception as e:
+                self.logger.error(f"Unexpected error for {file_path}: {e}", extra={'correlation_id': self.logger.correlation_id})
                 results[file_path] = False
         return results
 
-    def _generate_markdown(self, context: Dict[str, Any]) -> str:
-        """Generate markdown documentation from context."""
-        # Placeholder for markdown generation logic
-        return "Generated markdown documentation"
-
     async def __aenter__(self) -> "DocumentationOrchestrator":
-        """Async context manager entry."""
+        """Enter the async context manager."""
         return self
 
-    async def __aexit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[Any]
-    ) -> None:
-        """Async context manager exit."""
-        pass
-
-
-def load_schema(schema_name: str) -> Dict[str, Any]:
-    """Load the schema from a JSON file in the 'schemas' directory."""
-    schema_path = Path(__file__).parent.parent / 'schemas' / f"{schema_name}.json"
-
-    if not schema_path.exists():
-        raise FileNotFoundError(f"Schema file not found: {schema_path}")
-
-    with open(schema_path, "r", encoding="utf-8") as file:
-        return json.load(file)
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the async context manager."""
+        if self.ai_service:
+            await self.ai_service.close()

@@ -1,13 +1,16 @@
-# core/types.py
 """
-Core type definitions for code analysis and documentation generation.
-Provides dataclass definitions for structured data handling throughout the application.
+Core type definitions for Python code analysis and documentation generation.
+Handles all data structures needed for code extraction, analysis, metrics,
+and documentation generation throughout the application.
 """
 
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Set, Union
+from typing import Dict, Any, Optional, List, Set
+from core.extraction.function_extractor import FunctionExtractor
+from core.extraction.class_extractor import ClassExtractor
+from core.extraction.dependency_analyzer import DependencyAnalyzer
 
 @dataclass
 class BaseData:
@@ -17,15 +20,27 @@ class BaseData:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
+class MetricData:
+    """Represents code metrics and complexity scores."""
+    cyclomatic_complexity: int = 0
+    cognitive_complexity: int = 0
+    maintainability_index: float = 0.0
+    halstead_metrics: Dict[str, float] = field(default_factory=dict)
+    lines_of_code: int = 0
+    complexity_graph: Optional[str] = None  # Base64 encoded visualization
+
+@dataclass
 class DocstringData:
-    """Structured representation of a docstring."""
-    summary: str
-    args: List[Dict[str, Any]]
-    returns: Dict[str, Any]
-    raises: List[Dict[str, Any]]
-    description: Optional[str] = None
+    """Google Style docstring representation."""
+    summary: str  # First line brief description
+    args: List[Dict[str, str]] = field(default_factory=list)  # param name, type, description
+    returns: Dict[str, str] = field(default_factory=lambda: {"type": "None", "description": ""})  # type and description of return value
+    raises: List[Dict[str, str]] = field(default_factory=list)  # exception type and description
+    description: Optional[str] = None  # Detailed description
     metadata: Dict[str, Any] = field(default_factory=dict)
-    complexity: int = 1
+    complexity: Optional[int] = None
+    validation_status: bool = False
+    validation_errors: List[str] = field(default_factory=list)
 
 @dataclass
 class TokenUsage:
@@ -36,143 +51,152 @@ class TokenUsage:
     estimated_cost: float
 
 @dataclass
-class ExtractedElement:
-    """Base class for extracted code elements."""
-    name: str
-    lineno: int
-    source: Optional[str] = None
-    docstring: Optional[str] = None
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    dependencies: Dict[str, Set[str]] = field(default_factory=dict)
-    decorators: List[str] = field(default_factory=list)
-    complexity_warnings: List[str] = field(default_factory=list)
-
-@dataclass
 class ExtractedArgument:
     """Represents a function argument."""
     name: str
     type: Optional[str] = None
     default_value: Optional[str] = None
     is_required: bool = True
+    description: Optional[str] = None
 
 @dataclass
-class ExtractedFunction(ExtractedElement):
-    """Represents an extracted function with its metadata."""
+class ExtractedElement:
+    """Base class for extracted code elements."""
     name: str
     lineno: int
     source: Optional[str] = None
     docstring: Optional[str] = None
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    metrics: MetricData = field(default_factory=MetricData)
     dependencies: Dict[str, Set[str]] = field(default_factory=dict)
     decorators: List[str] = field(default_factory=list)
     complexity_warnings: List[str] = field(default_factory=list)
-    raises: List[Dict[str, str]] = field(default_factory=list)
-    body_summary: Optional[str] = None
     ast_node: Optional[ast.AST] = None
 
+@dataclass
+class ExtractedFunction(ExtractedElement):
+    """Represents an extracted function with its metadata."""
+    args: List[ExtractedArgument] = field(default_factory=list)
+    returns: Dict[str, str] = field(default_factory=lambda: {"type": "Any", "description": ""})
+    raises: List[Dict[str, str]] = field(default_factory=list)
+    body_summary: Optional[str] = None
+    docstring_info: Optional[DocstringData] = None
+    is_async: bool = False
+    is_method: bool = False
+    parent_class: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the ExtractedFunction instance to a dictionary."""
+        """Convert to dictionary format."""
         return {
             "name": self.name,
             "lineno": self.lineno,
             "source": self.source,
             "docstring": self.docstring,
-            "metrics": self.metrics,
+            "metrics": self.metrics.__dict__,
             "dependencies": self.dependencies,
             "decorators": self.decorators,
             "complexity_warnings": self.complexity_warnings,
-            "raises": [r.get('exception', 'Unknown') for r in self.raises],
-            "body_summary": self.body_summary
+            "args": [arg.__dict__ for arg in self.args],
+            "returns": self.returns,
+            "raises": self.raises,
+            "body_summary": self.body_summary,
+            "is_async": self.is_async,
+            "is_method": self.is_method,
+            "parent_class": self.parent_class
         }
 
 @dataclass
-class ExtractedClass:
-    name: str
-    docstring: str
-    lineno: int
-    source: str
-    metrics: Dict[str, Any]
-    dependencies: List[str]
-    decorators: List[str]
-    complexity_warnings: List[str]
-    raises: List[Dict[str, str]] = None  # Make 'raises' optional
-    bases: List[str] = None
-    methods: List[Any] = None
-    attributes: List[Any] = None
-    is_exception: bool = False
-    instance_attributes: List[Any] = None
+class ExtractedClass(ExtractedElement):
+    """Represents a class extracted from code."""
+    methods: List[ExtractedFunction] = field(default_factory=list)
+    attributes: List[Dict[str, Any]] = field(default_factory=list)
+    instance_attributes: List[Dict[str, Any]] = field(default_factory=list)
+    bases: List[str] = field(default_factory=list)
     metaclass: Optional[str] = None
-    ast_node: Optional[ast.AST] = None
-
-    def __post_init__(self):
-        """Initialize default values for optional fields."""
-        self.bases = self.bases or []
-        self.methods = self.methods or []
-        self.attributes = self.attributes or []
-        self.instance_attributes = self.instance_attributes or []
-        self.raises = self.raises or []
+    is_exception: bool = False
+    docstring_info: Optional[DocstringData] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the ExtractedClass instance to a dictionary."""
+        """Convert to dictionary format."""
         return {
             "name": self.name,
-            "docstring": self.docstring,
-            "raises": [r.get('exception', 'Unknown') for r in self.raises],
-            "methods": [method.to_dict() for method in self.methods],
-            "metrics": self.metrics,
-            "bases": self.bases,
             "lineno": self.lineno,
             "source": self.source,
+            "docstring": self.docstring,
+            "metrics": self.metrics.__dict__,
             "dependencies": self.dependencies,
-            "attributes": self.attributes,
-            "is_exception": self.is_exception,
             "decorators": self.decorators,
+            "complexity_warnings": self.complexity_warnings,
+            "methods": [method.to_dict() for method in self.methods],
+            "attributes": self.attributes,
             "instance_attributes": self.instance_attributes,
+            "bases": self.bases,
             "metaclass": self.metaclass,
-            "complexity_warnings": self.complexity_warnings
+            "is_exception": self.is_exception
         }
 
 @dataclass
-class ParsedResponse:
-    """Container for parsed response data."""
-    content: Dict[str, Any]
-    format_type: str
-    parsing_time: float
-    validation_success: bool
-    errors: List[str]
-    metadata: Dict[str, Any]
+class ExtractionResult:
+    """Result of code extraction process."""
+    module_docstring: Dict[str, Any] = field(default_factory=dict)
+    module_name: str = ""
+    file_path: str = ""
+    classes: List[ExtractedClass] = field(default_factory=list)
+    functions: List[ExtractedFunction] = field(default_factory=list)
+    variables: List[Dict[str, Any]] = field(default_factory=list)
+    constants: List[Dict[str, Any]] = field(default_factory=list)
+    dependencies: Dict[str, Set[str]] = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
+    maintainability_index: Optional[float] = None
+    source_code: str = ""
+    imports: List[Any] = field(default_factory=list)
+    metrics: MetricData = field(default_factory=MetricData)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary format."""
+        return {
+            'module_docstring': self.module_docstring,
+            'module_name': self.module_name,
+            'file_path': self.file_path,
+            'functions': [func.to_dict() for func in self.functions],
+            'classes': [cls.to_dict() for cls in self.classes],
+            'variables': self.variables,
+            'constants': self.constants,
+            'imports': self.imports,
+            'dependencies': self.dependencies,
+            'errors': self.errors,
+            'maintainability_index': self.maintainability_index,
+            'source_code': self.source_code,
+            'metrics': self.metrics.__dict__
+        }
 
 @dataclass
 class ProcessingResult:
     """Result of AI processing operation."""
-    content: str
+    content: Dict[str, Any]
     usage: Dict[str, Any]
-    metrics: Optional[Dict[str, Any]] = None
+    metrics: Dict[str, Any] = field(default_factory=dict)
     is_cached: bool = False
     processing_time: float = 0.0
+    validation_status: bool = False
+    validation_errors: List[str] = field(default_factory=list)
+    schema_errors: List[str] = field(default_factory=list)
 
 @dataclass
 class DocumentationContext:
-    """Context for managing and generating documentation."""
+    """Context for documentation generation."""
     source_code: str
     module_path: Path
     include_source: bool = True
     metadata: Optional[Dict[str, Any]] = None
     ai_generated: Optional[Dict[str, Any]] = None
-    classes: Optional[List[Any]] = None
-    functions: Optional[List[Any]] = None
+    classes: Optional[List[ExtractedClass]] = None
+    functions: Optional[List[ExtractedFunction]] = None
     constants: Optional[List[Any]] = None
     changes: Optional[List[Any]] = None
 
     def get_cache_key(self) -> str:
-        """
-        Generate a cache key for this documentation context.
-
-        Returns:
-            A unique hash combining the source code and metadata.
-        """
+        """Generate cache key."""
         import hashlib
-
         key_parts = [
             self.source_code,
             str(self.module_path),
@@ -195,62 +219,52 @@ class ExtractionContext:
     base_path: Optional[Path] = None
     source_code: Optional[str] = None
     tree: Optional[ast.AST] = None
+    function_extractor: Optional[FunctionExtractor] = None
+    class_extractor: Optional[ClassExtractor] = None
+    dependency_analyzer: Optional[DependencyAnalyzer] = None
 
-    def __post_init__(self):
-        """Initialize additional attributes after dataclass initialization."""
-        if not hasattr(self, 'tree'):
-            self.tree = None
-
-    def __init__(self):
-        self.tree = None
-        self.metrics_enabled = True
-        self.include_private = False
-
-@dataclass
-class ExtractionResult:
-    """Result of code extraction."""
-    module_docstring: Dict[str, Any]
-    module_name: str = ""
-    file_path: str = ""
-    classes: List[Any] = field(default_factory=list)
-    functions: List[Any] = field(default_factory=list)
-    variables: List[Dict[str, Any]] = field(default_factory=list)
-    constants: List[Dict[str, Any]] = field(default_factory=list)
-    dependencies: Dict[str, Set[str]] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
-    maintainability_index: Optional[float] = None
-    source_code: str = ""
-    imports: List[Any] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert extraction result to dictionary format."""
-        return {
-            'functions': self.functions if hasattr(self, 'functions') else [],
-            'classes': self.classes if hasattr(self, 'classes') else [],
-            'imports': self.imports if hasattr(self, 'imports') else [],
-            'dependencies': self.dependencies if hasattr(self, 'dependencies') else []
-        }
+    def __post_init__(self) -> None:
+        """Initialize AST if needed."""
+        if self.tree is None and self.source_code:
+            try:
+                self.tree = ast.parse(self.source_code)
+            except SyntaxError as e:
+                raise ValueError(f"Failed to parse source code: {e}")
+        
+        if self.source_code is None and self.tree is not None:
+            try:
+                if hasattr(ast, "unparse"):
+                    self.source_code = ast.unparse(self.tree)
+            except Exception as e:
+                raise ValueError(f"Failed to unparse AST: {e}")
 
 @dataclass
 class DocumentationData:
-    """Standardized documentation data structure."""
-    module_info: Dict[str, str]
-    ai_content: Dict[str, Any]
+    """Documentation data structure."""
+    module_name: str
+    module_path: Path
+    module_summary: str
+    glossary: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    changes: List[Dict[str, Any]] = field(default_factory=list)
+    complexity_scores: Dict[str, float] = field(default_factory=dict)
+    source_code: str
     docstring_data: DocstringData
+    ai_content: Dict[str, Any]
     code_metadata: Dict[str, Any]
-    source_code: Optional[str] = None
-    metrics: Optional[Dict[str, Any]] = None
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    validation_status: bool = False
+    validation_errors: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert to dictionary representation.
-
-        Returns:
-            Dictionary containing all documentation data.
-        """
+        """Convert to dictionary format."""
         return {
-            "module_info": self.module_info,
-            "ai_content": self.ai_content,
+            "module_name": self.module_name,
+            "module_path": str(self.module_path),
+            "module_summary": self.module_summary,
+            "glossary": self.glossary,
+            "changes": self.changes,
+            "complexity_scores": self.complexity_scores,
+            "source_code": self.source_code,
             "docstring_data": {
                 "summary": self.docstring_data.summary,
                 "description": self.docstring_data.description,
@@ -260,6 +274,7 @@ class DocumentationData:
                 "complexity": self.docstring_data.complexity,
             },
             "code_metadata": self.code_metadata,
-            "source_code": self.source_code,
             "metrics": self.metrics,
+            "validation_status": self.validation_status,
+            "validation_errors": self.validation_errors
         }

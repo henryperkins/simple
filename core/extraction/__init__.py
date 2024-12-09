@@ -13,21 +13,18 @@ Main components:
 - CodeExtractor: Main class for code extraction
 - ClassExtractor: Extract class definitions and methods
 - FunctionExtractor: Extract function and method definitions
-- ImportExtractor: Extract and analyze imports
+- DependencyAnalyzer: Analyze code dependencies
+- extract_dependencies_from_node: Extract dependencies from an AST node
 """
 
 from core.extraction.code_extractor import CodeExtractor
-from core.types import (
-    ExtractedFunction,
-    ExtractedClass,
-    ExtractionResult,
-    ExtractionContext
-)
+from core.extraction.class_extractor import ClassExtractor
+from core.extraction.function_extractor import FunctionExtractor
+from core.extraction.dependency_analyzer import DependencyAnalyzer
 
 __all__ = [
     "CodeExtractor",
-    "ExtractedFunction",
-    "ExtractedClass", 
-    "ExtractionResult",
-    "ExtractionContext"
+    "ClassExtractor",
+    "FunctionExtractor",
+    "DependencyAnalyzer"
 ]
