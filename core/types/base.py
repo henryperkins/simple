@@ -28,9 +28,9 @@ class ParsedResponse:
 class DocstringData:
     """Google Style docstring representation."""
     summary: str  # First line brief description
-    args: List[Dict[str, str]] = default_factory(list)  # param name, type, description
-    returns: Dict[str, str] = default_factory(lambda: {"type": "None", "description": ""})  # type and description of return value
-    raises: List[Dict[str, str]] = default_factory(list)  # exception type and description
+    args: List[Dict[str, str]] = field(default_factory=list)  # param name, type, description
+    returns: Dict[str, str] = field(default_factory=lambda: {"type": "None", "description": ""})  # type and description of return value
+    raises: List[Dict[str, str]] = field(default_factory=list)  # exception type and description
     description: Optional[str] = None  # Detailed description
     metadata: Dict[str, Any] = field(default_factory=dict)
     complexity: Optional[int] = None
