@@ -120,6 +120,8 @@ class ExtractedFunction(ExtractedElement):
             self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_parser = Injector.get('docstring_parser')
+        self.docstring_parser = Injector.get('docstring_parser')
+        self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_info = self.docstring_parser(self.docstring)
 
 @dataclass
@@ -162,7 +164,7 @@ class ExtractionResult:
         """Initialize dependencies."""
         if self.metric_calculator is None:
             self.metric_calculator = Injector.get('metric_calculator')
-        self.metrics = self.metric_calculator(self)
+        self.metrics = Injector.get('metric_calculator')(self)
 
 @dataclass
 class ProcessingResult:
@@ -264,5 +266,6 @@ class DocumentationData:
         """Initialize dependencies."""
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get('docstring_parser')
+        self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_data = self.docstring_parser(self.source_code)
