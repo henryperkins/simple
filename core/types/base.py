@@ -99,7 +99,6 @@ class ExtractedFunction(ExtractedElement):
             "parent_class": self.parent_class,
             "ai_content": self.ai_content,
             "code_metadata": self.code_metadata,
-            "metrics": self.metrics,
             "validation_status": self.validation_status,
             "validation_errors": self.validation_errors,
         }
