@@ -49,7 +49,7 @@ class DocumentationGenerator:
         )
 
         # Initialize core components
-        self.ai_service = AIService(config=self.config.ai, correlation_id=self.correlation_id)
+        self.ai_service = AIService(config=self.config.ai, correlation_id=self.correlation_id, docstring_processor=DocstringProcessor(), response_parser=ResponseParsingService(correlation_id=self.correlation_id), token_manager=TokenManager(model=self.config.ai.model, config=self.config.ai))
         self.doc_orchestrator = DocumentationOrchestrator(
             ai_service=self.ai_service,
             correlation_id=self.correlation_id
