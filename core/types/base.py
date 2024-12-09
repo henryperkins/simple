@@ -97,10 +97,6 @@ class ExtractedFunction(ExtractedElement):
             "is_async": self.is_async,
             "is_method": self.is_method,
             "parent_class": self.parent_class,
-            "ai_content": self.ai_content,
-            "code_metadata": self.code_metadata,
-            "validation_status": self.validation_status,
-            "validation_errors": self.validation_errors,
         }
 
 @dataclass
