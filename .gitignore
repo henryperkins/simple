@@ -19,3 +19,5 @@ docs/api/models
 docs/core
 .aider*
 .env
+cache.json
+metrics_history.json
