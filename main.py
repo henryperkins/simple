@@ -28,7 +28,7 @@ Injector.register('metric_calculator', lambda element: MetricData())
 Injector.register('docstring_parser', lambda docstring: DocstringData(summary=docstring))
 
 # Configure logger globally with dynamic settings
-log_dir = "logs"  # This could be set via an environment variable or command-line argument
+LOG_DIR = "logs"  # This could be set via an environment variable or command-line argument
 LoggerSetup.configure(level="DEBUG", log_dir=log_dir)
 
 # Set global exception handler
@@ -39,26 +39,26 @@ class DocumentationGenerator:
 
     def __init__(self) -> None:
         """Initialize the documentation generator."""
-        self.config: Config = Config()
-        self.correlation_id: str = str(uuid.uuid4())
-        self.logger: CorrelationLoggerAdapter = CorrelationLoggerAdapter(
+        self.config = Config()
+        self.correlation_id = str(uuid.uuid4())
+        self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__), 
             correlation_id=self.correlation_id
         )
 
         # Initialize core components
-        self.metrics_collector: MetricsCollector = MetricsCollector(correlation_id=self.correlation_id)
-        self.ai_service: AIService = AIService(config=self.config.ai, correlation_id=self.correlation_id)
-        self.doc_orchestrator: DocumentationOrchestrator = DocumentationOrchestrator(
+        self.metrics_collector = MetricsCollector(correlation_id=self.correlation_id)
+        self.ai_service = AIService(config=self.config.ai, correlation_id=self.correlation_id)
+        self.doc_orchestrator = DocumentationOrchestrator(
             ai_service=self.ai_service,
             correlation_id=self.correlation_id
         )
-        self.system_monitor: SystemMonitor = SystemMonitor(
+        self.system_monitor = SystemMonitor(
             token_manager=self.ai_service.token_manager,
             metrics_collector=self.metrics_collector,
             correlation_id=self.correlation_id
         )
-        self.repo_manager: Optional[RepositoryManager] = None
+        self.repo_manager = None
 
     async def initialize(self) -> None:
         """Start systems that require asynchronous setup."""
@@ -66,11 +66,11 @@ class DocumentationGenerator:
             self.logger.info("Initializing system components")
             await self.system_monitor.start()
             self.logger.info("All components initialized successfully")
-        except Exception as e:
-            error_msg = f"Initialization failed: {e}"
+        except Exception as init_error:
+            error_msg = f"Initialization failed: {init_error}"
             self.logger.error(error_msg, exc_info=True)
             await self.cleanup()
-            raise ConfigurationError(error_msg) from e
+            raise ConfigurationError(error_msg) from init_error
 
     async def process_file(self, file_path: Path, output_path: Path) -> bool:
         """Process a single file and generate documentation."""
@@ -106,8 +106,8 @@ class DocumentationGenerator:
             self.logger.info(f"Finished processing file: {file_path}")
             return success
 
-        except Exception as e:
-            self.logger.error(f"Error processing file: {e}", exc_info=True)
+        except Exception as process_error:
+            self.logger.error(f"Error processing file: {process_error}", exc_info=True)
             return False
 
     def _fix_indentation(self, source_code: str) -> str:
@@ -143,8 +143,8 @@ class DocumentationGenerator:
             self.doc_orchestrator.code_extractor.context.base_path = local_path
             success = await self._process_local_repository(local_path, output_dir)
 
-        except Exception as e:
-            self.logger.error(f"Error processing repository {repo_path}: {e}", exc_info=True)
+        except Exception as repo_error:
+            self.logger.error(f"Error processing repository {repo_path}: {repo_error}", exc_info=True)
             success = False
         finally:
             processing_time: float = asyncio.get_event_loop().time() - start_time
@@ -171,9 +171,9 @@ class DocumentationGenerator:
             repo_path = await self.repo_manager.clone_repository(repo_url)
             self.logger.info(f"Successfully cloned repository to {repo_path}")
             return repo_path
-        except Exception as e:
-            self.logger.error(f"Failed to clone repository: {e}", exc_info=True)
-            raise DocumentationError(f"Repository cloning failed: {e}")
+        except Exception as clone_error:
+            self.logger.error(f"Failed to clone repository: {clone_error}", exc_info=True)
+            raise DocumentationError(f"Repository cloning failed: {clone_error}") from clone_error
 
     async def _process_local_repository(self, repo_path: Path, output_dir: Path) -> bool:
         """Process a local repository."""
@@ -191,8 +191,8 @@ class DocumentationGenerator:
             self.logger.info(f"Finished processing local repository: {repo_path}")
             return True
 
-        except Exception as e:
-            self.logger.error(f"Error processing local repository: {e}", exc_info=True)
+        except Exception as local_repo_error:
+            self.logger.error(f"Error processing local repository: {local_repo_error}", exc_info=True)
             return False
 
     async def display_metrics(self) -> None:
@@ -216,8 +216,8 @@ class DocumentationGenerator:
             print(f"Status: {system_metrics.get('status', 'unknown')}")
             print("-" * 40)
 
-        except Exception as e:
-            self.logger.error(f"Error displaying metrics: {e}", exc_info=True)
+        except Exception as display_error:
+            self.logger.error(f"Error displaying metrics: {display_error}", exc_info=True)
 
     async def cleanup(self) -> None:
         """Cleanup resources used by the DocumentationGenerator."""
@@ -230,8 +230,8 @@ class DocumentationGenerator:
             if self.system_monitor:
                 await self.system_monitor.stop()
             self.logger.info("Cleanup completed successfully")
-        except Exception as e:
-            self.logger.error(f"Error during cleanup: {e}", exc_info=True)
+        except Exception as cleanup_error:
+            self.logger.error(f"Error during cleanup: {cleanup_error}", exc_info=True)
 
 async def main(args: argparse.Namespace) -> int:
     """Main function to manage documentation generation process."""
@@ -264,8 +264,8 @@ async def main(args: argparse.Namespace) -> int:
 
     except DocumentationError as de:
         log_error(f"Documentation generation failed: {de}")
-    except Exception as e:
-        log_error(f"Unexpected error: {e}")
+    except Exception as unexpected_error:
+        log_error(f"Unexpected error: {unexpected_error}")
     finally:
         if doc_generator:
             await doc_generator.cleanup()
@@ -300,12 +300,12 @@ if __name__ == "__main__":
         args = parse_arguments()
         log_info(f"Command-line arguments: {args}")
         exit_code = asyncio.run(main(args))
-        exit(exit_code)
+        sys.exit(exit_code)
     except KeyboardInterrupt:
         log_info("Documentation generation interrupted by user")
-        exit(1)
-    except Exception as e:
-        log_error(f"Failed to run documentation generator: {e}")
-        exit(1)
+        sys.exit(1)
+    except Exception as run_error:
+        log_error(f"Failed to run documentation generator: {run_error}")
+        sys.exit(1)
     finally:
         LoggerSetup.shutdown()
