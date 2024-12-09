@@ -1,7 +1,7 @@
 """Base type definitions for code extraction."""
 
 import ast
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Set
 
@@ -62,7 +62,7 @@ class ExtractedElement:
     source: Optional[str] = None
     docstring: Optional[str] = None
     metrics: MetricData = field(default_factory=MetricData)
-    dependencies: Dict[str, Set[str]] = field(default_factory=dict)
+    dependencies: Dict[str, Set[str]] = default_factory(dict)
     decorators: List[str] = field(default_factory=list)
     complexity_warnings: List[str] = field(default_factory=list)
     ast_node: Optional[ast.AST] = None
