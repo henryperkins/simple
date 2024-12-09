@@ -101,7 +101,7 @@ class ExtractedFunction(ExtractedElement):
             "code_metadata": self.code_metadata,
             "metrics": self.metrics,
             "validation_status": self.validation_status,
-            "validation_errors": self.validation_errors
+            "validation_errors": self.validation_errors,
         }
 
 @dataclass
