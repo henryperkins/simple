@@ -103,7 +103,6 @@ class ExtractedFunction(ExtractedElement):
             "validation_status": self.validation_status,
             "validation_errors": self.validation_errors,
         }
-        }
 
 @dataclass
 class ExtractedClass(ExtractedElement):
