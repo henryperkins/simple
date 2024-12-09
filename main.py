@@ -118,9 +118,8 @@ class DocumentationGenerator:
             await self.metrics_collector.track_operation(
                 operation_type="file_processing",
                 success=success,
-                metadata={"file_path": str(file_path)}
-                duration=processing_time,
-                metadata={"file_path": str(file_path)}
+                metadata={"file_path": str(file_path)},
+                duration=processing_time
             )
             
             self.logger.info(f"Finished processing file: {file_path}")
