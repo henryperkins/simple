@@ -30,7 +30,7 @@ from typing import Optional, Union
 
 # Configure logger globally with dynamic settings
 LOG_DIR = "logs"  # This could be set via an environment variable or command-line argument
-LoggerSetup.configure(level="DEBUG", log_dir=log_dir)
+LoggerSetup.configure(level="DEBUG", log_dir=LOG_DIR)
 
 # Set global exception handler
 sys.excepthook = LoggerSetup.handle_exception
