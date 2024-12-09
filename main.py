@@ -297,9 +297,9 @@ def parse_arguments() -> argparse.Namespace:
 
 if __name__ == "__main__":
     try:
-        args = parse_arguments()
-        log_info(f"Command-line arguments: {args}")
-        exit_code = asyncio.run(main(args))
+        cli_args = parse_arguments()
+        log_info(f"Command-line arguments: {cli_args}")
+        exit_code = asyncio.run(main(cli_args))
         sys.exit(exit_code)
     except KeyboardInterrupt:
         log_info("Documentation generation interrupted by user")
