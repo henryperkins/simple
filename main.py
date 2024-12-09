@@ -2,6 +2,14 @@
 Main documentation generation coordinator with monitoring.
 """
 
+import argparse
+import asyncio
+import sys
+from pathlib import Path
+from typing import Optional, Union
+
+import uuid
+
 from core.ai_service import AIService
 from core.config import Config
 from core.docs import DocumentationOrchestrator
@@ -10,7 +18,6 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_in
 from core.metrics_collector import MetricsCollector
 from core.monitoring import SystemMonitor
 from core.types.base import Injector, MetricData, DocstringData
-import uuid
 
 from utils import (
     ensure_directory,
@@ -21,12 +28,6 @@ from utils import (
 # Register dependencies
 Injector.register('metric_calculator', lambda element: MetricData())
 Injector.register('docstring_parser', lambda docstring: DocstringData(summary=docstring))
-
-import argparse
-import asyncio
-import sys
-from pathlib import Path
-from typing import Optional, Union
 
 # Configure logger globally with dynamic settings
 LOG_DIR = "logs"  # This could be set via an environment variable or command-line argument
@@ -48,15 +49,14 @@ class DocumentationGenerator:
         )
 
         # Initialize core components
-        self.metrics_collector = MetricsCollector(correlation_id=self.correlation_id)
         self.ai_service = AIService(config=self.config.ai, correlation_id=self.correlation_id)
         self.doc_orchestrator = DocumentationOrchestrator(
             ai_service=self.ai_service,
             correlation_id=self.correlation_id
         )
-        self.system_monitor = SystemMonitor(
+        self.monitoring = SystemMonitor(
             token_manager=self.ai_service.token_manager,
-            metrics_collector=self.metrics_collector,
+            metrics_collector=MetricsCollector(correlation_id=self.correlation_id),
             correlation_id=self.correlation_id
         )
         self.repo_manager = None
@@ -67,7 +67,7 @@ class DocumentationGenerator:
             self.logger.info("Initializing system components")
             await self.system_monitor.start()
             self.logger.info("All components initialized successfully")
-        except Exception as init_error:
+        except (RuntimeError, ValueError) as init_error:
             error_msg = f"Initialization failed: {init_error}"
             self.logger.error(error_msg, exc_info=True)
             await self.cleanup()
@@ -107,18 +107,19 @@ class DocumentationGenerator:
             self.logger.info(f"Finished processing file: {file_path}")
             return success
 
-        except Exception as process_error:
+        except (FileNotFoundError, ValueError, IOError) as process_error:
             self.logger.error(f"Error processing file: {process_error}", exc_info=True)
             return False
 
     def _fix_indentation(self, source_code: str) -> str:
         """Fix inconsistent indentation using autopep8."""
         try:
-            import autopep8
             return autopep8.fix_code(source_code)
         except ImportError:
             self.logger.warning("autopep8 not installed. Skipping indentation fix.")
             return source_code
+
+import autopep8
 
     async def process_repository(self, repo_path: str, output_dir: Path = Path("docs")) -> bool:
         """Process a repository for documentation."""
@@ -144,7 +145,7 @@ class DocumentationGenerator:
             self.doc_orchestrator.code_extractor.context.base_path = local_path
             success = await self._process_local_repository(local_path, output_dir)
 
-        except Exception as repo_error:
+        except (FileNotFoundError, ValueError, IOError) as repo_error:
             self.logger.error(f"Error processing repository {repo_path}: {repo_error}", exc_info=True)
             success = False
         finally:
@@ -156,7 +157,6 @@ class DocumentationGenerator:
                 metadata={"repo_path": str(repo_path)}
             )
             self.logger.info(f"Finished repository processing: {repo_path}")
-            return success
 
     def _is_url(self, path: Union[str, Path]) -> bool:
         """Check if the path is a URL."""
@@ -172,7 +172,7 @@ class DocumentationGenerator:
             repo_path = await self.repo_manager.clone_repository(repo_url)
             self.logger.info(f"Successfully cloned repository to {repo_path}")
             return repo_path
-        except Exception as clone_error:
+        except (git.GitCommandError, ValueError, IOError) as clone_error:
             self.logger.error(f"Failed to clone repository: {clone_error}", exc_info=True)
             raise DocumentationError(f"Repository cloning failed: {clone_error}") from clone_error
 
@@ -192,7 +192,7 @@ class DocumentationGenerator:
             self.logger.info(f"Finished processing local repository: {repo_path}")
             return True
 
-        except Exception as local_repo_error:
+        except (FileNotFoundError, ValueError, IOError) as local_repo_error:
             self.logger.error(f"Error processing local repository: {local_repo_error}", exc_info=True)
             return False
 
@@ -217,7 +217,7 @@ class DocumentationGenerator:
             print(f"Status: {system_metrics.get('status', 'unknown')}")
             print("-" * 40)
 
-        except Exception as display_error:
+        except (KeyError, ValueError, IOError) as display_error:
             self.logger.error(f"Error displaying metrics: {display_error}", exc_info=True)
 
     async def cleanup(self) -> None:
@@ -231,7 +231,7 @@ class DocumentationGenerator:
             if self.system_monitor:
                 await self.system_monitor.stop()
             self.logger.info("Cleanup completed successfully")
-        except Exception as cleanup_error:
+        except (RuntimeError, ValueError, IOError) as cleanup_error:
             self.logger.error(f"Error during cleanup: {cleanup_error}", exc_info=True)
 
 async def main(args: argparse.Namespace) -> int:
@@ -265,13 +265,12 @@ async def main(args: argparse.Namespace) -> int:
 
     except DocumentationError as de:
         log_error(f"Documentation generation failed: {de}")
-    except Exception as unexpected_error:
+    except (RuntimeError, ValueError, IOError) as unexpected_error:
         log_error(f"Unexpected error: {unexpected_error}")
     finally:
         if doc_generator:
             await doc_generator.cleanup()
         log_info("Exiting documentation generation")
-        return exit_code
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
@@ -305,7 +304,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log_info("Documentation generation interrupted by user")
         sys.exit(1)
-    except Exception as run_error:
+    except (RuntimeError, ValueError, IOError) as run_error:
         log_error(f"Failed to run documentation generator: {run_error}")
         sys.exit(1)
     finally:
