@@ -125,8 +125,6 @@ class DocumentationGenerator:
             self.logger.warning("autopep8 not installed. Skipping indentation fix.")
             return source_code
 
-import autopep8
-
     async def process_repository(self, repo_path: str, output_dir: Path = Path("docs")) -> bool:
         """Process a repository for documentation."""
         start_time = asyncio.get_event_loop().time()
