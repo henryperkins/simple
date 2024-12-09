@@ -6,9 +6,8 @@ Centralizes all token-related operations for Azure OpenAI API.
 
 from typing import Optional, Dict, Any, Tuple, Union
 from core.config import AIConfig
-from core.logger import LoggerSetup, log_debug, log_error, log_info
+from core.logger import LoggerSetup
 from utils import (
-    TokenCounter,
     serialize_for_logging,
     get_env_var
 )

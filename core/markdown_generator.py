@@ -4,7 +4,7 @@ Markdown documentation generator module.
 
 from datetime import datetime
 from typing import Optional, Dict, Any
-from core.logger import LoggerSetup, log_debug, log_error
+from core.logger import LoggerSetup, log_debug, log_error, log_warning
 from core.types import DocumentationData, ExtractedClass, ExtractedFunction
 
 class MarkdownGenerator:
@@ -18,6 +18,11 @@ class MarkdownGenerator:
         """Generate markdown documentation."""
         try:
             log_debug("Generating markdown documentation.")
+
+            # Check for complete information
+            if not self._has_complete_information(documentation_data):
+                log_warning("Incomplete information received for markdown generation.")
+                return "# Warning: Incomplete Documentation Data\n\nSome sections may be missing due to incomplete input data."
 
             # Create module info from DocumentationData fields
             module_info = {
@@ -40,6 +45,18 @@ class MarkdownGenerator:
         except Exception as e:
             log_error(f"Error generating markdown: {e}", exc_info=True)
             return f"# Error Generating Documentation\n\nAn error occurred: {e}"
+
+    def _has_complete_information(self, documentation_data: DocumentationData) -> bool:
+        """Check if the documentation data contains complete information."""
+        required_fields = [
+            documentation_data.module_name,
+            documentation_data.module_path,
+            documentation_data.module_summary,
+            documentation_data.ai_content,
+            documentation_data.code_metadata,
+            documentation_data.source_code
+        ]
+        return all(required_fields)
 
     def _generate_header(self, module_name: str) -> str:
         """Generate the module header."""

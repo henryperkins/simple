@@ -15,7 +15,6 @@ from core.ai_service import AIService
 from core.cache import Cache
 from core.config import Config
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info
-from core.metrics_collector import MetricsCollector
 from core.types.base import (
     DocstringData, 
     DocumentationContext, 
@@ -26,7 +25,7 @@ from core.types.base import (
     ExtractedFunction
 )
 from core.exceptions import DocumentationError
-from utils import ensure_directory, handle_extraction_error, read_file_safe
+from utils import ensure_directory, read_file_safe
 import uuid
 
 class DocumentationOrchestrator:

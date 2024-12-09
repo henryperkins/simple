@@ -107,6 +107,7 @@ class ResponseParsingService:
 
         self._parsing_stats["total_processed"] += 1
         self.logger.info(f"Parsing response, expected format: {expected_format}")
+        self.logger.debug(f"Response size: {len(str(response))} characters")
 
         try:
             if expected_format == "json":

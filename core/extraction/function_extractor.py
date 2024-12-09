@@ -6,11 +6,11 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 """
 
 import ast
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Any, Optional, Union
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error
 from core.metrics import Metrics
 from core.types import ExtractedFunction, ExtractedArgument, ExtractionContext, MetricData
-from utils import handle_extraction_error, get_source_segment, get_node_name, NodeNameVisitor
+from utils import get_source_segment, get_node_name, NodeNameVisitor
 
 class FunctionExtractor:
     """Handles extraction of functions from Python source code."""

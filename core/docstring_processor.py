@@ -5,7 +5,9 @@ from docstring_parser import parse as parse_docstring, Docstring
 from core.logger import LoggerSetup, log_error, log_debug, log_info
 from core.metrics import Metrics
 from core.types import DocstringData
-from exceptions import DocumentationError
+class DocumentationError(Exception):
+    """Exception raised for errors in the documentation."""
+    pass
 
 try:
     import astor
@@ -48,6 +50,7 @@ class DocstringProcessor:
         required_keys = {'summary', 'description', 'args', 'returns', 'raises'}
         missing_keys = required_keys - docstring_dict.keys()
         if missing_keys:
+            self.logger.warning(f"Docstring dictionary missing keys: {missing_keys}")
             raise DocumentationError(f"Docstring dictionary missing keys: {missing_keys}")
 
     def parse(self, docstring: Union[Dict[str, Any], str]) -> DocstringData:
@@ -60,6 +63,7 @@ class DocstringProcessor:
             DocstringData: A structured representation of the parsed docstring.
         """
         try:
+            self.logger.debug(f"Parsing docstring of type: {type(docstring).__name__}")
             if isinstance(docstring, dict):
                 self._validate_docstring_dict(docstring)
                 if 'complexity' not in docstring:
@@ -67,6 +71,7 @@ class DocstringProcessor:
                 docstring_data = self._create_docstring_data_from_dict(docstring)
             elif isinstance(docstring, str):
                 docstring_str = docstring.strip()
+                self.logger.debug(f"Docstring length: {len(docstring_str)} characters")
                 if docstring_str.startswith('{') and docstring_str.endswith('}'):
                     doc_dict = json.loads(docstring_str)
                     if 'complexity' not in doc_dict:
@@ -96,6 +101,9 @@ class DocstringProcessor:
             docstring_data.validation_status = is_valid
             docstring_data.validation_errors = errors
             
+            if not is_valid:
+                self.logger.warning(f"Docstring validation failed with errors: {errors}")
+
             return docstring_data
 
         except DocumentationError:

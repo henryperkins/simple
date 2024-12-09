@@ -194,18 +194,16 @@ class DocumentationGenerator:
         """Display collected metrics and system performance metrics."""
         try:
             self.logger.info("Displaying metrics")
-            collected_metrics = self.metrics_collector.get_metrics()
+            collected_metrics = self.metrics_collector.metrics_history
             system_metrics = self.system_monitor.get_metrics()
 
             print("\n=== Documentation Generation Metrics ===")
-            for metric in collected_metrics['operations']:
-                print(f"Operation: {metric['operation_type']}")
-                print(f"Success: {metric['success']}")
-                print(f"Duration: {metric['duration']:.2f} seconds")
-                print(f"Timestamp: {metric['timestamp']}")
-                if 'error' in metric:
-                    print(f"Error: {metric['error']}")
-                print("-" * 40)
+            for module, metrics_list in collected_metrics.items():
+                for metric in metrics_list:
+                    print(f"Module: {module}")
+                    print(f"Timestamp: {metric['timestamp']}")
+                    print(f"Metrics: {metric['metrics']}")
+                    print("-" * 40)
 
             print("\n=== System Performance Metrics ===")
             print(f"CPU Usage: {system_metrics.get('cpu', {}).get('percent', 0)}%")

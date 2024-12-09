@@ -96,7 +96,12 @@ class ExtractedFunction(ExtractedElement):
             "body_summary": self.body_summary,
             "is_async": self.is_async,
             "is_method": self.is_method,
-            "parent_class": self.parent_class
+            "parent_class": self.parent_class,
+            "ai_content": self.ai_content,
+            "code_metadata": self.code_metadata,
+            "metrics": self.metrics,
+            "validation_status": self.validation_status,
+            "validation_errors": self.validation_errors
         }
 
 @dataclass
@@ -222,6 +227,7 @@ class ExtractionContext:
         """Initialize AST if needed."""
         if self.tree is None and self.source_code:
             try:
+                self.source_code = self._fix_indentation(self.source_code)
                 self.tree = ast.parse(self.source_code)
             except SyntaxError as e:
                 raise ValueError(f"Failed to parse source code: {e}")
@@ -232,6 +238,14 @@ class ExtractionContext:
                     self.source_code = ast.unparse(self.tree)
             except Exception as e:
                 raise ValueError(f"Failed to unparse AST: {e}")
+
+    def _fix_indentation(self, code: str) -> str:
+        """Fix inconsistent indentation in the source code."""
+        lines = code.splitlines()
+        fixed_lines = []
+        for line in lines:
+            fixed_lines.append(line.replace('\t', '    '))
+        return '\n'.join(fixed_lines)
 
 @dataclass
 class DocumentationData:
@@ -263,13 +277,4 @@ class DocumentationData:
             "docstring_data": {
                 "summary": self.docstring_data.summary,
                 "description": self.docstring_data.description,
-                "args": self.docstring_data.args,
-                "returns": self.docstring_data.returns,
-                "raises": self.docstring_data.raises,
-                "complexity": self.docstring_data.complexity,
-            },
-            "code_metadata": self.code_metadata,
-            "metrics": self.metrics,
-            "validation_status": self.validation_status,
-            "validation_errors": self.validation_errors
         }
