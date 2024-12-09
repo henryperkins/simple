@@ -272,5 +272,7 @@ class DocumentationData:
             "docstring_data": {
                 "summary": self.docstring_data.summary,
                 "description": self.docstring_data.description,
-            }
+            },
+            "ai_content": self.ai_content,
+            "code_metadata": self.code_metadata,
         }
