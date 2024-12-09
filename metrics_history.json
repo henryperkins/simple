@@ -1050,6 +1050,4950 @@
         "complexity_graph": null
       },
       "correlation_id": "5a1654af-9298-42fa-b21a-4f024bd9b8f6"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:00.324725",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 30.761144082707073,
+          "difficulty": 0.9285714285714286,
+          "effort": 28.563919505370855,
+          "time": 1.5868844169650476,
+          "bugs": 0.01025371469423569
+        },
+        "lines_of_code": 6,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:00.331414",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 81.09817653378384,
+        "halstead_metrics": {
+          "volume": 185.49965568748573,
+          "difficulty": 3.5625,
+          "effort": 660.842523386668,
+          "time": 36.71347352148155,
+          "bugs": 0.06183321856249524
+        },
+        "lines_of_code": 45,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:00.334646",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 1,
+        "maintainability_index": 95.93663429275969,
+        "halstead_metrics": {
+          "volume": 73.68272297580947,
+          "difficulty": 1.8125,
+          "effort": 133.54993539365466,
+          "time": 7.419440855203037,
+          "bugs": 0.024560907658603158
+        },
+        "lines_of_code": 23,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:00.350649",
+      "metrics": {
+        "cyclomatic_complexity": 29,
+        "cognitive_complexity": 211,
+        "maintainability_index": 38.376181303926614,
+        "halstead_metrics": {
+          "volume": 1237.5988547991792,
+          "difficulty": 6.413043478260869,
+          "effort": 7936.775264472996,
+          "time": 440.9319591373887,
+          "bugs": 0.4125329515997264
+        },
+        "lines_of_code": 241,
+        "total_functions": 8,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:05.255909",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 35.96842909197556,
+          "difficulty": 0.7777777777777778,
+          "effort": 27.975444849314325,
+          "time": 1.5541913805174625,
+          "bugs": 0.011989476363991853
+        },
+        "lines_of_code": 18,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:05.258052",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 10.75055681536833,
+          "difficulty": 0.625,
+          "effort": 6.719098009605206,
+          "time": 0.3732832227558448,
+          "bugs": 0.00358351893845611
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:05.260332",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 22.873856958478193,
+          "difficulty": 0.8333333333333334,
+          "effort": 19.061547465398494,
+          "time": 1.0589748591888053,
+          "bugs": 0.007624618986159398
+        },
+        "lines_of_code": 11,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:05.263155",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 16.125835223052494,
+          "difficulty": 1.0,
+          "effort": 16.125835223052494,
+          "time": 0.8958797346140275,
+          "bugs": 0.005375278407684165
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:05.265493",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 19.709354161508603,
+          "difficulty": 1.25,
+          "effort": 24.636692701885753,
+          "time": 1.368705150104764,
+          "bugs": 0.006569784720502868
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:05.270509",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 10,
+        "maintainability_index": 73.6361678813688,
+        "halstead_metrics": {
+          "volume": 161.49316061120433,
+          "difficulty": 1.8666666666666667,
+          "effort": 301.4538998075814,
+          "time": 16.747438878198967,
+          "bugs": 0.05383105353706811
+        },
+        "lines_of_code": 68,
+        "total_functions": 6,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:09.273912",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 12,
+        "maintainability_index": 84.27333466486984,
+        "halstead_metrics": {
+          "volume": 173.0983773880657,
+          "difficulty": 1.375,
+          "effort": 238.01026890859035,
+          "time": 13.222792717143909,
+          "bugs": 0.057699459129355236
+        },
+        "lines_of_code": 34,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:09.302864",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 12,
+        "maintainability_index": 79.51400080030558,
+        "halstead_metrics": {
+          "volume": 212.13963728914788,
+          "difficulty": 1.1481481481481481,
+          "effort": 243.567731702355,
+          "time": 13.531540650130832,
+          "bugs": 0.07071321242971595
+        },
+        "lines_of_code": 43,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:09.307012",
+      "metrics": {
+        "cyclomatic_complexity": 8,
+        "cognitive_complexity": 15,
+        "maintainability_index": 93.11695645853908,
+        "halstead_metrics": {
+          "volume": 86.65760643527072,
+          "difficulty": 1.1923076923076923,
+          "effort": 103.32253074974587,
+          "time": 5.740140597208104,
+          "bugs": 0.028885868811756907
+        },
+        "lines_of_code": 25,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:09.312288",
+      "metrics": {
+        "cyclomatic_complexity": 11,
+        "cognitive_complexity": 15,
+        "maintainability_index": 79.49444792395053,
+        "halstead_metrics": {
+          "volume": 218.88355609103763,
+          "difficulty": 1.4130434782608696,
+          "effort": 309.291981432988,
+          "time": 17.182887857388224,
+          "bugs": 0.07296118536367921
+        },
+        "lines_of_code": 42,
+        "total_functions": 2,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.435380",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.439079",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 40.7642196375723,
+          "difficulty": 0.8888888888888888,
+          "effort": 36.23486190006427,
+          "time": 2.013047883336904,
+          "bugs": 0.013588073212524102
+        },
+        "lines_of_code": 10,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.441996",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 27.032740041837865,
+          "difficulty": 6.0,
+          "effort": 162.19644025102718,
+          "time": 9.010913347279288,
+          "bugs": 0.009010913347279288
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.444450",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 12.875503299472802,
+          "difficulty": 1.0,
+          "effort": 12.875503299472802,
+          "time": 0.7153057388596001,
+          "bugs": 0.0042918344331576005
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.448494",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 90.28517569886715,
+        "halstead_metrics": {
+          "volume": 106.85098594088402,
+          "difficulty": 6.5625,
+          "effort": 701.2095952370513,
+          "time": 38.956088624280625,
+          "bugs": 0.035616995313628004
+        },
+        "lines_of_code": 31,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.454456",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 74.5985757358849,
+        "halstead_metrics": {
+          "volume": 296.3220330388097,
+          "difficulty": 6.166666666666667,
+          "effort": 1827.3192037393267,
+          "time": 101.51773354107371,
+          "bugs": 0.09877401101293656
+        },
+        "lines_of_code": 59,
+        "total_functions": 3,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.459127",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 43.74911676688687,
+          "difficulty": 0.9375,
+          "effort": 41.01479696895644,
+          "time": 2.278599831608691,
+          "bugs": 0.014583038922295623
+        },
+        "lines_of_code": 17,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.461595",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 17.91759469228055,
+          "difficulty": 1.125,
+          "effort": 20.157294028815617,
+          "time": 1.1198496682675343,
+          "bugs": 0.005972531564093516
+        },
+        "lines_of_code": 5,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.466865",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 79.29122658328026,
+        "halstead_metrics": {
+          "volume": 155.26496844542774,
+          "difficulty": 5.75,
+          "effort": 892.7735685612095,
+          "time": 49.598531586733856,
+          "bugs": 0.051754989481809247
+        },
+        "lines_of_code": 55,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.474526",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 6,
+        "maintainability_index": 64.65624167843359,
+        "halstead_metrics": {
+          "volume": 438.9766550395584,
+          "difficulty": 6.0,
+          "effort": 2633.8599302373505,
+          "time": 146.3255516798528,
+          "bugs": 0.1463255516798528
+        },
+        "lines_of_code": 94,
+        "total_functions": 3,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.477761",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 50.14208926268992,
+          "difficulty": 0.7083333333333334,
+          "effort": 35.5173132277387,
+          "time": 1.9731840682077053,
+          "bugs": 0.016714029754229975
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.480250",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 20.723265836946414,
+          "difficulty": 0.5,
+          "effort": 10.361632918473207,
+          "time": 0.5756462732485115,
+          "bugs": 0.006907755278982138
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.482572",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 8.958797346140274,
+          "difficulty": 0.5,
+          "effort": 4.479398673070137,
+          "time": 0.24885548183722983,
+          "bugs": 0.002986265782046758
+        },
+        "lines_of_code": 3,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T11:49:16.486484",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 93.77356042098185,
+        "halstead_metrics": {
+          "volume": 95.38226801057343,
+          "difficulty": 0.96875,
+          "effort": 92.401572135243,
+          "time": 5.133420674180167,
+          "bugs": 0.03179408933685781
+        },
+        "lines_of_code": 25,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "95801122-a8f2-4ba7-95fe-e99e9eed9009"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:34.290995",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 30.761144082707073,
+          "difficulty": 0.9285714285714286,
+          "effort": 28.563919505370855,
+          "time": 1.5868844169650476,
+          "bugs": 0.01025371469423569
+        },
+        "lines_of_code": 6,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:34.298435",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 81.09817653378384,
+        "halstead_metrics": {
+          "volume": 185.49965568748573,
+          "difficulty": 3.5625,
+          "effort": 660.842523386668,
+          "time": 36.71347352148155,
+          "bugs": 0.06183321856249524
+        },
+        "lines_of_code": 45,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:34.302307",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 1,
+        "maintainability_index": 95.93663429275969,
+        "halstead_metrics": {
+          "volume": 73.68272297580947,
+          "difficulty": 1.8125,
+          "effort": 133.54993539365466,
+          "time": 7.419440855203037,
+          "bugs": 0.024560907658603158
+        },
+        "lines_of_code": 23,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:34.319084",
+      "metrics": {
+        "cyclomatic_complexity": 29,
+        "cognitive_complexity": 211,
+        "maintainability_index": 38.376181303926614,
+        "halstead_metrics": {
+          "volume": 1237.5988547991792,
+          "difficulty": 6.413043478260869,
+          "effort": 7936.775264472996,
+          "time": 440.9319591373887,
+          "bugs": 0.4125329515997264
+        },
+        "lines_of_code": 241,
+        "total_functions": 8,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:41.855731",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 35.96842909197556,
+          "difficulty": 0.7777777777777778,
+          "effort": 27.975444849314325,
+          "time": 1.5541913805174625,
+          "bugs": 0.011989476363991853
+        },
+        "lines_of_code": 18,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:41.858454",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 10.75055681536833,
+          "difficulty": 0.625,
+          "effort": 6.719098009605206,
+          "time": 0.3732832227558448,
+          "bugs": 0.00358351893845611
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:41.861353",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 22.873856958478193,
+          "difficulty": 0.8333333333333334,
+          "effort": 19.061547465398494,
+          "time": 1.0589748591888053,
+          "bugs": 0.007624618986159398
+        },
+        "lines_of_code": 11,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:41.864378",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 16.125835223052494,
+          "difficulty": 1.0,
+          "effort": 16.125835223052494,
+          "time": 0.8958797346140275,
+          "bugs": 0.005375278407684165
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:41.867452",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 19.709354161508603,
+          "difficulty": 1.25,
+          "effort": 24.636692701885753,
+          "time": 1.368705150104764,
+          "bugs": 0.006569784720502868
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:41.873142",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 10,
+        "maintainability_index": 73.6361678813688,
+        "halstead_metrics": {
+          "volume": 161.49316061120433,
+          "difficulty": 1.8666666666666667,
+          "effort": 301.4538998075814,
+          "time": 16.747438878198967,
+          "bugs": 0.05383105353706811
+        },
+        "lines_of_code": 68,
+        "total_functions": 6,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:47.902193",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 12,
+        "maintainability_index": 84.27333466486984,
+        "halstead_metrics": {
+          "volume": 173.0983773880657,
+          "difficulty": 1.375,
+          "effort": 238.01026890859035,
+          "time": 13.222792717143909,
+          "bugs": 0.057699459129355236
+        },
+        "lines_of_code": 34,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:47.907944",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 12,
+        "maintainability_index": 79.51400080030558,
+        "halstead_metrics": {
+          "volume": 212.13963728914788,
+          "difficulty": 1.1481481481481481,
+          "effort": 243.567731702355,
+          "time": 13.531540650130832,
+          "bugs": 0.07071321242971595
+        },
+        "lines_of_code": 43,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:47.912585",
+      "metrics": {
+        "cyclomatic_complexity": 8,
+        "cognitive_complexity": 15,
+        "maintainability_index": 93.11695645853908,
+        "halstead_metrics": {
+          "volume": 86.65760643527072,
+          "difficulty": 1.1923076923076923,
+          "effort": 103.32253074974587,
+          "time": 5.740140597208104,
+          "bugs": 0.028885868811756907
+        },
+        "lines_of_code": 25,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:47.918489",
+      "metrics": {
+        "cyclomatic_complexity": 11,
+        "cognitive_complexity": 15,
+        "maintainability_index": 79.49444792395053,
+        "halstead_metrics": {
+          "volume": 218.88355609103763,
+          "difficulty": 1.4130434782608696,
+          "effort": 309.291981432988,
+          "time": 17.182887857388224,
+          "bugs": 0.07296118536367921
+        },
+        "lines_of_code": 42,
+        "total_functions": 2,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.567871",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.571098",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 40.7642196375723,
+          "difficulty": 0.8888888888888888,
+          "effort": 36.23486190006427,
+          "time": 2.013047883336904,
+          "bugs": 0.013588073212524102
+        },
+        "lines_of_code": 10,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.574610",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 27.032740041837865,
+          "difficulty": 6.0,
+          "effort": 162.19644025102718,
+          "time": 9.010913347279288,
+          "bugs": 0.009010913347279288
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.577709",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 12.875503299472802,
+          "difficulty": 1.0,
+          "effort": 12.875503299472802,
+          "time": 0.7153057388596001,
+          "bugs": 0.0042918344331576005
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.582356",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 90.28517569886715,
+        "halstead_metrics": {
+          "volume": 106.85098594088402,
+          "difficulty": 6.5625,
+          "effort": 701.2095952370513,
+          "time": 38.956088624280625,
+          "bugs": 0.035616995313628004
+        },
+        "lines_of_code": 31,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.588938",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 74.5985757358849,
+        "halstead_metrics": {
+          "volume": 296.3220330388097,
+          "difficulty": 6.166666666666667,
+          "effort": 1827.3192037393267,
+          "time": 101.51773354107371,
+          "bugs": 0.09877401101293656
+        },
+        "lines_of_code": 59,
+        "total_functions": 3,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.593154",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 43.74911676688687,
+          "difficulty": 0.9375,
+          "effort": 41.01479696895644,
+          "time": 2.278599831608691,
+          "bugs": 0.014583038922295623
+        },
+        "lines_of_code": 17,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.596230",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 17.91759469228055,
+          "difficulty": 1.125,
+          "effort": 20.157294028815617,
+          "time": 1.1198496682675343,
+          "bugs": 0.005972531564093516
+        },
+        "lines_of_code": 5,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.602121",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 79.29122658328026,
+        "halstead_metrics": {
+          "volume": 155.26496844542774,
+          "difficulty": 5.75,
+          "effort": 892.7735685612095,
+          "time": 49.598531586733856,
+          "bugs": 0.051754989481809247
+        },
+        "lines_of_code": 55,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.610478",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 6,
+        "maintainability_index": 64.65624167843359,
+        "halstead_metrics": {
+          "volume": 438.9766550395584,
+          "difficulty": 6.0,
+          "effort": 2633.8599302373505,
+          "time": 146.3255516798528,
+          "bugs": 0.1463255516798528
+        },
+        "lines_of_code": 94,
+        "total_functions": 3,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.614371",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 50.14208926268992,
+          "difficulty": 0.7083333333333334,
+          "effort": 35.5173132277387,
+          "time": 1.9731840682077053,
+          "bugs": 0.016714029754229975
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.617413",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 20.723265836946414,
+          "difficulty": 0.5,
+          "effort": 10.361632918473207,
+          "time": 0.5756462732485115,
+          "bugs": 0.006907755278982138
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.620372",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 8.958797346140274,
+          "difficulty": 0.5,
+          "effort": 4.479398673070137,
+          "time": 0.24885548183722983,
+          "bugs": 0.002986265782046758
+        },
+        "lines_of_code": 3,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:53.625021",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 93.77356042098185,
+        "halstead_metrics": {
+          "volume": 95.38226801057343,
+          "difficulty": 0.96875,
+          "effort": 92.401572135243,
+          "time": 5.133420674180167,
+          "bugs": 0.03179408933685781
+        },
+        "lines_of_code": 25,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.691593",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.695746",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.698665",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.702833",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 8.317766166719343,
+          "difficulty": 1.25,
+          "effort": 10.39720770839918,
+          "time": 0.5776226504666211,
+          "bugs": 0.002772588722239781
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.706192",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 12.875503299472802,
+          "difficulty": 1.1666666666666667,
+          "effort": 15.021420516051604,
+          "time": 0.8345233620028669,
+          "bugs": 0.0042918344331576005
+        },
+        "lines_of_code": 5,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.709570",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 19.709354161508603,
+          "difficulty": 1.25,
+          "effort": 24.636692701885753,
+          "time": 1.368705150104764,
+          "bugs": 0.006569784720502868
+        },
+        "lines_of_code": 8,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.713245",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 29.1121815835177,
+          "difficulty": 1.0833333333333333,
+          "effort": 31.538196715477504,
+          "time": 1.7521220397487502,
+          "bugs": 0.009704060527839233
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.719383",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 6,
+        "maintainability_index": 80.63447452653729,
+        "halstead_metrics": {
+          "volume": 173.53777895023512,
+          "difficulty": 1.4736842105263157,
+          "effort": 255.73988476876752,
+          "time": 14.20777137604264,
+          "bugs": 0.05784592631674504
+        },
+        "lines_of_code": 46,
+        "total_functions": 5,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.728937",
+      "metrics": {
+        "cyclomatic_complexity": 8,
+        "cognitive_complexity": 10,
+        "maintainability_index": 71.96974573978642,
+        "halstead_metrics": {
+          "volume": 213.21360668318218,
+          "difficulty": 1.5714285714285714,
+          "effort": 335.0499533592863,
+          "time": 18.613886297738127,
+          "bugs": 0.07107120222772739
+        },
+        "lines_of_code": 71,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.733158",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 91.0674575857687,
+        "halstead_metrics": {
+          "volume": 69.31471805599453,
+          "difficulty": 0.8571428571428571,
+          "effort": 59.41261547656674,
+          "time": 3.3007008598092633,
+          "bugs": 0.023104906018664845
+        },
+        "lines_of_code": 33,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.737279",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 99.65095246557388,
+        "halstead_metrics": {
+          "volume": 62.285154625350835,
+          "difficulty": 0.8461538461538461,
+          "effort": 52.70282314452763,
+          "time": 2.927934619140424,
+          "bugs": 0.02076171820845028
+        },
+        "lines_of_code": 20,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.741356",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 55.42020392192043,
+          "difficulty": 0.8333333333333334,
+          "effort": 46.18350326826703,
+          "time": 2.5657501815703907,
+          "bugs": 0.018473401307306812
+        },
+        "lines_of_code": 19,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.747184",
+      "metrics": {
+        "cyclomatic_complexity": 9,
+        "cognitive_complexity": 18,
+        "maintainability_index": 79.90331222476748,
+        "halstead_metrics": {
+          "volume": 137.80368458348357,
+          "difficulty": 2.4705882352941178,
+          "effort": 340.4561619121359,
+          "time": 18.914231217340884,
+          "bugs": 0.04593456152782786
+        },
+        "lines_of_code": 49,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.753342",
+      "metrics": {
+        "cyclomatic_complexity": 8,
+        "cognitive_complexity": 13,
+        "maintainability_index": 77.41376562045139,
+        "halstead_metrics": {
+          "volume": 138.82745385875458,
+          "difficulty": 1.6,
+          "effort": 222.12392617400735,
+          "time": 12.340218120778186,
+          "bugs": 0.04627581795291819
+        },
+        "lines_of_code": 58,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.758629",
+      "metrics": {
+        "cyclomatic_complexity": 9,
+        "cognitive_complexity": 26,
+        "maintainability_index": 85.09927135479069,
+        "halstead_metrics": {
+          "volume": 86.97173274258002,
+          "difficulty": 3.5555555555555554,
+          "effort": 309.2328275291734,
+          "time": 17.17960152939852,
+          "bugs": 0.028990577580860006
+        },
+        "lines_of_code": 41,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.762913",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 2,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 29.1121815835177,
+          "difficulty": 1.0833333333333333,
+          "effort": 31.538196715477504,
+          "time": 1.7521220397487502,
+          "bugs": 0.009704060527839233
+        },
+        "lines_of_code": 19,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.767282",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 31.13456238488501,
+          "difficulty": 3.0,
+          "effort": 93.40368715465503,
+          "time": 5.189093730814168,
+          "bugs": 0.010378187461628337
+        },
+        "lines_of_code": 16,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.771681",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 47.213226345972004,
+          "difficulty": 0.9,
+          "effort": 42.4919037113748,
+          "time": 2.3606613172986,
+          "bugs": 0.015737742115324003
+        },
+        "lines_of_code": 12,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:02:56.800668",
+      "metrics": {
+        "cyclomatic_complexity": 60,
+        "cognitive_complexity": 1046,
+        "maintainability_index": 17.508460706238125,
+        "halstead_metrics": {
+          "volume": 2005.5765642823628,
+          "difficulty": 8.82,
+          "effort": 17689.18529697044,
+          "time": 982.7325164983579,
+          "bugs": 0.6685255214274543
+        },
+        "lines_of_code": 483,
+        "total_functions": 17,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:00.534554",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 55.42020392192043,
+          "difficulty": 0.8333333333333334,
+          "effort": 46.18350326826703,
+          "time": 2.5657501815703907,
+          "bugs": 0.018473401307306812
+        },
+        "lines_of_code": 11,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:00.538427",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 25.328436022934504,
+          "difficulty": 0.625,
+          "effort": 15.830272514334066,
+          "time": 0.8794595841296703,
+          "bugs": 0.008442812007644835
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:00.542497",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 31.17263854637882,
+          "difficulty": 0.6666666666666666,
+          "effort": 20.78175903091921,
+          "time": 1.1545421683844006,
+          "bugs": 0.010390879515459606
+        },
+        "lines_of_code": 11,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:00.548373",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 88.31295526528562,
+        "halstead_metrics": {
+          "volume": 142.18795285448255,
+          "difficulty": 1.125,
+          "effort": 159.96144696129286,
+          "time": 8.88674705340516,
+          "bugs": 0.04739598428482752
+        },
+        "lines_of_code": 32,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.612049",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.615632",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.618978",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.623309",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 23.350921788663758,
+          "difficulty": 1.1,
+          "effort": 25.686013967530137,
+          "time": 1.4270007759738965,
+          "bugs": 0.007783640596221253
+        },
+        "lines_of_code": 14,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.628037",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 95.56047283391652,
+        "halstead_metrics": {
+          "volume": 86.71115273688494,
+          "difficulty": 0.90625,
+          "effort": 78.58198216780198,
+          "time": 4.365665675988999,
+          "bugs": 0.02890371757896165
+        },
+        "lines_of_code": 23,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.633953",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 1,
+        "maintainability_index": 89.6304595912152,
+        "halstead_metrics": {
+          "volume": 96.32925369791135,
+          "difficulty": 1.1,
+          "effort": 105.9621790677025,
+          "time": 5.8867877259834716,
+          "bugs": 0.03210975123263712
+        },
+        "lines_of_code": 32,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.640726",
+      "metrics": {
+        "cyclomatic_complexity": 7,
+        "cognitive_complexity": 10,
+        "maintainability_index": 76.94747306776617,
+        "halstead_metrics": {
+          "volume": 143.09255457300088,
+          "difficulty": 1.2105263157894737,
+          "effort": 173.21730290415897,
+          "time": 9.623183494675498,
+          "bugs": 0.04769751819100029
+        },
+        "lines_of_code": 60,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.649172",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 15,
+        "maintainability_index": 63.63099803286785,
+        "halstead_metrics": {
+          "volume": 291.121815835177,
+          "difficulty": 1.3833333333333333,
+          "effort": 402.71851190532817,
+          "time": 22.37325066140712,
+          "bugs": 0.09704060527839234
+        },
+        "lines_of_code": 105,
+        "total_functions": 2,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.654151",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 3,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 48.354286952874965,
+          "difficulty": 1.25,
+          "effort": 60.442858691093704,
+          "time": 3.3579365939496504,
+          "bugs": 0.01611809565095832
+        },
+        "lines_of_code": 15,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.658462",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 25.296831937719073,
+          "difficulty": 1.2,
+          "effort": 30.356198325262888,
+          "time": 1.6864554625146049,
+          "bugs": 0.008432277312573025
+        },
+        "lines_of_code": 12,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.664997",
+      "metrics": {
+        "cyclomatic_complexity": 7,
+        "cognitive_complexity": 7,
+        "maintainability_index": 80.39840213469292,
+        "halstead_metrics": {
+          "volume": 166.18119344424494,
+          "difficulty": 2.5,
+          "effort": 415.45298361061236,
+          "time": 23.080721311700685,
+          "bugs": 0.055393731148081646
+        },
+        "lines_of_code": 46,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.673675",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 18,
+        "maintainability_index": 64.79196367128262,
+        "halstead_metrics": {
+          "volume": 350.25903752648975,
+          "difficulty": 2.7058823529411766,
+          "effort": 947.75974860109,
+          "time": 52.653319366727224,
+          "bugs": 0.11675301250882991
+        },
+        "lines_of_code": 92,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.681430",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 0,
+        "maintainability_index": 79.36889641505786,
+        "halstead_metrics": {
+          "volume": 171.61490683878907,
+          "difficulty": 1.2045454545454546,
+          "effort": 206.71795596490503,
+          "time": 11.48433088693917,
+          "bugs": 0.05720496894626302
+        },
+        "lines_of_code": 50,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:11.696793",
+      "metrics": {
+        "cyclomatic_complexity": 27,
+        "cognitive_complexity": 65,
+        "maintainability_index": 43.76125365702619,
+        "halstead_metrics": {
+          "volume": 792.4380484955718,
+          "difficulty": 5.462264150943396,
+          "effort": 4328.505944140906,
+          "time": 240.47255245227254,
+          "bugs": 0.2641460161651906
+        },
+        "lines_of_code": 205,
+        "total_functions": 10,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:13.154595",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 95.12915652268838,
+        "halstead_metrics": {
+          "volume": 86.71115273688494,
+          "difficulty": 0.90625,
+          "effort": 78.58198216780198,
+          "time": 4.365665675988999,
+          "bugs": 0.02890371757896165
+        },
+        "lines_of_code": 24,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:13.159055",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 44.72831969618401,
+          "difficulty": 0.85,
+          "effort": 38.019071741756406,
+          "time": 2.1121706523198003,
+          "bugs": 0.014909439898728004
+        },
+        "lines_of_code": 18,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:13.163797",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 55.42020392192043,
+          "difficulty": 0.8333333333333334,
+          "effort": 46.18350326826703,
+          "time": 2.5657501815703907,
+          "bugs": 0.018473401307306812
+        },
+        "lines_of_code": 11,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:13.171250",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 75.01708968732245,
+        "halstead_metrics": {
+          "volume": 248.28740886133735,
+          "difficulty": 1.2857142857142858,
+          "effort": 319.2266685360052,
+          "time": 17.734814918666956,
+          "bugs": 0.08276246962044578
+        },
+        "lines_of_code": 60,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.147861",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 11.266065387038703,
+          "difficulty": 1.0,
+          "effort": 11.266065387038703,
+          "time": 0.6258925215021501,
+          "bugs": 0.0037553551290129008
+        },
+        "lines_of_code": 5,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.152065",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 5.545177444479562,
+          "difficulty": 0.75,
+          "effort": 4.1588830833596715,
+          "time": 0.23104906018664842,
+          "bugs": 0.0018483924814931875
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.159075",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 92.18480958391973,
+        "halstead_metrics": {
+          "volume": 129.82378304104927,
+          "difficulty": 1.025,
+          "effort": 133.06937761707547,
+          "time": 7.392743200948638,
+          "bugs": 0.04327459434701642
+        },
+        "lines_of_code": 25,
+        "total_functions": 2,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.163931",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 76.49676028951784,
+          "difficulty": 0.8666666666666667,
+          "effort": 66.29719225091546,
+          "time": 3.683177347273081,
+          "bugs": 0.025498920096505947
+        },
+        "lines_of_code": 9,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.169968",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 4,
+        "maintainability_index": 96.23003613137004,
+        "halstead_metrics": {
+          "volume": 105.99980324999186,
+          "difficulty": 3.3000000000000003,
+          "effort": 349.7993507249732,
+          "time": 19.43329726249851,
+          "bugs": 0.03533326774999729
+        },
+        "lines_of_code": 20,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.176129",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 4,
+        "maintainability_index": 90.52426043502943,
+        "halstead_metrics": {
+          "volume": 129.82378304104927,
+          "difficulty": 3.25,
+          "effort": 421.9272948834101,
+          "time": 23.440405271300563,
+          "bugs": 0.04327459434701642
+        },
+        "lines_of_code": 27,
+        "total_functions": 2,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.186734",
+      "metrics": {
+        "cyclomatic_complexity": 7,
+        "cognitive_complexity": 4,
+        "maintainability_index": 63.860520422312746,
+        "halstead_metrics": {
+          "volume": 370.0197262590943,
+          "difficulty": 5.647058823529412,
+          "effort": 2089.523160051356,
+          "time": 116.08462000285311,
+          "bugs": 0.12333990875303143
+        },
+        "lines_of_code": 100,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.191071",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 16.635532333438686,
+          "difficulty": 0.5833333333333334,
+          "effort": 9.704060527839234,
+          "time": 0.5391144737688464,
+          "bugs": 0.005545177444479562
+        },
+        "lines_of_code": 3,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.195867",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 27.242742086774385,
+          "difficulty": 1.3,
+          "effort": 35.4155647128067,
+          "time": 1.9675313729337054,
+          "bugs": 0.009080914028924796
+        },
+        "lines_of_code": 12,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.200930",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 29.1121815835177,
+          "difficulty": 1.0833333333333333,
+          "effort": 31.538196715477504,
+          "time": 1.7521220397487502,
+          "bugs": 0.009704060527839233
+        },
+        "lines_of_code": 22,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:16.214479",
+      "metrics": {
+        "cyclomatic_complexity": 11,
+        "cognitive_complexity": 14,
+        "maintainability_index": 51.65029565517561,
+        "halstead_metrics": {
+          "volume": 678.1272879159267,
+          "difficulty": 6.73469387755102,
+          "effort": 4566.979694127669,
+          "time": 253.72109411820384,
+          "bugs": 0.22604242930530888
+        },
+        "lines_of_code": 166,
+        "total_functions": 5,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.616225",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 8.958797346140274,
+          "difficulty": 0.5,
+          "effort": 4.479398673070137,
+          "time": 0.24885548183722983,
+          "bugs": 0.002986265782046758
+        },
+        "lines_of_code": 5,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.620963",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 37.273599746820004,
+          "difficulty": 0.7,
+          "effort": 26.091519822774,
+          "time": 1.449528879043,
+          "bugs": 0.012424533248940002
+        },
+        "lines_of_code": 7,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.628270",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 57.549486547160896,
+          "difficulty": 1.2777777777777777,
+          "effort": 73.53545503248336,
+          "time": 4.0853030573601865,
+          "bugs": 0.019183162182386967
+        },
+        "lines_of_code": 14,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.635211",
+      "metrics": {
+        "cyclomatic_complexity": 8,
+        "cognitive_complexity": 6,
+        "maintainability_index": 84.62971096411215,
+        "halstead_metrics": {
+          "volume": 148.37003776119917,
+          "difficulty": 1.175,
+          "effort": 174.33479436940902,
+          "time": 9.685266353856058,
+          "bugs": 0.04945667925373306
+        },
+        "lines_of_code": 36,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.641009",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 1,
+        "maintainability_index": 97.78032142566809,
+        "halstead_metrics": {
+          "volume": 67.70125502755525,
+          "difficulty": 0.9230769230769231,
+          "effort": 62.49346617928177,
+          "time": 3.4718592321823203,
+          "bugs": 0.022567085009185084
+        },
+        "lines_of_code": 21,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.646077",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 44.8639746034594,
+          "difficulty": 0.6666666666666666,
+          "effort": 29.909316402306263,
+          "time": 1.6616286890170147,
+          "bugs": 0.014954658201153131
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.652994",
+      "metrics": {
+        "cyclomatic_complexity": 7,
+        "cognitive_complexity": 6,
+        "maintainability_index": 84.7915869229842,
+        "halstead_metrics": {
+          "volume": 163.82525002799076,
+          "difficulty": 1.275,
+          "effort": 208.8771937856882,
+          "time": 11.604288543649345,
+          "bugs": 0.05460841667599692
+        },
+        "lines_of_code": 35,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.657620",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 18.71497387511852,
+          "difficulty": 0.6666666666666666,
+          "effort": 12.476649250079014,
+          "time": 0.6931471805599452,
+          "bugs": 0.006238324625039507
+        },
+        "lines_of_code": 5,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.664953",
+      "metrics": {
+        "cyclomatic_complexity": 6,
+        "cognitive_complexity": 2,
+        "maintainability_index": 83.92368266753272,
+        "halstead_metrics": {
+          "volume": 157.6431651212741,
+          "difficulty": 1.225,
+          "effort": 193.1128772735608,
+          "time": 10.728493181864488,
+          "bugs": 0.05254772170709137
+        },
+        "lines_of_code": 38,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.669425",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 5.545177444479562,
+          "difficulty": 0.75,
+          "effort": 4.1588830833596715,
+          "time": 0.23104906018664842,
+          "bugs": 0.0018483924814931875
+        },
+        "lines_of_code": 5,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.674981",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 60.69831858115096,
+          "difficulty": 0.9166666666666666,
+          "effort": 55.640125366055045,
+          "time": 3.0911180758919468,
+          "bugs": 0.020232772860383653
+        },
+        "lines_of_code": 15,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.680453",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 58.059261251535695,
+          "difficulty": 0.875,
+          "effort": 50.80185359509373,
+          "time": 2.8223251997274295,
+          "bugs": 0.01935308708384523
+        },
+        "lines_of_code": 16,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.686061",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 47.213226345972004,
+          "difficulty": 0.9,
+          "effort": 42.4919037113748,
+          "time": 2.3606613172986,
+          "bugs": 0.015737742115324003
+        },
+        "lines_of_code": 14,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:27.709088",
+      "metrics": {
+        "cyclomatic_complexity": 40,
+        "cognitive_complexity": 90,
+        "maintainability_index": 34.07390255869075,
+        "halstead_metrics": {
+          "volume": 1311.5230924064933,
+          "difficulty": 5.781818181818182,
+          "effort": 7582.988061550271,
+          "time": 421.2771145305706,
+          "bugs": 0.43717436413549776
+        },
+        "lines_of_code": 264,
+        "total_functions": 12,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:30.147173",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 5,
+        "maintainability_index": 96.43095817998446,
+        "halstead_metrics": {
+          "volume": 46.05170185988092,
+          "difficulty": 1.1875,
+          "effort": 54.68639595860859,
+          "time": 3.0381331088115884,
+          "bugs": 0.015350567286626975
+        },
+        "lines_of_code": 26,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:30.152386",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 31.17263854637882,
+          "difficulty": 0.6666666666666666,
+          "effort": 20.78175903091921,
+          "time": 1.1545421683844006,
+          "bugs": 0.010390879515459606
+        },
+        "lines_of_code": 17,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:30.157508",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 29.1121815835177,
+          "difficulty": 1.0833333333333333,
+          "effort": 31.538196715477504,
+          "time": 1.7521220397487502,
+          "bugs": 0.009704060527839233
+        },
+        "lines_of_code": 15,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:30.165288",
+      "metrics": {
+        "cyclomatic_complexity": 9,
+        "cognitive_complexity": 16,
+        "maintainability_index": 69.739154152036,
+        "halstead_metrics": {
+          "volume": 173.53777895023512,
+          "difficulty": 1.4736842105263157,
+          "effort": 255.73988476876752,
+          "time": 14.20777137604264,
+          "bugs": 0.05784592631674504
+        },
+        "lines_of_code": 86,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:36.520155",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 5.545177444479562,
+          "difficulty": 0.75,
+          "effort": 4.1588830833596715,
+          "time": 0.23104906018664842,
+          "bugs": 0.0018483924814931875
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:36.526304",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 6.931471805599453,
+          "difficulty": 1.0,
+          "effort": 6.931471805599453,
+          "time": 0.3850817669777474,
+          "bugs": 0.0023104906018664843
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:36.532709",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 3,
+        "maintainability_index": 89.12472464679414,
+        "halstead_metrics": {
+          "volume": 143.35624767294522,
+          "difficulty": 0.8958333333333334,
+          "effort": 128.4233052070134,
+          "time": 7.134628067056301,
+          "bugs": 0.04778541589098174
+        },
+        "lines_of_code": 29,
+        "total_functions": 2,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:55.904335",
+      "metrics": {
+        "cyclomatic_complexity": 6,
+        "cognitive_complexity": 4,
+        "maintainability_index": 79.42772929358188,
+        "halstead_metrics": {
+          "volume": 276.8502967443636,
+          "difficulty": 3.2916666666666665,
+          "effort": 911.2988934501968,
+          "time": 50.62771630278871,
+          "bugs": 0.0922834322481212
+        },
+        "lines_of_code": 42,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:55.921101",
+      "metrics": {
+        "cyclomatic_complexity": 12,
+        "cognitive_complexity": 31,
+        "maintainability_index": 54.016474169836755,
+        "halstead_metrics": {
+          "volume": 1015.3858444508079,
+          "difficulty": 8.428571428571429,
+          "effort": 8558.252117513952,
+          "time": 475.4584509729973,
+          "bugs": 0.3384619481502693
+        },
+        "lines_of_code": 124,
+        "total_functions": 10,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:55.931951",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 28,
+        "maintainability_index": 73.532203034217,
+        "halstead_metrics": {
+          "volume": 354.7683749071549,
+          "difficulty": 2.8484848484848486,
+          "effort": 1010.5523406446231,
+          "time": 56.14179670247906,
+          "bugs": 0.11825612496905163
+        },
+        "lines_of_code": 53,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:03:55.948684",
+      "metrics": {
+        "cyclomatic_complexity": 26,
+        "cognitive_complexity": 171,
+        "maintainability_index": 48.97604083049539,
+        "halstead_metrics": {
+          "volume": 1035.2480429341178,
+          "difficulty": 3.8548387096774195,
+          "effort": 3990.7142300202286,
+          "time": 221.7063461122349,
+          "bugs": 0.3450826809780393
+        },
+        "lines_of_code": 138,
+        "total_functions": 7,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:13.813266",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 92.55395237629112,
+        "halstead_metrics": {
+          "volume": 100.11092529165897,
+          "difficulty": 0.9705882352941176,
+          "effort": 97.16648631249254,
+          "time": 5.398138128471808,
+          "bugs": 0.03337030843055299
+        },
+        "lines_of_code": 27,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:13.819708",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 44.72831969618401,
+          "difficulty": 0.85,
+          "effort": 38.019071741756406,
+          "time": 2.1121706523198003,
+          "bugs": 0.014909439898728004
+        },
+        "lines_of_code": 18,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:13.825507",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 55.42020392192043,
+          "difficulty": 0.8333333333333334,
+          "effort": 46.18350326826703,
+          "time": 2.5657501815703907,
+          "bugs": 0.018473401307306812
+        },
+        "lines_of_code": 11,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:13.834550",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 72.93255868740887,
+        "halstead_metrics": {
+          "volume": 290.2101276017179,
+          "difficulty": 1.3225806451612903,
+          "effort": 383.82629779582044,
+          "time": 21.32368321087891,
+          "bugs": 0.09673670920057263
+        },
+        "lines_of_code": 65,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.184097",
+      "metrics": {
+        "cyclomatic_complexity": 25,
+        "cognitive_complexity": 92,
+        "maintainability_index": 46.34873947624234,
+        "halstead_metrics": {
+          "volume": 829.7910099323935,
+          "difficulty": 2.0392156862745097,
+          "effort": 1692.1228437837044,
+          "time": 94.00682465465025,
+          "bugs": 0.27659700331079784
+        },
+        "lines_of_code": 177,
+        "total_functions": 11,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.191481",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 0,
+        "maintainability_index": 97.39949178649829,
+        "halstead_metrics": {
+          "volume": 69.31471805599453,
+          "difficulty": 0.8571428571428571,
+          "effort": 59.41261547656674,
+          "time": 3.3007008598092633,
+          "bugs": 0.023104906018664845
+        },
+        "lines_of_code": 22,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.198343",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 1,
+        "maintainability_index": 90.95816867129102,
+        "halstead_metrics": {
+          "volume": 67.70125502755525,
+          "difficulty": 0.9230769230769231,
+          "effort": 62.49346617928177,
+          "time": 3.4718592321823203,
+          "bugs": 0.022567085009185084
+        },
+        "lines_of_code": 33,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.218564",
+      "metrics": {
+        "cyclomatic_complexity": 30,
+        "cognitive_complexity": 107,
+        "maintainability_index": 38.70299781927153,
+        "halstead_metrics": {
+          "volume": 1126.272330222871,
+          "difficulty": 1.9776119402985075,
+          "effort": 2227.3296082765733,
+          "time": 123.74053379314296,
+          "bugs": 0.37542411007429033
+        },
+        "lines_of_code": 240,
+        "total_functions": 14,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 2,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.225698",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 6,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 36.972292832050954,
+          "difficulty": 1.8,
+          "effort": 66.55012709769171,
+          "time": 3.697229283205095,
+          "bugs": 0.012324097610683652
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.231835",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 6,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 36.972292832050954,
+          "difficulty": 1.8,
+          "effort": 66.55012709769171,
+          "time": 3.697229283205095,
+          "bugs": 0.012324097610683652
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.237690",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 6,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 33.08047253394032,
+          "difficulty": 1.6,
+          "effort": 52.92875605430452,
+          "time": 2.940486447461362,
+          "bugs": 0.011026824177980107
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.243815",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 23.292873099964716,
+          "difficulty": 1.5,
+          "effort": 34.93930964994708,
+          "time": 1.9410727583303933,
+          "bugs": 0.007764291033321572
+        },
+        "lines_of_code": 7,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.255398",
+      "metrics": {
+        "cyclomatic_complexity": 23,
+        "cognitive_complexity": 171,
+        "maintainability_index": 65.37794177206813,
+        "halstead_metrics": {
+          "volume": 374.476259839981,
+          "difficulty": 3.0,
+          "effort": 1123.428779519943,
+          "time": 62.412709973330166,
+          "bugs": 0.12482541994666034
+        },
+        "lines_of_code": 72,
+        "total_functions": 6,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.262661",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 6,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 69.577386194064,
+          "difficulty": 1.35,
+          "effort": 93.92947136198642,
+          "time": 5.218303964554801,
+          "bugs": 0.023192462064688002
+        },
+        "lines_of_code": 12,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.267669",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 4.1588830833596715,
+          "difficulty": 0.5,
+          "effort": 2.0794415416798357,
+          "time": 0.11552453009332421,
+          "bugs": 0.0013862943611198904
+        },
+        "lines_of_code": 2,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.272704",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 4.1588830833596715,
+          "difficulty": 0.5,
+          "effort": 2.0794415416798357,
+          "time": 0.11552453009332421,
+          "bugs": 0.0013862943611198904
+        },
+        "lines_of_code": 2,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.279087",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 47.82715545863622,
+          "difficulty": 1.8333333333333333,
+          "effort": 87.68311834083306,
+          "time": 4.871284352268503,
+          "bugs": 0.01594238515287874
+        },
+        "lines_of_code": 17,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.285481",
+      "metrics": {
+        "cyclomatic_complexity": 6,
+        "cognitive_complexity": 8,
+        "maintainability_index": 95.3378396175807,
+        "halstead_metrics": {
+          "volume": 79.17171988845777,
+          "difficulty": 1.2083333333333333,
+          "effort": 95.66582819855314,
+          "time": 5.314768233252952,
+          "bugs": 0.026390573296152593
+        },
+        "lines_of_code": 23,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:19.299850",
+      "metrics": {
+        "cyclomatic_complexity": 18,
+        "cognitive_complexity": 64,
+        "maintainability_index": 56.965830666472044,
+        "halstead_metrics": {
+          "volume": 542.2071236271877,
+          "difficulty": 1.9864864864864864,
+          "effort": 1077.087123962116,
+          "time": 59.83817355345089,
+          "bugs": 0.18073570787572923
+        },
+        "lines_of_code": 116,
+        "total_functions": 10,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:21.501380",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 0,
+        "maintainability_index": 81.83271015632837,
+        "halstead_metrics": {
+          "volume": 128.8164877628216,
+          "difficulty": 1.1666666666666667,
+          "effort": 150.28590238995855,
+          "time": 8.349216799442141,
+          "bugs": 0.042938829254273864
+        },
+        "lines_of_code": 47,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:21.508547",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 0,
+        "maintainability_index": 85.37615203129917,
+        "halstead_metrics": {
+          "volume": 103.05536427082541,
+          "difficulty": 1.0,
+          "effort": 103.05536427082541,
+          "time": 5.725298015045856,
+          "bugs": 0.034351788090275136
+        },
+        "lines_of_code": 41,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:21.516268",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 1,
+        "maintainability_index": 92.37522888037724,
+        "halstead_metrics": {
+          "volume": 44.72831969618401,
+          "difficulty": 0.85,
+          "effort": 38.019071741756406,
+          "time": 2.1121706523198003,
+          "bugs": 0.014909439898728004
+        },
+        "lines_of_code": 34,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:21.527288",
+      "metrics": {
+        "cyclomatic_complexity": 12,
+        "cognitive_complexity": 1,
+        "maintainability_index": 58.31494479875036,
+        "halstead_metrics": {
+          "volume": 333.22045101752036,
+          "difficulty": 1.9038461538461537,
+          "effort": 634.4004740525868,
+          "time": 35.24447078069927,
+          "bugs": 0.11107348367250679
+        },
+        "lines_of_code": 136,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:27.239749",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 0,
+        "maintainability_index": 83.24229446356037,
+        "halstead_metrics": {
+          "volume": 128.8164877628216,
+          "difficulty": 1.1666666666666667,
+          "effort": 150.28590238995855,
+          "time": 8.349216799442141,
+          "bugs": 0.042938829254273864
+        },
+        "lines_of_code": 43,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:27.247143",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 0,
+        "maintainability_index": 86.57670118018947,
+        "halstead_metrics": {
+          "volume": 103.05536427082541,
+          "difficulty": 1.0,
+          "effort": 103.05536427082541,
+          "time": 5.725298015045856,
+          "bugs": 0.034351788090275136
+        },
+        "lines_of_code": 38,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:27.253754",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 1,
+        "maintainability_index": 93.32844498074876,
+        "halstead_metrics": {
+          "volume": 44.72831969618401,
+          "difficulty": 0.85,
+          "effort": 38.019071741756406,
+          "time": 2.1121706523198003,
+          "bugs": 0.014909439898728004
+        },
+        "lines_of_code": 32,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:27.265106",
+      "metrics": {
+        "cyclomatic_complexity": 12,
+        "cognitive_complexity": 1,
+        "maintainability_index": 59.4157455216682,
+        "halstead_metrics": {
+          "volume": 333.22045101752036,
+          "difficulty": 1.9038461538461537,
+          "effort": 634.4004740525868,
+          "time": 35.24447078069927,
+          "bugs": 0.11107348367250679
+        },
+        "lines_of_code": 127,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:30.883879",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 0,
+        "maintainability_index": 82.09132838222718,
+        "halstead_metrics": {
+          "volume": 114.83312018749118,
+          "difficulty": 1.1176470588235294,
+          "effort": 128.34289903307837,
+          "time": 7.130161057393242,
+          "bugs": 0.038277706729163724
+        },
+        "lines_of_code": 48,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:30.891319",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 0,
+        "maintainability_index": 84.99495797325403,
+        "halstead_metrics": {
+          "volume": 103.05536427082541,
+          "difficulty": 1.0,
+          "effort": 103.05536427082541,
+          "time": 5.725298015045856,
+          "bugs": 0.034351788090275136
+        },
+        "lines_of_code": 42,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:30.899740",
+      "metrics": {
+        "cyclomatic_complexity": 7,
+        "cognitive_complexity": 7,
+        "maintainability_index": 77.01834966899126,
+        "halstead_metrics": {
+          "volume": 121.39561383163891,
+          "difficulty": 1.28125,
+          "effort": 155.53813022178736,
+          "time": 8.641007234543743,
+          "bugs": 0.040465204610546306
+        },
+        "lines_of_code": 63,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:30.912813",
+      "metrics": {
+        "cyclomatic_complexity": 14,
+        "cognitive_complexity": 7,
+        "maintainability_index": 53.401128164603165,
+        "halstead_metrics": {
+          "volume": 415.88830833596717,
+          "difficulty": 1.9833333333333334,
+          "effort": 824.8451448663349,
+          "time": 45.824730270351935,
+          "bugs": 0.13862943611198905
+        },
+        "lines_of_code": 167,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:37.650279",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 0,
+        "maintainability_index": 83.83494514214348,
+        "halstead_metrics": {
+          "volume": 114.83312018749118,
+          "difficulty": 1.1176470588235294,
+          "effort": 128.34289903307837,
+          "time": 7.130161057393242,
+          "bugs": 0.038277706729163724
+        },
+        "lines_of_code": 43,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:37.657884",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 0,
+        "maintainability_index": 86.57670118018947,
+        "halstead_metrics": {
+          "volume": 103.05536427082541,
+          "difficulty": 1.0,
+          "effort": 103.05536427082541,
+          "time": 5.725298015045856,
+          "bugs": 0.034351788090275136
+        },
+        "lines_of_code": 38,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:37.665953",
+      "metrics": {
+        "cyclomatic_complexity": 7,
+        "cognitive_complexity": 7,
+        "maintainability_index": 80.89807116037875,
+        "halstead_metrics": {
+          "volume": 109.83412680005425,
+          "difficulty": 1.15625,
+          "effort": 126.99570911256272,
+          "time": 7.055317172920152,
+          "bugs": 0.036611375600018085
+        },
+        "lines_of_code": 51,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:37.678537",
+      "metrics": {
+        "cyclomatic_complexity": 14,
+        "cognitive_complexity": 7,
+        "maintainability_index": 55.740194695589764,
+        "halstead_metrics": {
+          "volume": 402.0253647247683,
+          "difficulty": 1.9166666666666667,
+          "effort": 770.5486157224726,
+          "time": 42.80825642902626,
+          "bugs": 0.13400845490825608
+        },
+        "lines_of_code": 146,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:39.892665",
+      "metrics": {
+        "cyclomatic_complexity": 7,
+        "cognitive_complexity": 3,
+        "maintainability_index": 75.80418370841606,
+        "halstead_metrics": {
+          "volume": 161.35968919934143,
+          "difficulty": 1.368421052631579,
+          "effort": 220.80799574646724,
+          "time": 12.267110874803736,
+          "bugs": 0.05378656306644714
+        },
+        "lines_of_code": 62,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:39.901276",
+      "metrics": {
+        "cyclomatic_complexity": 6,
+        "cognitive_complexity": 3,
+        "maintainability_index": 77.9566127550121,
+        "halstead_metrics": {
+          "volume": 152.22612188617114,
+          "difficulty": 1.2894736842105263,
+          "effort": 196.29157822164174,
+          "time": 10.905087678980097,
+          "bugs": 0.050742040628723714
+        },
+        "lines_of_code": 56,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:39.908962",
+      "metrics": {
+        "cyclomatic_complexity": 6,
+        "cognitive_complexity": 4,
+        "maintainability_index": 82.75101932309629,
+        "halstead_metrics": {
+          "volume": 90.66282700979892,
+          "difficulty": 1.0333333333333334,
+          "effort": 93.68492124345889,
+          "time": 5.204717846858827,
+          "bugs": 0.030220942336599638
+        },
+        "lines_of_code": 49,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:39.923001",
+      "metrics": {
+        "cyclomatic_complexity": 17,
+        "cognitive_complexity": 22,
+        "maintainability_index": 50.6059628611589,
+        "halstead_metrics": {
+          "volume": 486.01455104384075,
+          "difficulty": 2.225806451612903,
+          "effort": 1081.7743232911293,
+          "time": 60.09857351617385,
+          "bugs": 0.16200485034794693
+        },
+        "lines_of_code": 181,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:44.125440",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 6.437751649736401,
+          "difficulty": 0.5,
+          "effort": 3.2188758248682006,
+          "time": 0.17882643471490003,
+          "bugs": 0.0021459172165788003
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:44.131586",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 35.96842909197556,
+          "difficulty": 0.7777777777777778,
+          "effort": 27.975444849314325,
+          "time": 1.5541913805174625,
+          "bugs": 0.011989476363991853
+        },
+        "lines_of_code": 5,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:44.143761",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 13,
+        "maintainability_index": 72.05575365108882,
+        "halstead_metrics": {
+          "volume": 219.20561551608645,
+          "difficulty": 1.868421052631579,
+          "effort": 409.56838688531946,
+          "time": 22.753799271406635,
+          "bugs": 0.07306853850536216
+        },
+        "lines_of_code": 68,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:44.151045",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 0,
+        "maintainability_index": 89.03724537045987,
+        "halstead_metrics": {
+          "volume": 85.95025038943322,
+          "difficulty": 1.0714285714285714,
+          "effort": 92.08955398867845,
+          "time": 5.116086332704358,
+          "bugs": 0.028650083463144408
+        },
+        "lines_of_code": 35,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:44.159539",
+      "metrics": {
+        "cyclomatic_complexity": 8,
+        "cognitive_complexity": 6,
+        "maintainability_index": 80.72710608905966,
+        "halstead_metrics": {
+          "volume": 122.82502321571363,
+          "difficulty": 1.1111111111111112,
+          "effort": 136.4722480174596,
+          "time": 7.581791556525534,
+          "bugs": 0.040941674405237875
+        },
+        "lines_of_code": 49,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:04:44.188669",
+      "metrics": {
+        "cyclomatic_complexity": 46,
+        "cognitive_complexity": 319,
+        "maintainability_index": 24.258037045684773,
+        "halstead_metrics": {
+          "volume": 1582.31538944104,
+          "difficulty": 2.8333333333333335,
+          "effort": 4483.226936749614,
+          "time": 249.0681631527563,
+          "bugs": 0.5274384631470134
+        },
+        "lines_of_code": 419,
+        "total_functions": 16,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "9592cfd8-f099-48a1-b96b-5e8700bb3ef9"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:04.254118",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 30.761144082707073,
+          "difficulty": 0.9285714285714286,
+          "effort": 28.563919505370855,
+          "time": 1.5868844169650476,
+          "bugs": 0.01025371469423569
+        },
+        "lines_of_code": 6,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:04.264904",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 81.09817653378384,
+        "halstead_metrics": {
+          "volume": 185.49965568748573,
+          "difficulty": 3.5625,
+          "effort": 660.842523386668,
+          "time": 36.71347352148155,
+          "bugs": 0.06183321856249524
+        },
+        "lines_of_code": 45,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:04.272180",
+      "metrics": {
+        "cyclomatic_complexity": 5,
+        "cognitive_complexity": 1,
+        "maintainability_index": 95.93663429275969,
+        "halstead_metrics": {
+          "volume": 73.68272297580947,
+          "difficulty": 1.8125,
+          "effort": 133.54993539365466,
+          "time": 7.419440855203037,
+          "bugs": 0.024560907658603158
+        },
+        "lines_of_code": 23,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:04.292154",
+      "metrics": {
+        "cyclomatic_complexity": 29,
+        "cognitive_complexity": 211,
+        "maintainability_index": 38.376181303926614,
+        "halstead_metrics": {
+          "volume": 1237.5988547991792,
+          "difficulty": 6.413043478260869,
+          "effort": 7936.775264472996,
+          "time": 440.9319591373887,
+          "bugs": 0.4125329515997264
+        },
+        "lines_of_code": 241,
+        "total_functions": 8,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:10.943729",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 35.96842909197556,
+          "difficulty": 0.7777777777777778,
+          "effort": 27.975444849314325,
+          "time": 1.5541913805174625,
+          "bugs": 0.011989476363991853
+        },
+        "lines_of_code": 18,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:10.950733",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 10.75055681536833,
+          "difficulty": 0.625,
+          "effort": 6.719098009605206,
+          "time": 0.3732832227558448,
+          "bugs": 0.00358351893845611
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:10.956927",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 22.873856958478193,
+          "difficulty": 0.8333333333333334,
+          "effort": 19.061547465398494,
+          "time": 1.0589748591888053,
+          "bugs": 0.007624618986159398
+        },
+        "lines_of_code": 11,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:10.963251",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 16.125835223052494,
+          "difficulty": 1.0,
+          "effort": 16.125835223052494,
+          "time": 0.8958797346140275,
+          "bugs": 0.005375278407684165
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:10.969567",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 19.709354161508603,
+          "difficulty": 1.25,
+          "effort": 24.636692701885753,
+          "time": 1.368705150104764,
+          "bugs": 0.006569784720502868
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:10.978601",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 10,
+        "maintainability_index": 73.6361678813688,
+        "halstead_metrics": {
+          "volume": 161.49316061120433,
+          "difficulty": 1.8666666666666667,
+          "effort": 301.4538998075814,
+          "time": 16.747438878198967,
+          "bugs": 0.05383105353706811
+        },
+        "lines_of_code": 68,
+        "total_functions": 6,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:22.508637",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 12,
+        "maintainability_index": 84.27333466486984,
+        "halstead_metrics": {
+          "volume": 173.0983773880657,
+          "difficulty": 1.375,
+          "effort": 238.01026890859035,
+          "time": 13.222792717143909,
+          "bugs": 0.057699459129355236
+        },
+        "lines_of_code": 34,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:22.517882",
+      "metrics": {
+        "cyclomatic_complexity": 10,
+        "cognitive_complexity": 12,
+        "maintainability_index": 79.51400080030558,
+        "halstead_metrics": {
+          "volume": 212.13963728914788,
+          "difficulty": 1.1481481481481481,
+          "effort": 243.567731702355,
+          "time": 13.531540650130832,
+          "bugs": 0.07071321242971595
+        },
+        "lines_of_code": 43,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:22.525853",
+      "metrics": {
+        "cyclomatic_complexity": 8,
+        "cognitive_complexity": 15,
+        "maintainability_index": 93.11695645853908,
+        "halstead_metrics": {
+          "volume": 86.65760643527072,
+          "difficulty": 1.1923076923076923,
+          "effort": 103.32253074974587,
+          "time": 5.740140597208104,
+          "bugs": 0.028885868811756907
+        },
+        "lines_of_code": 25,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:22.535096",
+      "metrics": {
+        "cyclomatic_complexity": 11,
+        "cognitive_complexity": 15,
+        "maintainability_index": 79.49444792395053,
+        "halstead_metrics": {
+          "volume": 218.88355609103763,
+          "difficulty": 1.4130434782608696,
+          "effort": 309.291981432988,
+          "time": 17.182887857388224,
+          "bugs": 0.07296118536367921
+        },
+        "lines_of_code": 42,
+        "total_functions": 2,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.485872",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 2.197224577336219,
+          "difficulty": 0.5,
+          "effort": 1.0986122886681096,
+          "time": 0.061034016037117195,
+          "bugs": 0.0007324081924454063
+        },
+        "lines_of_code": 3,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.492586",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 40.7642196375723,
+          "difficulty": 0.8888888888888888,
+          "effort": 36.23486190006427,
+          "time": 2.013047883336904,
+          "bugs": 0.013588073212524102
+        },
+        "lines_of_code": 10,
+        "total_functions": 0,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.499602",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 27.032740041837865,
+          "difficulty": 6.0,
+          "effort": 162.19644025102718,
+          "time": 9.010913347279288,
+          "bugs": 0.009010913347279288
+        },
+        "lines_of_code": 9,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.506081",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 12.875503299472802,
+          "difficulty": 1.0,
+          "effort": 12.875503299472802,
+          "time": 0.7153057388596001,
+          "bugs": 0.0042918344331576005
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.514205",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 90.28517569886715,
+        "halstead_metrics": {
+          "volume": 106.85098594088402,
+          "difficulty": 6.5625,
+          "effort": 701.2095952370513,
+          "time": 38.956088624280625,
+          "bugs": 0.035616995313628004
+        },
+        "lines_of_code": 31,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.524665",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 74.5985757358849,
+        "halstead_metrics": {
+          "volume": 296.3220330388097,
+          "difficulty": 6.166666666666667,
+          "effort": 1827.3192037393267,
+          "time": 101.51773354107371,
+          "bugs": 0.09877401101293656
+        },
+        "lines_of_code": 59,
+        "total_functions": 3,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.532251",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 3,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 43.74911676688687,
+          "difficulty": 0.9375,
+          "effort": 41.01479696895644,
+          "time": 2.278599831608691,
+          "bugs": 0.014583038922295623
+        },
+        "lines_of_code": 17,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.538604",
+      "metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 17.91759469228055,
+          "difficulty": 1.125,
+          "effort": 20.157294028815617,
+          "time": 1.1198496682675343,
+          "bugs": 0.005972531564093516
+        },
+        "lines_of_code": 5,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.547830",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 79.29122658328026,
+        "halstead_metrics": {
+          "volume": 155.26496844542774,
+          "difficulty": 5.75,
+          "effort": 892.7735685612095,
+          "time": 49.598531586733856,
+          "bugs": 0.051754989481809247
+        },
+        "lines_of_code": 55,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.560769",
+      "metrics": {
+        "cyclomatic_complexity": 4,
+        "cognitive_complexity": 6,
+        "maintainability_index": 64.65624167843359,
+        "halstead_metrics": {
+          "volume": 438.9766550395584,
+          "difficulty": 6.0,
+          "effort": 2633.8599302373505,
+          "time": 146.3255516798528,
+          "bugs": 0.1463255516798528
+        },
+        "lines_of_code": 94,
+        "total_functions": 3,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.568052",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 50.14208926268992,
+          "difficulty": 0.7083333333333334,
+          "effort": 35.5173132277387,
+          "time": 1.9731840682077053,
+          "bugs": 0.016714029754229975
+        },
+        "lines_of_code": 10,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.574580",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 20.723265836946414,
+          "difficulty": 0.5,
+          "effort": 10.361632918473207,
+          "time": 0.5756462732485115,
+          "bugs": 0.006907755278982138
+        },
+        "lines_of_code": 4,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.580918",
+      "metrics": {
+        "cyclomatic_complexity": 1,
+        "cognitive_complexity": 0,
+        "maintainability_index": 100.0,
+        "halstead_metrics": {
+          "volume": 8.958797346140274,
+          "difficulty": 0.5,
+          "effort": 4.479398673070137,
+          "time": 0.24885548183722983,
+          "bugs": 0.002986265782046758
+        },
+        "lines_of_code": 3,
+        "total_functions": 1,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 0,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
+    },
+    {
+      "timestamp": "2024-12-09T12:37:25.588851",
+      "metrics": {
+        "cyclomatic_complexity": 3,
+        "cognitive_complexity": 1,
+        "maintainability_index": 93.77356042098185,
+        "halstead_metrics": {
+          "volume": 95.38226801057343,
+          "difficulty": 0.96875,
+          "effort": 92.401572135243,
+          "time": 5.133420674180167,
+          "bugs": 0.03179408933685781
+        },
+        "lines_of_code": 25,
+        "total_functions": 4,
+        "scanned_functions": 0,
+        "function_scan_ratio": 0.0,
+        "total_classes": 1,
+        "scanned_classes": 0,
+        "class_scan_ratio": 0.0,
+        "complexity_graph": null
+      },
+      "correlation_id": "950e2d47-4762-4829-b1de-388e8f8ead4e"
     }
   ]
 }

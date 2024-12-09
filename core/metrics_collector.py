@@ -125,10 +125,6 @@ class MetricsCollector:
                 self.progress.remove_task(self.current_task_id)
                 self.current_task_id = None
             
-            # Only create progress if we have metrics
-            if not self.has_metrics:
-                return
-                
             # Create new progress tracking with initial description
             desc = self._format_progress_desc(module_name, 0, 0, 0, 0)
             self.current_task_id = self.progress.add_task(desc, total=max(1, total_items))
@@ -168,16 +164,14 @@ class MetricsCollector:
             # Initialize progress for new module if it has items to process
             total_items = metrics.total_functions + metrics.total_classes
             if total_items > 0:
-                self.has_metrics = True
                 if self.current_module != module_name:
                     self._init_progress(module_name, total_items)
-                
-                # Update progress with initial counts
-                self._update_progress(
-                    module_name,
-                    (0, metrics.total_functions),
-                    (0, metrics.total_classes)
-                )
+                    # Update progress with initial counts
+                    self._update_progress(
+                        module_name,
+                        (metrics.scanned_functions, metrics.total_functions),
+                        (metrics.scanned_classes, metrics.total_classes)
+                    )
         except Exception as e:
             self.logger.error(f"Error collecting metrics: {e}")
 
@@ -195,6 +189,7 @@ class MetricsCollector:
                 
                 if item_type == 'function':
                     self.accumulated_functions += 1
+                    metrics.scanned_functions = self.accumulated_functions
                     if self.current_task_id is not None and self.progress is not None:
                         self.progress.advance(self.current_task_id)
                         self._update_progress(
@@ -202,8 +197,11 @@ class MetricsCollector:
                             (self.accumulated_functions, metrics.total_functions),
                             (self.accumulated_classes, metrics.total_classes)
                         )
+                        # Log item completion
+                        console.print(f"[dim]Processed function: {name}[/dim]")
                 elif item_type == 'class':
                     self.accumulated_classes += 1
+                    metrics.scanned_classes = self.accumulated_classes
                     if self.current_task_id is not None and self.progress is not None:
                         self.progress.advance(self.current_task_id)
                         self._update_progress(
@@ -211,9 +209,8 @@ class MetricsCollector:
                             (self.accumulated_functions, metrics.total_functions),
                             (self.accumulated_classes, metrics.total_classes)
                         )
-                
-                # Log item completion
-                console.print(f"[dim]Processed {item_type}: {name}[/dim]")
+                        # Log item completion
+                        console.print(f"[dim]Processed class: {name}[/dim]")
                 
         except Exception as e:
             self.logger.error(f"Error updating scan progress: {e}")
@@ -256,6 +253,7 @@ class MetricsCollector:
                 completed=completed_items,
                 total=max(1, total_items)  # Ensure non-zero total
             )
+            
         except Exception as e:
             self.logger.error(f"Error updating progress: {e}")
 

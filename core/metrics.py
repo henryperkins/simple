@@ -242,7 +242,8 @@ class Metrics:
             return None
 
         try:
-            plt.figure(figsize=(10, 6))
+            # Create figure and immediately get current figure to ensure we close the right one
+            fig = plt.figure(figsize=(10, 6))
             plt.clf()
             
             # Get historical metrics from collector
@@ -271,10 +272,20 @@ class Metrics:
                         buf = io.BytesIO()
                         plt.savefig(buf, format='png')
                         buf.seek(0)
-                        return base64.b64encode(buf.getvalue()).decode('utf-8')
+                        encoded_image = base64.b64encode(buf.getvalue()).decode('utf-8')
+                        
+                        # Clean up
+                        plt.close(fig)
+                        buf.close()
+                        
+                        return encoded_image
             
+            # Clean up if no graph was generated
+            plt.close(fig)
             return None
             
         except Exception as e:
             self.logger.error(f"Error generating complexity graph: {str(e)}", exc_info=True)
+            # Ensure figure is closed even on error
+            plt.close('all')
             return None
