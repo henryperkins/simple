@@ -221,10 +221,8 @@ class TokenManager:
         """
         self.total_prompt_tokens += prompt_tokens
         self.total_completion_tokens += max_completion
-        self.logger.info(
-            f"Tracked request - Prompt Tokens: {prompt_tokens}, "
-            f"Max Completion Tokens: {max_completion}"
-        )
+        from core.console import console
+        console.print(f"\rTracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}", end="")
 
     async def process_completion(self, completion: Any) -> Tuple[str, Dict[str, int]]:
         """
@@ -266,9 +264,8 @@ class TokenManager:
                         },
                     )
 
-                self.logger.info(
-                    f"Processed completion - Content Length: {len(content)}, Usage: {usage}"
-                )
+                from core.console import console
+                console.print(f"\rProcessed completion - Content Length: {len(content)}, Usage: {usage}", end="")
 
             return content, usage
 
