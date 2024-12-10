@@ -32,6 +32,12 @@ class ClassExtractor:
             context (ExtractionContext): The context for extraction, including settings and source code.
             correlation_id (Optional[str]): An optional correlation ID for logging purposes.
         """
+        """Initialize the class extractor.
+
+        Args:
+            context (ExtractionContext): The context for extraction, including settings and source code.
+            correlation_id (Optional[str]): An optional correlation ID for logging purposes.
+        """
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id)
         self.context = context
         self.metrics_calculator = Injector.get('metrics_calculator')
@@ -79,6 +85,28 @@ class ClassExtractor:
         except Exception as e:
             self.logger.error(f"Error extracting classes: {e}", exc_info=True)
             return []
+
+    def _should_process_class(self, node: ast.ClassDef) -> bool:
+        """Determine if a class should be processed based on context settings.
+        
+        Args:
+            node: The class node to check
+            
+        Returns:
+            bool: True if the class should be processed, False otherwise
+        """
+        # Skip private classes if not included in settings
+        if not self.context.include_private and node.name.startswith('_'):
+            return False
+            
+        # Skip nested classes if not included in settings
+        if not self.context.include_nested:
+            for parent in ast.walk(self.context.tree):
+                if isinstance(parent, ast.ClassDef) and node in ast.walk(parent):
+                    if parent != node:  # Don't count the node itself
+                        return False
+                        
+        return True
 
     async def _process_class(self, node: ast.ClassDef) -> Optional[ExtractedClass]:
         """Process a class node to extract information.
