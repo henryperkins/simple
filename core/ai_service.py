@@ -14,6 +14,7 @@ from core.cache import Cache
 from core.exceptions import ProcessingError
 from core.docstring_processor import DocstringProcessor
 from core.response_parsing import ResponseParsingService
+from core.prompt_manager import PromptManager
 from core.types import (
     DocumentationContext,
     ProcessingResult,
@@ -33,7 +34,8 @@ class AIService:
         correlation_id: Optional[str] = None,
         docstring_processor: DocstringProcessor = None,
         response_parser: ResponseParsingService = None,
-        token_manager: TokenManager = None
+        token_manager: TokenManager = None,
+        prompt_manager: Optional[PromptManager] = None
     ) -> None:
         """Initialize AI service with dependency injection.
 
@@ -55,8 +57,7 @@ class AIService:
         self.docstring_processor = docstring_processor or DocstringProcessor()
         self.response_parser = response_parser or ResponseParsingService(correlation_id)
         self.token_manager = token_manager or TokenManager(model=self.config.model, config=self.config)
-        # Define the function schema for structured output
-        self.function_schema = {
+        self.prompt_manager = prompt_manager or PromptManager(correlation_id)
             "name": "generate_docstring",
             "description": "Generate Google-style documentation for code",
             "parameters": {
@@ -234,35 +235,12 @@ class AIService:
             module_name = context.metadata.get("module_name", "")
             file_path = context.metadata.get("file_path", "")
 
-            # Build comprehensive prompt with detailed code structure
-            prompt = (
-                f"Generate comprehensive Google-style documentation for the following Python module.\n\n"
-                f"Module Name: {module_name}\n"
-                f"File Path: {file_path}\n\n"
-                "Code Structure:\n\n"
-            )
-
-            # Add class information
-            if context.classes:
-                prompt += "Classes:\n"
-                for cls in context.classes:
-                    prompt += self._format_class_info(cls)
-                prompt += "\n"
-
-            # Add function information
-            if context.functions:
-                prompt += "Functions:\n"
-                for func in context.functions:
-                    prompt += self._format_function_info(func)
-                prompt += "\n"
-
-            # Add source code
-            prompt += (
-                "Source Code:\n"
-                f"{context.source_code}\n\n"
-                "Analyze the code and generate comprehensive Google-style documentation. "
-                "Include a brief summary, detailed description, arguments, return values, and possible exceptions. "
-                "Ensure all descriptions are clear and technically accurate."
+            prompt = self.prompt_manager.create_documentation_prompt(
+                module_name=module_name,
+                file_path=file_path,
+                source_code=context.source_code,
+                classes=context.classes,
+                functions=context.functions
             )
 
             # Get AI response using function calling
@@ -482,7 +460,7 @@ class AIService:
         )
 
         # Add function calling parameters
-        request_params["functions"] = [self.function_schema]
+        request_params["functions"] = [self.prompt_manager.get_function_schema()]
         request_params["function_call"] = {"name": "generate_docstring"}
 
         try:
@@ -563,7 +541,7 @@ class AIService:
         Returns:
             Dictionary containing quality metrics and suggestions
         """
-        prompt = f"Analyze the following code for quality and provide specific improvements:\n\n{code}"
+        prompt = self.prompt_manager.create_code_analysis_prompt(code)
 
         try:
             async with self.semaphore:
