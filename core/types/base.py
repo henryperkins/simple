@@ -229,6 +229,23 @@ class DocumentationData:
 
 @dataclass
 class ExtractionContext:
+    """Context for code extraction operations."""
+    metrics_enabled: bool = True
+    module_name: Optional[str] = None
+    include_private: bool = False
+    include_magic: bool = False
+    include_nested: bool = True
+    include_source: bool = True
+    max_line_length: int = 88
+    ignore_decorators: Set[str] = field(default_factory=set)
+    base_path: Optional[Path] = None
+    source_code: Optional[str] = None
+    tree: Optional[ast.AST] = None
+    function_extractor: Any = None  # Type will be set at runtime
+    class_extractor: Any = None  # Type will be set at runtime
+    dependency_analyzer: Any = None  # Type will be set at runtime
+
+    def __post_init__(self) -> None:
         """Initialize AST if needed."""
         if self.tree is None and self.source_code:
             try:
