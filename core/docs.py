@@ -82,10 +82,14 @@ class DocumentationOrchestrator:
                 include_source=True
             )
 
-            extraction_result = await self.code_extractor.extract_code(
-                context.source_code, 
-                extraction_context
-            )
+            try:
+                extraction_result = await self.code_extractor.extract_code(
+                    context.source_code, 
+                    extraction_context
+                )
+            except AttributeError:
+                # Silently handle attribute errors
+                raise DocumentationError("Failed to generate documentation")
 
             # Update context with extracted information
             context.classes = [
