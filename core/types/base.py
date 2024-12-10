@@ -119,8 +119,9 @@ class ExtractedElement:
     def __post_init__(self):
         """Initialize dependencies."""
         if self.metric_calculator is None:
-            self.metric_calculator = Injector.get('metric_calculator')
-        self.metrics = self.metric_calculator(self)
+            self.metric_calculator = Injector.get('metrics_calculator')
+        if self.source:
+            self.metrics = self.metric_calculator.calculate_metrics(self.source)
 
 @dataclass
 class ExtractedFunction(ExtractedElement):
