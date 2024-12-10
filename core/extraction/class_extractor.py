@@ -43,7 +43,6 @@ class ClassExtractor:
             self.docstring_parser = Injector.get('docstring_parser')
         except KeyError:
             self.logger.warning("Docstring parser not registered, using default")
-            from core.docstring_processor import DocstringProcessor
             self.docstring_parser = DocstringProcessor()
             Injector.register('docstring_parser', self.docstring_parser)
         self.errors: list[str] = []
