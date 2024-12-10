@@ -224,8 +224,8 @@ class MetricsCollector:
     def _update_progress(
         self,
         module_name: str,
-        functions: tuple[int, int],
-        classes: tuple[int, int]
+        functions: Tuple[int, int],
+        classes: Tuple[int, int]
     ) -> None:
         """Update the progress tracking with current counts.
         

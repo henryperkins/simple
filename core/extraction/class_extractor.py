@@ -6,7 +6,7 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 """
 
 import ast
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict, List, Union
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics import Metrics
 from core.metrics_collector import MetricsCollector
@@ -60,7 +60,7 @@ class ClassExtractor:
             Injector.register('docstring_parser', self.docstring_parser)
         self.errors: list[str] = []
 
-    async def extract_classes(self, tree: ast.AST) -> list[ExtractedClass]:
+    async def extract_classes(self, tree: Union[ast.AST, ast.Module]) -> List[ExtractedClass]:
         """Extract class definitions from AST nodes.
 
         Args:

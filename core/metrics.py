@@ -4,7 +4,7 @@ import base64
 import io
 import math
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from core.logger import LoggerSetup
 from core.metrics_collector import MetricsCollector
@@ -163,7 +163,7 @@ class Metrics:
             self.logger.error(f"Error calculating function metrics: {str(e)}", exc_info=True)
             return MetricData()
 
-    def _calculate_cyclomatic_complexity(self, tree: ast.AST) -> int:
+    def _calculate_cyclomatic_complexity(self, tree: Union[ast.AST, ast.Module]) -> int:
         """Calculate cyclomatic complexity."""
         try:
             complexity = 1  # Base complexity

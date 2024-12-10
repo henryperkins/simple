@@ -5,7 +5,7 @@ Code extraction module for Python source code analysis.
 import ast
 import uuid
 import re
-from typing import Any, Optional
+from typing import Any, Optional, Tuple, Union, List
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_info, log_error
 from core.metrics import Metrics
@@ -55,7 +55,7 @@ class CodeExtractor:
         self.context.class_extractor = ClassExtractor(self.context, self.metrics_calculator)
         self.context.dependency_analyzer = DependencyAnalyzer(self.context)
 
-    def _count_code_elements(self, tree: ast.AST) -> tuple[int, int]:
+    def _count_code_elements(self, tree: Union[ast.AST, ast.Module]) -> Tuple[int, int]:
         """Count total functions and classes in the AST.
         
         Args:
