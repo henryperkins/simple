@@ -100,14 +100,15 @@ class CodeExtractor:
             # Extract module docstring
             docstring_info = self._extract_module_docstring(tree)
 
-            # Calculate maintainability using the public method with source_code
-            maintainability_index = self.metrics_calculator.calculate_maintainability_index(source_code)
+            # Calculate metrics first to get maintainability index
+            metrics_data = self.metrics_calculator.calculate_metrics(source_code, self.context.module_name)
+            maintainability_index = metrics_data.maintainability_index
 
-            # Initialize metrics with total counts
+            # Initialize metrics with calculated values
             metrics = MetricData(
-                cyclomatic_complexity=0,
-                cognitive_complexity=0,
-                maintainability_index=maintainability_index,
+                cyclomatic_complexity=metrics_data.cyclomatic_complexity,
+                cognitive_complexity=metrics_data.cognitive_complexity,
+                maintainability_index=metrics_data.maintainability_index,
                 halstead_metrics={},
                 lines_of_code=len(source_code.splitlines()),
                 complexity_graph=None,
