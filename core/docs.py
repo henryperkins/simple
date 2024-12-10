@@ -17,13 +17,12 @@ from core.config import Config
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info
 from core.types.base import (
     DocstringData, 
-    DocumentationContext, 
-    DocumentationData,
-    ExtractionContext, 
-    ProcessingResult,
+    DocumentationContext,
+    ExtractionContext,
     ExtractedClass,
     ExtractedFunction
 )
+from core.types.documentation import DocumentationData, ProcessingResult
 from core.exceptions import DocumentationError
 from utils import ensure_directory, read_file_safe
 import uuid
