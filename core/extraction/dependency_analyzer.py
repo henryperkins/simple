@@ -203,7 +203,9 @@ class DependencyAnalyzer:
             # Check dependencies of the current module
             for dep_type in ["local", "third_party"]:
                 for dep in dependencies.get(dep_type, set()):
-                    visit(dep)
+                    # Skip self-references and known circular deps
+                    if dep != module and (module, dep) not in circular_deps:
+                        visit(dep)
 
             path.remove(module)
 

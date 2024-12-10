@@ -147,19 +147,33 @@ class MetricsCollector:
             if module_name not in self.metrics_history:
                 self.metrics_history[module_name] = []
                 
+            # Check if metrics have changed before storing
+            current_metrics = self._metrics_to_dict(metrics)
+            if module_name in self.current_module_metrics:
+                last_metrics = self._metrics_to_dict(self.current_module_metrics[module_name])
+                if current_metrics == last_metrics:
+                    return
+
             # Update current module metrics silently
             self.current_module_metrics[module_name] = metrics
                 
             # Create metrics entry without output
             entry = {
                 'timestamp': datetime.now().isoformat(),
-                'metrics': self._metrics_to_dict(metrics),
+                'metrics': current_metrics,
                 'correlation_id': self.correlation_id
             }
             
             # Store metrics silently
-            self.metrics_history[module_name].append(entry)
-            self._save_history()
+            if module_name in self.metrics_history:
+                # Only store if metrics have changed
+                last_entry = self.metrics_history[module_name][-1]
+                if last_entry['metrics'] != current_metrics:
+                    self.metrics_history[module_name].append(entry)
+                    self._save_history()
+            else:
+                self.metrics_history[module_name] = [entry]
+                self._save_history()
             
             # Initialize progress for new module if it has items to process
             total_items = metrics.total_functions + metrics.total_classes

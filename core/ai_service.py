@@ -111,9 +111,18 @@ class AIService:
                 functions=context.functions
             )
 
-            # Get AI response using function calling
+            # Get AI response using function calling with chunking if needed
             start_time = datetime.now()
-            response = await self._make_api_call(prompt)
+            if len(prompt) > self.config.max_tokens // 2:
+                # Split into chunks and process separately
+                chunks = self._split_prompt(prompt)
+                responses = []
+                for chunk in chunks:
+                    chunk_response = await self._make_api_call(chunk)
+                    responses.append(chunk_response)
+                response = self._merge_responses(responses)
+            else:
+                response = await self._make_api_call(prompt)
 
             # Extract the function call response
             if "choices" in response and response["choices"]:
@@ -474,6 +483,59 @@ class AIService:
                 extra={"correlation_id": self.correlation_id},
             )
             raise
+
+    def _split_prompt(self, prompt: str) -> List[str]:
+        """Split a large prompt into smaller chunks."""
+        chunk_size = self.config.max_tokens // 2
+        words = prompt.split()
+        chunks = []
+        current_chunk = []
+        current_size = 0
+        
+        for word in words:
+            word_size = len(word) + 1  # Add 1 for space
+            if current_size + word_size > chunk_size:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = [word]
+                current_size = word_size
+            else:
+                current_chunk.append(word)
+                current_size += word_size
+                
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+            
+        return chunks
+
+    def _merge_responses(self, responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Merge multiple responses into a single response."""
+        if not responses:
+            return {}
+            
+        merged = responses[0].copy()
+        for response in responses[1:]:
+            if "choices" in response and response["choices"]:
+                message = response["choices"][0]["message"]
+                if "function_call" in message:
+                    args = json.loads(message["function_call"]["arguments"])
+                    merged_args = json.loads(merged["choices"][0]["message"]["function_call"]["arguments"])
+                    
+                    # Merge descriptions
+                    if "description" in args:
+                        merged_args["description"] = merged_args.get("description", "") + "\n" + args["description"]
+                    
+                    # Merge other fields
+                    for key in ["args", "raises"]:
+                        if key in args:
+                            merged_args[key].extend(args[key])
+                            
+                    merged["choices"][0]["message"]["function_call"]["arguments"] = json.dumps(merged_args)
+                    
+            if "usage" in response:
+                for key in ["prompt_tokens", "completion_tokens", "total_tokens"]:
+                    merged["usage"][key] = merged["usage"].get(key, 0) + response["usage"].get(key, 0)
+                    
+        return merged
 
     async def close(self) -> None:
         """Clean up resources."""
