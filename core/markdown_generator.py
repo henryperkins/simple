@@ -42,7 +42,7 @@ class MarkdownGenerator:
             ]
             markdown = "\n\n".join(filter(None, sections))
             if not self._has_complete_information(documentation_data):
-                log_debug("Generated partial documentation due to incomplete information")
+                log_warning("Generated partial documentation due to incomplete information")
             else:
                 log_debug("Generated complete documentation successfully")
             return markdown
