@@ -13,17 +13,24 @@ Main components:
 - ClassExtractor: Extract class definitions and methods
 - FunctionExtractor: Extract function and method definitions
 - DependencyAnalyzer: Analyze code dependencies
-- extract_dependencies_from_node: Extract dependencies from an AST node
 """
 
+from core.metrics import Metrics
+from core.docstring_processor import DocstringProcessor
 from core.extraction.code_extractor import CodeExtractor
 from core.extraction.class_extractor import ClassExtractor
 from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
+from core.types.base import Injector
+
+# Register default dependencies
+Injector.register('metrics_calculator', Metrics())
+Injector.register('docstring_parser', DocstringProcessor())
 
 __all__ = [
     "CodeExtractor",
-    "ClassExtractor",
+    "ClassExtractor", 
     "FunctionExtractor",
-    "DependencyAnalyzer"
+    "DependencyAnalyzer",
+    "Injector"
 ]

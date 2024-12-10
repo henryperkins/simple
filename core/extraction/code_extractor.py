@@ -34,7 +34,7 @@ class CodeExtractor:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id=self.correlation_id)
 
         self.context = context or ExtractionContext()
-        self.metrics_calculator = Metrics()
+        self.metrics_calculator = Injector.get('metrics_calculator')
         
         # Initialize extractors
         self._initialize_extractors()

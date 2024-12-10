@@ -10,18 +10,50 @@ from core.types.metrics_types import MetricData
 class Injector:
     """Manages dependency injection for classes."""
     _dependencies: Dict[str, Any] = {}
+    _initialized: bool = False
 
     @classmethod
-    def register(cls, name: str, dependency: Any):
-        """Register a dependency with a name."""
+    def register(cls, name: str, dependency: Any) -> None:
+        """Register a dependency with a name.
+        
+        Args:
+            name: The name to register the dependency under
+            dependency: The dependency instance to register
+        """
         cls._dependencies[name] = dependency
+        cls._initialized = True
 
     @classmethod
     def get(cls, name: str) -> Any:
-        """Retrieve a dependency by name."""
+        """Retrieve a dependency by name.
+        
+        Args:
+            name: The name of the dependency to retrieve
+            
+        Returns:
+            The registered dependency instance
+            
+        Raises:
+            KeyError: If the dependency is not registered
+        """
+        if not cls._initialized:
+            # Import here to avoid circular imports
+            from core.metrics import Metrics
+            from core.docstring_processor import DocstringProcessor
+            
+            # Register default dependencies
+            cls.register('metrics_calculator', Metrics())
+            cls.register('docstring_parser', DocstringProcessor())
+            
         if name not in cls._dependencies:
-            raise KeyError(f"Dependency '{name}' not found")
+            raise KeyError(f"Dependency '{name}' not found. Available dependencies: {list(cls._dependencies.keys())}")
         return cls._dependencies[name]
+
+    @classmethod
+    def clear(cls) -> None:
+        """Clear all registered dependencies."""
+        cls._dependencies.clear()
+        cls._initialized = False
 
 @dataclass
 class BaseData:
