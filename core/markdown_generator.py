@@ -48,15 +48,33 @@ class MarkdownGenerator:
 
     def _has_complete_information(self, documentation_data: DocumentationData) -> bool:
         """Check if the documentation data contains complete information."""
-        required_fields = [
-            documentation_data.module_name,
-            documentation_data.module_path,
-            documentation_data.module_summary,
-            documentation_data.ai_content,
-            documentation_data.code_metadata,
-            documentation_data.source_code
-        ]
-        return all(required_fields)
+        # Check required fields exist and have minimal content
+        if not documentation_data.module_name:
+            log_warning("Missing module name")
+            return False
+            
+        if not documentation_data.module_path:
+            log_warning("Missing module path")
+            return False
+            
+        # These fields can be empty but should exist
+        if documentation_data.module_summary is None:
+            log_warning("Missing module summary")
+            return False
+            
+        if documentation_data.ai_content is None:
+            log_warning("Missing AI content")
+            return False
+            
+        if documentation_data.code_metadata is None:
+            log_warning("Missing code metadata")
+            return False
+            
+        if documentation_data.source_code is None:
+            log_warning("Missing source code")
+            return False
+            
+        return True
 
     def _generate_header(self, module_name: str) -> str:
         """Generate the module header."""
