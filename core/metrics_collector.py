@@ -340,3 +340,15 @@ class MetricsCollector:
         self.metrics_history = {}
         if os.path.exists('metrics_history.json'):
             os.remove('metrics_history.json')
+            
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get the current metrics data.
+        
+        Returns:
+            Dictionary containing current metrics data and history
+        """
+        return {
+            'current_metrics': self.current_module_metrics,
+            'history': self.metrics_history,
+            'operations': self.operations
+        }
