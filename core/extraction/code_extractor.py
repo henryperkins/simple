@@ -41,9 +41,9 @@ class CodeExtractor:
 
     def _initialize_extractors(self) -> None:
         """Initialize the extractors with the current context."""
-        self.context.function_extractor = FunctionExtractor(self.context, self.metrics_calculator, correlation_id=self.correlation_id)
-        self.context.class_extractor = ClassExtractor(self.context, self.metrics_calculator, correlation_id=self.correlation_id)
-        self.context.dependency_analyzer = DependencyAnalyzer(self.context, correlation_id=self.correlation_id)
+        self.context.function_extractor = FunctionExtractor(self.context, self.metrics_calculator)
+        self.context.class_extractor = ClassExtractor(self.context, self.metrics_calculator)
+        self.context.dependency_analyzer = DependencyAnalyzer(self.context)
 
     def _count_code_elements(self, tree: ast.AST) -> tuple[int, int]:
         """Count total functions and classes in the AST.
