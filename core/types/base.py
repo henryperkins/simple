@@ -201,31 +201,6 @@ class ProcessingResult:
     validation_errors: List[str] = field(default_factory=list)
     schema_errors: List[str] = field(default_factory=list)
 
-@dataclass
-class DocumentationData:
-    """Documentation data structure."""
-    module_name: str
-    module_path: Path
-    module_summary: str
-    source_code: str
-    docstring_data: DocstringData
-    ai_content: Dict[str, Any]
-    code_metadata: Dict[str, Any]
-    glossary: Dict[str, Dict[str, str]] = field(default_factory=dict)
-    changes: List[Dict[str, Any]] = field(default_factory=list)
-    complexity_scores: Dict[str, float] = field(default_factory=dict)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    validation_status: bool = False
-    validation_errors: List[str] = field(default_factory=list)
-    docstring_parser: Callable = None  # New field for dependency injection
-
-    def __post_init__(self):
-        """Initialize dependencies."""
-        if self.docstring_parser is None:
-            self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_data = self.docstring_parser(self.source_code)
 
 @dataclass
 class ExtractionContext:

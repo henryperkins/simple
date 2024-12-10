@@ -129,14 +129,6 @@ class DocumentationGenerator:
             self.logger.error(f"Error processing file: {process_error}", exc_info=True)
             return False
 
-    def analyze_syntax(self, source_code: str, file_path: Path) -> bool:
-        """Analyze the syntax of the given source code."""
-        try:
-            ast.parse(source_code)
-            return True
-        except SyntaxError as e:
-            self.logger.error(f"Syntax error in {file_path}: {e}")
-            return False
 
     def _fix_indentation(self, source_code: str) -> str:
         """Fix inconsistent indentation using autopep8."""
