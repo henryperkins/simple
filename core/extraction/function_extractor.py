@@ -165,26 +165,26 @@ class FunctionExtractor:
             return_type = get_node_name(node.returns) or "Any"
             decorators = [NodeNameVisitor().visit(decorator) for decorator in node.decorator_list]
 
-            # Initialize metrics
-            metrics = MetricData()
+            # Create the extracted function
             extracted_function = ExtractedFunction(
                 name=node.name,
                 lineno=node.lineno,
                 source=source,
                 docstring=docstring,
-                metrics=metrics,
+                metrics=MetricData(),  # Will be populated below
                 dependencies=self.context.dependency_analyzer.extract_dependencies(node),
                 decorators=decorators,
-                complexity_warnings=[],  # Populate as needed
+                complexity_warnings=[],
                 ast_node=node,
                 args=args,
                 returns={"type": return_type, "description": ""},
                 is_async=isinstance(node, ast.AsyncFunctionDef),
-                docstring_info=self.docstring_parser(docstring)  # Use injected docstring parser
+                docstring_info=self.docstring_parser(docstring)
             )
 
-            # Calculate and assign metrics
-            extracted_function.metrics = self.metrics_calculator.calculate_metrics(extracted_function)
+            # Calculate metrics using the metrics calculator
+            metrics = self.metrics_calculator.calculate_metrics(source, self.context.module_name)
+            extracted_function.metrics = metrics
 
             return extracted_function
         except Exception as e:

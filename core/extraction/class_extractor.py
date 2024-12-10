@@ -281,17 +281,16 @@ class ClassExtractor:
             docstring = ast.get_docstring(node) or ""
             source = get_source_segment(self.context.source_code or "", node) or ""
 
-            # Calculate metrics
-            metrics = MetricData()
+            # Create the extracted class
             extracted_class = ExtractedClass(
                 name=node.name,
                 lineno=node.lineno,
                 source=source,
                 docstring=docstring,
-                metrics=metrics,
+                metrics=MetricData(),  # Will be populated below
                 dependencies=self.context.dependency_analyzer.analyze_dependencies(node),
                 decorators=self._extract_decorators(node),
-                complexity_warnings=[],  # Populate as needed
+                complexity_warnings=[],
                 ast_node=node,
                 methods=await self._extract_methods(node),
                 attributes=self._extract_attributes(node),
@@ -301,8 +300,9 @@ class ClassExtractor:
                 is_exception=self._is_exception_class(node)
             )
 
-            # Calculate and assign metrics
-            extracted_class.metrics = self.metrics_calculator.calculate_metrics(extracted_class)
+            # Calculate metrics using the metrics calculator
+            metrics = self.metrics_calculator.calculate_metrics(source, self.context.module_name)
+            extracted_class.metrics = metrics
 
             return extracted_class
 
