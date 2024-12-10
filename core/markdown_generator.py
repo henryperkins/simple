@@ -52,29 +52,32 @@ class MarkdownGenerator:
 
     def _has_complete_information(self, documentation_data: DocumentationData) -> bool:
         """Check if the documentation data contains complete information."""
+        missing_fields = []
+        
         # Check required fields have content
         if not documentation_data.module_name:
-            log_warning("Empty module name")
-            return False
+            missing_fields.append("module_name")
             
         if not documentation_data.module_path:
-            log_warning("Empty module path") 
-            return False
-            
-        if not documentation_data.module_summary:
-            log_warning("Empty module summary")
-            return False
-            
-        if not documentation_data.ai_content:
-            log_warning("Empty AI content")
-            return False
-            
-        if not documentation_data.code_metadata:
-            log_warning("Empty code metadata")
-            return False
+            missing_fields.append("module_path")
             
         if not documentation_data.source_code:
-            log_warning("Empty source code")
+            missing_fields.append("source_code")
+            
+        if not documentation_data.code_metadata:
+            missing_fields.append("code_metadata")
+            
+        # These fields are optional but we'll log if they're missing
+        if not documentation_data.module_summary:
+            log_warning(f"Module {documentation_data.module_name} is missing a summary")
+            documentation_data.module_summary = "No module summary provided."
+            
+        if not documentation_data.ai_content:
+            log_warning(f"Module {documentation_data.module_name} is missing AI-generated content")
+            
+        # Only fail validation if critical fields are missing
+        if missing_fields:
+            log_warning(f"Missing required fields: {', '.join(missing_fields)}")
             return False
             
         return True
@@ -87,6 +90,12 @@ class MarkdownGenerator:
     def _generate_overview(self, file_path: str, description: str) -> str:
         """Generate the overview section."""
         log_debug(f"Generating overview for file_path: {file_path}")
+        
+        # Use a default description if none provided
+        if not description or description.isspace():
+            description = "No description available."
+            log_warning(f"No description provided for {file_path}")
+            
         return "\n".join(
             [
                 "## Overview",
