@@ -221,19 +221,6 @@ class DocumentationContext:
         combined = "|".join(key_parts).encode("utf-8")
         return hashlib.sha256(combined).hexdigest()
 
-@dataclass
-class ProcessingResult:
-    """Result of AI processing operations."""
-    
-    content: Dict[str, Any]
-    usage: Dict[str, Any]
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    is_cached: bool = False
-    processing_time: float = 0.0
-    validation_status: bool = False
-    validation_errors: List[str] = field(default_factory=list)
-    schema_errors: List[str] = field(default_factory=list)
-
 
 @dataclass
 class ExtractionContext:

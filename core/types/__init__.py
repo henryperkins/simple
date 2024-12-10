@@ -1,21 +1,33 @@
 """Type definitions package."""
 
-from core.types.metrics_types import MetricData
+# Base types
 from core.types.base import (
     BaseData,
+    DocumentationContext,
+    DocumentationData,
+    ExtractionContext,
+    Injector,
     ParsedResponse,
+    ProcessingResult,
+    TokenUsage
+)
+
+# Documentation types
+from core.types.base import (
     DocstringData,
-    TokenUsage,
+)
+
+# Extraction types
+from core.types.base import (
     ExtractedArgument,
+    ExtractedClass,
     ExtractedElement,
     ExtractedFunction,
-    ExtractedClass,
     ExtractionResult,
-    ProcessingResult,
-    DocumentationContext,
-    ExtractionContext,
-    DocumentationData
 )
+
+# Metrics types
+from core.types.metrics_types import MetricData
 
 __all__ = [
     "MetricData",
