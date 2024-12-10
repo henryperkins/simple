@@ -8,14 +8,13 @@ import re
 from typing import Any, Optional, Tuple, Union, List
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_info, log_error
-from core.metrics import Metrics
-from core.metrics_collector import MetricsCollector
 from core.types import (
     ExtractionContext,
     ExtractionResult,
     DocstringData,
     MetricData,
 )
+from core.metrics_collector import MetricsCollector
 from core.types.base import Injector
 from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.class_extractor import ClassExtractor

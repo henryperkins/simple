@@ -205,8 +205,9 @@ class ExtractionResult:
     def __post_init__(self):
         """Initialize dependencies."""
         if self.metric_calculator is None:
-            self.metric_calculator = Injector.get('metric_calculator')
-        self.metrics = self.metric_calculator(self)
+            self.metric_calculator = Injector.get('metrics_calculator')
+        if hasattr(self.metric_calculator, 'calculate_metrics'):
+            self.metrics = self.metric_calculator.calculate_metrics(self.source_code)
 
 @dataclass
 class ProcessingResult:

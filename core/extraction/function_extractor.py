@@ -8,9 +8,13 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 import ast
 from typing import List, Any, Optional, Union
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error
-from core.metrics import Metrics
 from core.metrics_collector import MetricsCollector
-from core.types import ExtractedFunction, ExtractedArgument, ExtractionContext, MetricData
+from core.types import (
+    ExtractedFunction,
+    ExtractedArgument,
+    ExtractionContext,
+    MetricData
+)
 from utils import get_source_segment, get_node_name, NodeNameVisitor
 from core.types.base import Injector
 
