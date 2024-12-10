@@ -298,12 +298,11 @@ class ClassExtractor:
                 instance_attributes=self._extract_instance_attributes(node),
                 bases=self._extract_bases(node),
                 metaclass=self._extract_metaclass(node),
-                is_exception=self._is_exception_class(node),
-                docstring_info=self.docstring_parser(docstring)  # Use injected docstring parser
+                is_exception=self._is_exception_class(node)
             )
 
             # Calculate and assign metrics
-            extracted_class.metrics = self.metrics_calculator.calculate_metrics_for_class(extracted_class)
+            extracted_class.metrics = self.metrics_calculator.calculate_metrics(extracted_class)
 
             return extracted_class
 
