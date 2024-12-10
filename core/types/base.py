@@ -266,6 +266,35 @@ class DocumentationData:
         """Initialize dependencies."""
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_data = self.docstring_parser(self.source_code)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert DocumentationData to a dictionary.
+
+        Returns:
+            Dict[str, Any]: Dictionary representation of the documentation data
+        """
+        return {
+            'module_name': self.module_name,
+            'module_path': str(self.module_path),
+            'module_summary': self.module_summary,
+            'source_code': self.source_code,
+            'docstring_data': {
+                'summary': self.docstring_data.summary,
+                'description': self.docstring_data.description,
+                'args': self.docstring_data.args,
+                'returns': self.docstring_data.returns,
+                'raises': self.docstring_data.raises,
+                'complexity': self.docstring_data.complexity,
+                'validation_status': self.docstring_data.validation_status,
+                'validation_errors': self.docstring_data.validation_errors
+            },
+            'ai_content': self.ai_content,
+            'code_metadata': self.code_metadata,
+            'glossary': self.glossary,
+            'changes': self.changes,
+            'complexity_scores': self.complexity_scores,
+            'metrics': self.metrics,
+            'validation_status': self.validation_status,
+            'validation_errors': self.validation_errors
+        }
