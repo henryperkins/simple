@@ -170,8 +170,9 @@ class TokenManager:
                     f"available: {available_tokens})"
                 )
 
+            total = prompt_tokens + max_completion
             self.logger.debug(
-                f"Token calculation: prompt={prompt_tokens}, max_completion={max_completion}, total={total_tokens}"
+                f"Token calculation: prompt={prompt_tokens}, max_completion={max_completion}, total={total}"
             )
 
             # For Azure OpenAI, we use the deployment_id as the model
