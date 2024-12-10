@@ -20,7 +20,6 @@ from core.types.base import (
     ProcessingResult,
     TokenUsage
 )
-from core.types.metrics_types import MetricData
 
 __all__ = [
     "BaseData",
