@@ -35,7 +35,15 @@ class CodeExtractor:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id=self.correlation_id)
 
         self.context = context or ExtractionContext()
-        self.metrics_calculator = Injector.get('metrics_calculator')
+        
+        # Get metrics calculator with fallback
+        try:
+            self.metrics_calculator = Injector.get('metrics_calculator')
+        except KeyError:
+            self.logger.warning("Metrics calculator not registered, creating new instance")
+            from core.metrics import Metrics
+            self.metrics_calculator = Metrics()
+            Injector.register('metrics_calculator', self.metrics_calculator)
         
         # Initialize extractors
         self._initialize_extractors()
