@@ -68,12 +68,13 @@ class MarkdownGenerator:
             missing_fields.append("code_metadata")
             
         # These fields are optional but we'll log if they're missing
-        if not documentation_data.module_summary:
+        if not documentation_data.module_summary and not documentation_data.ai_content.get('summary'):
             log_warning(f"Module {documentation_data.module_name} is missing a summary")
-            documentation_data.module_summary = "No module summary provided."
+            documentation_data.module_summary = documentation_data.ai_content.get('summary', "No module summary provided.")
             
         if not documentation_data.ai_content:
             log_warning(f"Module {documentation_data.module_name} is missing AI-generated content")
+            documentation_data.ai_content = {'summary': documentation_data.module_summary}
             
         # Only fail validation if critical fields are missing
         if missing_fields:
@@ -95,6 +96,9 @@ class MarkdownGenerator:
         if not description or description.isspace():
             description = "No description available."
             log_warning(f"No description provided for {file_path}")
+        
+        # Log the description being used
+        log_debug(f"Using description: {description[:100]}...")
             
         return "\n".join(
             [

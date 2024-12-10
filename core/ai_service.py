@@ -167,11 +167,11 @@ class AIService:
 
             processing_time = (datetime.now() - start_time).total_seconds()
 
-            # Create DocumentationData
+            # Create DocumentationData with AI-generated summary
             doc_data = DocumentationData(
                 module_name=module_name,
                 module_path=Path(file_path),
-                module_summary=docstring_data.summary,
+                module_summary=parsed_response.content.get('summary', docstring_data.summary),
                 source_code=context.source_code,
                 docstring_data=docstring_data,
                 ai_content=parsed_response.content,
