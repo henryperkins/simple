@@ -14,7 +14,7 @@ from core.types import (
     ExtractedFunction,
     ExtractedArgument,
     ExtractionContext,
-    MetricData
+    MetricData,
 )
 from utils import get_source_segment, get_node_name, NodeNameVisitor
 from core.types.base import Injector

@@ -33,12 +33,6 @@ class ClassExtractor:
             context (ExtractionContext): The context for extraction, including settings and source code.
             correlation_id (Optional[str]): An optional correlation ID for logging purposes.
         """
-        """Initialize the class extractor.
-
-        Args:
-            context (ExtractionContext): The context for extraction, including settings and source code.
-            correlation_id (Optional[str]): An optional correlation ID for logging purposes.
-        """
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id)
         self.context = context
         # Get metrics calculator with fallback
