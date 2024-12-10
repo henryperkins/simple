@@ -18,8 +18,6 @@ from core.prompt_manager import PromptManager
 from core.types import (
     DocumentationContext,
     ProcessingResult,
-    ExtractedClass,
-    ExtractedFunction,
     DocumentationData,
 )
 from api.token_management import TokenManager
@@ -59,49 +57,6 @@ class AIService:
         self.token_manager = token_manager or TokenManager(model=self.config.model, config=self.config)
         self.prompt_manager = prompt_manager or PromptManager(correlation_id)
 
-    def _format_function_info(self, func: ExtractedFunction) -> str:
-        """Format function information for prompt.
-
-        Args:
-            func: The extracted function information
-
-        Returns:
-            Formatted function string
-        """
-        args_str = ", ".join(f"{arg.name}: {arg.type or 'Any'}" for arg in func.args)
-        return (
-            f"Function: {func.name}\n"
-            f"Arguments: ({args_str})\n"
-            f"Returns: {func.returns.get('type', 'Any')}\n"
-            f"Existing Docstring: {func.docstring if func.docstring else 'None'}\n"
-            f"Decorators: {', '.join(func.decorators) if func.decorators else 'None'}\n"
-            f"Is Async: {'Yes' if func.is_async else 'No'}\n"
-            f"Complexity Score: {func.metrics.cyclomatic_complexity if func.metrics else 'Unknown'}\n"
-        )
-
-    def _format_class_info(self, cls: ExtractedClass) -> str:
-        """Format class information for prompt.
-
-        Args:
-            cls: The extracted class information
-
-        Returns:
-            Formatted class string
-        """
-        methods_str = "\n    ".join(
-            f"- {m.name}({', '.join(a.name for a in m.args)})" for m in cls.methods
-        )
-        return (
-            f"Class: {cls.name}\n"
-            f"Base Classes: {', '.join(cls.bases) if cls.bases else 'None'}\n"
-            f"Existing Docstring: {cls.docstring if cls.docstring else 'None'}\n"
-            f"Methods:\n    {methods_str}\n"
-            f"Attributes: {', '.join(a['name'] for a in cls.attributes)}\n"
-            f"Instance Attributes: {', '.join(a['name'] for a in cls.instance_attributes)}\n"
-            f"Decorators: {', '.join(cls.decorators) if cls.decorators else 'None'}\n"
-            f"Is Exception: {'Yes' if cls.is_exception else 'No'}\n"
-            f"Complexity Score: {cls.metrics.cyclomatic_complexity if cls.metrics else 'Unknown'}\n"
-        )
 
     async def enhance_and_format_docstring(
         self, context: DocumentationContext
@@ -344,14 +299,13 @@ class AIService:
         Returns:
             Formatted prompt string
         """
-        prompt = (
-            f"Generate Google-style documentation for the following code:\n\n{code}\n"
+        return self.prompt_manager.create_documentation_prompt(
+            module_name=context.get("module_name", "") if context else "",
+            file_path=context.get("file_path", "") if context else "",
+            source_code=code,
+            classes=context.get("classes", []) if context else [],
+            functions=context.get("functions", []) if context else []
         )
-
-        if context:
-            prompt += f"\nAdditional context:\n{json.dumps(context, indent=2)}"
-
-        return prompt
 
     async def _make_api_call(self, prompt: str) -> Dict[str, Any]:
         """Make API call to OpenAI.
