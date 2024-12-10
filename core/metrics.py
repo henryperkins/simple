@@ -46,14 +46,30 @@ class Metrics:
         """
         self.module_name = module_name
         try:
+            # Parse code once and reuse the AST
             tree = ast.parse(code)
             
+            # Calculate base metrics first
+            lines_of_code = len(code.splitlines())
+            cyclomatic = self._calculate_cyclomatic_complexity(tree)
+            cognitive = self._calculate_cognitive_complexity(tree)
+            
+            # Calculate Halstead metrics without recursion
+            halstead = self._calculate_halstead_metrics(code)
+            
+            # Calculate maintainability using pre-calculated values
+            maintainability = self._calculate_maintainability_direct(
+                lines_of_code,
+                cyclomatic,
+                halstead.get('volume', 0)
+            )
+            
             metrics = MetricData()
-            metrics.cyclomatic_complexity = self._calculate_cyclomatic_complexity(tree)
-            metrics.cognitive_complexity = self._calculate_cognitive_complexity(tree)
-            metrics.maintainability_index = self._calculate_maintainability_index(code)
-            metrics.halstead_metrics = self._calculate_halstead_metrics(code)
-            metrics.lines_of_code = len(code.splitlines())
+            metrics.cyclomatic_complexity = cyclomatic
+            metrics.cognitive_complexity = cognitive
+            metrics.maintainability_index = maintainability
+            metrics.halstead_metrics = halstead
+            metrics.lines_of_code = lines_of_code
             
             # Count total functions and classes
             total_functions = sum(1 for node in ast.walk(tree) 
@@ -178,12 +194,13 @@ class Metrics:
             self.logger.error(f"Error calculating cognitive complexity: {str(e)}", exc_info=True)
             return 0
 
-    def _calculate_maintainability_index(self, code: str) -> float:
-        """Calculate maintainability index."""
+    def _calculate_maintainability_direct(self, loc: int, cyclomatic: int, volume: float) -> float:
+        """Calculate maintainability index using pre-calculated metrics."""
         try:
-            loc = max(1, len(code.splitlines()))  # Ensure non-zero LOC
-            volume = max(1, self._calculate_halstead_volume(code))  # Ensure non-zero volume
-            cyclomatic = max(1, self._calculate_cyclomatic_complexity(ast.parse(code)))  # Ensure non-zero complexity
+            # Ensure non-zero values
+            loc = max(1, loc)
+            volume = max(1, volume)
+            cyclomatic = max(1, cyclomatic)
             
             # Use log1p to handle small values safely
             mi = 171 - 5.2 * math.log1p(volume) - 0.23 * cyclomatic - 16.2 * math.log1p(loc)

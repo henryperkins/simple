@@ -27,8 +27,24 @@ class MetricsCollector:
         Returns:
             The singleton MetricsCollector instance
         """
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
+        if not cls._instance:
+            instance = super().__new__(cls)
+            # Initialize here instead of in __init__ to avoid recursion
+            if not cls._initialized:
+                instance.logger = LoggerSetup.get_logger(__name__)
+                instance.correlation_id = correlation_id
+                instance.metrics_history = {}
+                instance.operations = []
+                instance.current_module_metrics = {}
+                instance.accumulated_functions = 0
+                instance.accumulated_classes = 0
+                instance.progress = None
+                instance.current_task_id = None
+                instance.current_module = None
+                instance.has_metrics = False
+                instance._load_history()
+                cls._initialized = True
+            cls._instance = instance
         return cls._instance
 
     def __init__(self, correlation_id: Optional[str] = None) -> None:
@@ -37,9 +53,8 @@ class MetricsCollector:
         Args:
             correlation_id: Optional correlation ID for tracking related operations
         """
-        # Only initialize once
-        if MetricsCollector._initialized:
-            return
+        # Skip initialization since it's done in __new__
+        pass
             
         self.logger = LoggerSetup.get_logger(__name__)
         self.correlation_id = correlation_id
