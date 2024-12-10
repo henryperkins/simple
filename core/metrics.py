@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Union, TYPE_CHECKING
 
 from core.logger import LoggerSetup
 from core.types import MetricData
-from core.types.base import Injector
+from core.types import MetricData, Injector
 
 if TYPE_CHECKING:
     from core.metrics_collector import MetricsCollector

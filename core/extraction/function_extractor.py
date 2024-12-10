@@ -9,6 +9,7 @@ import ast
 from typing import List, Any, Optional, Union
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error
 from core.metrics_collector import MetricsCollector
+from core.docstring_processor import DocstringProcessor
 from core.types import (
     ExtractedFunction,
     ExtractedArgument,
@@ -48,7 +49,6 @@ class FunctionExtractor:
             self.docstring_parser = Injector.get('docstring_parser')
         except KeyError:
             self.logger.warning("Docstring parser not registered, using default")
-            from core.docstring_processor import DocstringProcessor
             self.docstring_parser = DocstringProcessor()
             Injector.register('docstring_parser', self.docstring_parser)
         self.errors: List[str] = []
