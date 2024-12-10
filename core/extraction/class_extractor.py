@@ -314,8 +314,11 @@ class ClassExtractor:
             )
 
             # Calculate metrics using the metrics calculator
-            metrics = self.metrics_calculator.calculate_metrics(source, self.context.module_name)
-            extracted_class.metrics = metrics
+            extracted_class.metrics = self.metrics_calculator.calculate_metrics_for_class({
+                'name': node.name,
+                'source': source,
+                'docstring': docstring
+            })
 
             return extracted_class
 

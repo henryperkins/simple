@@ -183,8 +183,11 @@ class FunctionExtractor:
             )
 
             # Calculate metrics using the metrics calculator
-            metrics = self.metrics_calculator.calculate_metrics(source, self.context.module_name)
-            extracted_function.metrics = metrics
+            extracted_function.metrics = self.metrics_calculator.calculate_metrics_for_function({
+                'name': node.name,
+                'source': source,
+                'docstring': docstring
+            })
 
             return extracted_function
         except Exception as e:
