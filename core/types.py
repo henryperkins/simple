@@ -55,10 +55,6 @@ from core.types.base import (
     ExtractedClass
 )
 
-from core.types.documentation import (
-    DocumentationData,
-    ProcessingResult
-)
 
 __all__ = [
     # Base types
@@ -71,7 +67,4 @@ __all__ = [
     "ExtractedElement",
     "ExtractedFunction", 
     "ExtractedClass",
-    # Documentation types
-    "DocumentationData",
-    "ProcessingResult"
 ]

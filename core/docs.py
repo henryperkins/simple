@@ -18,11 +18,12 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_in
 from core.types.base import (
     DocstringData, 
     DocumentationContext,
+    DocumentationData,
     ExtractionContext,
     ExtractedClass,
-    ExtractedFunction
+    ExtractedFunction,
+    ProcessingResult
 )
-from core.types.documentation import DocumentationData, ProcessingResult
 from core.exceptions import DocumentationError
 from utils import ensure_directory, read_file_safe
 import uuid

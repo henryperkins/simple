@@ -189,24 +189,46 @@ class DocumentationContext:
         return hashlib.sha256(combined).hexdigest()
 
 @dataclass
-class ExtractionContext:
-    """Context for code extraction operations."""
-    metrics_enabled: bool = True
-    module_name: Optional[str] = None
-    include_private: bool = False
-    include_magic: bool = False
-    include_nested: bool = True
-    include_source: bool = True
-    max_line_length: int = 88
-    ignore_decorators: Set[str] = field(default_factory=set)
-    base_path: Optional[Path] = None
-    source_code: Optional[str] = None
-    tree: Optional[ast.AST] = None
-    function_extractor: Any = None  # Type will be set at runtime
-    class_extractor: Any = None  # Type will be set at runtime
-    dependency_analyzer: Any = None  # Type will be set at runtime
+class ProcessingResult:
+    """Result of AI processing operations."""
+    
+    content: Dict[str, Any]
+    usage: Dict[str, Any]
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    is_cached: bool = False
+    processing_time: float = 0.0
+    validation_status: bool = False
+    validation_errors: List[str] = field(default_factory=list)
+    schema_errors: List[str] = field(default_factory=list)
 
-    def __post_init__(self) -> None:
+@dataclass
+class DocumentationData:
+    """Documentation data structure."""
+    module_name: str
+    module_path: Path
+    module_summary: str
+    source_code: str
+    docstring_data: DocstringData
+    ai_content: Dict[str, Any]
+    code_metadata: Dict[str, Any]
+    glossary: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    changes: List[Dict[str, Any]] = field(default_factory=list)
+    complexity_scores: Dict[str, float] = field(default_factory=dict)
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    validation_status: bool = False
+    validation_errors: List[str] = field(default_factory=list)
+    docstring_parser: Callable = None  # New field for dependency injection
+
+    def __post_init__(self):
+        """Initialize dependencies."""
+        if self.docstring_parser is None:
+            self.docstring_parser = Injector.get('docstring_parser')
+        self.docstring_parser = Injector.get('docstring_parser')
+        self.docstring_parser = Injector.get('docstring_parser')
+        self.docstring_data = self.docstring_parser(self.source_code)
+
+@dataclass
+class ExtractionContext:
         """Initialize AST if needed."""
         if self.tree is None and self.source_code:
             try:

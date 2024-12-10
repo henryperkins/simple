@@ -15,8 +15,7 @@ from core.exceptions import ProcessingError
 from core.docstring_processor import DocstringProcessor
 from core.response_parsing import ResponseParsingService
 from core.prompt_manager import PromptManager
-from core.types import DocumentationContext
-from core.types.documentation import ProcessingResult, DocumentationData
+from core.types.base import DocumentationContext, ProcessingResult, DocumentationData
 from api.token_management import TokenManager
 
 
