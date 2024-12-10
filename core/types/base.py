@@ -218,13 +218,23 @@ class ExtractedClass(ExtractedElement):
         Returns:
             Dictionary representation of the class
         """
+        # Handle dependencies conversion safely
+        deps = {}
+        for k, v in self.dependencies.items():
+            if isinstance(v, (list, set)):
+                deps[k] = list(v)
+            elif isinstance(v, (int, float)):
+                deps[k] = [v]
+            else:
+                deps[k] = []
+
         return {
             'name': self.name,
             'lineno': self.lineno,
             'source': self.source,
             'docstring': self.docstring,
             'metrics': self.metrics.__dict__,
-            'dependencies': {k: list(v) for k, v in self.dependencies.items()},
+            'dependencies': deps,
             'decorators': self.decorators,
             'complexity_warnings': self.complexity_warnings,
             'methods': [m.to_dict() for m in self.methods],
