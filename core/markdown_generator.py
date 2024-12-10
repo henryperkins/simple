@@ -68,9 +68,13 @@ class MarkdownGenerator:
             missing_fields.append("code_metadata")
             
         # These fields are optional but we'll log if they're missing
-        if not documentation_data.module_summary and not documentation_data.ai_content.get('summary'):
+        if not documentation_data.module_summary:
             log_warning(f"Module {documentation_data.module_name} is missing a summary")
-            documentation_data.module_summary = documentation_data.ai_content.get('summary', "No module summary provided.")
+            documentation_data.module_summary = (
+                documentation_data.ai_content.get('summary') or 
+                documentation_data.docstring_data.summary or
+                "No module summary provided."
+            )
             
         if not documentation_data.ai_content:
             log_warning(f"Module {documentation_data.module_name} is missing AI-generated content")

@@ -373,6 +373,14 @@ class DocumentationData:
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_data = self.docstring_parser(self.source_code)
+        
+        # Ensure module summary is never None
+        if not self.module_summary:
+            self.module_summary = (
+                self.ai_content.get('summary') or 
+                self.docstring_data.summary or 
+                "No module summary available."
+            )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert DocumentationData to a dictionary.
