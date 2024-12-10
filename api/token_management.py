@@ -197,6 +197,7 @@ class TokenManager:
         Returns:
             Dict[str, Union[int, float]]: Current token usage and estimated cost.
         """
+        from core.console import console
         usage = self._calculate_usage(
             self.total_prompt_tokens, self.total_completion_tokens
         )
@@ -207,7 +208,6 @@ class TokenManager:
             "estimated_cost": usage.estimated_cost,
         }
         # Use rich console to update in place
-        from core.console import console
         console.print(f"\rToken Usage: {stats}", end="")
         return stats
 
