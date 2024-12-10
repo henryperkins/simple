@@ -150,16 +150,24 @@ class TokenManager:
         """
         try:
             prompt_tokens = self._estimate_tokens(prompt)
-            max_completion = max_tokens or min(
-                self.model_config.max_tokens - prompt_tokens,
-                self.model_config.chunk_size,
-            )
+            # Calculate available tokens for completion
+            available_tokens = self.model_config.max_tokens - prompt_tokens
+            
+            # If max_tokens specified, use minimum of that or available
+            if max_tokens:
+                max_completion = min(max_tokens, available_tokens)
+            else:
+                # Otherwise use minimum of available or chunk size
+                max_completion = min(available_tokens, self.model_config.chunk_size)
+                
+            # Ensure at least 1 token for completion
             max_completion = max(1, max_completion)
-            total_tokens = prompt_tokens + max_completion
-            if total_tokens > self.model_config.max_tokens:
-                max_completion = max(1, self.model_config.max_tokens - prompt_tokens)
-                self.logger.warning(
-                    f"Total tokens ({total_tokens}) exceed model max tokens ({self.model_config.max_tokens}). Adjusting max_completion to {max_completion}."
+            
+            # Log if we had to adjust the completion tokens
+            if max_completion < available_tokens:
+                self.logger.debug(
+                    f"Adjusted completion tokens to {max_completion} (prompt: {prompt_tokens}, "
+                    f"available: {available_tokens})"
                 )
 
             self.logger.debug(
