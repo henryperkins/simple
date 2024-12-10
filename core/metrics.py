@@ -284,7 +284,9 @@ class Metrics:
                     history = self.metrics_collector.get_metrics_history(self.module_name)
                     if not history:
                         self.logger.debug(f"No metrics history found for {self.module_name}")
+                        plt.close(fig)
                         return None
+                        
                     dates = []
                     complexities = []
                     for entry in history:
@@ -314,7 +316,11 @@ class Metrics:
                         buf.close()
                         
                         return encoded_image
-            
+                except Exception as e:
+                    self.logger.error(f"Error processing metrics history: {e}")
+                    plt.close(fig)
+                    return None
+                    
             # Clean up if no graph was generated
             plt.close(fig)
             return None
