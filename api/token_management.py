@@ -206,7 +206,9 @@ class TokenManager:
             "total_tokens": self.total_prompt_tokens + self.total_completion_tokens,
             "estimated_cost": usage.estimated_cost,
         }
-        self.logger.info(f"Current Usage Stats: {stats}")
+        # Use rich console to update in place
+        from core.console import console
+        console.print(f"\rToken Usage: {stats}", end="")
         return stats
 
     def track_request(self, prompt_tokens: int, max_completion: int) -> None:
