@@ -166,6 +166,32 @@ class ExtractedFunction(ExtractedElement):
             self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_info = self.docstring_parser(self.docstring)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert ExtractedFunction to a dictionary.
+        
+        Returns:
+            Dictionary representation of the function
+        """
+        return {
+            'name': self.name,
+            'lineno': self.lineno,
+            'source': self.source,
+            'docstring': self.docstring,
+            'metrics': self.metrics.__dict__,
+            'dependencies': {k: list(v) for k, v in self.dependencies.items()},
+            'decorators': self.decorators,
+            'complexity_warnings': self.complexity_warnings,
+            'args': [{'name': a.name, 'type': a.type, 'default_value': a.default_value, 'is_required': a.is_required}
+                    for a in self.args],
+            'returns': self.returns,
+            'raises': self.raises,
+            'body_summary': self.body_summary,
+            'docstring_info': self.docstring_info.__dict__ if self.docstring_info else None,
+            'is_async': self.is_async,
+            'is_method': self.is_method,
+            'parent_class': self.parent_class
+        }
+
 @dataclass
 class ExtractedClass(ExtractedElement):
     """Represents a class extracted from code."""
@@ -185,6 +211,30 @@ class ExtractedClass(ExtractedElement):
             self.docstring_parser = Injector.get('docstring_parser')
         if self.docstring_info is None:  # Only parse if not provided
             self.docstring_info = self.docstring_parser(self.docstring)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert ExtractedClass to a dictionary.
+        
+        Returns:
+            Dictionary representation of the class
+        """
+        return {
+            'name': self.name,
+            'lineno': self.lineno,
+            'source': self.source,
+            'docstring': self.docstring,
+            'metrics': self.metrics.__dict__,
+            'dependencies': {k: list(v) for k, v in self.dependencies.items()},
+            'decorators': self.decorators,
+            'complexity_warnings': self.complexity_warnings,
+            'methods': [m.to_dict() for m in self.methods],
+            'attributes': self.attributes,
+            'instance_attributes': self.instance_attributes,
+            'bases': self.bases,
+            'metaclass': self.metaclass,
+            'is_exception': self.is_exception,
+            'docstring_info': self.docstring_info.__dict__ if self.docstring_info else None
+        }
 
 @dataclass
 class ExtractionResult:
