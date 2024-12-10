@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_info, log_error
 from core.metrics import Metrics
+from core.metrics_collector import MetricsCollector
 from core.types import (
     ExtractionContext,
     ExtractionResult,

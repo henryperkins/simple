@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from core.logger import LoggerSetup
 from core.metrics_collector import MetricsCollector
 from core.types.metrics_types import MetricData
+from core.types.base import Injector
 
 # Try to import matplotlib, but provide fallback if not available
 try:
