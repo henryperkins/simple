@@ -176,13 +176,15 @@ class ExtractedClass(ExtractedElement):
     metaclass: Optional[str] = None
     is_exception: bool = False
     docstring_parser: Callable = None  # New field for dependency injection
+    docstring_info: Optional[DocstringData] = None  # Add missing field
 
     def __post_init__(self):
         """Initialize dependencies."""
         super().__post_init__()
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get('docstring_parser')
-        self.docstring_info = self.docstring_parser(self.docstring)
+        if self.docstring_info is None:  # Only parse if not provided
+            self.docstring_info = self.docstring_parser(self.docstring)
 
 @dataclass
 class ExtractionResult:
