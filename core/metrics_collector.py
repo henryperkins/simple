@@ -145,18 +145,22 @@ class MetricsCollector:
             metrics: MetricData object containing the metrics
         """
         try:
-            if module_name not in self.metrics_history:
-                self.metrics_history[module_name] = []
-                
-            # Update current module metrics
-            self.current_module_metrics[module_name] = metrics
-                
-            # Create metrics entry
-            entry = {
-                'timestamp': datetime.now().isoformat(),
-                'metrics': self._metrics_to_dict(metrics),
-                'correlation_id': self.correlation_id
-            }
+            try:
+                if module_name not in self.metrics_history:
+                    self.metrics_history[module_name] = []
+                    
+                # Update current module metrics
+                self.current_module_metrics[module_name] = metrics
+                    
+                # Create metrics entry
+                entry = {
+                    'timestamp': datetime.now().isoformat(),
+                    'metrics': self._metrics_to_dict(metrics),
+                    'correlation_id': self.correlation_id
+                }
+            except AttributeError:
+                # Silently handle attribute errors without output
+                return
             
             self.metrics_history[module_name].append(entry)
             self._save_history()
