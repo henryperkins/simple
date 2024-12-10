@@ -15,6 +15,7 @@ from core.types import (
     DocstringData,
     MetricData
 )
+from core.types.base import Injector
 from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.class_extractor import ClassExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
