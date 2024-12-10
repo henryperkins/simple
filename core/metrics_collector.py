@@ -144,6 +144,10 @@ class MetricsCollector:
             metrics: MetricData object containing the metrics
         """
         try:
+            if not module_name or not metrics:
+                self.logger.warning("Invalid metrics data received")
+                return
+
             if module_name not in self.metrics_history:
                 self.metrics_history[module_name] = []
                 
@@ -166,10 +170,14 @@ class MetricsCollector:
             
             # Store metrics silently
             if module_name in self.metrics_history:
-                # Only store if metrics have changed
-                last_entry = self.metrics_history[module_name][-1]
-                if last_entry['metrics'] != current_metrics:
-                    self.metrics_history[module_name].append(entry)
+                # Only store if metrics have changed and history exists
+                if self.metrics_history[module_name]:
+                    last_entry = self.metrics_history[module_name][-1]
+                    if last_entry.get('metrics', {}) != current_metrics:
+                        self.metrics_history[module_name].append(entry)
+                        self._save_history()
+                else:
+                    self.metrics_history[module_name] = [entry]
                     self._save_history()
             else:
                 self.metrics_history[module_name] = [entry]
@@ -269,20 +277,24 @@ class MetricsCollector:
 
     def _metrics_to_dict(self, metrics: MetricData) -> Dict[str, Any]:
         """Convert MetricData to dictionary format."""
-        return {
-            'cyclomatic_complexity': metrics.cyclomatic_complexity,
-            'cognitive_complexity': metrics.cognitive_complexity,
-            'maintainability_index': metrics.maintainability_index,
-            'halstead_metrics': metrics.halstead_metrics,
-            'lines_of_code': metrics.lines_of_code,
-            'total_functions': metrics.total_functions,
-            'scanned_functions': metrics.scanned_functions,
-            'function_scan_ratio': metrics.function_scan_ratio,
-            'total_classes': metrics.total_classes,
-            'scanned_classes': metrics.scanned_classes,
-            'class_scan_ratio': metrics.class_scan_ratio,
-            'complexity_graph': metrics.complexity_graph
-        }
+        try:
+            return {
+                'cyclomatic_complexity': getattr(metrics, 'cyclomatic_complexity', 0),
+                'cognitive_complexity': getattr(metrics, 'cognitive_complexity', 0),
+                'maintainability_index': getattr(metrics, 'maintainability_index', 0.0),
+                'halstead_metrics': getattr(metrics, 'halstead_metrics', {}),
+                'lines_of_code': getattr(metrics, 'lines_of_code', 0),
+                'total_functions': getattr(metrics, 'total_functions', 0),
+                'scanned_functions': getattr(metrics, 'scanned_functions', 0),
+                'function_scan_ratio': getattr(metrics, 'function_scan_ratio', 0.0),
+                'total_classes': getattr(metrics, 'total_classes', 0),
+                'scanned_classes': getattr(metrics, 'scanned_classes', 0),
+                'class_scan_ratio': getattr(metrics, 'class_scan_ratio', 0.0),
+                'complexity_graph': getattr(metrics, 'complexity_graph', None)
+            }
+        except Exception as e:
+            self.logger.error(f"Error converting metrics to dict: {e}")
+            return {}
 
     async def track_operation(
         self,
