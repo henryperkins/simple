@@ -54,24 +54,8 @@ class MetricsCollector:
             correlation_id: Optional correlation ID for tracking related operations
         """
         # Skip initialization since it's done in __new__
-        pass
-            
-        self.logger = LoggerSetup.get_logger(__name__)
-        self.correlation_id = correlation_id
-        self.metrics_history: Dict[str, List[Dict[str, Any]]] = {}
-        self.operations: List[Dict[str, Any]] = []
-        self._load_history()
-        # Track current module's metrics
-        self.current_module_metrics: Dict[str, MetricData] = {}
-        # Track accumulated counts for the current module
-        self.accumulated_functions = 0
-        self.accumulated_classes = 0
-        # Progress tracking
-        self.progress: Optional[Progress] = None
-        self.current_task_id: Optional[TaskID] = None
-        self.current_module = None
-        self.has_metrics = False
-        MetricsCollector._initialized = True
+        if MetricsCollector._initialized:
+            return
 
     def _format_progress_desc(
         self,

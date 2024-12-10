@@ -36,8 +36,8 @@ class FunctionExtractor:
         except KeyError:
             self.logger.warning("Metrics calculator not registered, creating new instance")
             from core.metrics import Metrics
-            self.metrics_calculator = Metrics(metrics_collector=MetricsCollector(correlation_id=correlation_id))
-            Injector.register('metrics_calculator', self.metrics_calculator)
+            metrics_collector = MetricsCollector(correlation_id=correlation_id)
+            self.metrics_calculator = Metrics(metrics_collector=metrics_collector, correlation_id=correlation_id)
             
         # Get docstring parser with fallback
         try:

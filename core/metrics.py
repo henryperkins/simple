@@ -28,11 +28,15 @@ class Metrics:
         self.correlation_id = correlation_id
         self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
         
-        # Register self with injector if not already registered
-        try:
-            Injector.get('metrics_calculator')
-        except KeyError:
-            Injector.register('metrics_calculator', self)
+        # Only register if we're not already in the process of getting from injector
+        if not getattr(Metrics, '_initializing', False):
+            try:
+                Metrics._initializing = True
+                existing = Injector.get('metrics_calculator')
+                if existing is None:
+                    Injector.register('metrics_calculator', self)
+            finally:
+                Metrics._initializing = False
 
     def calculate_metrics(self, code: str, module_name: Optional[str] = None) -> MetricData:
         """Calculate all metrics for the given code.
