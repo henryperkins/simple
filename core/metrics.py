@@ -21,7 +21,7 @@ except ImportError:
 
 class Metrics:
     """Calculates various code complexity metrics for Python code."""
-    def __init__(self, metrics_collector: Optional[MetricsCollector] = None, correlation_id: Optional[str] = None) -> None:
+    def __init__(self, metrics_collector: Optional["MetricsCollector"] = None, correlation_id: Optional[str] = None) -> None:
         self.module_name: Optional[str] = None
         self.logger = LoggerSetup.get_logger(__name__)
         self.error_counts: Dict[str, int] = {}

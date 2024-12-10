@@ -28,7 +28,7 @@ class CodeExtractor:
 
     def __init__(
         self,
-        context: Optional[ExtractionContext] = None,
+        context: Optional["ExtractionContext"] = None,
         correlation_id: Optional[str] = None
     ) -> None:
         # Generate correlation ID if not provided

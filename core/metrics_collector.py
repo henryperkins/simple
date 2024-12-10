@@ -136,7 +136,7 @@ class MetricsCollector:
         except Exception as e:
             self.logger.error(f"Error initializing progress: {e}")
 
-    def collect_metrics(self, module_name: str, metrics: MetricData) -> None:
+    def collect_metrics(self, module_name: str, metrics: "MetricData") -> None:
         """Collect metrics for a module.
         
         Args:

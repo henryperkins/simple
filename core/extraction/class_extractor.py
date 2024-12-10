@@ -24,7 +24,7 @@ class ClassExtractor:
 
     def __init__(
         self,
-        context: ExtractionContext,
+        context: "ExtractionContext",
         correlation_id: Optional[str] = None
     ) -> None:
         """Initialize the class extractor.
