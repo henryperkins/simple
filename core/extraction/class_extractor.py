@@ -161,6 +161,35 @@ class ClassExtractor:
                     )
         return methods
 
+    def _extract_attributes(self, node: ast.ClassDef) -> List[Dict[str, Any]]:
+        """Extract class-level attributes from a class node.
+
+        Args:
+            node (ast.ClassDef): The class node to process.
+
+        Returns:
+            List[Dict[str, Any]]: List of extracted class attributes.
+        """
+        attributes = []
+        for child in node.body:
+            if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
+                # Handle annotated assignments (e.g., x: int = 1)
+                attributes.append({
+                    'name': child.target.id,
+                    'type': get_node_name(child.annotation),
+                    'value': get_source_segment(self.context.source_code or "", child.value) if child.value else None
+                })
+            elif isinstance(child, ast.Assign):
+                # Handle regular assignments (e.g., x = 1)
+                for target in child.targets:
+                    if isinstance(target, ast.Name):
+                        attributes.append({
+                            'name': target.id,
+                            'type': 'Any',  # Type not explicitly specified
+                            'value': get_source_segment(self.context.source_code or "", child.value)
+                        })
+        return attributes
+
     async def _process_class(self, node: ast.ClassDef) -> Optional[ExtractedClass]:
         """Process a class node to extract information.
 
