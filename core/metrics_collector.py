@@ -145,6 +145,9 @@ class MetricsCollector:
             metrics: MetricData object containing the metrics
         """
         try:
+            # Silently handle attribute errors without output
+            if not hasattr(metrics, 'calculate_metrics'):
+                return
             try:
                 if module_name not in self.metrics_history:
                     self.metrics_history[module_name] = []
