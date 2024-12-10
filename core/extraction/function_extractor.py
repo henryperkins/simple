@@ -29,7 +29,7 @@ class FunctionExtractor:
         """
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id=correlation_id)
         self.context = context
-        self.metrics_calculator = Injector.get('metrics_calculator')
+        self.metrics_calculator = Injector.get('metric_calculator')
         self.docstring_parser = Injector.get('docstring_parser')
         self.errors: List[str] = []
 

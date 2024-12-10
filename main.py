@@ -33,7 +33,8 @@ from utils import (
 )
 
 # Register dependencies
-Injector.register('metric_calculator', lambda element: MetricData())
+Injector.register('metrics_calculator', lambda element: MetricData())
+Injector.register('metric_calculator', lambda element: MetricData())  # Old name for compatibility
 Injector.register('docstring_parser', lambda docstring: DocstringData(summary=docstring))
 
 # Configure logger globally with dynamic settings
