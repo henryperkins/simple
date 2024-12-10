@@ -8,6 +8,7 @@ import re
 from typing import Any, Optional, Tuple, Union, List
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_info, log_error
+from core.metrics import Metrics
 from core.types import (
     ExtractionContext,
     ExtractionResult,
