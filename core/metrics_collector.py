@@ -305,9 +305,7 @@ class MetricsCollector:
                 
             self.operations.append(operation)
             
-            # Log operation status with color
-            status = "[green]succeeded[/green]" if success else "[red]failed[/red]"
-            console.print(f"Operation [bold]{operation_type}[/bold] {status} in {duration:.2f}s")
+            # Silently track operation without output
             
         except Exception as e:
             self.logger.error(f"Error tracking operation: {e}")

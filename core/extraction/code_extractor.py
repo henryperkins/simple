@@ -146,12 +146,7 @@ class CodeExtractor:
                 metrics=metrics
             )
 
-            # Log extraction statistics
-            log_info(
-                f"Code extraction completed. Functions: {metrics.scanned_functions}/{metrics.total_functions}, "
-                f"Classes: {metrics.scanned_classes}/{metrics.total_classes}",
-                extra={'correlation_id': self.correlation_id}
-            )
+            # Silently complete extraction without statistics output
             return result
 
         except Exception as e:
