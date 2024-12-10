@@ -130,6 +130,37 @@ class ClassExtractor:
                 decorators.append(f"{decorator.value.id}.{decorator.attr}")
         return decorators
 
+    async def _extract_methods(self, node: ast.ClassDef) -> List[ExtractedFunction]:
+        """Extract method definitions from a class node.
+
+        Args:
+            node (ast.ClassDef): The class node to process.
+
+        Returns:
+            List[ExtractedFunction]: List of extracted method information.
+        """
+        methods = []
+        for child in node.body:
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if not self.context.function_extractor._should_process_function(child):
+                    self.logger.debug(f"Skipping method: {child.name}")
+                    continue
+                    
+                try:
+                    extracted_method = await self.context.function_extractor._process_function(child)
+                    if extracted_method:
+                        # Mark as method and set parent class
+                        extracted_method.is_method = True
+                        extracted_method.parent_class = node.name
+                        methods.append(extracted_method)
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to process method {child.name}: {e}",
+                        exc_info=True,
+                        extra={'method_name': child.name}
+                    )
+        return methods
+
     async def _process_class(self, node: ast.ClassDef) -> Optional[ExtractedClass]:
         """Process a class node to extract information.
 
