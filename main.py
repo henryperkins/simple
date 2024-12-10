@@ -232,14 +232,6 @@ class DocumentationGenerator:
             collected_metrics = self.metrics_collector.metrics_history
             system_metrics = self.system_monitor.get_metrics()
 
-            print("\n=== Documentation Generation Metrics ===")
-            for module, metrics_list in collected_metrics.items():
-                for metric in metrics_list:
-                    print(f"Module: {module}")
-                    print(f"Timestamp: {metric['timestamp']}")
-                    print(f"Metrics: {metric['metrics']}")
-                    print("-" * 40)
-
             print("\n=== System Performance Metrics ===")
             print(f"CPU Usage: {system_metrics.get('cpu', {}).get('percent', 0)}%")
             print(f"Memory Usage: {system_metrics.get('memory', {}).get('percent', 0)}%")
