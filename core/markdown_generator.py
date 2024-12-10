@@ -20,9 +20,16 @@ class MarkdownGenerator:
             log_debug("Generating markdown documentation.")
 
             # Check for complete information
+            if not documentation_data.source_code:
+                log_error("Source code is missing - cannot generate documentation")
+                return "# Error: Missing Source Code\n\nDocumentation cannot be generated without source code."
+
             if not self._has_complete_information(documentation_data):
-                log_warning("Incomplete information received for markdown generation.")
-                return "# Warning: Incomplete Documentation Data\n\nSome sections may be missing due to incomplete input data."
+                log_warning("Incomplete information received for markdown generation")
+                # Continue with partial documentation but add warning header
+                sections = ["# ⚠️ Warning: Partial Documentation\n\nSome information may be missing or incomplete.\n"]
+            else:
+                sections = []
 
             # Create module info from DocumentationData fields
             module_info = {
@@ -55,17 +62,17 @@ class MarkdownGenerator:
         missing_fields = []
         
         # Check required fields have content
-        if not documentation_data.module_name:
-            missing_fields.append("module_name")
-            
-        if not documentation_data.module_path:
-            missing_fields.append("module_path")
-            
-        if not documentation_data.source_code:
-            missing_fields.append("source_code")
-            
-        if not documentation_data.code_metadata:
-            missing_fields.append("code_metadata")
+        required_fields = {
+            'module_name': documentation_data.module_name,
+            'module_path': documentation_data.module_path,
+            'source_code': documentation_data.source_code,
+            'code_metadata': documentation_data.code_metadata
+        }
+        
+        missing_fields = [
+            field for field, value in required_fields.items() 
+            if not value or (isinstance(value, str) and not value.strip())
+        ]
             
         # These fields are optional but we'll log if they're missing
         if not documentation_data.module_summary:

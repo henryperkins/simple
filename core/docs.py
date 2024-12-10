@@ -70,9 +70,13 @@ class DocumentationOrchestrator:
         try:
             self.logger.info("Starting documentation generation process", extra={'correlation_id': self.correlation_id})
 
+            # Validate source code
+            if not context.source_code or not context.source_code.strip():
+                raise DocumentationError("Source code is empty or missing")
+
             # Extract code information
             extraction_context = ExtractionContext(
-                module_name=context.metadata.get("module_name"),
+                module_name=context.metadata.get("module_name", context.module_path.stem),
                 source_code=context.source_code,
                 base_path=context.module_path,
                 metrics_enabled=True,
