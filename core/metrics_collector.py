@@ -342,3 +342,14 @@ class MetricsCollector:
             'history': self.metrics_history,
             'operations': self.operations
         }
+        
+    def get_metrics_history(self, module_name: str) -> List[Dict[str, Any]]:
+        """Get metrics history for a specific module.
+        
+        Args:
+            module_name: Name of the module to get history for
+            
+        Returns:
+            List of historical metrics entries for the module
+        """
+        return self.metrics_history.get(module_name, [])

@@ -280,8 +280,11 @@ class Metrics:
             
             # Get historical metrics from collector
             if self.module_name and self.metrics_collector:
-                history = self.metrics_collector.get_metrics_history(self.module_name)
-                if history:
+                try:
+                    history = self.metrics_collector.get_metrics_history(self.module_name)
+                    if not history:
+                        self.logger.debug(f"No metrics history found for {self.module_name}")
+                        return None
                     dates = []
                     complexities = []
                     for entry in history:
