@@ -144,23 +144,20 @@ class MetricsCollector:
             metrics: MetricData object containing the metrics
         """
         try:
-            try:
-                if module_name not in self.metrics_history:
-                    self.metrics_history[module_name] = []
-                    
-                # Update current module metrics
-                self.current_module_metrics[module_name] = metrics
-                    
-                # Create metrics entry
-                entry = {
-                    'timestamp': datetime.now().isoformat(),
-                    'metrics': self._metrics_to_dict(metrics),
-                    'correlation_id': self.correlation_id
-                }
-            except AttributeError:
-                # Silently handle attribute errors without output
-                return
+            if module_name not in self.metrics_history:
+                self.metrics_history[module_name] = []
+                
+            # Update current module metrics silently
+            self.current_module_metrics[module_name] = metrics
+                
+            # Create metrics entry without output
+            entry = {
+                'timestamp': datetime.now().isoformat(),
+                'metrics': self._metrics_to_dict(metrics),
+                'correlation_id': self.correlation_id
+            }
             
+            # Store metrics silently
             self.metrics_history[module_name].append(entry)
             self._save_history()
             
@@ -200,8 +197,6 @@ class MetricsCollector:
                             (self.accumulated_functions, metrics.total_functions),
                             (self.accumulated_classes, metrics.total_classes)
                         )
-                        # Log item completion
-                        console.print(f"[dim]Processed function: {name}[/dim]")
                 elif item_type == 'class':
                     self.accumulated_classes += 1
                     metrics.scanned_classes = self.accumulated_classes
@@ -212,8 +207,6 @@ class MetricsCollector:
                             (self.accumulated_functions, metrics.total_functions),
                             (self.accumulated_classes, metrics.total_classes)
                         )
-                        # Log item completion
-                        console.print(f"[dim]Processed class: {name}[/dim]")
                 
         except Exception as e:
             self.logger.error(f"Error updating scan progress: {e}")
