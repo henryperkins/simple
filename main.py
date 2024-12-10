@@ -68,9 +68,10 @@ class DocumentationGenerator:
             ai_service=self.ai_service,
             correlation_id=self.correlation_id
         )
-        self.monitoring = SystemMonitor(
+        self.metrics_collector = MetricsCollector(correlation_id=self.correlation_id)
+        self.system_monitor = SystemMonitor(
             token_manager=self.ai_service.token_manager,
-            metrics_collector=MetricsCollector(correlation_id=self.correlation_id),
+            metrics_collector=self.metrics_collector,
             correlation_id=self.correlation_id
         )
         self.repo_manager = None
@@ -79,7 +80,8 @@ class DocumentationGenerator:
         """Start systems that require asynchronous setup."""
         try:
             self.logger.info("Initializing system components")
-            await self.system_monitor.start()
+            if hasattr(self, 'system_monitor'):
+                await self.system_monitor.start()
             self.logger.info("All components initialized successfully")
         except (RuntimeError, ValueError) as init_error:
             error_msg = f"Initialization failed: {init_error}"
@@ -251,11 +253,11 @@ class DocumentationGenerator:
         """Cleanup resources used by the DocumentationGenerator."""
         try:
             self.logger.info("Starting cleanup process")
-            if self.ai_service:
+            if hasattr(self, 'ai_service') and self.ai_service:
                 await self.ai_service.close()
-            if self.metrics_collector:
+            if hasattr(self, 'metrics_collector') and self.metrics_collector:
                 await self.metrics_collector.close()
-            if self.system_monitor:
+            if hasattr(self, 'system_monitor') and self.system_monitor:
                 await self.system_monitor.stop()
             self.logger.info("Cleanup completed successfully")
         except (RuntimeError, ValueError, IOError) as cleanup_error:
