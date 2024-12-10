@@ -172,22 +172,35 @@ class ClassExtractor:
         """
         attributes = []
         for child in node.body:
-            if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
-                # Handle annotated assignments (e.g., x: int = 1)
-                attributes.append({
-                    'name': child.target.id,
-                    'type': get_node_name(child.annotation),
-                    'value': get_source_segment(self.context.source_code or "", child.value) if child.value else None
-                })
-            elif isinstance(child, ast.Assign):
-                # Handle regular assignments (e.g., x = 1)
-                for target in child.targets:
-                    if isinstance(target, ast.Name):
-                        attributes.append({
-                            'name': target.id,
-                            'type': 'Any',  # Type not explicitly specified
-                            'value': get_source_segment(self.context.source_code or "", child.value)
-                        })
+            try:
+                if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
+                    # Handle annotated assignments (e.g., x: int = 1)
+                    attr_value = None
+                    if child.value:
+                        attr_value = get_source_segment(self.context.source_code or "", child.value)
+                    
+                    attributes.append({
+                        'name': child.target.id,
+                        'type': get_node_name(child.annotation),
+                        'value': attr_value
+                    })
+                elif isinstance(child, ast.Assign):
+                    # Handle regular assignments (e.g., x = 1)
+                    for target in child.targets:
+                        if isinstance(target, ast.Name):
+                            attr_value = get_source_segment(self.context.source_code or "", child.value)
+                            attributes.append({
+                                'name': target.id,
+                                'type': 'Any',  # Type not explicitly specified
+                                'value': attr_value
+                            })
+            except Exception as e:
+                self.logger.warning(
+                    f"Error extracting attribute from {getattr(child, 'name', 'unknown')}: {e}",
+                    exc_info=True
+                )
+                continue
+                
         return attributes
 
     def _extract_bases(self, node: ast.ClassDef) -> List[str]:
