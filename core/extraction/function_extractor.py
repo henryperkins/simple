@@ -184,7 +184,7 @@ class FunctionExtractor:
             )
 
             # Calculate and assign metrics
-            extracted_function.metrics = self.metrics_calculator.calculate_metrics_for_function(extracted_function)
+            extracted_function.metrics = self.metrics_calculator.calculate_metrics(extracted_function)
 
             return extracted_function
         except Exception as e:

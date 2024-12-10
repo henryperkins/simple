@@ -190,6 +190,55 @@ class ClassExtractor:
                         })
         return attributes
 
+    def _extract_bases(self, node: ast.ClassDef) -> List[str]:
+        """Extract base class names from a class definition.
+
+        Args:
+            node (ast.ClassDef): The class node to process.
+
+        Returns:
+            List[str]: List of base class names.
+        """
+        bases = []
+        for base in node.bases:
+            if isinstance(base, ast.Name):
+                bases.append(base.id)
+            elif isinstance(base, ast.Attribute):
+                bases.append(f"{base.value.id}.{base.attr}")
+        return bases
+
+    def _extract_metaclass(self, node: ast.ClassDef) -> Optional[str]:
+        """Extract metaclass name from class keywords if present.
+
+        Args:
+            node (ast.ClassDef): The class node to process.
+
+        Returns:
+            Optional[str]: Metaclass name if present, None otherwise.
+        """
+        for keyword in node.keywords:
+            if keyword.arg == 'metaclass':
+                if isinstance(keyword.value, ast.Name):
+                    return keyword.value.id
+                elif isinstance(keyword.value, ast.Attribute):
+                    return f"{keyword.value.value.id}.{keyword.value.attr}"
+        return None
+
+    def _is_exception_class(self, node: ast.ClassDef) -> bool:
+        """Check if the class is an exception class.
+
+        Args:
+            node (ast.ClassDef): The class node to process.
+
+        Returns:
+            bool: True if the class is an exception class, False otherwise.
+        """
+        exception_bases = {'Exception', 'BaseException'}
+        for base in node.bases:
+            if isinstance(base, ast.Name) and base.id in exception_bases:
+                return True
+        return False
+
     def _extract_instance_attributes(self, node: ast.ClassDef) -> List[Dict[str, Any]]:
         """Extract instance attributes from a class node.
 
