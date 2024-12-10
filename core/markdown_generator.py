@@ -40,8 +40,12 @@ class MarkdownGenerator:
                 self._generate_constants_table(documentation_data.code_metadata.get("constants", [])),
                 self._generate_source_code(documentation_data.source_code),
             ]
-            log_debug("Markdown generation completed successfully.")
-            return "\n\n".join(filter(None, sections))
+            markdown = "\n\n".join(filter(None, sections))
+            if not self._has_complete_information(documentation_data):
+                log_debug("Generated partial documentation due to incomplete information")
+            else:
+                log_debug("Generated complete documentation successfully")
+            return markdown
         except Exception as e:
             log_error(f"Error generating markdown: {e}", exc_info=True)
             return f"# Error Generating Documentation\n\nAn error occurred: {e}"
