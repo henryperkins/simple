@@ -108,6 +108,28 @@ class ClassExtractor:
                         
         return True
 
+    def _extract_decorators(self, node: ast.ClassDef) -> List[str]:
+        """Extract decorator names from a class node.
+
+        Args:
+            node (ast.ClassDef): The class node to process.
+
+        Returns:
+            List[str]: List of decorator names.
+        """
+        decorators = []
+        for decorator in node.decorator_list:
+            if isinstance(decorator, ast.Name):
+                decorators.append(decorator.id)
+            elif isinstance(decorator, ast.Call):
+                if isinstance(decorator.func, ast.Name):
+                    decorators.append(decorator.func.id)
+                elif isinstance(decorator.func, ast.Attribute):
+                    decorators.append(f"{decorator.func.value.id}.{decorator.func.attr}")
+            elif isinstance(decorator, ast.Attribute):
+                decorators.append(f"{decorator.value.id}.{decorator.attr}")
+        return decorators
+
     async def _process_class(self, node: ast.ClassDef) -> Optional[ExtractedClass]:
         """Process a class node to extract information.
 
