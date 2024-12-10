@@ -48,30 +48,29 @@ class MarkdownGenerator:
 
     def _has_complete_information(self, documentation_data: DocumentationData) -> bool:
         """Check if the documentation data contains complete information."""
-        # Check required fields exist and have minimal content
+        # Check required fields have content
         if not documentation_data.module_name:
-            log_warning("Missing module name")
+            log_warning("Empty module name")
             return False
             
         if not documentation_data.module_path:
-            log_warning("Missing module path")
+            log_warning("Empty module path") 
             return False
             
-        # These fields can be empty but should exist
-        if documentation_data.module_summary is None:
-            log_warning("Missing module summary")
+        if not documentation_data.module_summary:
+            log_warning("Empty module summary")
             return False
             
-        if documentation_data.ai_content is None:
-            log_warning("Missing AI content")
+        if not documentation_data.ai_content:
+            log_warning("Empty AI content")
             return False
             
-        if documentation_data.code_metadata is None:
-            log_warning("Missing code metadata")
+        if not documentation_data.code_metadata:
+            log_warning("Empty code metadata")
             return False
             
-        if documentation_data.source_code is None:
-            log_warning("Missing source code")
+        if not documentation_data.source_code:
+            log_warning("Empty source code")
             return False
             
         return True
