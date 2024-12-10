@@ -33,6 +33,32 @@ class FunctionExtractor:
         self.docstring_parser = Injector.get('docstring_parser')
         self.errors: List[str] = []
 
+    def _should_process_function(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:
+        """Determine if a function should be processed based on context settings.
+        
+        Args:
+            node: The function node to check
+            
+        Returns:
+            bool: True if the function should be processed, False otherwise
+        """
+        # Skip private functions if not included in settings
+        if not self.context.include_private and node.name.startswith('_'):
+            return False
+            
+        # Skip magic methods if not included in settings
+        if not self.context.include_magic and node.name.startswith('__') and node.name.endswith('__'):
+            return False
+            
+        # Skip nested functions if not included in settings
+        if not self.context.include_nested:
+            for parent in ast.walk(self.context.tree):
+                if isinstance(parent, ast.FunctionDef) and node in ast.walk(parent):
+                    if parent != node:  # Don't count the node itself
+                        return False
+                        
+        return True
+
     async def extract_functions(
         self,
         nodes: Union[ast.AST, List[ast.AST]]
