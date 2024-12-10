@@ -42,7 +42,7 @@ class CodeExtractor:
         except KeyError:
             self.logger.warning("Metrics calculator not registered, creating new instance")
             from core.metrics import Metrics
-            self.metrics_calculator = Metrics()
+            self.metrics_calculator = Metrics(metrics_collector=MetricsCollector(correlation_id=self.correlation_id))
             Injector.register('metrics_calculator', self.metrics_calculator)
         
         # Initialize extractors

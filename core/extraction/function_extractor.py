@@ -29,8 +29,23 @@ class FunctionExtractor:
         """
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id=correlation_id)
         self.context = context
-        self.metrics_calculator = Injector.get('metrics_calculator')
-        self.docstring_parser = Injector.get('docstring_parser')
+        # Get metrics calculator with fallback
+        try:
+            self.metrics_calculator = Injector.get('metrics_calculator')
+        except KeyError:
+            self.logger.warning("Metrics calculator not registered, creating new instance")
+            from core.metrics import Metrics
+            self.metrics_calculator = Metrics(metrics_collector=MetricsCollector(correlation_id=correlation_id))
+            Injector.register('metrics_calculator', self.metrics_calculator)
+            
+        # Get docstring parser with fallback
+        try:
+            self.docstring_parser = Injector.get('docstring_parser')
+        except KeyError:
+            self.logger.warning("Docstring parser not registered, using default")
+            from core.docstring_processor import DocstringProcessor
+            self.docstring_parser = DocstringProcessor()
+            Injector.register('docstring_parser', self.docstring_parser)
         self.errors: List[str] = []
 
     def _should_process_function(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:

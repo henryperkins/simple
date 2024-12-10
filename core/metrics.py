@@ -20,11 +20,18 @@ except ImportError:
 
 class Metrics:
     """Calculates various code complexity metrics for Python code."""
-    def __init__(self, metrics_collector: Optional[MetricsCollector] = None) -> None:
+    def __init__(self, metrics_collector: Optional[MetricsCollector] = None, correlation_id: Optional[str] = None) -> None:
         self.module_name: Optional[str] = None
         self.logger = LoggerSetup.get_logger(__name__)
         self.error_counts: Dict[str, int] = {}
-        self.metrics_collector = metrics_collector or MetricsCollector()
+        self.correlation_id = correlation_id
+        self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
+        
+        # Register self with injector if not already registered
+        try:
+            Injector.get('metrics_calculator')
+        except KeyError:
+            Injector.register('metrics_calculator', self)
 
     def calculate_metrics(self, code: str, module_name: Optional[str] = None) -> MetricData:
         """Calculate all metrics for the given code.
