@@ -4,12 +4,14 @@ import base64
 import io
 import math
 from datetime import datetime
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, TYPE_CHECKING
 
 from core.logger import LoggerSetup
-from core.metrics_collector import MetricsCollector
 from core.types import MetricData
 from core.types.base import Injector
+
+if TYPE_CHECKING:
+    from core.metrics_collector import MetricsCollector
 
 # Try to import matplotlib, but provide fallback if not available
 try:
