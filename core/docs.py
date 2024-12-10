@@ -174,7 +174,7 @@ class DocumentationOrchestrator:
             # Generate markdown
             markdown_doc = self.markdown_generator.generate(documentation_data)
 
-            if not self.markdown_generator._has_complete_information(doc_data):
+            if not self.markdown_generator._has_complete_information(documentation_data):
                 self.logger.warning("Documentation generated with missing information", extra={'correlation_id': self.correlation_id})
             else:
                 self.logger.info("Documentation generation completed successfully", extra={'correlation_id': self.correlation_id})
