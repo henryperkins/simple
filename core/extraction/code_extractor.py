@@ -14,7 +14,7 @@ from core.types import (
     ExtractionContext,
     ExtractionResult,
     DocstringData,
-    MetricData
+    MetricData,
 )
 from core.types.base import Injector
 from core.extraction.function_extractor import FunctionExtractor

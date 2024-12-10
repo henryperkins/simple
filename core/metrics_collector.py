@@ -8,7 +8,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskID
 from rich.console import Console
 
 from core.logger import LoggerSetup
-from core.types.metrics_types import MetricData
+from core.types import MetricData
 from core.console import console
 
 class MetricsCollector:

@@ -16,6 +16,7 @@ from core.types.base import (
     ExtractedClass,
     ExtractionResult,
     Injector,
+    MetricData,
     ParsedResponse,
     ProcessingResult,
     TokenUsage
