@@ -10,6 +10,7 @@ from typing import Any, Optional, Dict, List, Union
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics import Metrics
 from core.metrics_collector import MetricsCollector
+from core.docstring_processor import DocstringProcessor
 from core.types import (
     ExtractionContext,
     ExtractedClass,
