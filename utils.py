@@ -28,6 +28,7 @@ import importlib.util
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Union, Tuple, Set, Type
+from ast import NodeVisitor
 from dataclasses import dataclass
 from git.exc import GitCommandError
 
@@ -37,6 +38,22 @@ from exceptions import DocumentationError
 
 # Initialize logger
 logger = LoggerSetup.get_logger(__name__)
+
+#-----------------------------------------------------------------------------
+# AST Node Visitor
+#-----------------------------------------------------------------------------
+
+class NodeNameVisitor(NodeVisitor):
+    """Visitor to extract the name from an AST node."""
+
+    def __init__(self):
+        self.name = None
+
+    def visit_Name(self, node: ast.Name):
+        self.name = node.id
+
+    def visit_Attribute(self, node: ast.Attribute):
+        self.name = node.attr
 
 #-----------------------------------------------------------------------------
 # AST Processing Utilities
