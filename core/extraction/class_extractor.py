@@ -62,7 +62,7 @@ class ClassExtractor:
             self.logger.warning("Docstring parser not registered, using default")
             self.docstring_parser = DocstringProcessor()
             Injector.register("docstring_parser", self.docstring_parser)
-        self.metrics_collector = metrics_collector
+        self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
         self.errors: List[str] = []
 
     async def extract_classes(
@@ -89,7 +89,7 @@ class ClassExtractor:
                         if extracted_class:
                             classes.append(extracted_class)
                             # Update scan progress
-                            if self.metrics_calculator.metrics_collector:
+                            if self.metrics_calculator and self.metrics_calculator.metrics_collector:
                                 self.metrics_calculator.metrics_collector.update_scan_progress(
                                     self.context.module_name or "unknown",
                                     "class",
