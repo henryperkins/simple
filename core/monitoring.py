@@ -38,7 +38,9 @@ class SystemMonitor:
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__)
         )
-        self.logger.set_correlation_id(correlation_id)
+        # Set the correlation ID using the context variable
+        from core.logger import set_correlation_id
+        set_correlation_id(correlation_id)
         self.correlation_id = correlation_id
         self.check_interval = check_interval
         self.token_manager = token_manager
