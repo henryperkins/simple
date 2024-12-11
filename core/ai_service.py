@@ -45,8 +45,8 @@ class AIService:
         self.config = config
         self.correlation_id = correlation_id
         self.logger = LoggerSetup.get_logger(__name__)
-        self.cache = Cache()
-        self.semaphore = asyncio.Semaphore(5)  # Limit concurrent API calls
+        self.cache = Injector.get('cache')
+        self.semaphore = Injector.get('semaphore')
         self._client = None
 
     # ... rest of the class remains unchanged ...

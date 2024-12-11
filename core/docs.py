@@ -53,8 +53,8 @@ class DocumentationOrchestrator:
             correlation_id=self.correlation_id
         )
         self.ai_service = ai_service or Injector.get('ai_service')
-        self.code_extractor = CodeExtractor(correlation_id=self.correlation_id)
-        self.markdown_generator = MarkdownGenerator()
+        self.code_extractor = Injector.get('code_extractor')
+        self.markdown_generator = Injector.get('markdown_generator')
 
     async def generate_documentation(self, context: DocumentationContext) -> Tuple[str, str]:
         """
