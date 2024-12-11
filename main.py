@@ -175,7 +175,7 @@ class DocumentationGenerator:
             if not self.repo_manager:
                 self.repo_manager = RepositoryManager(local_path)
 
-            self.doc_orchestrator.code_extractor.context.base_path = local_path
+            self.doc_orchestrator.code_extractor().context.base_path = local_path
             success = await self._process_local_repository(local_path, output_dir)
 
         except (FileNotFoundError, ValueError, IOError) as repo_error:
