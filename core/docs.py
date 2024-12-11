@@ -30,7 +30,7 @@ from core.console import (
     print_info,
     print_error,
     print_warning,
-    display_error,
+    display_metrics,
     create_progress,
     display_metrics
 )
