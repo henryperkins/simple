@@ -13,67 +13,79 @@ from core.metrics_collector import MetricsCollector
 from core.docstring_processor import DocstringProcessor
 from core.types import ExtractionContext, ExtractedClass, ExtractedFunction, MetricData
 from utils import (
-    handle_extraction_error,
-    get_source_segment,
     NodeNameVisitor,
-    get_node_name,
+    get_source_segment,
+    handle_extraction_error,
+    get_node_name
 )
 from core.types.base import Injector
-
+from core.console import (
+    print_info,
+    print_error,
+    print_warning,
+    display_metrics,
+    create_progress,
+    display_metrics
+)
 
 class ClassExtractor:
     """Handles extraction of classes from Python source code."""
 
     def __init__(
-        self, context: "ExtractionContext", correlation_id: Optional[str] = None, metrics_collector: Optional[MetricsCollector] = None, docstring_processor: Optional[DocstringProcessor] = None
+        self, context: ExtractionContext, correlation_id: Optional[str] = None, metrics_collector: Optional[MetricsCollector] = None, docstring_processor: Optional[DocstringProcessor] = None
     ) -> None:
+        """Initialize the ClassExtractor.
+
+        Args:
+            context: The extraction context containing necessary information.
+            correlation_id: Optional correlation ID for logging.
+            metrics_collector: Optional MetricsCollector instance.
+            docstring_processor: Optional DocstringProcessor instance.
+        """
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.context = context
-        # Get metrics calculator with fallback
+        self.correlation_id = correlation_id or str(uuid.uuid4())
+        self.metrics_collector = metrics_collector or self._get_metrics_collector()
+        self.metrics_calculator = self._get_metrics_calculator()
+        self.docstring_parser = docstring_processor or self._get_docstring_parser()
+        self.errors: List[str] = []
+
+    def _get_metrics_collector(self) -> MetricsCollector:
+        """Get the metrics collector instance, with fallback if not registered."""
         try:
-            self.metrics_calculator = Injector.get("metrics_calculator")
-            if self.metrics_calculator is None:
-                self.logger.warning(
-                    "Metrics calculator not registered, creating new instance"
-                )
-                from core.metrics import Metrics
-                self.metrics_calculator = Metrics(
-                    metrics_collector=metrics_collector, correlation_id=correlation_id
-                )
+            return Injector.get('metrics_collector')
         except KeyError:
             self.logger.warning(
-                "Metrics calculator not registered, creating new instance"
+                f"Metrics collector not registered, creating new instance with correlation ID: {self.correlation_id}"
             )
-            from core.metrics import Metrics
+            metrics_collector = MetricsCollector(correlation_id=self.correlation_id)
+            Injector.register('metrics_collector', metrics_collector)
+            return metrics_collector
 
-            metrics_collector = MetricsCollector(correlation_id=correlation_id)
-            self.metrics_calculator = Metrics(
-                metrics_collector=metrics_collector, correlation_id=correlation_id
-            )
-
-        # Get docstring parser with fallback
+    def _get_metrics_calculator(self) -> Metrics:
+        """Get the metrics calculator instance, with fallback if not registered."""
         try:
-            self.docstring_parser = Injector.get("docstring_parser")
-            if self.docstring_parser is None:
-                self.logger.warning("Docstring parser not registered, using default")
-                self.docstring_parser = DocstringProcessor()
-                Injector.register("docstring_parser", self.docstring_parser)
+            return Injector.get('metrics_calculator')
         except KeyError:
-            self.logger.warning("Docstring parser not registered, using default")
-            self.docstring_parser = DocstringProcessor()
-            Injector.register("docstring_parser", self.docstring_parser)
-        self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
-        if not hasattr(self, 'metrics_calculator') or self.metrics_calculator is None:
-            self.metrics_calculator = Injector.get('metrics_calculator')
-        if not hasattr(self, 'docstring_parser') or self.docstring_parser is None:
-            self.docstring_parser = Injector.get('docstring_parser')
-        if self.metrics_calculator is None:
-            self.logger.warning("Metrics calculator not initialized, using default")
-            self.metrics_calculator = Metrics(metrics_collector=self.metrics_collector, correlation_id=correlation_id)
-        if self.docstring_parser is None:
-            self.logger.warning("Docstring parser not initialized, using default")
-            self.docstring_parser = DocstringProcessor()
-        self.errors: List[str] = []
+            self.logger.warning(
+                f"Metrics calculator not registered, creating new instance with correlation ID: {self.correlation_id}"
+            )
+            metrics_calculator = Metrics(
+                metrics_collector=self.metrics_collector, correlation_id=self.correlation_id)
+            Injector.register('metrics_calculator', metrics_calculator)
+            return metrics_calculator
+
+    def _get_docstring_parser(self) -> DocstringProcessor:
+        """Get the docstring parser instance, with fallback if not registered."""
+        try:
+            return Injector.get('docstring_parser')
+        except KeyError:
+            self.logger.warning(
+                f"Docstring parser not registered, using default with correlation ID: {self.correlation_id}"
+            )
+            docstring_parser = DocstringProcessor()
+            Injector.register('docstring_parser', docstring_parser)
+            return docstring_parser
 
     async def extract_classes(
         self, tree: Union[ast.AST, ast.Module]
@@ -99,8 +111,8 @@ class ClassExtractor:
                         if extracted_class:
                             classes.append(extracted_class)
                             # Update scan progress
-                            if self.metrics_calculator and self.metrics_calculator.metrics_collector:
-                                self.metrics_calculator.metrics_collector.update_scan_progress(
+                            if self.metrics_calculator and self.metrics_collector:
+                                self.metrics_collector.update_scan_progress(
                                     self.context.module_name or "unknown",
                                     "class",
                                     node.name,
@@ -116,7 +128,8 @@ class ClassExtractor:
 
             return classes
         except Exception as e:
-            self.logger.error(f"Error extracting classes: {e}", exc_info=True)
+            self.logger.error(
+                f"Error extracting classes: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             return []
 
     def _should_process_class(self, node: ast.ClassDef) -> bool:
@@ -192,7 +205,7 @@ class ClassExtractor:
                         methods.append(extracted_method)
                 except Exception as e:
                     self.logger.error(
-                        f"Failed to process method {child.name}: {e}",
+                        f"Failed to process method {child.name}: {e} with correlation ID: {self.correlation_id}",
                         exc_info=True,
                         extra={"method_name": child.name},
                     )
@@ -217,34 +230,31 @@ class ClassExtractor:
                     attr_value = None
                     if child.value:
                         attr_value = get_source_segment(
-                            self.context.source_code or "", child.value
-                        )
+                            self.context.source_code or "", child.value)
 
-                    attributes.append(
-                        {
-                            "name": child.target.id,
-                            "type": get_node_name(child.annotation),
-                            "value": attr_value,
-                        }
-                    )
+                    attributes.append({
+                        "name": child.target.id,
+                        "type": get_node_name(child.annotation),
+                        "value": attr_value,
+                    })
                 elif isinstance(child, ast.Assign):
                     # Handle regular assignments (e.g., x = 1)
                     for target in child.targets:
                         if isinstance(target, ast.Name):
                             attr_value = get_source_segment(
-                                self.context.source_code or "", child.value
-                            )
-                            attributes.append(
-                                {
-                                    "name": target.id,
-                                    "type": "Any",  # Type not explicitly specified
-                                    "value": attr_value,
-                                }
-                            )
+                                self.context.source_code or "", child.value)
+                            attributes.append({
+                                "name": target.id,
+                                "type": "Any",  # Type not explicitly specified
+                                "value": attr_value,
+                            })
             except Exception as e:
-                self.logger.warning(
-                    f"Error extracting attribute from {getattr(child, 'name', 'unknown')}: {e}",
-                    exc_info=True,
+                handle_extraction_error(
+                    self.logger,
+                    self.errors,
+                    f"Class {node.name}",
+                    e,
+                    extra={"attribute_name": getattr(child, 'name', 'unknown')},
                 )
                 continue
 
@@ -317,34 +327,28 @@ class ClassExtractor:
                         and isinstance(target.value, ast.Name)
                         and target.value.id == "self"
                     ):
-                        instance_attributes.append(
-                            {
-                                "name": target.attr,
-                                "type": "Any",  # Type not explicitly specified
-                                "value": get_source_segment(
-                                    self.context.source_code or "", child.value
-                                ),
-                            }
-                        )
+                        instance_attributes.append({
+                            "name": target.attr,
+                            "type": "Any",  # Type not explicitly specified
+                            "value": get_source_segment(
+                                self.context.source_code or "", child.value),
+                        })
             elif isinstance(child, ast.AnnAssign):
                 if (
                     isinstance(child.target, ast.Attribute)
                     and isinstance(child.target.value, ast.Name)
                     and child.target.value.id == "self"
                 ):
-                    instance_attributes.append(
-                        {
-                            "name": child.target.attr,
-                            "type": get_node_name(child.annotation),
-                            "value": (
-                                get_source_segment(
-                                    self.context.source_code or "", child.value
-                                )
-                                if child.value
-                                else None
-                            ),
-                        }
-                    )
+                    instance_attributes.append({
+                        "name": child.target.attr,
+                        "type": get_node_name(child.annotation),
+                        "value": (
+                            get_source_segment(
+                                self.context.source_code or "", child.value)
+                            if child.value
+                            else None
+                        ),
+                    })
         return instance_attributes
 
     async def _process_class(self, node: ast.ClassDef) -> Optional[ExtractedClass]:
@@ -370,7 +374,7 @@ class ClassExtractor:
                 metrics=MetricData(),  # Will be populated below
                 dependencies=self.context.dependency_analyzer.analyze_dependencies(
                     node
-                ),
+                ) if self.context.dependency_analyzer else {},
                 decorators=self._extract_decorators(node),
                 complexity_warnings=[],
                 ast_node=node,
@@ -380,22 +384,22 @@ class ClassExtractor:
                 bases=self._extract_bases(node),
                 metaclass=self._extract_metaclass(node),
                 is_exception=self._is_exception_class(node),
+                docstring_parser=self.docstring_parser  # Pass the parser instance
             )
 
             # Calculate metrics using the metrics calculator
-            metrics = self.metrics_calculator.calculate_metrics(
-                source, self.context.module_name
-            )
-            extracted_class.metrics = metrics
+            if self.metrics_calculator:
+                metrics = self.metrics_calculator.calculate_metrics(
+                    source, self.context.module_name)
+                extracted_class.metrics = metrics
 
             return extracted_class
-
         except Exception as e:
-            self.logger.error(
-                f"Failed to process class {node.name}: {e}",
-                exc_info=True,
+            handle_extraction_error(
+                self.logger,
+                self.errors,
+                f"Class {node.name}",
+                e,
                 extra={"class_name": node.name},
             )
             return None
-
-    # ... rest of the methods remain unchanged ...
