@@ -162,7 +162,7 @@ class CodeExtractor:
             )
             
         except Exception as e:
-            handle_extraction_error(e, errors=[], context="code_extraction", correlation_id=self.correlation_id)
+            handle_extraction_error(logger, errors=[], context="code_extraction", correlation_id=self.correlation_id, e=e)
             raise
 
     def _extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:

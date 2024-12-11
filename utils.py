@@ -80,7 +80,11 @@ def handle_extraction_error(
     **kwargs
 ) -> None:
     """Handle errors during extraction processes."""
-    error_message = f"Error in {context}: {str(kwargs.get('e', 'Unknown error'))}"
+    e = kwargs.get('e')
+    if isinstance(e, LiveError):
+        error_message = f"Error in {context}: {str(e)}"
+    else:
+        error_message = f"Error in {context}: {str(e or 'Unknown error')}"
     errors.append(error_message)
     log_kwargs = {"extra": {"correlation_id": correlation_id or get_correlation_id(), **kwargs}}
     logger.error(error_message, **log_kwargs)
