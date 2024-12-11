@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core.logger import LoggerSetup
 from core.types import MetricData
-from console import (
+from core.console import (
     create_progress,
     display_metrics,
     print_error,
