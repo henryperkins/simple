@@ -20,7 +20,8 @@ from utils import (
     handle_extraction_error,
     check_module_exists,
     get_module_path,
-    get_node_name
+    get_node_name,
+    get_correlation_id
 )
 
 
@@ -68,7 +69,7 @@ class DependencyAnalyzer:
             circular_deps = self._detect_circular_dependencies(
                 categorized_deps)
             if circular_deps:
-                logger.warning(
+                self.logger.warning(
                     f"Circular dependencies detected: {circular_deps}",
                     extra={'dependencies': circular_deps}
                 )
@@ -80,7 +81,7 @@ class DependencyAnalyzer:
             return categorized_deps
 
         except Exception as e:
-            logger.error(
+            self.logger.error(
                 f"Dependency analysis failed: {e}", exc_info=True)
             return {"stdlib": set(), "third_party": set(), "local": set()}
 
