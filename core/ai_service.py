@@ -73,7 +73,7 @@ class AIService:
             )
 
             async with self.semaphore:
-                response = await self._make_api_call(prompt)
+                response = await self._make_api_call_with_retry(prompt)
 
             parsed_response = await self.response_parser.parse_response(
                 response,
@@ -152,12 +152,13 @@ class AIService:
                 schema_errors=[]
             )
 
-    async def _make_api_call(self, prompt: str) -> Dict[str, Any]:
+    async def _make_api_call_with_retry(self, prompt: str, max_retries: int = 3) -> Dict[str, Any]:
         """
-        Makes an API call to the AI model.
+        Makes an API call to the AI model with retry logic.
 
         Args:
             prompt: The prompt to send to the AI model.
+            max_retries: Maximum number of retries for the API call.
 
         Returns:
             The raw response from the AI model.
@@ -180,39 +181,31 @@ class AIService:
         request_params["functions"] = [self.prompt_manager.get_function_schema()]
         request_params["function_call"] = {"name": "generate_docstring"}
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                endpoint = self.config.endpoint.rstrip('/') + '/'
-                path = f"openai/deployments/{self.config.deployment}/chat/completions"
-                url = urljoin(endpoint, path) + "?api-version=2024-02-15-preview"
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    endpoint = self.config.endpoint.rstrip('/') + '/'
+                    path = f"openai/deployments/{self.config.deployment}/chat/completions"
+                    url = urljoin(endpoint, path) + "?api-version=2024-02-15-preview"
 
-                async with session.post(
-                    url,
-                    headers=headers,
-                    json=request_params,
-                    timeout=self.config.timeout
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        print_error(f"API call failed with status {response.status}: {error_text}", correlation_id=self.correlation_id)
-                        self.logger.error(f"API call failed with status {response.status}: {error_text}")
-                        raise Exception(f"API call failed with status {response.status}: {error_text}")
-
-                    response_data = await response.json()
-                    return response_data
-
-        except aiohttp.ClientError as e:
-            print_error(f"Client error during API call: {e}", correlation_id=self.correlation_id)
-            self.logger.error(f"Client error during API call: {e}")
-            raise
-        except asyncio.TimeoutError:
-            print_error(f"API call timed out after {self.config.timeout} seconds", correlation_id=self.correlation_id)
-            self.logger.error(f"API call timed out after {self.config.timeout} seconds")
-            raise
-        except Exception as e:
-            print_error(f"An unexpected error occurred during API call: {e}", correlation_id=self.correlation_id)
-            self.logger.error(f"An unexpected error occurred during API call: {e}")
-            raise
+                    async with session.post(
+                        url,
+                        headers=headers,
+                        json=request_params,
+                        timeout=self.config.timeout
+                    ) as response:
+                        if response.status == 200:
+                            return await response.json()
+                        else:
+                            error_text = await response.text()
+                            self.logger.error(f"API call failed with status {response.status}: {error_text}")
+                            if attempt == max_retries - 1:
+                                raise Exception(f"API call failed after {max_retries} retries: {error_text}")
+                            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                self.logger.error(f"Error during API call attempt {attempt + 1}: {e}")
+                if attempt == max_retries - 1:
+                    raise
 
     async def close(self) -> None:
         """Closes the aiohttp client session."""
