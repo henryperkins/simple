@@ -47,7 +47,7 @@ class AIService:
         self.semaphore = Injector.get('semaphore')
         self._client = None
 
-        print_info("Initializing AI service", correlation_id=self.correlation_id)
+        print_info("Initializing AI service")
 
     async def generate_documentation(self, context: DocumentationContext) -> ProcessingResult:
         """
