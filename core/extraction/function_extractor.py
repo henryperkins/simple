@@ -47,10 +47,7 @@ class FunctionExtractor:
             )
             from core.metrics import Metrics
 
-            metrics_collector = MetricsCollector(correlation_id=correlation_id)
-            self.metrics_calculator = Metrics(
-                metrics_collector=metrics_collector, correlation_id=correlation_id
-            )
+            self.metrics_calculator = Metrics()
 
         # Get docstring parser with fallback
         try:
