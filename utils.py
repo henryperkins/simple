@@ -26,6 +26,7 @@ import tiktoken
 import importlib.util
 from pathlib import Path
 from datetime import datetime
+from contextvars import ContextVar
 from typing import Dict, Any, List, Optional, Union, Tuple, Set, Type
 import importlib.util
 from ast import NodeVisitor
