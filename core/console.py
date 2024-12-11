@@ -51,12 +51,15 @@ def print_status(message: str, style: str = "bold blue") -> None:
     console.print(f"[{style}]{message}[/{style}]")
 
 
-def print_error(message: str) -> None:
+def print_error(message: str, correlation_id: Optional[str] = None) -> None:
     """Print an error message in red.
 
     Args:
         message: The error message to display
+        correlation_id: Optional correlation ID for tracking
     """
+    if correlation_id:
+        message = f"{message} (Correlation ID: {correlation_id})"
     console.print(f"[bold red]Error:[/bold red] {message}")
 
 
