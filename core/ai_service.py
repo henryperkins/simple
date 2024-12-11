@@ -14,7 +14,6 @@ from core.types.base import Injector
 from core.types.base import DocumentationContext, ProcessingResult
 from core.prompt_manager import PromptManager
 from core.response_parsing import ResponseParsingService
-from core.docstring_processor import DocstringProcessor
 from api.token_management import TokenManager
 from core.console import (
     print_info,
@@ -40,7 +39,7 @@ class AIService:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.prompt_manager: PromptManager = Injector.get('prompt_manager')
         self.response_parser: ResponseParsingService = Injector.get('response_parser')
-        self.docstring_processor: DocstringProcessor = Injector.get('docstring_processor')
+        self.docstring_processor = Injector.get('docstring_processor')
         self.token_manager: TokenManager = Injector.get('token_manager')
         self.semaphore = Injector.get('semaphore')
         self._client = None
