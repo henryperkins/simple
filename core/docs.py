@@ -52,7 +52,7 @@ class DocumentationOrchestrator:
             correlation_id: Optional correlation ID for tracking related operations
         """
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        print_info(f"Initializing DocumentationOrchestrator", correlation_id=self.correlation_id)
+        print_info(f"Initializing DocumentationOrchestrator")
         self.ai_service = ai_service or Injector.get('ai_service')
         self.code_extractor = Injector.get('code_extractor')
         self.markdown_generator = Injector.get('markdown_generator')
