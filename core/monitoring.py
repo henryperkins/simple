@@ -36,9 +36,9 @@ class SystemMonitor:
             correlation_id: Optional correlation ID for tracking related operations
         """
         self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__),
-            correlation_id=correlation_id
+            LoggerSetup.get_logger(__name__)
         )
+        self.logger.set_correlation_id(correlation_id)
         self.correlation_id = correlation_id
         self.check_interval = check_interval
         self.token_manager = token_manager
