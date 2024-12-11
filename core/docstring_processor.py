@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, List, Union, Tuple
 from docstring_parser import parse as parse_docstring, Docstring
 from core.logger import LoggerSetup, log_error, log_debug, log_info
 from core.types.base import Injector
+from core.types.base import Injector
 from core.metrics import Metrics
 from core.types import DocstringData
 

@@ -9,6 +9,7 @@ from urllib.parse import urljoin
 from pathlib import Path
 
 from core.logger import LoggerSetup
+from core.types.base import Injector
 from core.cache import Cache
 from core.exceptions import ProcessingError
 from core.docstring_processor import DocstringProcessor
