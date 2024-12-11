@@ -15,6 +15,7 @@ from core.ai_service import AIService
 from core.cache import Cache
 from core.config import Config
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info
+from core.types.base import Injector
 from core.types.base import (
     DocstringData,
     DocumentationContext,
