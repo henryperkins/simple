@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 import uuid
+import ast
 import autopep8
 import git
 
@@ -107,7 +108,7 @@ class DocumentationGenerator:
 
             # Analyze syntax before processing
             if not self.analyze_syntax(source_code, file_path):
-                print_warning(f"Skipping file due to syntax errors: {file_path}", correlation_id=self.correlation_id)
+                print_info(f"Skipping file due to syntax errors: {file_path}", correlation_id=self.correlation_id)
                 return False
 
             try:
@@ -144,7 +145,7 @@ class DocumentationGenerator:
         try:
             return autopep8.fix_code(source_code)
         except ImportError:
-            print_warning("autopep8 not installed. Skipping indentation fix.", correlation_id=self.correlation_id)
+            print_info("autopep8 not installed. Skipping indentation fix.", correlation_id=self.correlation_id)
             return source_code
 
     def analyze_syntax(self, source_code: str, file_path: Path) -> bool:
