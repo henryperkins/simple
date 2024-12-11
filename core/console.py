@@ -87,6 +87,15 @@ def print_info(message: str) -> None:
     console.print(f"[bold blue]Info:[/bold blue] {message}")
 
 
+def print_debug(message: str) -> None:
+    """Print a debug message in gray.
+
+    Args:
+        message: The debug message to display
+    """
+    console.print(f"[bold gray]Debug:[/bold gray] {message}")
+
+
 def display_metrics(metrics: dict, title: str = "Metrics") -> None:
     """Display metrics in a formatted table."""
     console.print(f"[bold magenta]{title}[/bold magenta]")
