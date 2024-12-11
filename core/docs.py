@@ -13,7 +13,6 @@ from core.extraction.code_extractor import CodeExtractor
 from core.markdown_generator import MarkdownGenerator
 from core.ai_service import AIService
 from core.cache import Cache
-from core.config import Config
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info
 from core.types.base import Injector
 from core.types.base import (
@@ -46,7 +45,6 @@ class DocumentationOrchestrator:
             ai_service: Service for AI interactions. Created if not provided.
             correlation_id: Optional correlation ID for tracking related operations
         """
-        self.config = Injector.get('config')
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
@@ -54,7 +52,6 @@ class DocumentationOrchestrator:
         )
         self.ai_service = ai_service or Injector.get('ai_service')
         self.code_extractor = Injector.get('code_extractor')
-        self.markdown_generator = Injector.get('markdown_generator')
 
     async def generate_documentation(self, context: DocumentationContext) -> Tuple[str, str]:
         """
