@@ -25,7 +25,7 @@ class ClassExtractor:
     """Handles extraction of classes from Python source code."""
 
     def __init__(
-        self, context: "ExtractionContext", correlation_id: Optional[str] = None, metrics_collector: Optional[MetricsCollector] = None
+        self, context: "ExtractionContext", correlation_id: Optional[str] = None, metrics_collector: Optional[MetricsCollector] = None, docstring_processor: Optional[DocstringProcessor] = None
     ) -> None:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.context = context
