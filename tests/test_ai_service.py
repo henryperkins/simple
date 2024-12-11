@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 from core.ai_service import AIService
 from core.config import AIConfig
 from core.types.base import DocumentationContext, ProcessingResult
+import aiohttp  # Import the aiohttp module
 
 @pytest.mark.asyncio
 async def test_generate_documentation():
