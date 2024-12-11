@@ -14,6 +14,7 @@ from pathlib import Path
 
 from core.types.base import Injector
 from core.logger import CorrelationLoggerAdapter
+from core.types.base import Injector
 from core.types import ExtractionContext
 from utils import (
     NodeNameVisitor,
@@ -35,6 +36,7 @@ class DependencyAnalyzer:
         """Initialize the dependency analyzer."""
         self.logger = CorrelationLoggerAdapter(
             Injector.get('logger'), correlation_id)
+        self.docstring_parser = Injector.get('docstring_parser')
         self.context = context
         self.module_name = context.module_name
         self._function_errors: List[str] = []

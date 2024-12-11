@@ -27,4 +27,5 @@ def setup_dependencies(correlation_id: Optional[str] = None):
     Injector.register('semaphore', lambda: asyncio.Semaphore(5))
     Injector.register('ai_service', lambda: AIService(config=AIConfig(), correlation_id=correlation_id))
     Injector.register('logger', lambda: LoggerSetup.get_logger(__name__))
+    Injector.register('docstring_parser', lambda: DocstringProcessor())
     Injector.register('dependency_analyzer', lambda: DependencyAnalyzer)

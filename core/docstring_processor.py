@@ -3,6 +3,7 @@ import json
 from typing import Optional, Dict, Any, List, Union, Tuple
 from docstring_parser import parse as parse_docstring, Docstring
 from core.logger import LoggerSetup, log_error, log_debug, log_info
+from core.types.base import Injector
 from core.metrics import Metrics
 from core.types import DocstringData
 
@@ -39,7 +40,7 @@ class DocstringProcessor:
             metrics (Optional[Metrics]): The metrics instance for handling code metrics.
         """
         self.logger = logger
-        self.metrics = metrics or Metrics()
+        self.metrics = metrics or Injector.get('metrics_calculator')
         self.docstring_schema: Dict[str, Any] = {}  # Placeholder for schema
 
     def _validate_docstring_dict(self, docstring_dict: Dict[str, Any]) -> None:
