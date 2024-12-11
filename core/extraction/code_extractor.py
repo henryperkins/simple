@@ -88,34 +88,27 @@ class CodeExtractor:
         module_metrics.module_name = module_name
 
         try:
+            # Use a single progress bar for the entire extraction process
             with create_progress() as progress:
                 extraction_task = progress.add_task("Extracting code elements", total=100)
 
                 progress.update(extraction_task, advance=10, description="Parsing AST...")
                 tree = ast.parse(source_code)
 
-                if self.dependency_analyzer: # Make sure it's initialized.
+                if self.dependency_analyzer:
                     progress.update(extraction_task, advance=10, description="Extracting dependencies...")
                     dependencies = self.dependency_analyzer.analyze_dependencies(tree)
                 else:
-                    dependencies = [] # or handle the case where it's not available
-
-                # ... (rest of the code remains largely the same, ensuring correct object usage)
+                    dependencies = []
 
                 progress.update(extraction_task, advance=15, description="Extracting classes...")
-                if self.class_extractor:
-                    classes = await self.class_extractor.extract_classes(tree)
-                else:
-                    classes = []  # or handle the missing class_extractor
+                classes = await self.class_extractor.extract_classes(tree) if self.class_extractor else []
                 for cls in classes:
                     module_metrics.scanned_classes += 1
                     module_metrics.total_classes += 1
 
                 progress.update(extraction_task, advance=15, description="Extracting functions...")
-                if self.function_extractor:
-                    functions = await self.function_extractor.extract_functions(tree)
-                else:
-                    functions = [] # or handle the missing function_extractor
+                functions = await self.function_extractor.extract_functions(tree) if self.function_extractor else []
                 for func in functions:
                     module_metrics.scanned_functions += 1
                     module_metrics.total_functions += 1
