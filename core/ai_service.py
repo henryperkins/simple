@@ -138,7 +138,7 @@ class AIService:
 
         except Exception as e:
             self.logger.error(f"Error generating documentation: {e}", exc_info=True)
-            display_error(e, {
+            print_error(f"Error: {e}", {
                 "operation": "generate_documentation",
                 "context": "ai_service"
             }, correlation_id=self.correlation_id)
