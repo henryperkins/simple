@@ -33,7 +33,7 @@ class DependencyAnalyzer:
         correlation_id: Optional[str] = None
     ) -> None:
         """Initialize the dependency analyzer."""
-        self.logger = CorrelationLoggerAdapter(Injector.get('logger'))
+        self.logger = CorrelationLoggerAdapter(Injector.get('logger'), extra={'correlation_id': correlation_id or get_correlation_id()})
         self.docstring_parser = Injector.get('docstring_parser')
         self.context = context
         self.module_name = context.module_name
@@ -68,7 +68,7 @@ class DependencyAnalyzer:
             circular_deps = self._detect_circular_dependencies(
                 categorized_deps)
             if circular_deps:
-                self.logger.warning(
+                logger.warning(
                     f"Circular dependencies detected: {circular_deps}",
                     extra={'dependencies': circular_deps}
                 )
@@ -80,7 +80,7 @@ class DependencyAnalyzer:
             return categorized_deps
 
         except Exception as e:
-            self.logger.error(
+            logger.error(
                 f"Dependency analysis failed: {e}", exc_info=True)
             return {"stdlib": set(), "third_party": set(), "local": set()}
 
