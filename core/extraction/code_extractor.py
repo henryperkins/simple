@@ -42,7 +42,7 @@ class CodeExtractor:
         self.context = context or ExtractionContext()
 
         # Ensure dependencies are registered before retrieval
-        if "metrics_collector" not in Injector._instances:
+        if "metrics_collector" not in Injector._dependencies:
             Injector.register("metrics_collector", MetricsCollector(correlation_id=self.correlation_id))
         self.metrics_collector = Injector.get("metrics_collector")
 
