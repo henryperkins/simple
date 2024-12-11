@@ -21,4 +21,6 @@ def setup_dependencies(correlation_id: Optional[str] = None):
     Injector.register('prompt_manager', lambda: PromptManager(correlation_id=correlation_id))
     Injector.register('code_extractor', lambda: CodeExtractor(correlation_id=correlation_id))
     Injector.register('markdown_generator', lambda: MarkdownGenerator())
+    Injector.register('cache', lambda: Cache())
+    Injector.register('semaphore', lambda: asyncio.Semaphore(5))
     Injector.register('ai_service', lambda: AIService(config=AIConfig(), correlation_id=correlation_id))
