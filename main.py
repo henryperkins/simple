@@ -22,7 +22,7 @@ from core.types.base import Injector, MetricData, DocstringData
 from core.docstring_processor import DocstringProcessor
 from core.response_parsing import ResponseParsingService
 from api.token_management import TokenManager
-from core.repo_manager import RepoManager
+from utils import RepositoryManager
 
 from hello import hello
 from console import (
