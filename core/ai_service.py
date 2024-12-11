@@ -216,7 +216,7 @@ class AIService:
 
     async def close(self) -> None:
         """Closes the aiohttp client session."""
-        print_info("Closing AI service", correlation_id=self.correlation_id)
+        print_info(f"Closing AI service with correlation ID: {self.correlation_id}")
         if self._client:
             await self._client.close()
 

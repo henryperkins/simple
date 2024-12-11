@@ -161,7 +161,7 @@ class DocumentationGenerator:
         local_path: Optional[Path] = None
 
         try:
-            print_info(f"Starting repository processing: {repo_path}", correlation_id=self.correlation_id)
+            print_info(f"Starting repository processing: {repo_path} with correlation ID: {self.correlation_id}")
             repo_path = repo_path.strip()
 
             if self._is_url(repo_path):
@@ -189,7 +189,7 @@ class DocumentationGenerator:
                 duration=processing_time,
                 metadata={"repo_path": str(repo_path)}
             )
-            print_info(f"Finished repository processing: {repo_path}", correlation_id=self.correlation_id)
+            print_info(f"Finished repository processing: {repo_path} with correlation ID: {self.correlation_id}")
 
     def _is_url(self, path: Union[str, Path]) -> bool:
         """Check if the path is a URL."""

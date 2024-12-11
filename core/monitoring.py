@@ -118,7 +118,7 @@ class SystemMonitor:
             }
 
             if self.token_manager:
-                token_stats = self.token_manager.get_usage_stats()
+                token_stats = self.token_manager().get_usage_stats()
                 metrics["tokens"] = token_stats
 
             self.logger.debug("Collected system metrics",
