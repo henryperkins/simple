@@ -31,7 +31,15 @@ class ClassExtractor:
         self.context = context
         # Get metrics calculator with fallback
         try:
-            self.metrics_calculator = Injector.get("metrics_calculator")
+            self.metrics_calculator = Injector.get("metrics_calculator", None)
+            if self.metrics_calculator is None:
+                self.logger.warning(
+                    "Metrics calculator not registered, creating new instance"
+                )
+                from core.metrics import Metrics
+                self.metrics_calculator = Metrics(
+                    metrics_collector=metrics_collector, correlation_id=correlation_id
+                )
         except KeyError:
             self.logger.warning(
                 "Metrics calculator not registered, creating new instance"
@@ -45,7 +53,11 @@ class ClassExtractor:
 
         # Get docstring parser with fallback
         try:
-            self.docstring_parser = Injector.get("docstring_parser")
+            self.docstring_parser = Injector.get("docstring_parser", None)
+            if self.docstring_parser is None:
+                self.logger.warning("Docstring parser not registered, using default")
+                self.docstring_parser = DocstringProcessor()
+                Injector.register("docstring_parser", self.docstring_parser)
         except KeyError:
             self.logger.warning("Docstring parser not registered, using default")
             self.docstring_parser = DocstringProcessor()
