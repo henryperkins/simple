@@ -366,7 +366,7 @@ def handle_extraction_error(e: Exception, errors: List[str], context: str, corre
     error_message = f"{context}: {str(e)}"
     errors.append(error_message)
     
-    logger = CorrelationLoggerAdapter(logger, correlation_id)
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
     logger.error(
         f"Error in {context}: {e}",
         exc_info=True,

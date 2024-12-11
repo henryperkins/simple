@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from core.logger import LoggerSetup
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import MetricData
 from core.console import (
     create_progress,
