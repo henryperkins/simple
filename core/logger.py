@@ -163,8 +163,7 @@ class CorrelationLoggerAdapter(logging.LoggerAdapter):
     def __init__(self, logger, extra=None):
         if extra is None:
             extra = {}
-        extra['correlation_id'] = get_correlation_id()
-        super().__init__(logger, extra)
+        super().__init__(logger, extra={'correlation_id': get_correlation_id()})
 
     def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
         extra = kwargs.get('extra', {})

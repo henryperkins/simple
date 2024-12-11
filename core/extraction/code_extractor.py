@@ -57,10 +57,7 @@ class CodeExtractor:
             correlation_id: Optional correlation ID for logging.
         """
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__),
-            {'correlation_id': self.correlation_id}
-        )
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.context = context or ExtractionContext()
         self.metrics_collector = self._get_metrics_collector()
         self.metrics = self._get_metrics_calculator()

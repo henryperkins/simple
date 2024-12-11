@@ -27,9 +27,7 @@ class ClassExtractor:
     def __init__(
         self, context: "ExtractionContext", correlation_id: Optional[str] = None
     ) -> None:
-        self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__), correlation_id
-        )
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.context = context
         # Get metrics calculator with fallback
         try:
