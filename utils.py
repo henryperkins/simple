@@ -35,6 +35,7 @@ from git.exc import GitCommandError
 from core.logger import LoggerSetup
 from core.types import DocstringData, TokenUsage
 from exceptions import DocumentationError
+from typing import List
 
 # Initialize logger
 logger = LoggerSetup.get_logger(__name__)
@@ -54,6 +55,16 @@ class NodeNameVisitor(NodeVisitor):
 
     def visit_Attribute(self, node: ast.Attribute):
         self.name = node.attr
+
+#-----------------------------------------------------------------------------
+# Error Handling Utilities
+#-----------------------------------------------------------------------------
+
+def handle_extraction_error(e: Exception, errors: List[str], context: str, correlation_id: str, **kwargs) -> None:
+    """Handle errors during extraction processes."""
+    error_message = f"Error in {context}: {str(e)}"
+    errors.append(error_message)
+    logger.error(error_message, extra={"correlation_id": correlation_id, **kwargs})
 
 #-----------------------------------------------------------------------------
 # AST Processing Utilities
