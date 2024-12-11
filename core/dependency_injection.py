@@ -28,6 +28,8 @@ def setup_dependencies(correlation_id: Optional[str] = None):
         Injector.register('metrics_calculator', lambda: Metrics())
         if 'docstring_processor' not in Injector._dependencies:
             Injector.register('docstring_processor', lambda: DocstringProcessor())
+        if 'docstring_processor' not in Injector._dependencies:
+            Injector.register('docstring_processor', lambda: DocstringProcessor())
         Injector.register('metrics_collector', lambda: MetricsCollector(correlation_id=correlation_id))
         Injector.register('dependency_analyzer', lambda: DependencyAnalyzer(context=ExtractionContext(), correlation_id=correlation_id))
 
