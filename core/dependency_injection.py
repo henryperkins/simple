@@ -16,7 +16,7 @@ from core.extraction.code_extractor import CodeExtractor
 from core.markdown_generator import MarkdownGenerator
 
 def setup_dependencies(correlation_id: Optional[str] = None):
-    Injector.register('metrics_calculator', lambda: Metrics(metrics_collector=MetricsCollector(correlation_id=correlation_id)))
+    Injector.register('metrics_calculator', lambda: Metrics())
     Injector.register('docstring_processor', lambda: DocstringProcessor())
     Injector.register('config', lambda: Config())
     Injector.register('token_manager', lambda: TokenManager(model="gpt-4"))
