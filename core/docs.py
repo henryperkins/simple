@@ -108,9 +108,10 @@ class DocumentationOrchestrator:
                 return context.source_code, markdown_doc
 
         except Exception as e:
-            print_error(f"Error: {str(e)} in documentation_generation for module_path: {context.module_path} with correlation ID: {self.correlation_id}")
-            self.logger.error(f"Error in documentation generation: {str(e)}", exc_info=True)
-            raise DocumentationError(f"Failed to generate documentation: {str(e)}")
+            error_message = f"Error: {str(e)} in documentation_generation for module_path: {context.module_path} with correlation ID: {self.correlation_id}"
+            print_error(error_message)
+            self.logger.error(error_message, exc_info=True)
+            raise DocumentationError(error_message)
 
     def _create_extraction_context(self, context: DocumentationContext) -> ExtractionContext:
         """Creates an extraction context from the documentation context."""
