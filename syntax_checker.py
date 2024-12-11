@@ -19,6 +19,8 @@ def check_syntax(file_path: Path) -> None:
         print(f"Syntax check passed for {file_path}")
     except SyntaxError as e:
         print(f"Syntax error in {file_path}: {e}")
+    except Exception as e:
+        print(f"Unexpected error in {file_path}: {e}")
 
 if __name__ == "__main__":
     # Replace 'core' with the directory you want to check
