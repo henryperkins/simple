@@ -6,7 +6,7 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from utils import serialize_for_logging, get_env_var
 from core.types import TokenUsage
 from core.exceptions import ProcessingError
-from console import display_metrics, print_info, print_error
+from core.console import display_metrics, print_info, print_error
 
 class TokenManager:
     """Manages token usage and cost estimation for OpenAI API interactions."""
