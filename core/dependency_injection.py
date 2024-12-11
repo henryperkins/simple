@@ -1,5 +1,6 @@
 from typing import Optional
 from core.metrics import Metrics
+from core.types.base import ExtractionContext
 from core.docstring_processor import DocstringProcessor
 from core.types.base import Injector
 from core.metrics_collector import MetricsCollector
