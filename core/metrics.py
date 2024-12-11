@@ -43,11 +43,7 @@ class Metrics:
             correlation_id=self.correlation_id)
 
         # Ensure metrics calculator is registered with Injector
-        try:
-            existing = Injector.get('metrics_calculator')
-            if existing is None:
-                Injector.register('metrics_calculator', self)
-        except KeyError:
+        if not Injector.get('metrics_calculator'):
             Injector.register('metrics_calculator', self)
 
     def calculate_metrics(self, code: str, module_name: Optional[str] = None) -> MetricData:
