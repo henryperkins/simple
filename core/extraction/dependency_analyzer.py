@@ -14,7 +14,6 @@ from pathlib import Path
 
 from core.types.base import Injector
 from core.logger import CorrelationLoggerAdapter
-from core.types.base import Injector
 from core.types import ExtractionContext
 from utils import (
     NodeNameVisitor,
@@ -40,6 +39,14 @@ class DependencyAnalyzer:
         self.module_name = context.module_name
         self._function_errors: List[str] = []
         self._stdlib_modules: Optional[Set[str]] = None
+
+        # Ensure dependency analyzer is registered with Injector
+        try:
+            existing = Injector.get('dependency_analyzer')
+            if existing is None:
+                Injector.register('dependency_analyzer', self)
+        except KeyError:
+            Injector.register('dependency_analyzer', self)
 
     def analyze_dependencies(
         self,
