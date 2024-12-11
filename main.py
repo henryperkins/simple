@@ -28,7 +28,6 @@ from hello import hello
 from core.console import (
     print_info,
     print_error,
-    display_error,
     print_success,
     setup_logging
 )
