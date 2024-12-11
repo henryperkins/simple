@@ -138,7 +138,8 @@ class CodeExtractor:
         module_metrics.module_name = module_name
 
         try:
-            with create_progress() as progress:
+            progress = create_progress()
+            try:
                 extraction_task = progress.add_task(
                     "Extracting code elements", total=100)
 
@@ -197,18 +198,20 @@ class CodeExtractor:
                 display_metrics(
                     metrics, title=f"Code Extraction Results for {module_name}")
 
-                return ExtractionResult(
-                    module_docstring=module_docstring,
-                    classes=classes,
-                    functions=functions,
-                    variables=variables,
-                    constants=constants,
-                    dependencies=dependencies,
-                    metrics=module_metrics,
-                    source_code=source_code,
-                    module_name=module_name,
-                    file_path=str(self.context.base_path) if self.context.base_path else ""
-                )
+            finally:
+                progress.stop()
+            return ExtractionResult(
+                module_docstring=module_docstring,
+                classes=classes,
+                functions=functions,
+                variables=variables,
+                constants=constants,
+                dependencies=dependencies,
+                metrics=module_metrics,
+                source_code=source_code,
+                module_name=module_name,
+                file_path=str(self.context.base_path) if self.context.base_path else ""
+            )
 
         except Exception as e:
             handle_extraction_error(
