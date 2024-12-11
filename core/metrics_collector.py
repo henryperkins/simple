@@ -100,8 +100,7 @@ class MetricsCollector:
         """Collect metrics for a module."""
         try:
             if not module_name or not metrics:
-                print_warning("Invalid metrics data received",
-                            correlation_id=self.correlation_id)
+                print_warning(f"Invalid metrics data received with correlation ID: {self.correlation_id}")
                 return
 
             if module_name not in self.metrics_history:
