@@ -37,7 +37,7 @@ from git.exc import GitCommandError
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import DocstringData, TokenUsage
 from exceptions import DocumentationError
-from core.exceptions import LiveError
+from core.exceptions import LiveError, DocumentationError
 from typing import List
 
 # Initialize logger
