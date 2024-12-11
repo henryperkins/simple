@@ -7,6 +7,7 @@ import json
 from core.types.base import ExtractedClass, ExtractedFunction
 from core.logger import LoggerSetup
 
+
 class PromptManager:
     """Manages the generation and formatting of prompts for AI interactions."""
 
@@ -186,7 +187,8 @@ class PromptManager:
         Returns:
             Formatted function string
         """
-        args_str = ", ".join(f"{arg.name}: {arg.type or 'Any'}" for arg in func.args)
+        args_str = ", ".join(
+            f"{arg.name}: {arg.type or 'Any'}" for arg in func.args)
         return (
             f"Function: {func.name}\n"
             f"Arguments: ({args_str})\n"

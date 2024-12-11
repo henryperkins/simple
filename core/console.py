@@ -8,6 +8,7 @@ import logging
 # Initialize rich console
 console = Console()
 
+
 def display_code_snippet(
     code: str,
     language: str = "python",
@@ -15,7 +16,7 @@ def display_code_snippet(
     line_numbers: bool = True
 ) -> None:
     """Display a code snippet with syntax highlighting.
-    
+
     Args:
         code: The code string to display
         language: Programming language for syntax highlighting
@@ -25,9 +26,10 @@ def display_code_snippet(
     syntax = Syntax(code, language, theme=theme, line_numbers=line_numbers)
     console.print(syntax)
 
+
 def setup_logging(level: int = logging.INFO) -> None:
     """Configure logging with rich handler and specified level.
-    
+
     Args:
         level: Logging level (e.g., logging.INFO, logging.DEBUG)
     """
@@ -37,53 +39,59 @@ def setup_logging(level: int = logging.INFO) -> None:
         handlers=[RichHandler(console=console, rich_tracebacks=True)]
     )
 
+
 def print_status(message: str, style: str = "bold blue") -> None:
     """Print a status message with styling.
-    
+
     Args:
         message: The message to display
         style: Rich style string for formatting
     """
     console.print(f"[{style}]{message}[/{style}]")
 
+
 def print_error(message: str) -> None:
     """Print an error message in red.
-    
+
     Args:
         message: The error message to display
     """
     console.print(f"[bold red]Error:[/bold red] {message}")
 
+
 def print_success(message: str) -> None:
     """Print a success message in green.
-    
+
     Args:
         message: The success message to display
     """
     console.print(f"[bold green]Success:[/bold green] {message}")
 
+
 def print_warning(message: str) -> None:
     """Print a warning message in yellow.
-    
+
     Args:
         message: The warning message to display
     """
     console.print(f"[bold yellow]Warning:[/bold yellow] {message}")
 
+
 def print_info(message: str) -> None:
     """Print an info message in blue.
-    
+
     Args:
         message: The info message to display
     """
     console.print(f"[bold blue]Info:[/bold blue] {message}")
+
 
 # Example usage:
 if __name__ == "__main__":
     # Set up logging
     setup_logging(logging.DEBUG)
     logger = logging.getLogger(__name__)
-    
+
     # Example code snippet display
     code = '''
     def example_function(param: str) -> None:
@@ -91,7 +99,7 @@ if __name__ == "__main__":
         print(f"Parameter: {param}")
     '''
     display_code_snippet(code)
-    
+
     # Example status messages
     print_info("Starting process...")
     print_status("Processing items", "bold cyan")

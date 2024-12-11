@@ -29,7 +29,7 @@ Injector.register('docstring_parser', DocstringProcessor())
 
 __all__ = [
     "CodeExtractor",
-    "ClassExtractor", 
+    "ClassExtractor",
     "FunctionExtractor",
     "DependencyAnalyzer",
     "Injector"

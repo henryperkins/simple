@@ -5,12 +5,13 @@ import time
 import aiofiles
 import os
 
+
 class Cache:
     """Simple cache implementation with file-based persistence."""
 
     def __init__(self, cache_file: str = "cache.json", ttl: int = 3600) -> None:
         """Initialize cache.
-        
+
         Args:
             cache_file: Path to cache file
             ttl: Time to live in seconds for cache entries
@@ -22,10 +23,10 @@ class Cache:
 
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache.
-        
+
         Args:
             key: Cache key
-            
+
         Returns:
             Cached value if found and not expired, None otherwise
         """
@@ -38,7 +39,7 @@ class Cache:
 
     def set(self, key: str, value: Any) -> None:
         """Set value in cache.
-        
+
         Args:
             key: Cache key
             value: Value to cache
@@ -51,7 +52,7 @@ class Cache:
 
     def remove(self, key: str) -> None:
         """Remove a specific key from the cache.
-        
+
         Args:
             key: Cache key to remove
         """

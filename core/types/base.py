@@ -14,7 +14,7 @@ class Injector:
     @classmethod
     def register(cls, name: str, dependency: Any) -> None:
         """Register a dependency with a name.
-        
+
         Args:
             name: The name to register the dependency under
             dependency: The dependency instance to register
@@ -25,13 +25,13 @@ class Injector:
     @classmethod
     def get(cls, name: str) -> Any:
         """Retrieve a dependency by name.
-        
+
         Args:
             name: The name of the dependency to retrieve
-            
+
         Returns:
             The registered dependency instance
-            
+
         Raises:
             KeyError: If the dependency is not registered
         """
@@ -39,13 +39,14 @@ class Injector:
             # Import here to avoid circular imports
             from core.metrics import Metrics
             from core.docstring_processor import DocstringProcessor
-            
+
             # Register default dependencies
             cls.register('metrics_calculator', Metrics())
             cls.register('docstring_parser', DocstringProcessor())
-            
+
         if name not in cls._dependencies:
-            raise KeyError(f"Dependency '{name}' not found. Available dependencies: {list(cls._dependencies.keys())}")
+            raise KeyError(
+                f"Dependency '{name}' not found. Available dependencies: {list(cls._dependencies.keys())}")
         return cls._dependencies[name]
 
     @classmethod
@@ -53,6 +54,7 @@ class Injector:
         """Clear all registered dependencies."""
         cls._dependencies.clear()
         cls._initialized = False
+
 
 @dataclass
 class MetricData:
@@ -67,16 +69,17 @@ class MetricData:
     scanned_functions: int = 0
     total_classes: int = 0
     scanned_classes: int = 0
-    
+
     @property
     def function_scan_ratio(self) -> float:
         """Calculate the ratio of successfully scanned functions."""
         return self.scanned_functions / self.total_functions if self.total_functions > 0 else 0.0
-    
+
     @property
     def class_scan_ratio(self) -> float:
         """Calculate the ratio of successfully scanned classes."""
         return self.scanned_classes / self.total_classes if self.total_classes > 0 else 0.0
+
 
 @dataclass
 class BaseData:
@@ -84,6 +87,7 @@ class BaseData:
     name: str
     description: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class ParsedResponse:
@@ -95,18 +99,23 @@ class ParsedResponse:
     errors: List[str]
     metadata: Dict[str, Any]
 
+
 @dataclass
 class DocstringData:
     """Google Style docstring representation."""
     summary: str  # First line brief description
-    args: List[Dict[str, str]] = field(default_factory=list)  # param name, type, description
-    returns: Dict[str, str] = field(default_factory=lambda: {"type": "None", "description": ""})  # type and description of return value
-    raises: List[Dict[str, str]] = field(default_factory=list)  # exception type and description
+    args: List[Dict[str, str]] = field(
+        default_factory=list)  # param name, type, description
+    returns: Dict[str, str] = field(default_factory=lambda: {
+                                    "type": "None", "description": ""})  # type and description of return value
+    raises: List[Dict[str, str]] = field(
+        default_factory=list)  # exception type and description
     description: Optional[str] = None  # Detailed description
     metadata: Dict[str, Any] = field(default_factory=dict)
     complexity: Optional[int] = None
     validation_status: bool = False
     validation_errors: List[str] = field(default_factory=list)
+
 
 @dataclass
 class TokenUsage:
@@ -116,6 +125,7 @@ class TokenUsage:
     total_tokens: int
     estimated_cost: float
 
+
 @dataclass
 class ExtractedArgument:
     """Represents a function argument."""
@@ -124,6 +134,7 @@ class ExtractedArgument:
     default_value: Optional[str] = None
     is_required: bool = True
     description: Optional[str] = None
+
 
 @dataclass
 class ExtractedElement:
@@ -144,13 +155,16 @@ class ExtractedElement:
         if self.metric_calculator is None:
             self.metric_calculator = Injector.get('metrics_calculator')
         if self.source:
-            self.metrics = self.metric_calculator.calculate_metrics(self.source)
+            self.metrics = self.metric_calculator.calculate_metrics(
+                self.source)
+
 
 @dataclass
 class ExtractedFunction(ExtractedElement):
     """Represents an extracted function with its metadata."""
     args: List[ExtractedArgument] = field(default_factory=list)
-    returns: Dict[str, str] = field(default_factory=lambda: {"type": "Any", "description": ""})
+    returns: Dict[str, str] = field(default_factory=lambda: {
+                                    "type": "Any", "description": ""})
     raises: List[Dict[str, str]] = field(default_factory=list)
     body_summary: Optional[str] = None
     docstring_info: Optional[DocstringData] = None
@@ -168,7 +182,7 @@ class ExtractedFunction(ExtractedElement):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert ExtractedFunction to a dictionary.
-        
+
         Returns:
             Dictionary representation of the function
         """
@@ -182,7 +196,7 @@ class ExtractedFunction(ExtractedElement):
             'decorators': self.decorators,
             'complexity_warnings': self.complexity_warnings,
             'args': [{'name': a.name, 'type': a.type, 'default_value': a.default_value, 'is_required': a.is_required}
-                    for a in self.args],
+                     for a in self.args],
             'returns': self.returns,
             'raises': self.raises,
             'body_summary': self.body_summary,
@@ -191,6 +205,7 @@ class ExtractedFunction(ExtractedElement):
             'is_method': self.is_method,
             'parent_class': self.parent_class
         }
+
 
 @dataclass
 class ExtractedClass(ExtractedElement):
@@ -214,7 +229,7 @@ class ExtractedClass(ExtractedElement):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert ExtractedClass to a dictionary.
-        
+
         Returns:
             Dictionary representation of the class
         """
@@ -246,6 +261,7 @@ class ExtractedClass(ExtractedElement):
             'docstring_info': self.docstring_info.__dict__ if self.docstring_info else None
         }
 
+
 @dataclass
 class ExtractionResult:
     """Result of code extraction process."""
@@ -269,7 +285,9 @@ class ExtractionResult:
         if self.metric_calculator is None:
             self.metric_calculator = Injector.get('metrics_calculator')
         if hasattr(self.metric_calculator, 'calculate_metrics'):
-            self.metrics = self.metric_calculator.calculate_metrics(self.source_code)
+            self.metrics = self.metric_calculator.calculate_metrics(
+                self.source_code)
+
 
 @dataclass
 class ProcessingResult:
@@ -282,6 +300,7 @@ class ProcessingResult:
     validation_status: bool = False
     validation_errors: List[str] = field(default_factory=list)
     schema_errors: List[str] = field(default_factory=list)
+
 
 @dataclass
 class DocumentationContext:
@@ -334,7 +353,7 @@ class ExtractionContext:
                 self.tree = ast.parse(self.source_code)
             except SyntaxError as e:
                 raise ValueError(f"Failed to parse source code: {e}")
-        
+
         if self.source_code is None and self.tree is not None:
             try:
                 if hasattr(ast, "unparse"):
@@ -349,6 +368,7 @@ class ExtractionContext:
         for line in lines:
             fixed_lines.append(line.replace('\t', '    '))
         return '\n'.join(fixed_lines)
+
 
 @dataclass
 class DocumentationData:
@@ -373,12 +393,12 @@ class DocumentationData:
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get('docstring_parser')
         self.docstring_data = self.docstring_parser(self.source_code)
-        
+
         # Ensure module summary is never None
         if not self.module_summary:
             self.module_summary = (
-                self.ai_content.get('summary') or 
-                self.docstring_data.summary or 
+                self.ai_content.get('summary') or
+                self.docstring_data.summary or
                 "No module summary available."
             )
 

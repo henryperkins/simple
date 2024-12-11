@@ -20,6 +20,7 @@ from core.types import (
 from utils import handle_extraction_error, get_source_segment, NodeNameVisitor, get_node_name
 from core.types.base import Injector
 
+
 class ClassExtractor:
     """Handles extraction of classes from Python source code."""
 
@@ -28,22 +29,26 @@ class ClassExtractor:
         context: "ExtractionContext",
         correlation_id: Optional[str] = None
     ) -> None:
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id)
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__), correlation_id)
         self.context = context
         # Get metrics calculator with fallback
         try:
             self.metrics_calculator = Injector.get('metrics_calculator')
         except KeyError:
-            self.logger.warning("Metrics calculator not registered, creating new instance")
+            self.logger.warning(
+                "Metrics calculator not registered, creating new instance")
             from core.metrics import Metrics
             metrics_collector = MetricsCollector(correlation_id=correlation_id)
-            self.metrics_calculator = Metrics(metrics_collector=metrics_collector, correlation_id=correlation_id)
-            
+            self.metrics_calculator = Metrics(
+                metrics_collector=metrics_collector, correlation_id=correlation_id)
+
         # Get docstring parser with fallback
         try:
             self.docstring_parser = Injector.get('docstring_parser')
         except KeyError:
-            self.logger.warning("Docstring parser not registered, using default")
+            self.logger.warning(
+                "Docstring parser not registered, using default")
             self.docstring_parser = DocstringProcessor()
             Injector.register('docstring_parser', self.docstring_parser)
         self.errors: list[str] = []
@@ -92,24 +97,24 @@ class ClassExtractor:
 
     def _should_process_class(self, node: ast.ClassDef) -> bool:
         """Determine if a class should be processed based on context settings.
-        
+
         Args:
             node: The class node to check
-            
+
         Returns:
             bool: True if the class should be processed, False otherwise
         """
         # Skip private classes if not included in settings
         if not self.context.include_private and node.name.startswith('_'):
             return False
-            
+
         # Skip nested classes if not included in settings
         if not self.context.include_nested:
             for parent in ast.walk(self.context.tree):
                 if isinstance(parent, ast.ClassDef) and node in ast.walk(parent):
                     if parent != node:  # Don't count the node itself
                         return False
-                        
+
         return True
 
     def _extract_decorators(self, node: ast.ClassDef) -> List[str]:
@@ -129,7 +134,8 @@ class ClassExtractor:
                 if isinstance(decorator.func, ast.Name):
                     decorators.append(decorator.func.id)
                 elif isinstance(decorator.func, ast.Attribute):
-                    decorators.append(f"{decorator.func.value.id}.{decorator.func.attr}")
+                    decorators.append(
+                        f"{decorator.func.value.id}.{decorator.func.attr}")
             elif isinstance(decorator, ast.Attribute):
                 decorators.append(f"{decorator.value.id}.{decorator.attr}")
         return decorators
@@ -149,7 +155,7 @@ class ClassExtractor:
                 if not self.context.function_extractor._should_process_function(child):
                     self.logger.debug(f"Skipping method: {child.name}")
                     continue
-                    
+
                 try:
                     extracted_method = await self.context.function_extractor._process_function(child)
                     if extracted_method:
@@ -181,8 +187,9 @@ class ClassExtractor:
                     # Handle annotated assignments (e.g., x: int = 1)
                     attr_value = None
                     if child.value:
-                        attr_value = get_source_segment(self.context.source_code or "", child.value)
-                    
+                        attr_value = get_source_segment(
+                            self.context.source_code or "", child.value)
+
                     attributes.append({
                         'name': child.target.id,
                         'type': get_node_name(child.annotation),
@@ -192,7 +199,8 @@ class ClassExtractor:
                     # Handle regular assignments (e.g., x = 1)
                     for target in child.targets:
                         if isinstance(target, ast.Name):
-                            attr_value = get_source_segment(self.context.source_code or "", child.value)
+                            attr_value = get_source_segment(
+                                self.context.source_code or "", child.value)
                             attributes.append({
                                 'name': target.id,
                                 'type': 'Any',  # Type not explicitly specified
@@ -204,7 +212,7 @@ class ClassExtractor:
                     exc_info=True
                 )
                 continue
-                
+
         return attributes
 
     def _extract_bases(self, node: ast.ClassDef) -> List[str]:
@@ -296,7 +304,8 @@ class ClassExtractor:
         try:
             # Extract basic information
             docstring = ast.get_docstring(node) or ""
-            source = get_source_segment(self.context.source_code or "", node) or ""
+            source = get_source_segment(
+                self.context.source_code or "", node) or ""
 
             # Create the extracted class
             extracted_class = ExtractedClass(
@@ -305,7 +314,8 @@ class ClassExtractor:
                 source=source,
                 docstring=docstring,
                 metrics=MetricData(),  # Will be populated below
-                dependencies=self.context.dependency_analyzer.analyze_dependencies(node),
+                dependencies=self.context.dependency_analyzer.analyze_dependencies(
+                    node),
                 decorators=self._extract_decorators(node),
                 complexity_warnings=[],
                 ast_node=node,
@@ -318,7 +328,8 @@ class ClassExtractor:
             )
 
             # Calculate metrics using the metrics calculator
-            metrics = self.metrics_calculator.calculate_metrics(source, self.context.module_name)
+            metrics = self.metrics_calculator.calculate_metrics(
+                source, self.context.module_name)
             extracted_class.metrics = metrics
 
             return extracted_class

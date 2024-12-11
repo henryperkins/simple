@@ -19,6 +19,7 @@ from core.types import (
 from utils import get_source_segment, get_node_name, NodeNameVisitor
 from core.types.base import Injector
 
+
 class FunctionExtractor:
     """Handles extraction of functions from Python source code."""
 
@@ -33,50 +34,54 @@ class FunctionExtractor:
             context (ExtractionContext): The context for extraction, including settings and source code.
             correlation_id (Optional[str]): An optional correlation ID for logging purposes.
         """
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id=correlation_id)
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__), correlation_id=correlation_id)
         self.context = context
         # Get metrics calculator with fallback
         try:
             self.metrics_calculator = Injector.get('metrics_calculator')
         except KeyError:
-            self.logger.warning("Metrics calculator not registered, creating new instance")
+            self.logger.warning(
+                "Metrics calculator not registered, creating new instance")
             from core.metrics import Metrics
             metrics_collector = MetricsCollector(correlation_id=correlation_id)
-            self.metrics_calculator = Metrics(metrics_collector=metrics_collector, correlation_id=correlation_id)
-            
+            self.metrics_calculator = Metrics(
+                metrics_collector=metrics_collector, correlation_id=correlation_id)
+
         # Get docstring parser with fallback
         try:
             self.docstring_parser = Injector.get('docstring_parser')
         except KeyError:
-            self.logger.warning("Docstring parser not registered, using default")
+            self.logger.warning(
+                "Docstring parser not registered, using default")
             self.docstring_parser = DocstringProcessor()
             Injector.register('docstring_parser', self.docstring_parser)
         self.errors: List[str] = []
 
     def _should_process_function(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:
         """Determine if a function should be processed based on context settings.
-        
+
         Args:
             node: The function node to check
-            
+
         Returns:
             bool: True if the function should be processed, False otherwise
         """
         # Skip private functions if not included in settings
         if not self.context.include_private and node.name.startswith('_'):
             return False
-            
+
         # Skip magic methods if not included in settings
         if not self.context.include_magic and node.name.startswith('__') and node.name.endswith('__'):
             return False
-            
+
         # Skip nested functions if not included in settings
         if not self.context.include_nested:
             for parent in ast.walk(self.context.tree):
                 if isinstance(parent, ast.FunctionDef) and node in ast.walk(parent):
                     if parent != node:  # Don't count the node itself
                         return False
-                        
+
         return True
 
     async def extract_functions(
@@ -118,18 +123,22 @@ class FunctionExtractor:
                         log_error(
                             f"Error extracting function {node.name if hasattr(node, 'name') else 'unknown'}: {e}",
                             exc_info=True,
-                            extra={'function_name': node.name if hasattr(node, 'name') else 'unknown'}
+                            extra={'function_name': node.name if hasattr(
+                                node, 'name') else 'unknown'}
                         )
-                        self.errors.append(f"Error extracting function {node.name if hasattr(node, 'name') else 'unknown'}: {e}")
+                        self.errors.append(
+                            f"Error extracting function {node.name if hasattr(node, 'name') else 'unknown'}: {e}")
                         continue
 
             if self.errors:
-                self.logger.warning(f"Encountered {len(self.errors)} errors during function extraction")
+                self.logger.warning(
+                    f"Encountered {len(self.errors)} errors during function extraction")
 
             return functions
 
         except Exception as e:
-            self.logger.error(f"Error extracting functions: {e}", exc_info=True)
+            self.logger.error(
+                f"Error extracting functions: {e}", exc_info=True)
             return []
 
     async def _process_function(
@@ -147,7 +156,8 @@ class FunctionExtractor:
         try:
             # Extract basic information
             docstring = ast.get_docstring(node) or ""
-            source = get_source_segment(self.context.source_code or "", node) or ""
+            source = get_source_segment(
+                self.context.source_code or "", node) or ""
 
             # Get the number of default arguments
             num_defaults = len(node.args.defaults)
@@ -183,7 +193,8 @@ class FunctionExtractor:
                 ))
 
             return_type = get_node_name(node.returns) or "Any"
-            decorators = [NodeNameVisitor().visit(decorator) for decorator in node.decorator_list]
+            decorators = [NodeNameVisitor().visit(decorator)
+                          for decorator in node.decorator_list]
 
             # Create the extracted function
             extracted_function = ExtractedFunction(
@@ -192,7 +203,8 @@ class FunctionExtractor:
                 source=source,
                 docstring=docstring,
                 metrics=MetricData(),  # Will be populated below
-                dependencies=self.context.dependency_analyzer.extract_dependencies(node),
+                dependencies=self.context.dependency_analyzer.extract_dependencies(
+                    node),
                 decorators=decorators,
                 complexity_warnings=[],
                 ast_node=node,
@@ -203,12 +215,14 @@ class FunctionExtractor:
             )
 
             # Calculate metrics using the metrics calculator
-            metrics = self.metrics_calculator.calculate_metrics(source, self.context.module_name)
+            metrics = self.metrics_calculator.calculate_metrics(
+                source, self.context.module_name)
             extracted_function.metrics = metrics
 
             return extracted_function
         except Exception as e:
-            log_error(f"Failed to process function {node.name}: {e}", exc_info=True, extra={'function_name': node.name})
+            log_error(f"Failed to process function {node.name}: {e}", exc_info=True, extra={
+                      'function_name': node.name})
             raise
 
     # ... rest of the methods remain unchanged ...

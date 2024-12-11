@@ -13,13 +13,15 @@ from logging.handlers import RotatingFileHandler
 import uuid
 from collections.abc import Mapping, Sequence
 
+
 class SanitizedLogFormatter(logging.Formatter):
     """Custom formatter to sanitize and format log records."""
 
     def format(self, record):
         # Ensure 'correlation_id' and 'sanitized_info' fields are present with default values
         record.correlation_id = getattr(record, 'correlation_id', "N/A")
-        record.sanitized_info = getattr(record, 'sanitized_info', {"info": "[Sanitized]"})
+        record.sanitized_info = getattr(
+            record, 'sanitized_info', {"info": "[Sanitized]"})
 
         # Sanitize the message and arguments recursively
         record.msg = self._sanitize(record.msg)
@@ -28,7 +30,8 @@ class SanitizedLogFormatter(logging.Formatter):
 
         # Format the timestamp in ISO8601 format
         if self.usesTime():
-            record.asctime = datetime.fromtimestamp(record.created).isoformat() + 'Z'
+            record.asctime = datetime.fromtimestamp(
+                record.created).isoformat() + 'Z'
 
         # Now format the message using the parent class
         return super().format(record)
@@ -40,10 +43,14 @@ class SanitizedLogFormatter(logging.Formatter):
             return [self._sanitize(it) for it in item]
         elif isinstance(item, str):
             # Example sanitization: Redact file paths and secrets (customize as needed)
-            item = re.sub(r'(/[a-zA-Z0-9_\-./]+)', '[SANITIZED_PATH]', item)  # File paths
-            item = re.sub(r'(secret_key|password|token)=[^&\s]+', r'\1=[REDACTED]', item) # Secrets
+            item = re.sub(r'(/[a-zA-Z0-9_\-./]+)',
+                          '[SANITIZED_PATH]', item)  # File paths
+            item = re.sub(
+                # Secrets
+                r'(secret_key|password|token)=[^&\s]+', r'\1=[REDACTED]', item)
             return item
         return item
+
 
 class LoggerSetup:
     """Configures and manages application logging."""
@@ -74,7 +81,8 @@ class LoggerSetup:
         if not logger.hasHandlers():
 
             # Correlation ID handling: generate or retrieve from logger's existing context
-            extra = getattr(logger, '_extra_context', {}) # retrieve existing context from logger object if it exists
+            # retrieve existing context from logger object if it exists
+            extra = getattr(logger, '_extra_context', {})
 
             correlation_id = extra.get('correlation_id')
             if not correlation_id:
@@ -102,13 +110,16 @@ class LoggerSetup:
                     sanitized_formatter = SanitizedLogFormatter(
                         fmt='{"timestamp": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", '
                             '"message": "%(message)s", "correlation_id": "%(correlation_id)s", '
-                            '"sanitized_info": %(sanitized_info)s}', # no quotes around sanitized_info because the .format method handles dicts
+                            # no quotes around sanitized_info because the .format method handles dicts
+                            '"sanitized_info": %(sanitized_info)s}',
                         datefmt='%Y-%m-%dT%H:%M:%S'
                     )
                     file_handler.setFormatter(sanitized_formatter)
                     logger.addHandler(file_handler)
                 except Exception as e:
-                    log_error(f"Failed to set up file handler: {e}", exc_info=True) # Log the exception to console or elsewhere
+                    # Log the exception to console or elsewhere
+                    log_error(
+                        f"Failed to set up file handler: {e}", exc_info=True)
                     # Fallback mechanism (e.g., write to a temporary file) if needed.
 
         cls._loggers[name] = logger
@@ -164,7 +175,6 @@ class LoggerSetup:
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
 
-
 class CorrelationLoggerAdapter(logging.LoggerAdapter):
     """LoggerAdapter to add a correlation ID to logs."""
 
@@ -180,25 +190,31 @@ class CorrelationLoggerAdapter(logging.LoggerAdapter):
         return msg, kwargs
 
 # Module-level utility functions (optional)
+
+
 def log_error(msg: str, *args: Any, exc_info: bool = True, **kwargs: Any) -> None:
     """Log an error message at module level."""
     logger = LoggerSetup.get_logger()
     logger.error(msg, *args, exc_info=exc_info, **kwargs)
+
 
 def log_debug(msg: str, *args: Any, **kwargs: Any) -> None:
     """Log a debug message at module level."""
     logger = LoggerSetup.get_logger()
     logger.debug(msg, *args, **kwargs)
 
+
 def log_info(msg: str, *args: Any, **kwargs: Any) -> None:
     """Log an info message at module level."""
     logger = LoggerSetup.get_logger()
     logger.info(msg, *args, **kwargs)
 
+
 def log_warning(msg: str, *args: Any, **kwargs: Any) -> None:
     """Log a warning message at module level."""
     logger = LoggerSetup.get_logger()
     logger.warning(msg, *args, **kwargs)
+
 
 __all__ = [
     'LoggerSetup',

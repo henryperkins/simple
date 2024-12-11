@@ -34,9 +34,11 @@ from utils import (
 
 # Register dependencies
 from core.metrics import Metrics
-Injector.register('metrics_calculator', Metrics())  # Register an instance, not a lambda
-Injector.register('metric_calculator', Metrics())  # Old name for compatibility 
-Injector.register('docstring_parser', lambda docstring: DocstringData(summary=docstring))
+# Register an instance, not a lambda
+Injector.register('metrics_calculator', Metrics())
+Injector.register('metric_calculator', Metrics())  # Old name for compatibility
+Injector.register('docstring_parser',
+                  lambda docstring: DocstringData(summary=docstring))
 
 # Configure logger globally with dynamic settings
 LOG_DIR = "logs"  # This could be set via an environment variable or command-line argument
@@ -44,6 +46,7 @@ LoggerSetup.configure(level="DEBUG", log_dir=LOG_DIR)
 
 # Set global exception handler
 sys.excepthook = LoggerSetup.handle_exception
+
 
 class DocumentationGenerator:
     """Main documentation generation coordinator with monitoring."""
@@ -53,23 +56,26 @@ class DocumentationGenerator:
         self.config = Config()
         self.correlation_id = str(uuid.uuid4())
         self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__), 
+            LoggerSetup.get_logger(__name__),
             correlation_id=self.correlation_id
         )
 
         # Initialize core components with dependency injection
         self.ai_service = AIService(
-            config=self.config.ai, 
+            config=self.config.ai,
             correlation_id=self.correlation_id,
             docstring_processor=DocstringProcessor(),
-            response_parser=ResponseParsingService(correlation_id=self.correlation_id),
-            token_manager=TokenManager(model=self.config.ai.model, config=self.config.ai)
+            response_parser=ResponseParsingService(
+                correlation_id=self.correlation_id),
+            token_manager=TokenManager(
+                model=self.config.ai.model, config=self.config.ai)
         )
         self.doc_orchestrator = DocumentationOrchestrator(
             ai_service=self.ai_service,
             correlation_id=self.correlation_id
         )
-        self.metrics_collector = MetricsCollector(correlation_id=self.correlation_id)
+        self.metrics_collector = MetricsCollector(
+            correlation_id=self.correlation_id)
         self.system_monitor = SystemMonitor(
             token_manager=self.ai_service.token_manager,
             metrics_collector=self.metrics_collector,
@@ -95,13 +101,14 @@ class DocumentationGenerator:
         try:
             self.logger.info(f"Processing file: {file_path}")
             start_time: float = asyncio.get_event_loop().time()
-            
+
             source_code: str = read_file_safe(file_path)
             source_code = self._fix_indentation(source_code)
 
             # Analyze syntax before processing
             if not self.analyze_syntax(source_code, file_path):
-                self.logger.warning(f"Skipping file due to syntax errors: {file_path}")
+                self.logger.warning(
+                    f"Skipping file due to syntax errors: {file_path}")
                 return False
 
             try:
@@ -112,10 +119,12 @@ class DocumentationGenerator:
                 )
                 success = True
             except DocumentationError as e:
-                self.logger.error(f"Failed to generate documentation for {file_path}: {e}")
+                self.logger.error(
+                    f"Failed to generate documentation for {file_path}: {e}")
                 success = False
             except Exception as e:
-                self.logger.error(f"Unexpected error processing file {file_path}: {e}", exc_info=True)
+                self.logger.error(
+                    f"Unexpected error processing file {file_path}: {e}", exc_info=True)
                 success = False
 
             processing_time: float = asyncio.get_event_loop().time() - start_time
@@ -125,21 +134,22 @@ class DocumentationGenerator:
                 metadata={"file_path": str(file_path)},
                 duration=processing_time
             )
-            
+
             self.logger.info(f"Finished processing file: {file_path}")
             return success
 
         except (FileNotFoundError, ValueError, IOError) as process_error:
-            self.logger.error(f"Error processing file: {process_error}", exc_info=True)
+            self.logger.error(
+                f"Error processing file: {process_error}", exc_info=True)
             return False
-
 
     def _fix_indentation(self, source_code: str) -> str:
         """Fix inconsistent indentation using autopep8."""
         try:
             return autopep8.fix_code(source_code)
         except ImportError:
-            self.logger.warning("autopep8 not installed. Skipping indentation fix.")
+            self.logger.warning(
+                "autopep8 not installed. Skipping indentation fix.")
             return source_code
 
     def analyze_syntax(self, source_code: str, file_path: Path) -> bool:
@@ -156,7 +166,7 @@ class DocumentationGenerator:
         start_time = asyncio.get_event_loop().time()
         success = False
         local_path: Optional[Path] = None
-        
+
         try:
             self.logger.info(f"Starting repository processing: {repo_path}")
             repo_path = repo_path.strip()
@@ -167,7 +177,8 @@ class DocumentationGenerator:
                 local_path = Path(repo_path)
 
             if not local_path or not local_path.exists():
-                raise FileNotFoundError(f"Repository path not found: {local_path or repo_path}")
+                raise FileNotFoundError(
+                    f"Repository path not found: {local_path or repo_path}")
 
             if not self.repo_manager:
                 self.repo_manager = RepositoryManager(local_path)
@@ -176,7 +187,8 @@ class DocumentationGenerator:
             success = await self._process_local_repository(local_path, output_dir)
 
         except (FileNotFoundError, ValueError, IOError) as repo_error:
-            self.logger.error(f"Error processing repository {repo_path}: {repo_error}", exc_info=True)
+            self.logger.error(
+                f"Error processing repository {repo_path}: {repo_error}", exc_info=True)
             success = False
         finally:
             processing_time: float = asyncio.get_event_loop().time() - start_time
@@ -203,8 +215,10 @@ class DocumentationGenerator:
             self.logger.info(f"Successfully cloned repository to {repo_path}")
             return repo_path
         except (git.GitCommandError, ValueError, IOError) as clone_error:
-            self.logger.error(f"Failed to clone repository: {clone_error}", exc_info=True)
-            raise DocumentationError(f"Repository cloning failed: {clone_error}") from clone_error
+            self.logger.error(
+                f"Failed to clone repository: {clone_error}", exc_info=True)
+            raise DocumentationError(
+                f"Repository cloning failed: {clone_error}") from clone_error
 
     async def _process_local_repository(self, repo_path: Path, output_dir: Path) -> bool:
         """Process a local repository."""
@@ -219,11 +233,13 @@ class DocumentationGenerator:
                 if not success:
                     self.logger.error(f"Failed to process file: {file_path}")
 
-            self.logger.info(f"Finished processing local repository: {repo_path}")
+            self.logger.info(
+                f"Finished processing local repository: {repo_path}")
             return True
 
         except (FileNotFoundError, ValueError, IOError) as local_repo_error:
-            self.logger.error(f"Error processing local repository: {local_repo_error}", exc_info=True)
+            self.logger.error(
+                f"Error processing local repository: {local_repo_error}", exc_info=True)
             return False
 
     async def display_metrics(self) -> None:
@@ -234,13 +250,16 @@ class DocumentationGenerator:
             system_metrics = self.system_monitor.get_metrics()
 
             print("\n=== System Performance Metrics ===")
-            print(f"CPU Usage: {system_metrics.get('cpu', {}).get('percent', 0)}%")
-            print(f"Memory Usage: {system_metrics.get('memory', {}).get('percent', 0)}%")
+            print(
+                f"CPU Usage: {system_metrics.get('cpu', {}).get('percent', 0)}%")
+            print(
+                f"Memory Usage: {system_metrics.get('memory', {}).get('percent', 0)}%")
             print(f"Status: {system_metrics.get('status', 'unknown')}")
             print("-" * 40)
 
         except (KeyError, ValueError, IOError) as display_error:
-            self.logger.error(f"Error displaying metrics: {display_error}", exc_info=True)
+            self.logger.error(
+                f"Error displaying metrics: {display_error}", exc_info=True)
 
     async def cleanup(self) -> None:
         """Cleanup resources used by the DocumentationGenerator."""
@@ -254,7 +273,9 @@ class DocumentationGenerator:
                 await self.system_monitor.stop()
             self.logger.info("Cleanup completed successfully")
         except (RuntimeError, ValueError, IOError) as cleanup_error:
-            self.logger.error(f"Error during cleanup: {cleanup_error}", exc_info=True)
+            self.logger.error(
+                f"Error during cleanup: {cleanup_error}", exc_info=True)
+
 
 async def main(args: argparse.Namespace) -> int:
     """Main function to manage documentation generation process."""
@@ -272,7 +293,8 @@ async def main(args: argparse.Namespace) -> int:
                 args.repository,
                 Path(args.output)
             )
-            log_info("Repository documentation generated successfully" if success else "Failed to generate repository documentation")
+            log_info(
+                "Repository documentation generated successfully" if success else "Failed to generate repository documentation")
 
         if args.files:
             for file in args.files:
@@ -280,7 +302,8 @@ async def main(args: argparse.Namespace) -> int:
                 file_path = Path(file)
                 output_path = Path(args.output) / (file_path.stem + ".md")
                 success = await doc_generator.process_file(file_path, output_path)
-                log_info(f"Documentation for {file} generated successfully" if success else f"Failed to generate documentation for {file}")
+                log_info(
+                    f"Documentation for {file} generated successfully" if success else f"Failed to generate documentation for {file}")
 
         await doc_generator.display_metrics()
         exit_code = 0
@@ -293,6 +316,7 @@ async def main(args: argparse.Namespace) -> int:
         if doc_generator:
             await doc_generator.cleanup()
         log_info("Exiting documentation generation")
+
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
@@ -316,6 +340,7 @@ def parse_arguments() -> argparse.Namespace:
         help="Output directory for documentation (default: docs)",
     )
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     try:

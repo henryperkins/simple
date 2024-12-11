@@ -16,7 +16,7 @@ from core.cache import Cache
 from core.config import Config
 from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error, log_info
 from core.types.base import (
-    DocstringData, 
+    DocstringData,
     DocumentationContext,
     DocumentationData,
     ExtractionContext,
@@ -27,6 +27,7 @@ from core.types.base import (
 from core.exceptions import DocumentationError
 from utils import ensure_directory, read_file_safe
 import uuid
+
 
 class DocumentationOrchestrator:
     """
@@ -50,7 +51,8 @@ class DocumentationOrchestrator:
             LoggerSetup.get_logger(__name__),
             correlation_id=self.correlation_id
         )
-        self.ai_service = ai_service or AIService(config=self.config.ai, correlation_id=self.correlation_id)
+        self.ai_service = ai_service or AIService(
+            config=self.config.ai, correlation_id=self.correlation_id)
         self.code_extractor = CodeExtractor(correlation_id=self.correlation_id)
         self.markdown_generator = MarkdownGenerator()
 
@@ -68,7 +70,8 @@ class DocumentationOrchestrator:
             DocumentationError: If documentation generation fails.
         """
         try:
-            self.logger.info("Starting documentation generation process", extra={'correlation_id': self.correlation_id})
+            self.logger.info("Starting documentation generation process", extra={
+                             'correlation_id': self.correlation_id})
 
             # Validate source code
             if not context.source_code or not context.source_code.strip():
@@ -76,7 +79,8 @@ class DocumentationOrchestrator:
 
             # Extract code information
             extraction_context = ExtractionContext(
-                module_name=context.metadata.get("module_name", context.module_path.stem),
+                module_name=context.metadata.get(
+                    "module_name", context.module_path.stem),
                 source_code=context.source_code,
                 base_path=context.module_path,
                 metrics_enabled=True,
@@ -88,7 +92,7 @@ class DocumentationOrchestrator:
 
             try:
                 extraction_result = await self.code_extractor.extract_code(
-                    context.source_code, 
+                    context.source_code,
                     extraction_context
                 )
             except AttributeError:
@@ -147,7 +151,8 @@ class DocumentationOrchestrator:
                 summary=processing_result.content.get("summary", ""),
                 description=processing_result.content.get("description", ""),
                 args=processing_result.content.get("args", []),
-                returns=processing_result.content.get("returns", {"type": "None", "description": ""}),
+                returns=processing_result.content.get(
+                    "returns", {"type": "None", "description": ""}),
                 raises=processing_result.content.get("raises", []),
                 complexity=extraction_result.maintainability_index or 1
             )
@@ -156,7 +161,8 @@ class DocumentationOrchestrator:
             documentation_data = DocumentationData(
                 module_name=str(context.metadata.get("module_name", "")),
                 module_path=context.module_path,
-                module_summary=str(processing_result.content.get("summary", "")),
+                module_summary=str(
+                    processing_result.content.get("summary", "")),
                 source_code=context.source_code,
                 docstring_data=docstring_data,
                 ai_content=processing_result.content,
@@ -179,13 +185,16 @@ class DocumentationOrchestrator:
             markdown_doc = self.markdown_generator.generate(documentation_data)
 
             if not self.markdown_generator._has_complete_information(documentation_data):
-                self.logger.warning("Documentation generated with missing information", extra={'correlation_id': self.correlation_id})
+                self.logger.warning("Documentation generated with missing information", extra={
+                                    'correlation_id': self.correlation_id})
             else:
-                self.logger.info("Documentation generation completed successfully", extra={'correlation_id': self.correlation_id})
+                self.logger.info("Documentation generation completed successfully", extra={
+                                 'correlation_id': self.correlation_id})
             return context.source_code, markdown_doc
 
         except Exception as e:
-            self.logger.error(f"Documentation generation failed: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
+            self.logger.error(f"Documentation generation failed: {e}", exc_info=True, extra={
+                              'correlation_id': self.correlation_id})
             raise DocumentationError(f"Failed to generate documentation: {e}")
 
     async def generate_module_documentation(self, file_path: Path, output_dir: Path, source_code: Optional[str] = None) -> None:
@@ -201,7 +210,8 @@ class DocumentationOrchestrator:
             DocumentationError: If documentation generation fails
         """
         try:
-            self.logger.info(f"Generating documentation for {file_path}", extra={'correlation_id': self.correlation_id})
+            self.logger.info(f"Generating documentation for {file_path}", extra={
+                             'correlation_id': self.correlation_id})
             output_dir = ensure_directory(output_dir)
             output_path = output_dir / file_path.with_suffix(".md").name
 
@@ -229,15 +239,18 @@ class DocumentationOrchestrator:
             output_path.write_text(markdown_doc, encoding="utf-8")
             file_path.write_text(updated_code, encoding="utf-8")
 
-            self.logger.info(f"Documentation written to {output_path}", extra={'correlation_id': self.correlation_id})
+            self.logger.info(f"Documentation written to {output_path}", extra={
+                             'correlation_id': self.correlation_id})
 
         except DocumentationError as de:
             error_msg = f"Module documentation generation failed for {file_path}: {de}"
-            self.logger.error(error_msg, extra={'correlation_id': self.correlation_id})
+            self.logger.error(error_msg, extra={
+                              'correlation_id': self.correlation_id})
             raise DocumentationError(error_msg) from de
         except Exception as e:
             error_msg = f"Unexpected error generating documentation for {file_path}: {e}"
-            self.logger.error(error_msg, extra={'correlation_id': self.correlation_id})
+            self.logger.error(error_msg, extra={
+                              'correlation_id': self.correlation_id})
             raise DocumentationError(error_msg) from e
 
     async def generate_batch_documentation(
@@ -261,10 +274,12 @@ class DocumentationOrchestrator:
                 await self.generate_module_documentation(file_path, output_dir)
                 results[file_path] = True
             except DocumentationError as e:
-                self.logger.error(f"Failed to generate docs for {file_path}: {e}", extra={'correlation_id': self.correlation_id})
+                self.logger.error(f"Failed to generate docs for {file_path}: {e}", extra={
+                                  'correlation_id': self.correlation_id})
                 results[file_path] = False
             except Exception as e:
-                self.logger.error(f"Unexpected error for {file_path}: {e}", extra={'correlation_id': self.correlation_id})
+                self.logger.error(f"Unexpected error for {file_path}: {e}", extra={
+                                  'correlation_id': self.correlation_id})
                 results[file_path] = False
         return results
 

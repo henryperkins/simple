@@ -23,6 +23,7 @@ from core.extraction.dependency_analyzer import DependencyAnalyzer
 # Since utils.py is in the project root, we need to use an absolute import
 from utils import NodeNameVisitor, get_source_segment
 
+
 class CodeExtractor:
     """Extracts code elements and metadata from Python source code."""
 
@@ -33,39 +34,44 @@ class CodeExtractor:
     ) -> None:
         # Generate correlation ID if not provided
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id=self.correlation_id)
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(
+            __name__), correlation_id=self.correlation_id)
 
         self.context = context or ExtractionContext()
-        
+
         # Get metrics calculator with fallback
         try:
             self.metrics_calculator = Injector.get('metrics_calculator')
         except KeyError:
-            self.logger.warning("Metrics calculator not registered, creating new instance")
-            self.metrics_calculator = Metrics(metrics_collector=MetricsCollector(correlation_id=self.correlation_id))
+            self.logger.warning(
+                "Metrics calculator not registered, creating new instance")
+            self.metrics_calculator = Metrics(
+                metrics_collector=MetricsCollector(correlation_id=self.correlation_id))
             Injector.register('metrics_calculator', self.metrics_calculator)
-        
+
         # Initialize extractors
         self._initialize_extractors()
 
     def _initialize_extractors(self) -> None:
         """Initialize the extractors with the current context."""
-        self.context.function_extractor = FunctionExtractor(self.context, self.metrics_calculator)
-        self.context.class_extractor = ClassExtractor(self.context, self.metrics_calculator)
+        self.context.function_extractor = FunctionExtractor(
+            self.context, self.metrics_calculator)
+        self.context.class_extractor = ClassExtractor(
+            self.context, self.metrics_calculator)
         self.context.dependency_analyzer = DependencyAnalyzer(self.context)
 
     def _count_code_elements(self, tree: Union[ast.AST, ast.Module]) -> Tuple[int, int]:
         """Count total functions and classes in the AST.
-        
+
         Args:
             tree: The AST to analyze
-            
+
         Returns:
             tuple[int, int]: Total number of functions and classes
         """
         total_functions = 0
         total_classes = 0
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 if self.context.class_extractor._should_process_class(node):
@@ -78,10 +84,10 @@ class CodeExtractor:
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 # Only count top-level functions here
                 if (self.context.function_extractor._should_process_function(node) and
-                    not any(isinstance(parent, ast.ClassDef) for parent in ast.walk(tree) 
-                           if node in ast.walk(parent))):
+                    not any(isinstance(parent, ast.ClassDef) for parent in ast.walk(tree)
+                            if node in ast.walk(parent))):
                     total_functions += 1
-                            
+
         return total_functions, total_classes
 
     async def extract_code(self, source_code: str, context: Optional[ExtractionContext] = None) -> ExtractionResult:
@@ -90,7 +96,7 @@ class CodeExtractor:
             self.context = context
             # Re-initialize extractors with new context
             self._initialize_extractors()
-            
+
         self.context.source_code = source_code
 
         try:
@@ -99,7 +105,8 @@ class CodeExtractor:
 
             log_info(
                 "Starting code extraction",
-                extra={'file_path': str(self.context.base_path or ""), 'module_name': self.context.module_name or ""}
+                extra={'file_path': str(
+                    self.context.base_path or ""), 'module_name': self.context.module_name or ""}
             )
 
             # Count total functions and classes before extraction
@@ -109,7 +116,8 @@ class CodeExtractor:
             docstring_info = self._extract_module_docstring(tree)
 
             # Calculate metrics first to get maintainability index
-            metrics_data = self.metrics_calculator.calculate_metrics(source_code, self.context.module_name)
+            metrics_data = self.metrics_calculator.calculate_metrics(
+                source_code, self.context.module_name)
             maintainability_index = metrics_data.maintainability_index
 
             # Initialize metrics with calculated values
@@ -133,7 +141,7 @@ class CodeExtractor:
             # Update scanned counts
             metrics.scanned_classes = len(extracted_classes)
             metrics.scanned_functions = len(extracted_functions)
-            
+
             # Count methods from extracted classes
             for class_info in extracted_classes:
                 metrics.scanned_functions += len(class_info.methods)
@@ -146,7 +154,8 @@ class CodeExtractor:
                 functions=extracted_functions,
                 variables=self._extract_variables(tree),
                 constants=self._extract_constants(tree),
-                dependencies=self.context.dependency_analyzer.analyze_dependencies(tree),
+                dependencies=self.context.dependency_analyzer.analyze_dependencies(
+                    tree),
                 errors=[],
                 maintainability_index=maintainability_index,
                 source_code=source_code,
@@ -158,7 +167,8 @@ class CodeExtractor:
             return result
 
         except Exception as e:
-            log_error(f"Error during code extraction: {e}", exc_info=True, extra={'source_code': self._sanitize(source_code)})
+            log_error(f"Error during code extraction: {e}", exc_info=True, extra={
+                      'source_code': self._sanitize(source_code)})
             raise
 
     def _extract_variables(self, tree: ast.AST) -> list[dict[str, Any]]:
@@ -181,7 +191,8 @@ class CodeExtractor:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id.isupper():
-                        constants.append(self._process_constant_node(target, node))
+                        constants.append(
+                            self._process_constant_node(target, node))
         return constants
 
     def _extract_module_docstring(self, tree: ast.Module) -> DocstringData:
@@ -215,7 +226,8 @@ class CodeExtractor:
                 }
             return None
         except Exception as e:
-            self.logger.error(f"Error processing variable node: {e}", extra={'correlation_id': self.correlation_id})
+            self.logger.error(f"Error processing variable node: {e}", extra={
+                              'correlation_id': self.correlation_id})
             return None
 
     def _process_constant_node(self, target: ast.Name, node: ast.Assign) -> dict[str, Any]:

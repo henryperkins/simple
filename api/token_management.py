@@ -48,7 +48,8 @@ class TokenManager:
             base_model = self._get_base_model_name(self.model)
             self.encoding = tiktoken.encoding_for_model(base_model)
         except KeyError:
-            self.logger.warning(f"Model {self.model} not found. Falling back to 'cl100k_base' encoding.")
+            self.logger.warning(
+                f"Model {self.model} not found. Falling back to 'cl100k_base' encoding.")
             self.encoding = tiktoken.get_encoding("cl100k_base")
 
         self.model_config = self.config.model_limits.get(
@@ -76,17 +77,18 @@ class TokenManager:
             "gpt-35-turbo": "gpt-3.5-turbo",
             "gpt-3.5-turbo": "gpt-3.5-turbo",
         }
-        
+
         # Remove any version numbers or suffixes
         base_name = model_name.split('-')[0].lower()
-        
+
         # Try to match with known models
         for key, value in model_mappings.items():
             if key.startswith(base_name):
                 return value
-                
+
         # Default to gpt-4 if unknown
-        self.logger.warning(f"Unknown model {model_name}, defaulting to gpt-4 for token encoding")
+        self.logger.warning(
+            f"Unknown model {model_name}, defaulting to gpt-4 for token encoding")
         return "gpt-4"
 
     def _estimate_tokens(self, text: str) -> int:
@@ -107,23 +109,23 @@ class TokenManager:
 
     def _calculate_usage(self, prompt_tokens: int, completion_tokens: int) -> TokenUsage:
         """Calculate token usage statistics.
-        
+
         Args:
             prompt_tokens (int): Number of tokens in the prompt
             completion_tokens (int): Number of tokens in the completion
-            
+
         Returns:
             TokenUsage: Token usage statistics including cost calculation
         """
         total_tokens = prompt_tokens + completion_tokens
-        
+
         # Calculate costs based on model config
         cost_per_token = self.model_config.cost_per_token
         estimated_cost = total_tokens * cost_per_token
 
         return TokenUsage(
             prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens, 
+            completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             estimated_cost=estimated_cost
         )
@@ -152,17 +154,18 @@ class TokenManager:
             prompt_tokens = self._estimate_tokens(prompt)
             # Calculate available tokens for completion
             available_tokens = self.model_config.max_tokens - prompt_tokens
-            
+
             # If max_tokens specified, use minimum of that or available
             if max_tokens:
                 max_completion = min(max_tokens, available_tokens)
             else:
                 # Otherwise use minimum of available or chunk size
-                max_completion = min(available_tokens, self.model_config.chunk_size)
-                
+                max_completion = min(
+                    available_tokens, self.model_config.chunk_size)
+
             # Ensure at least 1 token for completion
             max_completion = max(1, max_completion)
-            
+
             # Log if we had to adjust the completion tokens
             if max_completion < available_tokens:
                 self.logger.debug(
@@ -222,7 +225,8 @@ class TokenManager:
         self.total_prompt_tokens += prompt_tokens
         self.total_completion_tokens += max_completion
         from core.console import console
-        console.print(f"\rTracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}", end="")
+        console.print(
+            f"\rTracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}", end="")
 
     async def process_completion(self, completion: Any) -> Tuple[str, Dict[str, int]]:
         """
@@ -239,7 +243,7 @@ class TokenManager:
         """
         try:
             message = completion["choices"][0]["message"]
-            
+
             # Handle both regular responses and function call responses
             if "function_call" in message:
                 content = message["function_call"]["arguments"]
@@ -249,7 +253,8 @@ class TokenManager:
             usage = completion.get("usage", {})
 
             if usage:
-                self.total_completion_tokens += usage.get("completion_tokens", 0)
+                self.total_completion_tokens += usage.get(
+                    "completion_tokens", 0)
                 self.total_prompt_tokens += usage.get("prompt_tokens", 0)
 
                 if self.metrics_collector:
@@ -265,10 +270,12 @@ class TokenManager:
                     )
 
                 from core.console import console
-                console.print(f"\rProcessed completion - Content Length: {len(content)}, Usage: {usage}", end="")
+                console.print(
+                    f"\rProcessed completion - Content Length: {len(content)}, Usage: {usage}", end="")
 
             return content, usage
 
         except Exception as e:
-            self.logger.error(f"Error processing completion: {e}", exc_info=True)
+            self.logger.error(
+                f"Error processing completion: {e}", exc_info=True)
             raise ProcessingError(f"Failed to process completion: {str(e)}")

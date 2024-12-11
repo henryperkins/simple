@@ -46,7 +46,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "DocstringProcessor",
-    "ResponseParsingService", 
+    "ResponseParsingService",
     "CodeExtractor",
     "Cache",
     "Metrics",
@@ -55,7 +55,7 @@ __all__ = [
     "AIService",
     "DocstringData",
     "ExtractedFunction",
-    "ExtractedClass", 
+    "ExtractedClass",
     "ExtractionResult",
     "ParsedResponse",
     "ProcessingResult",

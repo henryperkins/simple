@@ -49,10 +49,11 @@ class AIService:
 
         # Inject dependencies
         self.docstring_processor = docstring_processor or DocstringProcessor()
-        self.response_parser = response_parser or ResponseParsingService(correlation_id)
-        self.token_manager = token_manager or TokenManager(model=self.config.model, config=self.config)
+        self.response_parser = response_parser or ResponseParsingService(
+            correlation_id)
+        self.token_manager = token_manager or TokenManager(
+            model=self.config.model, config=self.config)
         self.prompt_manager = prompt_manager or PromptManager(correlation_id)
-
 
     async def enhance_and_format_docstring(
         self, context: DocumentationContext
@@ -81,7 +82,8 @@ class AIService:
                 )
 
                 if is_valid:
-                    self.logger.info("AI response processing completed. Cached content used.")
+                    self.logger.info(
+                        "AI response processing completed. Cached content used.")
                     return ProcessingResult(
                         content=cached,
                         usage={},
@@ -128,7 +130,8 @@ class AIService:
             if "choices" in response and response["choices"]:
                 message = response["choices"][0]["message"]
                 if "function_call" in message:
-                    function_args = json.loads(message["function_call"]["arguments"])
+                    function_args = json.loads(
+                        message["function_call"]["arguments"])
                     parsed_response = await self.response_parser.parse_response(
                         function_args, expected_format="docstring"
                     )
@@ -141,7 +144,8 @@ class AIService:
                 raise ProcessingError("Failed to validate AI response")
 
             # Process through docstring processor for additional validation
-            docstring_data = self.docstring_processor.parse(parsed_response.content)
+            docstring_data = self.docstring_processor.parse(
+                parsed_response.content)
             is_valid, validation_errors = self.docstring_processor.validate(
                 docstring_data
             )
@@ -171,7 +175,8 @@ class AIService:
             doc_data = DocumentationData(
                 module_name=module_name,
                 module_path=Path(file_path),
-                module_summary=parsed_response.content.get('summary', '') or docstring_data.summary or "No module summary available.",
+                module_summary=parsed_response.content.get(
+                    'summary', '') or docstring_data.summary or "No module summary available.",
                 source_code=context.source_code,
                 docstring_data=docstring_data,
                 ai_content=parsed_response.content,
@@ -204,12 +209,15 @@ class AIService:
             if is_valid:
                 self.cache.set(cache_key, parsed_response.content)
 
-            self.logger.info(f"AI response processing completed. Processed {len(context.functions) + len(context.classes)} items.")
+            self.logger.info(
+                f"AI response processing completed. Processed {len(context.functions) + len(context.classes)} items.")
             return result
 
         except Exception as e:
-            self.logger.error(f"Error enhancing docstring: {str(e)}", exc_info=True)
-            raise ProcessingError(f"Failed to enhance docstring: {str(e)}") from e
+            self.logger.error(
+                f"Error enhancing docstring: {str(e)}", exc_info=True)
+            raise ProcessingError(
+                f"Failed to enhance docstring: {str(e)}") from e
 
     def _fix_common_docstring_issues(self, content: Dict[str, Any]) -> Dict[str, Any]:
         """Fix common docstring validation issues.
@@ -324,7 +332,8 @@ class AIService:
         Raises:
             Exception: If API call fails
         """
-        headers = {"api-key": self.config.api_key, "Content-Type": "application/json"}
+        headers = {"api-key": self.config.api_key,
+                   "Content-Type": "application/json"}
 
         if self.correlation_id:
             headers["x-correlation-id"] = self.correlation_id
@@ -336,7 +345,8 @@ class AIService:
         )
 
         # Add function calling parameters
-        request_params["functions"] = [self.prompt_manager.get_function_schema()]
+        request_params["functions"] = [
+            self.prompt_manager.get_function_schema()]
         request_params["function_call"] = {"name": "generate_docstring"}
 
         try:
@@ -346,9 +356,11 @@ class AIService:
                 # Construct the URL path
                 path = f"openai/deployments/{self.config.deployment}/chat/completions"
                 # Join the URL properly
-                url = urljoin(endpoint, path) + "?api-version=2024-02-15-preview"
+                url = urljoin(endpoint, path) + \
+                    "?api-version=2024-02-15-preview"
 
-                self.logger.debug(f"Making API call to {url} with prompt: {prompt[:100]}...")
+                self.logger.debug(
+                    f"Making API call to {url} with prompt: {prompt[:100]}...")
 
                 async with session.post(
                     url,
@@ -371,15 +383,18 @@ class AIService:
                         )
 
                     response_data = await response.json()
-                    self.logger.debug(f"API response received: {str(response_data)[:100]}...")
+                    self.logger.debug(
+                        f"API response received: {str(response_data)[:100]}...")
                     content, usage = await self.token_manager.process_completion(
                         response_data
                     )
                     return response_data
 
         except asyncio.TimeoutError:
-            self.logger.error(f"API call timed out after {self.config.timeout} seconds")
-            raise Exception(f"API call timed out after {self.config.timeout} seconds")
+            self.logger.error(
+                f"API call timed out after {self.config.timeout} seconds")
+            raise Exception(
+                f"API call timed out after {self.config.timeout} seconds")
         except Exception as e:
             self.logger.error(f"API call failed: {str(e)}", exc_info=True)
             raise Exception(f"API call failed: {str(e)}")
@@ -405,7 +420,8 @@ class AIService:
                     return message["content"].strip()
             raise Exception("Invalid response format")
         except (KeyError, IndexError) as e:
-            self.logger.error(f"Failed to parse API response: {str(e)}", exc_info=True)
+            self.logger.error(
+                f"Failed to parse API response: {str(e)}", exc_info=True)
             raise Exception(f"Failed to parse API response: {str(e)}")
 
     async def analyze_code_quality(self, code: str) -> Dict[str, Any]:
@@ -431,7 +447,8 @@ class AIService:
             }
 
         except Exception as e:
-            self.logger.error(f"Code quality analysis failed: {str(e)}", exc_info=True)
+            self.logger.error(
+                f"Code quality analysis failed: {str(e)}", exc_info=True)
             raise
 
     async def batch_process(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -449,14 +466,16 @@ class AIService:
                 self.logger.error("Each item must contain 'code' key")
                 raise ValueError("Each item must contain 'code' key")
 
-            task = self.generate_documentation(item["code"], item.get("context"))
+            task = self.generate_documentation(
+                item["code"], item.get("context"))
             tasks.append(task)
 
         try:
             results = await asyncio.gather(*tasks)
             return [{"documentation": result} for result in results]
         except Exception as e:
-            self.logger.error(f"Batch processing failed: {str(e)}", exc_info=True)
+            self.logger.error(
+                f"Batch processing failed: {str(e)}", exc_info=True)
             raise
 
     async def test_connection(self) -> None:
@@ -470,8 +489,10 @@ class AIService:
                 ) as response:
                     if response.status != 200:
                         response_text = await response.text()
-                        self.logger.error(f"Connection failed: {response_text}")
-                        raise ConnectionError(f"Connection failed: {response_text}")
+                        self.logger.error(
+                            f"Connection failed: {response_text}")
+                        raise ConnectionError(
+                            f"Connection failed: {response_text}")
             self.logger.info(
                 "Connection test successful",
                 extra={"correlation_id": self.correlation_id},
@@ -491,7 +512,7 @@ class AIService:
         chunks = []
         current_chunk = []
         current_size = 0
-        
+
         for word in words:
             word_size = len(word) + 1  # Add 1 for space
             if current_size + word_size > chunk_size:
@@ -501,40 +522,44 @@ class AIService:
             else:
                 current_chunk.append(word)
                 current_size += word_size
-                
+
         if current_chunk:
             chunks.append(" ".join(current_chunk))
-            
+
         return chunks
 
     def _merge_responses(self, responses: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Merge multiple responses into a single response."""
         if not responses:
             return {}
-            
+
         merged = responses[0].copy()
         for response in responses[1:]:
             if "choices" in response and response["choices"]:
                 message = response["choices"][0]["message"]
                 if "function_call" in message:
                     args = json.loads(message["function_call"]["arguments"])
-                    merged_args = json.loads(merged["choices"][0]["message"]["function_call"]["arguments"])
-                    
+                    merged_args = json.loads(
+                        merged["choices"][0]["message"]["function_call"]["arguments"])
+
                     # Merge descriptions
                     if "description" in args:
-                        merged_args["description"] = merged_args.get("description", "") + "\n" + args["description"]
-                    
+                        merged_args["description"] = merged_args.get(
+                            "description", "") + "\n" + args["description"]
+
                     # Merge other fields
                     for key in ["args", "raises"]:
                         if key in args:
                             merged_args[key].extend(args[key])
-                            
-                    merged["choices"][0]["message"]["function_call"]["arguments"] = json.dumps(merged_args)
-                    
+
+                    merged["choices"][0]["message"]["function_call"]["arguments"] = json.dumps(
+                        merged_args)
+
             if "usage" in response:
                 for key in ["prompt_tokens", "completion_tokens", "total_tokens"]:
-                    merged["usage"][key] = merged["usage"].get(key, 0) + response["usage"].get(key, 0)
-                    
+                    merged["usage"][key] = merged["usage"].get(
+                        key, 0) + response["usage"].get(key, 0)
+
         return merged
 
     async def close(self) -> None:

@@ -15,6 +15,7 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics_collector import MetricsCollector
 from api.token_management import TokenManager
 
+
 class SystemMonitor:
     """Monitors system resources and performance metrics."""
 
@@ -45,7 +46,8 @@ class SystemMonitor:
         self._metrics: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
+        self.metrics_collector = metrics_collector or MetricsCollector(
+            correlation_id=correlation_id)
         self.logger.info("System monitor initialized")
 
     async def start(self) -> None:
@@ -78,7 +80,8 @@ class SystemMonitor:
                 self.logger.debug("System metrics collected and stored")
                 await asyncio.sleep(self.check_interval)
             except Exception as e:
-                self.logger.error("Error in monitoring loop: %s", e, exc_info=True)
+                self.logger.error(
+                    "Error in monitoring loop: %s", e, exc_info=True)
                 await asyncio.sleep(self.check_interval)
 
     def _collect_system_metrics(self) -> Dict[str, Any]:
@@ -116,11 +119,13 @@ class SystemMonitor:
                 token_stats = self.token_manager.get_usage_stats()
                 metrics["tokens"] = token_stats
 
-            self.logger.debug("Collected system metrics", extra={"metrics": metrics})
+            self.logger.debug("Collected system metrics",
+                              extra={"metrics": metrics})
             return metrics
 
         except Exception as e:
-            self.logger.error("Error collecting system metrics: %s", e, exc_info=True)
+            self.logger.error(
+                "Error collecting system metrics: %s", e, exc_info=True)
             return {}
 
     async def _store_metrics(self, metrics: Dict[str, Any]) -> None:
@@ -176,7 +181,8 @@ class SystemMonitor:
                 "collected_metrics": collected_metrics,
             }
         except Exception as e:
-            self.logger.error("Error getting metrics summary: %s", e, exc_info=True)
+            self.logger.error(
+                "Error getting metrics summary: %s", e, exc_info=True)
             return {"error": str(e)}
 
     def _calculate_averages(self) -> Dict[str, float]:
@@ -215,17 +221,18 @@ class SystemMonitor:
 
             if (cpu_value > cpu_threshold or
                 memory_value > memory_threshold or
-                disk_value > disk_threshold):
+                    disk_value > disk_threshold):
                 return "critical"
 
             if (cpu_value > cpu_threshold * 0.8 or
                 memory_value > memory_threshold * 0.8 or
-                disk_value > disk_threshold * 0.8):
+                    disk_value > disk_threshold * 0.8):
                 return "warning"
 
             return "healthy"
         except Exception as e:
-            self.logger.error("Error getting system status: %s", e, exc_info=True)
+            self.logger.error(
+                "Error getting system status: %s", e, exc_info=True)
             return "unknown"
 
     async def __aenter__(self) -> "SystemMonitor":

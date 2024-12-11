@@ -38,9 +38,10 @@ from exceptions import DocumentationError
 # Initialize logger
 logger = LoggerSetup.get_logger(__name__)
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # AST Processing Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 class NodeNameVisitor(ast.NodeVisitor):
     """AST visitor for extracting names from nodes."""
@@ -105,6 +106,7 @@ class NodeNameVisitor(ast.NodeVisitor):
         visitor.visit(node)
         return visitor.name or "unknown"
 
+
 def get_node_name(node: Optional[ast.AST]) -> str:
     """Get the name from an AST node."""
     if node is None:
@@ -112,6 +114,7 @@ def get_node_name(node: Optional[ast.AST]) -> str:
     visitor = NodeNameVisitor()
     visitor.visit(node)
     return visitor.name or "unknown"
+
 
 def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
     """Extract source code segment for a given AST node with proper indentation."""
@@ -135,8 +138,8 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
             return None
 
         # Find the minimum indentation level (excluding empty lines)
-        indentation_levels = [len(line) - len(line.lstrip()) 
-                            for line in node_lines if line.strip()]
+        indentation_levels = [len(line) - len(line.lstrip())
+                              for line in node_lines if line.strip()]
         if not indentation_levels:
             return None
         min_indent = min(indentation_levels)
@@ -155,9 +158,10 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
         logger.error(f"Error extracting source segment: {e}")
         return None
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Repository Management Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 class RepositoryManager:
     """Handles git repository operations."""
@@ -172,7 +176,8 @@ class RepositoryManager:
             clone_dir = self.repo_path / Path(repo_url).stem
             if clone_dir.exists():
                 if not self._verify_repository(clone_dir):
-                    logger.warning(f"Invalid repository at {clone_dir}, re-cloning")
+                    logger.warning(
+                        f"Invalid repository at {clone_dir}, re-cloning")
                     shutil.rmtree(clone_dir)
                 else:
                     return clone_dir
@@ -204,9 +209,10 @@ class RepositoryManager:
 
         return python_files
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Token Management Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 class TokenCounter:
     """Handles token counting and usage calculation."""
@@ -215,7 +221,8 @@ class TokenCounter:
         try:
             self.encoding = tiktoken.encoding_for_model(model)
         except KeyError:
-            logger.warning(f"Model {model} not found. Using cl100k_base encoding.")
+            logger.warning(
+                f"Model {model} not found. Using cl100k_base encoding.")
             self.encoding = tiktoken.get_encoding("cl100k_base")
 
     def estimate_tokens(self, text: str) -> int:
@@ -245,9 +252,10 @@ class TokenCounter:
             estimated_cost=prompt_cost + completion_cost
         )
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # JSON Processing Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 class CustomJSONEncoder(json.JSONEncoder):
     """Enhanced JSON encoder handling special types."""
@@ -265,6 +273,7 @@ class CustomJSONEncoder(json.JSONEncoder):
             }
         return super().default(obj)
 
+
 def serialize_for_logging(obj: Any) -> str:
     """Safely serialize any object for logging."""
     try:
@@ -272,9 +281,10 @@ def serialize_for_logging(obj: Any) -> str:
     except Exception as e:
         return f"Error serializing object: {str(e)}\nObject repr: {repr(obj)}"
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Environment and Configuration Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def get_env_var(
     name: str,
@@ -301,7 +311,8 @@ def get_env_var(
 
     if value is None:
         if required:
-            raise ValueError(f"Required environment variable {name} is not set")
+            raise ValueError(
+                f"Required environment variable {name} is not set")
         return default
 
     try:
@@ -309,17 +320,20 @@ def get_env_var(
             return value.lower() in ('true', '1', 'yes', 'on')
         return var_type(value)
     except ValueError as e:
-        raise ValueError(f"Error converting {name} to {var_type.__name__}: {str(e)}")
+        raise ValueError(
+            f"Error converting {name} to {var_type.__name__}: {str(e)}")
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # File System Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def ensure_directory(path: Union[str, Path]) -> Path:
     """Ensure directory exists and return Path object."""
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
     return path
+
 
 def read_file_safe(file_path: Union[str, Path], encoding: str = 'utf-8') -> str:
     """Safely read file content with multiple encoding attempts."""
@@ -335,11 +349,13 @@ def read_file_safe(file_path: Union[str, Path], encoding: str = 'utf-8') -> str:
         except UnicodeDecodeError:
             continue
 
-    raise ValueError(f"Could not read file {file_path} with any supported encoding")
+    raise ValueError(
+        f"Could not read file {file_path} with any supported encoding")
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # String Processing Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def sanitize_identifier(text: str) -> str:
     """Convert text to a valid Python identifier."""
@@ -350,15 +366,17 @@ def sanitize_identifier(text: str) -> str:
         identifier = f"_{identifier}"
     return identifier
 
+
 def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
     """Truncate text to specified length."""
     if len(text) <= max_length:
         return text
     return text[:max_length - len(suffix)] + suffix
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Error Handling Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def handle_extraction_error(
     logger: Any,
@@ -393,9 +411,10 @@ def handle_extraction_error(
         extra={'sanitized_info': sanitized_info}
     )
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Module Inspection Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def check_module_exists(module_name: str) -> bool:
     """
@@ -412,6 +431,7 @@ def check_module_exists(module_name: str) -> bool:
         return spec is not None
     except Exception:
         return False
+
 
 def get_module_path(module_name: str) -> Optional[str]:
     """
@@ -431,9 +451,10 @@ def get_module_path(module_name: str) -> Optional[str]:
     except Exception:
         return None
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Time and Date Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def get_timestamp(fmt: str = "%Y-%m-%d_%H-%M-%S") -> str:
     """
@@ -446,6 +467,7 @@ def get_timestamp(fmt: str = "%Y-%m-%d_%H-%M-%S") -> str:
         Formatted timestamp string
     """
     return datetime.now().strftime(fmt)
+
 
 def parse_timestamp(timestamp: str, fmt: str = "%Y-%m-%d_%H-%M-%S") -> datetime:
     """
@@ -463,9 +485,10 @@ def parse_timestamp(timestamp: str, fmt: str = "%Y-%m-%d_%H-%M-%S") -> datetime:
     """
     return datetime.strptime(timestamp, fmt)
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Path Manipulation Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def normalize_path(path: Union[str, Path]) -> Path:
     """
@@ -478,6 +501,7 @@ def normalize_path(path: Union[str, Path]) -> Path:
         Normalized Path object
     """
     return Path(path).resolve()
+
 
 def is_subpath(path: Union[str, Path], parent: Union[str, Path]) -> bool:
     """
@@ -498,9 +522,10 @@ def is_subpath(path: Union[str, Path], parent: Union[str, Path]) -> bool:
     except ValueError:
         return False
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Type Checking Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def is_optional_type(type_hint: Any) -> bool:
     """
@@ -515,6 +540,7 @@ def is_optional_type(type_hint: Any) -> bool:
     origin = getattr(type_hint, '__origin__', None)
     args = getattr(type_hint, '__args__', ())
     return origin is Union and type(None) in args
+
 
 def get_optional_type(type_hint: Any) -> Optional[Type]:
     """
@@ -531,9 +557,10 @@ def get_optional_type(type_hint: Any) -> Optional[Type]:
         return args[0] if args else None
     return None
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Main Utility Functions
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def safe_getattr(obj: Any, attr: str, default: Any = None) -> Any:
     """
@@ -551,6 +578,7 @@ def safe_getattr(obj: Any, attr: str, default: Any = None) -> Any:
         return getattr(obj, attr, default)
     except Exception:
         return default
+
 
 def batch_process(
     items: List[Any],
@@ -574,9 +602,10 @@ def batch_process(
         results.extend(process_func(batch))
     return results
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Exported Utilities
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 # List of all utility functions and classes to be exported
 __all__ = [

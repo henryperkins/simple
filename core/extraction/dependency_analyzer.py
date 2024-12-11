@@ -32,7 +32,8 @@ class DependencyAnalyzer:
         correlation_id: Optional[str] = None
     ) -> None:
         """Initialize the dependency analyzer."""
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), correlation_id)
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__), correlation_id)
         self.context = context
         self.module_name = context.module_name
         self._function_errors: List[str] = []
@@ -55,7 +56,8 @@ class DependencyAnalyzer:
             categorized_deps = self._categorize_dependencies(raw_deps)
 
             # Detect circular dependencies
-            circular_deps = self._detect_circular_dependencies(categorized_deps)
+            circular_deps = self._detect_circular_dependencies(
+                categorized_deps)
             if circular_deps:
                 self.logger.warning(
                     f"Circular dependencies detected: {circular_deps}",
@@ -69,7 +71,8 @@ class DependencyAnalyzer:
             return categorized_deps
 
         except Exception as e:
-            self.logger.error(f"Dependency analysis failed: {e}", exc_info=True)
+            self.logger.error(
+                f"Dependency analysis failed: {e}", exc_info=True)
             return {"stdlib": set(), "third_party": set(), "local": set()}
 
     def extract_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:
@@ -145,7 +148,8 @@ class DependencyAnalyzer:
 
         # Check if the module exists in the project directory
         if self.context.base_path:
-            module_path = self.context.base_path / f"{module_name.replace('.', '/')}.py"
+            module_path = self.context.base_path / \
+                f"{module_name.replace('.', '/')}.py"
             return module_path.exists()
 
         return False
@@ -177,7 +181,8 @@ class DependencyAnalyzer:
             return stdlib_modules
 
         except Exception as e:
-            self.logger.error(f"Error getting stdlib modules: {e}", exc_info=True)
+            self.logger.error(
+                f"Error getting stdlib modules: {e}", exc_info=True)
             return set()
 
     def _detect_circular_dependencies(
@@ -213,7 +218,8 @@ class DependencyAnalyzer:
             if self.module_name:
                 visit(self.module_name)
         except Exception as e:
-            self.logger.error(f"Error detecting circular dependencies: {e}", exc_info=True)
+            self.logger.error(
+                f"Error detecting circular dependencies: {e}", exc_info=True)
 
         return circular_deps
 
@@ -246,7 +252,8 @@ class DependencyAnalyzer:
             return max(0.0, min(impact_score, 100.0))
 
         except Exception as e:
-            self.logger.error(f"Error calculating maintainability impact: {e}", exc_info=True)
+            self.logger.error(
+                f"Error calculating maintainability impact: {e}", exc_info=True)
             return 0.0
 
     def generate_dependency_graph(self) -> Optional[str]:
@@ -277,7 +284,7 @@ class DependencyAnalyzer:
                     if dep_type != "maintainability_impact":
                         for dep in deps_set:
                             dot.node(dep, dep, fillcolor=colors.get(dep_type, "white"),
-                                       style="filled")
+                                     style="filled")
                             if self.module_name:
                                 dot.edge(self.module_name, dep)
 
@@ -285,10 +292,12 @@ class DependencyAnalyzer:
             return dot.source
 
         except ImportError:
-            self.logger.warning("graphviz package not installed, cannot generate graph")
+            self.logger.warning(
+                "graphviz package not installed, cannot generate graph")
             return None
         except Exception as e:
-            self.logger.error(f"Error generating dependency graph: {e}", exc_info=True)
+            self.logger.error(
+                f"Error generating dependency graph: {e}", exc_info=True)
             return None
 
     def get_dependency_metrics(self) -> Dict[str, Any]:
@@ -309,7 +318,8 @@ class DependencyAnalyzer:
             }
 
         except Exception as e:
-            self.logger.error(f"Error getting dependency metrics: {e}", exc_info=True)
+            self.logger.error(
+                f"Error getting dependency metrics: {e}", exc_info=True)
             return {}
 
     async def analyze_project_dependencies(self, project_root: Path) -> Dict[str, Any]:
@@ -357,11 +367,13 @@ class DependencyAnalyzer:
                     for m in project_deps["modules"].values()
                 )
                 project_deps["global_metrics"]["avg_maintainability"] = (
-                    total_maintainability / project_deps["global_metrics"]["total_modules"]
+                    total_maintainability /
+                    project_deps["global_metrics"]["total_modules"]
                 )
 
             return project_deps
 
         except Exception as e:
-            self.logger.error(f"Error analyzing project dependencies: {e}", exc_info=True)
+            self.logger.error(
+                f"Error analyzing project dependencies: {e}", exc_info=True)
             return {}
