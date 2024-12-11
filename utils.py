@@ -296,6 +296,19 @@ def get_env_var(
         raise ValueError(f"Error converting {name} to {var_type.__name__}: {str(e)}")
 
 #-----------------------------------------------------------------------------
+# File Reading Utility
+#-----------------------------------------------------------------------------
+
+def read_file_safe(file_path: Union[str, Path]) -> str:
+    """Safely read a file and return its contents."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except (FileNotFoundError, IOError) as e:
+        logger.error(f"Error reading file {file_path}: {e}")
+        return ""
+        
+#-----------------------------------------------------------------------------
 # File System Utilities
 #-----------------------------------------------------------------------------
 
