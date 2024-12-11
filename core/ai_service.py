@@ -1,7 +1,7 @@
 """AI service module for interacting with OpenAI API."""
 
 import json
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 import aiohttp
 import asyncio
 from datetime import datetime
@@ -9,7 +9,6 @@ from urllib.parse import urljoin
 from pathlib import Path
 
 from core.logger import LoggerSetup
-from core.types.base import Injector
 from core.config import AIConfig
 from core.cache import Cache
 from core.exceptions import ProcessingError
@@ -18,7 +17,6 @@ from core.response_parsing import ResponseParsingService
 from core.prompt_manager import PromptManager
 from core.types.base import DocumentationContext, ProcessingResult, DocumentationData
 from api.token_management import TokenManager
-from core.types.base import Injector
 
 
 class AIService:

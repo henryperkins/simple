@@ -1,6 +1,6 @@
 """Manages prompt generation and formatting for AI interactions."""
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 import json
 
@@ -214,8 +214,7 @@ class PromptManager:
         Returns:
             Formatted function string
         """
-        args_str = ", ".join(
-            f"{arg.name}: {arg.type or 'Any'}" for arg in func.args)
+        args_str = ", ".join(f"{arg.name}: {arg.type or 'Any'}" for arg in func.args)
         return (
             f"Function: {func.name}\n"
             f"Arguments: ({args_str})\n"
@@ -235,9 +234,7 @@ class PromptManager:
         Returns:
             Formatted class string
         """
-        methods_str = "\n    ".join(
-            f"- {m.name}({', '.join(a.name for a in m.args)})" for m in cls.methods
-        )
+        methods_str = "\n    ".join(f"- {m.name}({', '.join(a.name for a in m.args)})" for m in cls.methods)
         return (
             f"Class: {cls.name}\n"
             f"Base Classes: {', '.join(cls.bases) if cls.bases else 'None'}\n"
