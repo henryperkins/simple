@@ -1,5 +1,5 @@
 """Rich console utilities for enhanced visual feedback."""
-from typing import Any
+from typing import Any, Optional
 from rich.console import Console
 from rich.progress import Progress
 from rich.syntax import Syntax
