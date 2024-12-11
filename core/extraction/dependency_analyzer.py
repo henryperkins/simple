@@ -34,7 +34,7 @@ class DependencyAnalyzer:
         correlation_id: Optional[str] = None
     ) -> None:
         """Initialize the dependency analyzer."""
-        self.logger = CorrelationLoggerAdapter(Injector.get('logger'), extra={'correlation_id': correlation_id or get_correlation_id()})
+        self._logger = CorrelationLoggerAdapter(Injector.get('logger'), extra={'correlation_id': correlation_id or get_correlation_id()})
         self.docstring_parser = Injector.get('docstring_parser')
         self.context = context
         self.module_name = context.module_name
@@ -69,7 +69,7 @@ class DependencyAnalyzer:
             circular_deps = self._detect_circular_dependencies(
                 categorized_deps)
             if circular_deps:
-                self.logger.warning(
+                self._logger.warning(
                     f"Circular dependencies detected: {circular_deps}",
                     extra={'dependencies': circular_deps}
                 )
@@ -81,7 +81,7 @@ class DependencyAnalyzer:
             return categorized_deps
 
         except Exception as e:
-            self.logger.error(
+            self._logger.error(
                 f"Dependency analysis failed: {e}", exc_info=True)
             return {"stdlib": set(), "third_party": set(), "local": set()}
 
@@ -109,7 +109,7 @@ class DependencyAnalyzer:
                     visitor.visit(child)
                     dependencies["attributes"].add(visitor.name)
             except Exception as e:
-                self.logger.debug(f"Error extracting dependency: {e}")
+                self._logger.debug(f"Error extracting dependency: {e}")
         return dependencies
 
     def _categorize_dependencies(
@@ -178,7 +178,7 @@ class DependencyAnalyzer:
             stdlib_dir = paths.get("stdlib")
 
             if not stdlib_dir:
-                self.logger.warning("Could not find stdlib directory")
+                self._logger.warning("Could not find stdlib directory")
                 return stdlib_modules
 
             # Walk through stdlib directory
@@ -191,7 +191,7 @@ class DependencyAnalyzer:
             return stdlib_modules
 
         except Exception as e:
-            self.logger.error(
+            self._logger.error(
                 f"Error getting stdlib modules: {e}", exc_info=True)
             return set()
 
@@ -228,7 +228,7 @@ class DependencyAnalyzer:
             if self.module_name:
                 visit(self.module_name)
         except Exception as e:
-            self.logger.error(
+            self._logger.error(
                 f"Error detecting circular dependencies: {e}", exc_info=True)
 
         return circular_deps
@@ -262,7 +262,7 @@ class DependencyAnalyzer:
             return max(0.0, min(impact_score, 100.0))
 
         except Exception as e:
-            self.logger.error(
+            self._logger.error(
                 f"Error calculating maintainability impact: {e}", exc_info=True)
             return 0.0
 
@@ -302,11 +302,11 @@ class DependencyAnalyzer:
             return dot.source
 
         except ImportError:
-            self.logger.warning(
+            self._logger.warning(
                 "graphviz package not installed, cannot generate graph")
             return None
         except Exception as e:
-            self.logger.error(
+            self._logger.error(
                 f"Error generating dependency graph: {e}", exc_info=True)
             return None
 
@@ -328,7 +328,7 @@ class DependencyAnalyzer:
             }
 
         except Exception as e:
-            self.logger.error(
+            self._logger.error(
                 f"Error getting dependency metrics: {e}", exc_info=True)
             return {}
 
@@ -368,7 +368,7 @@ class DependencyAnalyzer:
                     project_deps["global_metrics"]["total_dependencies"] += metrics["total_dependencies"]
 
                 except Exception as e:
-                    self.logger.error(f"Error analyzing {py_file}: {e}")
+                    self._logger.error(f"Error analyzing {py_file}: {e}")
 
             # Calculate average maintainability
             if project_deps["global_metrics"]["total_modules"] > 0:
@@ -384,6 +384,6 @@ class DependencyAnalyzer:
             return project_deps
 
         except Exception as e:
-            self.logger.error(
+            self._logger.error(
                 f"Error analyzing project dependencies: {e}", exc_info=True)
             return {}
