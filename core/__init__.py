@@ -41,6 +41,7 @@ from core.types import (
 )
 from core.metrics_collector import MetricsCollector
 from core.monitoring import SystemMonitor
+from core.dependency_injection import setup_dependencies
 
 __version__ = "0.1.0"
 
@@ -61,4 +62,5 @@ __all__ = [
     "ProcessingResult",
     "MetricsCollector",
     "SystemMonitor",
+    "setup_dependencies"
 ]
