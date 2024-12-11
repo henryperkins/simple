@@ -165,7 +165,7 @@ class DocumentationGenerator:
             print_info(f"Starting repository processing: {repo_path}", correlation_id=self.correlation_id)
             repo_path = repo_path.strip()
 
-            if is_url(repo_path):
+            if self._is_url(repo_path):
                 local_path = await self._clone_repository(repo_path)
             else:
                 local_path = Path(repo_path)
