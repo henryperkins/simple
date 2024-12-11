@@ -1,5 +1,9 @@
 # ... (previous content remains unchanged)
 
+from typing import Optional, List, Set
+from core.types.base import ExtractionContext, Injector
+from core.logger import CorrelationLoggerAdapter, LoggerSetup, get_correlation_id
+
 def __init__(
     self,
     context: ExtractionContext,

@@ -1,5 +1,14 @@
 # ... (previous content remains unchanged)
 
+from typing import Optional
+from core.ai_service import AIService
+from core.extraction.code_extractor import CodeExtractor
+from core.markdown_generator import MarkdownGenerator
+import uuid
+from core.console import print_info
+from core.logger import CorrelationLoggerAdapter, LoggerSetup
+from core.types.base import Injector
+
 def __init__(self, ai_service: Optional[AIService] = None, correlation_id: Optional[str] = None) -> None:
     """
     Initialize the DocumentationOrchestrator.
