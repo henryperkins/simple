@@ -25,7 +25,7 @@ from api.token_management import TokenManager
 from utils import RepositoryManager
 
 from hello import hello
-from console import (
+from core.console import (
     print_info,
     print_error,
     display_error,
