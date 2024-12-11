@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 from rich.logging import RichHandler
 from contextvars import ContextVar
 from functools import wraps
-from console import console
+from core.console import console
 
 # Context variable for the correlation ID
 correlation_id_var = ContextVar('correlation_id')
