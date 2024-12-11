@@ -35,7 +35,6 @@ from core.console import (
 from utils import (
     ensure_directory,
     read_file_safe,
-    is_url,
     RepositoryManager
 )
 
