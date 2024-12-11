@@ -1,6 +1,7 @@
 """Rich console utilities for enhanced visual feedback."""
 from typing import Any
 from rich.console import Console
+from rich.progress import Progress
 from rich.syntax import Syntax
 from rich.logging import RichHandler
 import logging
@@ -86,7 +87,9 @@ def print_info(message: str) -> None:
     console.print(f"[bold blue]Info:[/bold blue] {message}")
 
 
-# Example usage:
+def create_progress() -> Progress:
+    """Create and return a Rich Progress instance."""
+    return Progress()
 if __name__ == "__main__":
     # Set up logging
     setup_logging(logging.DEBUG)
