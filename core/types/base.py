@@ -43,8 +43,8 @@ class Injector:
             # Register default dependencies
             if 'metrics_calculator' not in cls._dependencies:
                 cls._dependencies['metrics_calculator'] = Metrics()
-            if 'docstring_parser' not in cls._dependencies:
-                cls._dependencies['docstring_parser'] = DocstringProcessor()
+            if 'docstring_processor' not in cls._dependencies:
+                cls._dependencies['docstring_processor'] = DocstringProcessor()
             cls._initialized = True
 
         if name not in cls._dependencies:
