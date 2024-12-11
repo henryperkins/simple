@@ -3,14 +3,18 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import json
 import os
-import sys
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskID
-from rich.console import Console
+from pathlib import Path
 
 from core.logger import LoggerSetup
 from core.types import MetricData
-from core.console import console
-
+from console import (
+    create_progress,
+    display_metrics,
+    print_error,
+    print_info,
+    print_warning,
+    print_debug
+)
 
 class MetricsCollector:
     """Collects and stores metrics data for code analysis."""
@@ -20,17 +24,9 @@ class MetricsCollector:
     _initialized = False
 
     def __new__(cls, correlation_id: Optional[str] = None) -> 'MetricsCollector':
-        """Ensure only one instance exists (singleton pattern).
-
-        Args:
-            correlation_id: Optional correlation ID for tracking related operations
-
-        Returns:
-            The singleton MetricsCollector instance
-        """
+        """Ensure only one instance exists (singleton pattern)."""
         if not cls._instance:
             instance = super().__new__(cls)
-            # Initialize here instead of in __init__ to avoid recursion
             if not cls._initialized:
                 instance.logger = LoggerSetup.get_logger(__name__)
                 instance.correlation_id = correlation_id
@@ -48,16 +44,6 @@ class MetricsCollector:
             cls._instance = instance
         return cls._instance
 
-    def __init__(self, correlation_id: Optional[str] = None) -> None:
-        """Initialize metrics collector.
-
-        Args:
-            correlation_id: Optional correlation ID for tracking related operations
-        """
-        # Skip initialization since it's done in __new__
-        if MetricsCollector._initialized:
-            return
-
     def _format_progress_desc(
         self,
         module_name: str,
@@ -66,21 +52,8 @@ class MetricsCollector:
         scanned_classes: int,
         total_classes: int
     ) -> str:
-        """Format the progress description.
-
-        Args:
-            module_name: Name of the module
-            scanned_funcs: Number of scanned functions
-            total_funcs: Total number of functions
-            scanned_classes: Number of scanned classes
-            total_classes: Total number of classes
-
-        Returns:
-            Formatted description string
-        """
-        # Use just the filename from the module path
-        display_name = os.path.basename(
-            module_name) if module_name else "unknown"
+        """Format the progress description."""
+        display_name = os.path.basename(module_name) if module_name else "unknown"
         func_ratio = scanned_funcs / total_funcs if total_funcs > 0 else 0
         class_ratio = scanned_classes / total_classes if total_classes > 0 else 0
         return (
@@ -92,14 +65,7 @@ class MetricsCollector:
     def start_progress(self) -> None:
         """Initialize and start progress tracking."""
         if self.progress is None:
-            self.progress = Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(complete_style="green"),
-                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                console=console,
-                expand=True
-            )
+            self.progress = create_progress()
             self.progress.start()
 
     def stop_progress(self) -> None:
@@ -110,51 +76,38 @@ class MetricsCollector:
             self.current_task_id = None
 
     def _init_progress(self, module_name: str, total_items: int) -> None:
-        """Initialize or update the progress tracking for a new module.
-
-        Args:
-            module_name: Name of the module being processed
-            total_items: Total number of items to process
-        """
+        """Initialize or update the progress tracking for a new module."""
         try:
-            # Ensure progress is started
             if self.progress is None:
                 self.start_progress()
 
-            # Stop existing task if any
             if self.current_task_id is not None:
                 self.progress.remove_task(self.current_task_id)
                 self.current_task_id = None
 
-            # Create new progress tracking with initial description
             desc = self._format_progress_desc(module_name, 0, 0, 0, 0)
             self.current_task_id = self.progress.add_task(
                 desc, total=max(1, total_items))
             self.current_module = module_name
 
-            # Reset accumulated counts
             self.accumulated_functions = 0
             self.accumulated_classes = 0
 
         except Exception as e:
-            self.logger.error(f"Error initializing progress: {e}")
+            print_error(f"Error initializing progress: {e}",
+                       correlation_id=self.correlation_id)
 
     def collect_metrics(self, module_name: str, metrics: MetricData) -> None:
-        """Collect metrics for a module.
-
-        Args:
-            module_name: Name of the module being analyzed
-            metrics: MetricData object containing the metrics
-        """
+        """Collect metrics for a module."""
         try:
             if not module_name or not metrics:
-                self.logger.warning("Invalid metrics data received")
+                print_warning("Invalid metrics data received",
+                            correlation_id=self.correlation_id)
                 return
 
             if module_name not in self.metrics_history:
                 self.metrics_history[module_name] = []
 
-            # Check if metrics have changed before storing
             current_metrics = self._metrics_to_dict(metrics)
             if module_name in self.current_module_metrics:
                 last_metrics = self._metrics_to_dict(
@@ -162,19 +115,15 @@ class MetricsCollector:
                 if current_metrics == last_metrics:
                     return
 
-            # Update current module metrics silently
             self.current_module_metrics[module_name] = metrics
 
-            # Create metrics entry without output
             entry = {
                 'timestamp': datetime.now().isoformat(),
                 'metrics': current_metrics,
                 'correlation_id': self.correlation_id
             }
 
-            # Store metrics silently
             if module_name in self.metrics_history:
-                # Only store if metrics have changed and history exists
                 if self.metrics_history[module_name]:
                     last_entry = self.metrics_history[module_name][-1]
                     if last_entry.get('metrics', {}) != current_metrics:
@@ -187,28 +136,21 @@ class MetricsCollector:
                 self.metrics_history[module_name] = [entry]
                 self._save_history()
 
-            # Initialize progress for new module if it has items to process
             total_items = metrics.total_functions + metrics.total_classes
             if total_items > 0:
                 if self.current_module != module_name:
                     self._init_progress(module_name, total_items)
-                    # Update progress with initial counts
                     self._update_progress(
                         module_name,
                         (metrics.scanned_functions, metrics.total_functions),
                         (metrics.scanned_classes, metrics.total_classes)
                     )
         except Exception as e:
-            self.logger.error(f"Error collecting metrics: {e}")
+            print_error(f"Error collecting metrics: {e}",
+                       correlation_id=self.correlation_id)
 
     def update_scan_progress(self, module_name: str, item_type: str, name: str) -> None:
-        """Update and log scan progress for a module.
-
-        Args:
-            module_name: Name of the module being analyzed
-            item_type: Type of item scanned ('function' or 'class')
-            name: Name of the scanned item
-        """
+        """Update and log scan progress for a module."""
         try:
             if module_name in self.current_module_metrics:
                 metrics = self.current_module_metrics[module_name]
@@ -235,7 +177,8 @@ class MetricsCollector:
                         )
 
         except Exception as e:
-            self.logger.error(f"Error updating scan progress: {e}")
+            print_error(f"Error updating scan progress: {e}",
+                       correlation_id=self.correlation_id)
 
     def _update_progress(
         self,
@@ -243,13 +186,7 @@ class MetricsCollector:
         functions: Tuple[int, int],
         classes: Tuple[int, int]
     ) -> None:
-        """Update the progress tracking with current counts.
-
-        Args:
-            module_name: Name of the module being processed
-            functions: Tuple of (scanned, total) functions
-            classes: Tuple of (scanned, total) classes
-        """
+        """Update the progress tracking with current counts."""
         try:
             if self.current_task_id is None or self.progress is None:
                 return
@@ -257,11 +194,9 @@ class MetricsCollector:
             scanned_funcs, total_funcs = functions
             scanned_classes, total_classes = classes
 
-            # Calculate overall completion
             total_items = total_funcs + total_classes
             completed_items = scanned_funcs + scanned_classes
 
-            # Update progress description and completion
             desc = self._format_progress_desc(
                 module_name,
                 scanned_funcs,
@@ -273,11 +208,12 @@ class MetricsCollector:
                 self.current_task_id,
                 description=desc,
                 completed=completed_items,
-                total=max(1, total_items)  # Ensure non-zero total
+                total=max(1, total_items)
             )
 
         except Exception as e:
-            self.logger.error(f"Error updating progress: {e}")
+            print_error(f"Error updating progress: {e}",
+                       correlation_id=self.correlation_id)
 
     def _metrics_to_dict(self, metrics: MetricData) -> Dict[str, Any]:
         """Convert MetricData to dictionary format."""
@@ -297,7 +233,8 @@ class MetricsCollector:
                 'complexity_graph': getattr(metrics, 'complexity_graph', None)
             }
         except Exception as e:
-            self.logger.error(f"Error converting metrics to dict: {e}")
+            print_error(f"Error converting metrics to dict: {e}",
+                       correlation_id=self.correlation_id)
             return {}
 
     async def track_operation(
@@ -324,10 +261,9 @@ class MetricsCollector:
 
             self.operations.append(operation)
 
-            # Silently track operation without output
-
         except Exception as e:
-            self.logger.error(f"Error tracking operation: {e}")
+            print_error(f"Error tracking operation: {e}",
+                       correlation_id=self.correlation_id)
 
     async def close(self) -> None:
         """Clean up resources and save final state."""
@@ -335,7 +271,8 @@ class MetricsCollector:
             self.stop_progress()
             self._save_history()
         except Exception as e:
-            self.logger.error(f"Error closing MetricsCollector: {e}")
+            print_error(f"Error closing MetricsCollector: {e}",
+                       correlation_id=self.correlation_id)
 
     def _load_history(self) -> None:
         """Load metrics history from storage."""
@@ -344,7 +281,8 @@ class MetricsCollector:
                 with open('metrics_history.json', 'r') as f:
                     self.metrics_history = json.load(f)
         except Exception as e:
-            self.logger.error(f"Error loading metrics history: {str(e)}")
+            print_error(f"Error loading metrics history: {str(e)}",
+                       correlation_id=self.correlation_id)
             self.metrics_history = {}
 
     def _save_history(self) -> None:
@@ -353,7 +291,8 @@ class MetricsCollector:
             with open('metrics_history.json', 'w') as f:
                 json.dump(self.metrics_history, f, indent=2, default=str)
         except Exception as e:
-            self.logger.error(f"Error saving metrics history: {str(e)}")
+            print_error(f"Error saving metrics history: {str(e)}",
+                       correlation_id=self.correlation_id)
 
     def clear_history(self) -> None:
         """Clear all metrics history."""
@@ -362,11 +301,7 @@ class MetricsCollector:
             os.remove('metrics_history.json')
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Get the current metrics data.
-
-        Returns:
-            Dictionary containing current metrics data and history
-        """
+        """Get the current metrics data."""
         return {
             'current_metrics': self.current_module_metrics,
             'history': self.metrics_history,
@@ -374,12 +309,35 @@ class MetricsCollector:
         }
 
     def get_metrics_history(self, module_name: str) -> List[Dict[str, Any]]:
-        """Get metrics history for a specific module.
-
-        Args:
-            module_name: Name of the module to get history for
-
-        Returns:
-            List of historical metrics entries for the module
-        """
+        """Get metrics history for a specific module."""
         return self.metrics_history.get(module_name, [])
+
+    async def display_metrics(self) -> None:
+        """Display collected metrics and system performance metrics."""
+        try:
+            print_info("Displaying metrics", correlation_id=self.correlation_id)
+            collected_metrics = self.metrics_history
+
+            if not collected_metrics:
+                print_warning("No metrics collected", correlation_id=self.correlation_id)
+                return
+
+            for module_name, history in collected_metrics.items():
+                if history:
+                    latest = history[-1]['metrics']
+                    display_metrics(
+                        {
+                            "Module": module_name,
+                            "Scanned Functions": latest['scanned_functions'],
+                            "Total Functions": latest['total_functions'],
+                            "Scanned Classes": latest['scanned_classes'],
+                            "Total Classes": latest['total_classes'],
+                            "Complexity Score": latest['cyclomatic_complexity'],
+                            "Maintainability": f"{latest['maintainability_index']:.2f}"
+                        },
+                        title=f"Metrics for {module_name}"
+                    )
+
+        except Exception as e:
+            print_error(f"Error displaying metrics: {e}",
+                       correlation_id=self.correlation_id)

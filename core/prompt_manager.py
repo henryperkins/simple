@@ -5,8 +5,7 @@ from pathlib import Path
 import json
 
 from core.types.base import ExtractedClass, ExtractedFunction
-from core.logger import LoggerSetup
-
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 
 class PromptManager:
     """Manages the generation and formatting of prompts for AI interactions."""
@@ -18,7 +17,10 @@ class PromptManager:
             correlation_id: Optional correlation ID for tracking related operations
         """
         self.correlation_id = correlation_id
-        self.logger = LoggerSetup.get_logger(__name__)
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__),
+            correlation_id=self.correlation_id
+        )
 
         # Define the function schema for structured output
         self.function_schema = {
@@ -126,6 +128,11 @@ class PromptManager:
         Returns:
             Formatted prompt string for the AI model
         """
+        self.logger.debug("Creating documentation prompt", extra={
+            'module_name': module_name,
+            'file_path': file_path
+        })
+
         prompt = (
             f"Objective: Generate comprehensive Google-style documentation for the following Python module.\n\n"
             f"Context: This module is part of a larger system aimed at providing AI-driven solutions. "
@@ -143,11 +150,6 @@ class PromptManager:
             "- Incomplete argument details that could lead to misunderstandings.\n\n"
             "Classes and Functions:\n"
             "Provide detailed documentation for each class and function, including their purpose, usage, and any important details.\n"
-            "Source Code:\n"
-            f"{source_code}\n\n"
-            "Analyze the code and generate comprehensive Google-style documentation. "
-            "Include a brief summary, detailed description, arguments, return values, and possible exceptions. "
-            "Ensure all descriptions are clear and technically accurate."
         )
 
         # Add class information
@@ -173,6 +175,7 @@ class PromptManager:
             "Ensure all descriptions are clear and technically accurate."
         )
 
+        self.logger.debug("Documentation prompt created successfully")
         return prompt
 
     def create_code_analysis_prompt(self, code: str) -> str:
@@ -184,7 +187,9 @@ class PromptManager:
         Returns:
             Formatted prompt for code analysis
         """
-        return (
+        self.logger.debug("Creating code analysis prompt")
+
+        prompt = (
             "Objective: Analyze the following code for quality and provide specific improvements.\n\n"
             "Context: This code is part of a critical system component where performance and reliability are paramount. "
             "Consider historical issues such as performance bottlenecks and error handling failures. "
@@ -205,6 +210,9 @@ class PromptManager:
             "Provide specific examples of improvements where applicable, and suggest alternative approaches or refactorings."
         )
 
+        self.logger.debug("Code analysis prompt created successfully")
+        return prompt
+
     def _format_function_info(self, func: ExtractedFunction) -> str:
         """Format function information for prompt.
 
@@ -214,16 +222,30 @@ class PromptManager:
         Returns:
             Formatted function string
         """
-        args_str = ", ".join(f"{arg.name}: {arg.type or 'Any'}" for arg in func.args)
-        return (
+        self.logger.debug(f"Formatting function info for: {func.name}")
+
+        args_str = ", ".join(
+            f"{arg.name}: {arg.type or 'Any'}"
+            + (f" = {arg.default_value}" if arg.default_value else "")
+            for arg in func.args
+        )
+
+        # Safely access docstring_info and returns
+        docstring_info = func.docstring_info or {}
+        returns_info = func.returns or {}
+
+        formatted_info = (
             f"Function: {func.name}\n"
             f"Arguments: ({args_str})\n"
-            f"Returns: {func.returns.get('type', 'Any')}\n"
-            f"Existing Docstring: {func.docstring if func.docstring else 'None'}\n"
+            f"Returns: {returns_info.get('type', 'Any')}\n"
+            f"Existing Docstring: {docstring_info.get('summary', 'None')}\n"
             f"Decorators: {', '.join(func.decorators) if func.decorators else 'None'}\n"
             f"Is Async: {'Yes' if func.is_async else 'No'}\n"
             f"Complexity Score: {func.metrics.cyclomatic_complexity if func.metrics else 'Unknown'}\n"
         )
+
+        self.logger.debug(f"Function info formatted for: {func.name}")
+        return formatted_info
 
     def _format_class_info(self, cls: ExtractedClass) -> str:
         """Format class information for prompt.
@@ -234,11 +256,20 @@ class PromptManager:
         Returns:
             Formatted class string
         """
-        methods_str = "\n    ".join(f"- {m.name}({', '.join(a.name for a in m.args)})" for m in cls.methods)
-        return (
+        self.logger.debug(f"Formatting class info for: {cls.name}")
+
+        methods_str = "\n    ".join(
+            f"- {m.name}({', '.join(a.name for a in m.args)})"
+            for m in cls.methods
+        )
+
+        # Safely access docstring_info
+        docstring_info = cls.docstring_info or {}
+
+        formatted_info = (
             f"Class: {cls.name}\n"
             f"Base Classes: {', '.join(cls.bases) if cls.bases else 'None'}\n"
-            f"Existing Docstring: {cls.docstring if cls.docstring else 'None'}\n"
+            f"Existing Docstring: {docstring_info.get('summary', 'None')}\n"
             f"Methods:\n    {methods_str}\n"
             f"Attributes: {', '.join(a['name'] for a in cls.attributes)}\n"
             f"Instance Attributes: {', '.join(a['name'] for a in cls.instance_attributes)}\n"
@@ -247,10 +278,14 @@ class PromptManager:
             f"Complexity Score: {cls.metrics.cyclomatic_complexity if cls.metrics else 'Unknown'}\n"
         )
 
+        self.logger.debug(f"Class info formatted for: {cls.name}")
+        return formatted_info
+
     def get_function_schema(self) -> Dict[str, Any]:
         """Get the function schema for structured output.
 
         Returns:
             Function schema dictionary
         """
+        self.logger.debug("Retrieving function schema")
         return self.function_schema

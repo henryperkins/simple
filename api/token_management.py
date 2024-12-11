@@ -1,65 +1,58 @@
-"""
-Token Management Module.
-
-Centralizes all token-related operations for Azure OpenAI API.
-"""
-
-from typing import Optional, Dict, Any, Tuple, Union
+"""Token management module for interacting with the OpenAI API."""
+import tiktoken
+from typing import Dict, Any, Optional, Tuple
 from core.config import AIConfig
-from core.logger import LoggerSetup
-from utils import (
-    serialize_for_logging,
-    get_env_var
-)
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from utils import serialize_for_logging, get_env_var
 from core.types import TokenUsage
 from core.exceptions import ProcessingError
-import tiktoken
-
+from console import display_metrics, print_info, print_error
 
 class TokenManager:
-    """Manages all token-related operations for Azure OpenAI API."""
+    """Manages token usage and cost estimation for OpenAI API interactions."""
 
     def __init__(
         self,
-        model: str = "gpt-4",
-        deployment_id: Optional[str] = None,
+        model: str,
         config: Optional[AIConfig] = None,
-        metrics_collector: Optional[Any] = None,
+        correlation_id: Optional[str] = None,
+        metrics_collector: Optional[Any] = None
     ) -> None:
-        """
-        Initialize the TokenManager.
+        """Initialize TokenManager with model and configuration.
 
         Args:
-            model (str): The model name to use. Defaults to "gpt-4".
-            deployment_id (Optional[str]): The deployment ID for the model.
-            config (Optional[AIConfig]): Configuration for Azure OpenAI.
-            metrics_collector (Optional[Any]): Collector for metrics.
+            model: The model name.
+            config: The AI configuration.
+            correlation_id: Optional correlation ID for logging.
+            metrics_collector: Optional metrics collector instance.
         """
-        self.logger = LoggerSetup.get_logger(__name__)
-        self.config = config or AIConfig.from_env()
-        # Use deployment from config if not explicitly provided
-        self.deployment_id = deployment_id or self.config.deployment
-        # Use model from config if not explicitly provided
-        self.model = model or self.config.model
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__),
+            correlation_id=correlation_id
+        )
+        self.config = config if config else AIConfig.from_env()
+        self.model = model
+        self.deployment_id = self.config.deployment
         self.metrics_collector = metrics_collector
+        self.correlation_id = correlation_id  # Added correlation_id
 
         try:
-            # For Azure OpenAI, we'll use the base model name for encoding
             base_model = self._get_base_model_name(self.model)
             self.encoding = tiktoken.encoding_for_model(base_model)
         except KeyError:
             self.logger.warning(
-                f"Model {self.model} not found. Falling back to 'cl100k_base' encoding.")
+                f"Model {self.model} not found. Falling back to 'cl100k_base' encoding."
+            )
             self.encoding = tiktoken.get_encoding("cl100k_base")
 
         self.model_config = self.config.model_limits.get(
             self.model, self.config.model_limits["gpt-4"]
         )
 
-        # Initialize counters
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
-        self.logger.info("TokenManager initialized.")
+
+        self.logger.info("TokenManager initialized.")  # Using logger
 
     def _get_base_model_name(self, model_name: str) -> str:
         """
@@ -71,24 +64,21 @@ class TokenManager:
         Returns:
             str: The base model name for token encoding.
         """
-        # Map Azure OpenAI deployment names to base model names
         model_mappings = {
             "gpt-4": "gpt-4",
             "gpt-35-turbo": "gpt-3.5-turbo",
             "gpt-3.5-turbo": "gpt-3.5-turbo",
         }
 
-        # Remove any version numbers or suffixes
         base_name = model_name.split('-')[0].lower()
 
-        # Try to match with known models
         for key, value in model_mappings.items():
             if key.startswith(base_name):
                 return value
 
-        # Default to gpt-4 if unknown
         self.logger.warning(
-            f"Unknown model {model_name}, defaulting to gpt-4 for token encoding")
+            f"Unknown model {model_name}, defaulting to gpt-4 for token encoding"
+        )
         return "gpt-4"
 
     def _estimate_tokens(self, text: str) -> int:
@@ -104,8 +94,8 @@ class TokenManager:
         try:
             return len(self.encoding.encode(text))
         except Exception as e:
-            self.logger.error(f"Error estimating tokens: {e}")
-            return len(text) // 4  # Rough fallback estimate
+            self.logger.error(f"Error estimating tokens: {e}")  # Using logger
+            return len(text) // 4
 
     def _calculate_usage(self, prompt_tokens: int, completion_tokens: int) -> TokenUsage:
         """Calculate token usage statistics.
@@ -118,8 +108,6 @@ class TokenManager:
             TokenUsage: Token usage statistics including cost calculation
         """
         total_tokens = prompt_tokens + completion_tokens
-
-        # Calculate costs based on model config
         cost_per_token = self.model_config.cost_per_token
         estimated_cost = total_tokens * cost_per_token
 
@@ -134,7 +122,7 @@ class TokenManager:
         self,
         prompt: str,
         max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        temperature: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Validate and prepare a request with token management.
@@ -152,33 +140,39 @@ class TokenManager:
         """
         try:
             prompt_tokens = self._estimate_tokens(prompt)
-            # Calculate available tokens for completion
             available_tokens = self.model_config.max_tokens - prompt_tokens
 
-            # If max_tokens specified, use minimum of that or available
+            if prompt_tokens > self.model_config.max_tokens:  # Specific error handling
+                raise ValueError(f"Prompt exceeds maximum token limit for model {self.model}: {prompt_tokens} > {self.model_config.max_tokens}")
+
             if max_tokens:
                 max_completion = min(max_tokens, available_tokens)
             else:
-                # Otherwise use minimum of available or chunk size
                 max_completion = min(
-                    available_tokens, self.model_config.chunk_size)
+                    available_tokens, self.model_config.chunk_size
+                )
 
-            # Ensure at least 1 token for completion
             max_completion = max(1, max_completion)
 
-            # Log if we had to adjust the completion tokens
+            if max_completion == 0:  # Warning when max_completion is 0
+                self.logger.warning(
+                    f"Estimated prompt tokens ({prompt_tokens}) close to or exceeding model's max tokens limit ({self.model_config.max_tokens}).",
+                    extra={"correlation_id": self.correlation_id}
+                )
+
             if max_completion < available_tokens:
                 self.logger.debug(
                     f"Adjusted completion tokens to {max_completion} (prompt: {prompt_tokens}, "
-                    f"available: {available_tokens})"
+                    f"available: {available_tokens})",
+                    extra={"correlation_id": self.correlation_id}
                 )
 
             total_tokens = prompt_tokens + max_completion
             self.logger.debug(
-                f"Token calculation: prompt={prompt_tokens}, max_completion={max_completion}, total={total_tokens}"
+                f"Token calculation: prompt={prompt_tokens}, max_completion={max_completion}, total={total_tokens}",
+                extra={"correlation_id": self.correlation_id}
             )
 
-            # For Azure OpenAI, we use the deployment_id as the model
             request_params = {
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_completion,
@@ -190,7 +184,7 @@ class TokenManager:
             return request_params
 
         except Exception as e:
-            self.logger.error(f"Error preparing request: {e}", exc_info=True)
+            self.logger.error(f"Error preparing request: {e}", exc_info=True)  # Using logger with stack trace
             raise ProcessingError(f"Failed to prepare request: {str(e)}")
 
     def get_usage_stats(self) -> Dict[str, Union[int, float]]:
@@ -200,7 +194,6 @@ class TokenManager:
         Returns:
             Dict[str, Union[int, float]]: Current token usage and estimated cost.
         """
-        from core.console import console
         usage = self._calculate_usage(
             self.total_prompt_tokens, self.total_completion_tokens
         )
@@ -210,8 +203,7 @@ class TokenManager:
             "total_tokens": self.total_prompt_tokens + self.total_completion_tokens,
             "estimated_cost": usage.estimated_cost,
         }
-        # Use rich console to update in place
-        console.print(f"\rToken Usage: {stats}", end="")
+        display_metrics(stats, title="Token Usage Statistics")
         return stats
 
     def track_request(self, prompt_tokens: int, max_completion: int) -> None:
@@ -224,11 +216,12 @@ class TokenManager:
         """
         self.total_prompt_tokens += prompt_tokens
         self.total_completion_tokens += max_completion
-        from core.console import console
-        console.print(
-            f"\rTracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}", end="")
+        self.logger.info(
+            f"Tracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}",
+            extra={"correlation_id": self.correlation_id}
+        )  # Using logger
 
-    async def process_completion(self, completion: Any) -> Tuple[str, Dict[str, int]]:
+    async def process_completion(self, completion: Any) -> Tuple[str, Dict[str, Any]]:
         """
         Process completion response and track token usage.
 
@@ -244,7 +237,6 @@ class TokenManager:
         try:
             message = completion["choices"][0]["message"]
 
-            # Handle both regular responses and function call responses
             if "function_call" in message:
                 content = message["function_call"]["arguments"]
             else:
@@ -261,21 +253,22 @@ class TokenManager:
                     await self.metrics_collector.track_operation(
                         "token_usage",
                         success=True,
-                        duration=0,  # Duration can be updated based on actual metrics
-                        usage=usage,
+                        duration=0,
+                        usage=self._calculate_usage(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)).to_dict(),  # Convert to dict
                         metadata={
                             "model": self.model,
                             "deployment_id": self.deployment_id,
+                            "correlation_id": self.correlation_id  # Added correlation_id
                         },
                     )
 
-                from core.console import console
-                console.print(
-                    f"\rProcessed completion - Content Length: {len(content)}, Usage: {usage}", end="")
+                self.logger.info(
+                    f"Processed completion - Content Length: {len(content)}, Usage: {usage}",
+                    extra={"correlation_id": self.correlation_id}
+                )  # Using logger
 
             return content, usage
 
         except Exception as e:
-            self.logger.error(
-                f"Error processing completion: {e}", exc_info=True)
+            self.logger.error(f"Error processing completion: {e}", exc_info=True)  # Using logger with stack trace
             raise ProcessingError(f"Failed to process completion: {str(e)}")
