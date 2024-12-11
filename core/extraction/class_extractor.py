@@ -25,7 +25,7 @@ class ClassExtractor:
     """Handles extraction of classes from Python source code."""
 
     def __init__(
-        self, context: "ExtractionContext", correlation_id: Optional[str] = None
+        self, context: "ExtractionContext", correlation_id: Optional[str] = None, metrics_collector: Optional[MetricsCollector] = None
     ) -> None:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.context = context
@@ -50,7 +50,8 @@ class ClassExtractor:
             self.logger.warning("Docstring parser not registered, using default")
             self.docstring_parser = DocstringProcessor()
             Injector.register("docstring_parser", self.docstring_parser)
-        self.errors: list[str] = []
+        self.metrics_collector = metrics_collector
+        self.errors: List[str] = []
 
     async def extract_classes(
         self, tree: Union[ast.AST, ast.Module]
