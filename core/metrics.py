@@ -6,10 +6,18 @@ import math
 from datetime import datetime
 from typing import Any, Dict, Optional, Union, TYPE_CHECKING
 
-from core.logger import LoggerSetup
-from core.types.base import MetricData
-from core.types import Injector
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.types import MetricData
+from core.types.base import Injector
 from core.metrics_collector import MetricsCollector
+from core.console import (
+    create_progress,
+    display_metrics,
+    print_error,
+    print_info,
+    print_warning,
+    print_debug
+)
 
 if TYPE_CHECKING:
     from core.metrics_collector import MetricsCollector
@@ -27,21 +35,19 @@ class Metrics:
 
     def __init__(self, metrics_collector: Optional["MetricsCollector"] = None, correlation_id: Optional[str] = None) -> None:
         self.module_name: Optional[str] = None
-        self.logger = LoggerSetup.get_logger(__name__)
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.error_counts: Dict[str, int] = {}
-        self.correlation_id = correlation_id
+        self.correlation_id = correlation_id or str(uuid.uuid4())
         self.metrics_collector = metrics_collector or MetricsCollector(
-            correlation_id=correlation_id)
+            correlation_id=self.correlation_id)
 
-        # Only register if we're not already in the process of getting from injector
-        if not getattr(Metrics, '_initializing', False):
-            try:
-                Metrics._initializing = True
-                existing = Injector.get('metrics_calculator')
-                if existing is None:
-                    Injector.register('metrics_calculator', self)
-            finally:
-                Metrics._initializing = False
+        # Ensure metrics calculator is registered with Injector
+        try:
+            existing = Injector.get('metrics_calculator')
+            if existing is None:
+                Injector.register('metrics_calculator', self)
+        except KeyError:
+            Injector.register('metrics_calculator', self)
 
     def calculate_metrics(self, code: str, module_name: Optional[str] = None) -> MetricData:
         """Calculate all metrics for the given code.
@@ -107,7 +113,7 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating metrics: {str(e)}", exc_info=True)
+                f"Error calculating metrics: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             # Return default metrics on error
             return MetricData()
 
@@ -120,7 +126,21 @@ class Metrics:
         Returns:
             float: The maintainability index score (0-100)
         """
-        return self._calculate_maintainability_index(code)
+        try:
+            tree = ast.parse(code)
+            lines_of_code = len(code.splitlines())
+            cyclomatic = self._calculate_cyclomatic_complexity(tree)
+            halstead_metrics = self._calculate_halstead_metrics(code)
+            maintainability = self._calculate_maintainability_direct(
+                lines_of_code,
+                cyclomatic,
+                halstead_metrics.get('volume', 0)
+            )
+            return maintainability
+        except Exception as e:
+            self.logger.error(
+                f"Error calculating maintainability index: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+            return 0.0
 
     def calculate_metrics_for_class(self, class_data: Any) -> MetricData:
         """Calculate metrics for a class.
@@ -144,7 +164,7 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating class metrics: {str(e)}", exc_info=True)
+                f"Error calculating class metrics: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             return MetricData()
 
     def calculate_metrics_for_function(self, function_data: Any) -> MetricData:
@@ -169,7 +189,7 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating function metrics: {str(e)}", exc_info=True)
+                f"Error calculating function metrics: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             return MetricData()
 
     def _calculate_cyclomatic_complexity(self, tree: Union[ast.AST, ast.Module]) -> int:
@@ -187,7 +207,7 @@ class Metrics:
             return complexity
         except Exception as e:
             self.logger.error(
-                f"Error calculating cyclomatic complexity: {str(e)}", exc_info=True)
+                f"Error calculating cyclomatic complexity: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             return 1
 
     def _calculate_cognitive_complexity(self, tree: ast.AST) -> int:
@@ -206,7 +226,7 @@ class Metrics:
             return complexity
         except Exception as e:
             self.logger.error(
-                f"Error calculating cognitive complexity: {str(e)}", exc_info=True)
+                f"Error calculating cognitive complexity: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             return 0
 
     def _calculate_maintainability_direct(self, loc: int, cyclomatic: int, volume: float) -> float:
@@ -224,7 +244,7 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating maintainability index: {str(e)}", exc_info=True)
+                f"Error calculating maintainability index: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             return 50.0  # Return a neutral value on error
 
     def _calculate_halstead_metrics(self, code: str) -> Dict[str, float]:
@@ -262,7 +282,7 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating Halstead metrics: {str(e)}", exc_info=True)
+                f"Error calculating Halstead metrics: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             return {
                 'volume': 0.0,
                 'difficulty': 0.0,
@@ -278,7 +298,7 @@ class Metrics:
             return max(0.0, metrics['volume'])
         except Exception as e:
             self.logger.error(
-                f"Error calculating Halstead volume: {str(e)}", exc_info=True)
+                f"Error calculating Halstead volume: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             return 0.0
 
     def _generate_complexity_graph(self) -> Optional[str]:
@@ -337,7 +357,7 @@ class Metrics:
 
                         return encoded_image
                 except Exception as e:
-                    self.logger.error(f"Error processing metrics history: {e}")
+                    self.logger.error(f"Error processing metrics history: {e} with correlation ID: {self.correlation_id}")
                     plt.close(fig)
                     return None
 
@@ -347,7 +367,7 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error generating complexity graph: {str(e)}", exc_info=True)
+                f"Error generating complexity graph: {e} with correlation ID: {self.correlation_id}", exc_info=True)
             # Ensure figure is closed even on error
             plt.close('all')
             return None
