@@ -54,7 +54,7 @@ class DocumentationOrchestrator:
         """
         self.correlation_id = correlation_id or str(uuid.uuid4())
         print_info(f"Initializing DocumentationOrchestrator")
-        self.logger = LoggerSetup.get_logger(__name__)
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.ai_service = ai_service or Injector.get('ai_service')
         self.code_extractor = CodeExtractor()
         self.markdown_generator = Injector.get('markdown_generator')
