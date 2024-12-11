@@ -46,7 +46,7 @@ class DocumentationOrchestrator:
             ai_service: Service for AI interactions. Created if not provided.
             correlation_id: Optional correlation ID for tracking related operations
         """
-        self.config = Config()
+        self.config = Injector.get('config')
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),

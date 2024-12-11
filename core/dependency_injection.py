@@ -8,7 +8,7 @@ from core.response_parsing import ResponseParsingService
 from core.logger import LoggerSetup
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.ai_service import AIService
-from core.config import AIConfig
+from core.config import Config
 from core.cache import Cache
 import asyncio
 from core.prompt_manager import PromptManager
@@ -25,7 +25,9 @@ def setup_dependencies(correlation_id: Optional[str] = None):
     Injector.register('markdown_generator', lambda: MarkdownGenerator())
     Injector.register('cache', lambda: Cache())
     Injector.register('semaphore', lambda: asyncio.Semaphore(5))
-    Injector.register('ai_service', lambda: AIService(config=AIConfig(), correlation_id=correlation_id))
+    config = Config()
+    Injector.register('ai_service', lambda: AIService(config=config.ai, correlation_id=correlation_id))
+    Injector.register('config', lambda: config)
     Injector.register('logger', lambda: LoggerSetup.get_logger(__name__))
     Injector.register('docstring_parser', lambda: DocstringProcessor())
     Injector.register('dependency_analyzer', lambda: DependencyAnalyzer)

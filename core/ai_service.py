@@ -25,7 +25,7 @@ class AIService:
 
     def __init__(
         self,
-        config: AIConfig,
+        config: Optional[AIConfig] = None,
         correlation_id: Optional[str] = None,
         docstring_processor: Optional[DocstringProcessor] = None,
         response_parser: Optional[ResponseParsingService] = None,
@@ -42,7 +42,7 @@ class AIService:
             config: AI service configuration
             correlation_id: Optional correlation ID for tracking related operations
         """
-        self.config = config
+        self.config = config or Injector.get('config').ai
         self.correlation_id = correlation_id
         self.logger = Injector.get('logger')
         self.cache = Injector.get('cache')
