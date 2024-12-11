@@ -87,6 +87,12 @@ def print_info(message: str) -> None:
     console.print(f"[bold blue]Info:[/bold blue] {message}")
 
 
+def display_metrics(metrics: dict, title: str = "Metrics") -> None:
+    """Display metrics in a formatted table."""
+    console.print(f"[bold magenta]{title}[/bold magenta]")
+    for key, value in metrics.items():
+        console.print(f"[bold]{key}:[/bold] {value}")
+
 def create_progress() -> Progress:
     """Create and return a Rich Progress instance."""
     return Progress()
