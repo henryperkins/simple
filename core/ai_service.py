@@ -49,10 +49,4 @@ class AIService:
         self.semaphore = asyncio.Semaphore(5)  # Limit concurrent API calls
         self._client = None
 
-        # Inject dependencies
-        self.docstring_processor = Injector.get('docstring_parser')
-        self.response_parser = Injector.get('response_parser')
-        self.token_manager = Injector.get('token_manager')
-        self.prompt_manager = Injector.get('prompt_manager')
-
     # ... rest of the class remains unchanged ...

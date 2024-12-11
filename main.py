@@ -32,13 +32,9 @@ from utils import (
     RepositoryManager
 )
 
-# Register dependencies
-from core.metrics import Metrics
-# Register an instance, not a lambda
-Injector.register('metrics_calculator', Metrics())
-Injector.register('metric_calculator', Metrics())  # Old name for compatibility
-Injector.register('docstring_parser',
-                  lambda docstring: DocstringData(summary=docstring))
+# Setup dependencies
+from core.dependency_injection import setup_dependencies
+setup_dependencies()
 
 # Configure logger globally with dynamic settings
 LOG_DIR = "logs"  # This could be set via an environment variable or command-line argument
@@ -63,12 +59,7 @@ class DocumentationGenerator:
         # Initialize core components with dependency injection
         self.ai_service = AIService(
             config=self.config.ai,
-            correlation_id=self.correlation_id,
-            docstring_processor=DocstringProcessor(),
-            response_parser=ResponseParsingService(
-                correlation_id=self.correlation_id),
-            token_manager=TokenManager(
-                model=self.config.ai.model, config=self.config.ai)
+            correlation_id=self.correlation_id
         )
         self.doc_orchestrator = DocumentationOrchestrator(
             ai_service=self.ai_service,
