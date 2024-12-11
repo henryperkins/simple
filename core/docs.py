@@ -26,7 +26,7 @@ from core.types.base import (
 )
 from core.exceptions import DocumentationError
 from utils import ensure_directory, read_file_safe
-from console import (
+from core.console import (
     print_info,
     print_error,
     print_warning,
