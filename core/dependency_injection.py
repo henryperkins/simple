@@ -1,9 +1,10 @@
+from typing import Optional
 from core.metrics import Metrics
 from core.docstring_processor import DocstringProcessor
 from core.types.base import Injector
 from core.metrics_collector import MetricsCollector
 from api.token_management import TokenManager
-from core.response_parasing import ResponseParsingService
+from core.response_parsing import ResponseParsingService
 from core.prompt_manager import PromptManager
 
 def setup_dependencies(correlation_id: Optional[str] = None):
