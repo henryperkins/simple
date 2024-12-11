@@ -88,58 +88,60 @@ class CodeExtractor:
         module_metrics.module_name = module_name
 
         try:
-            # Use a single progress bar for the entire extraction process
-            with create_progress() as progress:
-                extraction_task = progress.add_task("Extracting code elements", total=100)
+            # Create a single progress bar for the entire extraction process
+            progress = create_progress()
+            extraction_task = progress.add_task("Extracting code elements", total=100)
 
-                progress.update(extraction_task, advance=10, description="Parsing AST...")
-                tree = ast.parse(source_code)
+            progress.update(extraction_task, advance=10, description="Parsing AST...")
+            tree = ast.parse(source_code)
 
-                if self.dependency_analyzer:
-                    progress.update(extraction_task, advance=10, description="Extracting dependencies...")
-                    dependencies = self.dependency_analyzer.analyze_dependencies(tree)
-                else:
-                    dependencies = []
+            if self.dependency_analyzer:
+                progress.update(extraction_task, advance=10, description="Extracting dependencies...")
+                dependencies = self.dependency_analyzer.analyze_dependencies(tree)
+            else:
+                dependencies = []
 
-                progress.update(extraction_task, advance=15, description="Extracting classes...")
-                classes = await self.class_extractor.extract_classes(tree) if self.class_extractor else []
-                for cls in classes:
-                    module_metrics.scanned_classes += 1
-                    module_metrics.total_classes += 1
+            progress.update(extraction_task, advance=15, description="Extracting classes...")
+            classes = await self.class_extractor.extract_classes(tree) if self.class_extractor else []
+            for cls in classes:
+                module_metrics.scanned_classes += 1
+                module_metrics.total_classes += 1
 
-                progress.update(extraction_task, advance=15, description="Extracting functions...")
-                functions = await self.function_extractor.extract_functions(tree) if self.function_extractor else []
-                for func in functions:
-                    module_metrics.scanned_functions += 1
-                    module_metrics.total_functions += 1
+            progress.update(extraction_task, advance=15, description="Extracting functions...")
+            functions = await self.function_extractor.extract_functions(tree) if self.function_extractor else []
+            for func in functions:
+                module_metrics.scanned_functions += 1
+                module_metrics.total_functions += 1
 
-                progress.update(extraction_task, advance=20, description="Extracting variables...")
-                variables = self._extract_variables(tree)
+            progress.update(extraction_task, advance=20, description="Extracting variables...")
+            variables = self._extract_variables(tree)
 
-                progress.update(extraction_task, advance=10, description="Extracting constants...")
-                constants = self._extract_constants(tree)
+            progress.update(extraction_task, advance=10, description="Extracting constants...")
+            constants = self._extract_constants(tree)
 
-                progress.update(extraction_task, advance=10, description="Extracting docstrings...")
-                module_docstring = self._extract_module_docstring(tree)
+            progress.update(extraction_task, advance=10, description="Extracting docstrings...")
+            module_docstring = self._extract_module_docstring(tree)
 
-                progress.update(extraction_task, advance=10, description="Calculating metrics...")
-                module_metrics = self.metrics.calculate_metrics(
-                    source_code, module_name
-                )
+            progress.update(extraction_task, advance=10, description="Calculating metrics...")
+            module_metrics = self.metrics.calculate_metrics(
+                source_code, module_name
+            )
 
-                # Display extraction metrics
-                metrics_display = {
-                    "Classes": len(classes),
-                    "Functions": len(functions),
-                    "Variables": len(variables),
-                    "Constants": len(constants),
-                    "Lines of Code": len(source_code.splitlines()),
-                    "Cyclomatic Complexity": module_metrics.cyclomatic_complexity,
-                    "Maintainability Index": f"{module_metrics.maintainability_index:.2f}",
-                    "Halstead Volume": f"{module_metrics.halstead_metrics.get('volume', 0):.2f}",
-                    "Dependencies": len(dependencies),
-                }
-                display_metrics(metrics_display, title=f"Code Extraction Results for {module_name}")
+            # Display extraction metrics
+            metrics_display = {
+                "Classes": len(classes),
+                "Functions": len(functions),
+                "Variables": len(variables),
+                "Constants": len(constants),
+                "Lines of Code": len(source_code.splitlines()),
+                "Cyclomatic Complexity": module_metrics.cyclomatic_complexity,
+                "Maintainability Index": f"{module_metrics.maintainability_index:.2f}",
+                "Halstead Volume": f"{module_metrics.halstead_metrics.get('volume', 0):.2f}",
+                "Dependencies": len(dependencies),
+            }
+            display_metrics(metrics_display, title=f"Code Extraction Results for {module_name}")
+
+            progress.stop()
 
             return ExtractionResult(
                 module_docstring=module_docstring,
