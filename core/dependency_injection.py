@@ -5,6 +5,8 @@ from core.types.base import Injector
 from core.metrics_collector import MetricsCollector
 from api.token_management import TokenManager
 from core.response_parsing import ResponseParsingService
+from core.ai_service import AIService
+from core.config import AIConfig
 from core.prompt_manager import PromptManager
 
 def setup_dependencies(correlation_id: Optional[str] = None):
