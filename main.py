@@ -121,7 +121,7 @@ class DocumentationGenerator:
                 print_error(f"Failed to generate documentation for {file_path}: {e}", correlation_id=self.correlation_id)
                 success = False
             except Exception as e:
-                display_error(e, {"file_path": str(file_path)}, correlation_id=self.correlation_id)
+                print_error(f"Error processing file {file_path}: {e}", correlation_id=self.correlation_id)
                 success = False
 
             processing_time = asyncio.get_event_loop().time() - start_time
@@ -208,7 +208,7 @@ class DocumentationGenerator:
             print_info(f"Successfully cloned repository to {repo_path}", correlation_id=self.correlation_id)
             return repo_path
         except (git.GitCommandError, ValueError, IOError) as clone_error:
-            display_error(clone_error, {"repo_url": repo_url}, correlation_id=self.correlation_id)
+            print_error(f"Error cloning repository {repo_url}: {clone_error}", correlation_id=self.correlation_id)
             raise DocumentationError(f"Repository cloning failed: {clone_error}") from clone_error
 
     async def _process_local_repository(self, repo_path: Path, output_dir: Path) -> bool:
