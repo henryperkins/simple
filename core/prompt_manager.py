@@ -129,12 +129,18 @@ class PromptManager:
         prompt = (
             f"Objective: Generate comprehensive Google-style documentation for the following Python module.\n\n"
             f"Context: This module is part of a larger system aimed at providing AI-driven solutions. "
-            f"Consider the target audience as developers who will use this documentation to understand and maintain the code.\n\n"
+            f"Consider the target audience as developers who will use this documentation to understand and maintain the code. "
+            f"Ensure the documentation is detailed enough to facilitate onboarding and maintenance.\n\n"
             f"Module Name: {module_name}\n"
             f"File Path: {file_path}\n\n"
             "Code Structure:\n\n"
-            "Examples of desired documentation include clear summaries, detailed descriptions, and well-defined argument lists.\n"
-            "Avoid vague descriptions and incomplete argument details.\n\n"
+            "Examples of desired documentation include:\n"
+            "- Clear summaries that succinctly describe the purpose of each component.\n"
+            "- Detailed descriptions that explain the functionality and usage.\n"
+            "- Well-defined argument lists with types and descriptions.\n"
+            "Avoid:\n"
+            "- Vague descriptions that do not add value.\n"
+            "- Incomplete argument details that could lead to misunderstandings.\n\n"
         )
 
         # Add class information
@@ -174,7 +180,8 @@ class PromptManager:
         return (
             "Objective: Analyze the following code for quality and provide specific improvements.\n\n"
             "Context: This code is part of a critical system component where performance and reliability are paramount. "
-            "Consider historical issues such as performance bottlenecks and error handling failures.\n\n"
+            "Consider historical issues such as performance bottlenecks and error handling failures. "
+            "The analysis should help in identifying potential risks and areas for optimization.\n\n"
             f"Code:\n{code}\n\n"
             "Consider the following aspects:\n"
             "1. Code complexity and readability\n"
@@ -182,8 +189,12 @@ class PromptManager:
             "3. Error handling and edge cases\n"
             "4. Performance considerations\n"
             "5. Documentation completeness\n\n"
-            "Examples of good practices include clear variable naming and efficient algorithms. "
-            "Avoid practices like deep nesting and lack of error handling."
+            "Examples of good practices include:\n"
+            "- Clear variable naming that enhances readability.\n"
+            "- Efficient algorithms that improve performance.\n"
+            "Avoid:\n"
+            "- Deep nesting that complicates understanding.\n"
+            "- Lack of error handling that could lead to failures."
         )
 
     def _format_function_info(self, func: ExtractedFunction) -> str:
