@@ -8,7 +8,7 @@ from core.response_parsing import ResponseParsingService
 from core.logger import LoggerSetup
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.ai_service import AIService
-from core.config import Config
+from core.config import Config, AIConfig
 from core.cache import Cache
 import asyncio
 from core.prompt_manager import PromptManager
