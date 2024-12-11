@@ -41,8 +41,10 @@ class Injector:
             from core.docstring_processor import DocstringProcessor
 
             # Register default dependencies
-            cls._dependencies['metrics_calculator'] = Metrics()
-            cls._dependencies['docstring_parser'] = DocstringProcessor()
+            if 'metrics_calculator' not in cls._dependencies:
+                cls._dependencies['metrics_calculator'] = Metrics()
+            if 'docstring_parser' not in cls._dependencies:
+                cls._dependencies['docstring_parser'] = DocstringProcessor()
             cls._initialized = True
 
         if name not in cls._dependencies:
