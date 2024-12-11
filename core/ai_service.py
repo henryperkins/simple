@@ -26,8 +26,16 @@ class AIService:
     def __init__(
         self,
         config: AIConfig,
-        correlation_id: Optional[str] = None
+        correlation_id: Optional[str] = None,
+        docstring_processor: Optional[DocstringProcessor] = None,
+        response_parser: Optional[ResponseParsingService] = None,
+        token_manager: Optional[TokenManager] = None,
+        prompt_manager: Optional[PromptManager] = None
     ) -> None:
+        self.docstring_processor = docstring_processor or Injector.get('docstring_parser')
+        self.response_parser = response_parser or Injector.get('response_parser')
+        self.token_manager = token_manager or Injector.get('token_manager')
+        self.prompt_manager = prompt_manager or Injector.get('prompt_manager')
         """Initialize AI service with dependency injection.
 
         Args:

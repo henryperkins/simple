@@ -13,3 +13,4 @@ def setup_dependencies(correlation_id: Optional[str] = None):
     Injector.register('token_manager', lambda: TokenManager(model="gpt-4"))
     Injector.register('response_parser', lambda: ResponseParsingService(correlation_id=correlation_id))
     Injector.register('prompt_manager', lambda: PromptManager(correlation_id=correlation_id))
+    Injector.register('ai_service', lambda: AIService(config=AIConfig(), correlation_id=correlation_id))
