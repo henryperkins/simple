@@ -35,7 +35,7 @@ class AIService:
             config: AI service configuration.
             correlation_id: Optional correlation ID for tracking related operations.
         """
-        self.config = config or Injector.get('config').ai()
+        self.config = config or Injector.get('config').ai
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
