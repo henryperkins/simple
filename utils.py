@@ -93,7 +93,7 @@ def handle_error(func):
             return await func(*args, **kwargs)
         except Exception as e:
             logger = LoggerSetup.get_logger()
-            handle_extraction_error(logger, [], func.__name__, e, correlation_id=get_correlation_id())
+            handle_extraction_error(logger, [], func.__name__, correlation_id=get_correlation_id(), e=e)
             raise
     return wrapper
 
