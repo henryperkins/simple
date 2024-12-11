@@ -1,4 +1,3 @@
-
 """
 Core utilities module for Python code analysis and documentation generation.
 
@@ -33,12 +32,22 @@ from ast import NodeVisitor
 from dataclasses import dataclass
 from git.exc import GitCommandError
 
-from core.logger import LoggerSetup
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import DocstringData, TokenUsage
 from exceptions import DocumentationError
 from typing import List
 
 # Initialize logger
+correlation_id_var = ContextVar('correlation_id', default=None)
+
+def get_correlation_id() -> Optional[str]:
+    """Retrieve the correlation ID from the context or return 'N/A' if not set."""
+    return correlation_id_var.get('N/A')
+
+def set_correlation_id(correlation_id: str):
+    """Set the correlation ID in the context."""
+    correlation_id_var.set(correlation_id)
+
 logger = LoggerSetup.get_logger(__name__)
 
 #-----------------------------------------------------------------------------
@@ -61,11 +70,31 @@ class NodeNameVisitor(NodeVisitor):
 # Error Handling Utilities
 #-----------------------------------------------------------------------------
 
-def handle_extraction_error(e: Exception, errors: List[str], context: str, correlation_id: str, **kwargs) -> None:
+def handle_extraction_error(
+    logger: CorrelationLoggerAdapter,
+    errors: List[str],
+    context: str,
+    e: Exception,
+    correlation_id: Optional[str] = None,
+    **kwargs
+) -> None:
     """Handle errors during extraction processes."""
     error_message = f"Error in {context}: {str(e)}"
     errors.append(error_message)
-    logger.error(error_message, extra={"correlation_id": correlation_id, **kwargs})
+    log_kwargs = {"extra": {"correlation_id": correlation_id or get_correlation_id(), **kwargs}}
+    logger.error(error_message, **log_kwargs)
+
+def handle_error(func):
+    """Decorator to handle common exceptions with logging."""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            logger = LoggerSetup.get_logger()
+            handle_extraction_error(logger, [], func.__name__, e, correlation_id=get_correlation_id())
+            raise
+    return wrapper
 
 #-----------------------------------------------------------------------------
 # Module Existence Check Utility
@@ -136,7 +165,7 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
 
         return '\n'.join(normalized_lines).rstrip()
     except Exception as e:
-        logger.error(f"Error extracting source segment: {e}")
+        logger.error(f"Error extracting source segment: {e}", exc_info=True)
         return None
 
 #-----------------------------------------------------------------------------
@@ -146,9 +175,10 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
 class RepositoryManager:
     """Handles git repository operations."""
 
-    def __init__(self, repo_path: Path):
+    def __init__(self, repo_path: Path, correlation_id: Optional[str] = None):
         self.repo_path = repo_path
         self.repo = None
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
 
     async def clone_repository(self, repo_url: str) -> Path:
         """Clone a repository and return its path."""
@@ -156,12 +186,12 @@ class RepositoryManager:
             clone_dir = self.repo_path / Path(repo_url).stem
             if clone_dir.exists():
                 if not self._verify_repository(clone_dir):
-                    logger.warning(f"Invalid repository at {clone_dir}, re-cloning")
+                    self.logger.warning(f"Invalid repository at {clone_dir}, re-cloning")
                     shutil.rmtree(clone_dir)
                 else:
                     return clone_dir
 
-            logger.info(f"Cloning repository from {repo_url}")
+            self.logger.info(f"Cloning repository from {repo_url}")
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, git.Repo.clone_from, repo_url, clone_dir)
 
@@ -170,7 +200,7 @@ class RepositoryManager:
 
             return clone_dir
         except Exception as e:
-            logger.error(f"Failed to clone repository: {e}")
+            self.logger.error(f"Failed to clone repository: {e}", exc_info=True)
             raise
 
     def _verify_repository(self, path: Path) -> bool:
@@ -195,19 +225,20 @@ class RepositoryManager:
 class TokenCounter:
     """Handles token counting and usage calculation."""
 
-    def __init__(self, model: str = "gpt-4"):
+    def __init__(self, model: str = "gpt-4", correlation_id: Optional[str] = None):
         try:
             self.encoding = tiktoken.encoding_for_model(model)
         except KeyError:
-            logger.warning(f"Model {model} not found. Using cl100k_base encoding.")
+            self.logger.warning(f"Model {model} not found. Using cl100k_base encoding.")
             self.encoding = tiktoken.get_encoding("cl100k_base")
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
 
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count for text."""
         try:
             return len(self.encoding.encode(text))
         except Exception as e:
-            logger.error(f"Error estimating tokens: {e}")
+            self.logger.error(f"Error estimating tokens: {e}", exc_info=True)
             return 0
 
     def calculate_usage(
@@ -264,7 +295,8 @@ def get_env_var(
     name: str,
     default: Any = None,
     var_type: Type = str,
-    required: bool = False
+    required: bool = False,
+    correlation_id: Optional[str] = None
 ) -> Any:
     """
     Get environment variable with type conversion and validation.
@@ -282,6 +314,7 @@ def get_env_var(
         ValueError: If required variable is missing or type conversion fails
     """
     value = os.getenv(name)
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
 
     if value is None:
         if required:
@@ -299,24 +332,30 @@ def get_env_var(
 # File Reading Utility
 #-----------------------------------------------------------------------------
 
-def read_file_safe(file_path: Union[str, Path]) -> str:
+def read_file_safe(file_path: Union[str, Path], correlation_id: Optional[str] = None) -> str:
     """Safely read a file and return its contents."""
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             return file.read()
     except (FileNotFoundError, IOError) as e:
-        logger.error(f"Error reading file {file_path}: {e}")
+        logger.error(f"Error reading file {file_path}: {e}", exc_info=True)
         return ""
         
 #-----------------------------------------------------------------------------
 # File System Utilities
 #-----------------------------------------------------------------------------
 
-def ensure_directory(path: Union[str, Path]) -> Path:
+def ensure_directory(path: Union[str, Path], correlation_id: Optional[str] = None) -> Path:
     """Ensure directory exists and return Path object."""
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
     path = Path(path)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    except Exception as e:
+        logger.error(f"Error ensuring directory {path}: {e}", exc_info=True)
+        return path
 
 #-----------------------------------------------------------------------------
 # String Processing Utilities
@@ -332,7 +371,7 @@ def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
 # Path Manipulation Utilities
 #-----------------------------------------------------------------------------
 
-def normalize_path(path: Union[str, Path]) -> Path:
+def normalize_path(path: Union[str, Path], correlation_id: Optional[str] = None) -> Path:
     """
     Normalize a file system path.
 
@@ -342,7 +381,12 @@ def normalize_path(path: Union[str, Path]) -> Path:
     Returns:
         Normalized Path object
     """
-    return Path(path).resolve()
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
+    try:
+        return Path(path).resolve()
+    except Exception as e:
+        logger.error(f"Error normalizing path {path}: {e}", exc_info=True)
+        return Path(path)
 
 # List of all utility functions and classes to be exported
 __all__ = [
@@ -371,4 +415,6 @@ __all__ = [
 
     # Path Manipulation
     'normalize_path',
+    'handle_extraction_error',
+    'handle_error'
 ]
