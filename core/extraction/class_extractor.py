@@ -31,7 +31,7 @@ class ClassExtractor:
         self.context = context
         # Get metrics calculator with fallback
         try:
-            self.metrics_calculator = Injector.get("metrics_calculator", None)
+            self.metrics_calculator = Injector.get("metrics_calculator")
             if self.metrics_calculator is None:
                 self.logger.warning(
                     "Metrics calculator not registered, creating new instance"
@@ -53,7 +53,7 @@ class ClassExtractor:
 
         # Get docstring parser with fallback
         try:
-            self.docstring_parser = Injector.get("docstring_parser", None)
+            self.docstring_parser = Injector.get("docstring_parser")
             if self.docstring_parser is None:
                 self.logger.warning("Docstring parser not registered, using default")
                 self.docstring_parser = DocstringProcessor()
