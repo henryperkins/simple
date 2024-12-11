@@ -106,7 +106,7 @@ class DocumentationOrchestrator:
                 return context.source_code, markdown_doc
 
         except Exception as e:
-            display_error(e, {
+            print_error(e, {
                 "context": "documentation_generation",
                 "module_path": str(context.module_path)
             }, correlation_id=self.correlation_id)
