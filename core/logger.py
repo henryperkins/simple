@@ -160,9 +160,11 @@ class LoggerSetup:
 class CorrelationLoggerAdapter(logging.LoggerAdapter):
     """Logger adapter that adds correlation ID to logs."""
 
-    def __init__(self, logger, extra=None):
+    def __init__(self, logger, extra=None, correlation_id=None):
         if extra is None:
             extra = {}
+        if correlation_id is not None:
+            set_correlation_id(correlation_id)
         super().__init__(logger, extra={'correlation_id': get_correlation_id()})
 
     def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
