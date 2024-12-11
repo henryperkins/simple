@@ -7,6 +7,7 @@ source files using the ast module.
 
 import ast
 import uuid
+import re
 from typing import Any, Dict, List, Optional
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
