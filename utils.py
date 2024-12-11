@@ -28,6 +28,7 @@ import importlib.util
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Union, Tuple, Set, Type
+import importlib.util
 from ast import NodeVisitor
 from dataclasses import dataclass
 from git.exc import GitCommandError
@@ -65,6 +66,15 @@ def handle_extraction_error(e: Exception, errors: List[str], context: str, corre
     error_message = f"Error in {context}: {str(e)}"
     errors.append(error_message)
     logger.error(error_message, extra={"correlation_id": correlation_id, **kwargs})
+
+#-----------------------------------------------------------------------------
+# Module Existence Check Utility
+#-----------------------------------------------------------------------------
+
+def check_module_exists(module_name: str) -> bool:
+    """Check if a module can be imported without actually importing it."""
+    spec = importlib.util.find_spec(module_name)
+    return spec is not None
 
 #-----------------------------------------------------------------------------
 # AST Processing Utilities
