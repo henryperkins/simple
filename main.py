@@ -84,10 +84,10 @@ class DocumentationGenerator:
     async def initialize(self) -> None:
         """Start systems that require asynchronous setup."""
         try:
-            print_info("Initializing system components", correlation_id=self.correlation_id)
+            print_info(f"Initializing system components with correlation ID: {self.correlation_id}")
             if hasattr(self, 'system_monitor'):
                 await self.system_monitor.start()
-            print_info("All components initialized successfully", correlation_id=self.correlation_id)
+            print_info(f"All components initialized successfully with correlation ID: {self.correlation_id}")
         except (RuntimeError, ValueError) as init_error:
             error_msg = f"Initialization failed: {init_error}"
             print_error(error_msg, correlation_id=self.correlation_id)
@@ -248,7 +248,7 @@ class DocumentationGenerator:
     async def cleanup(self) -> None:
         """Cleanup resources used by the DocumentationGenerator."""
         try:
-            print_info("Starting cleanup process", correlation_id=self.correlation_id)
+            print_info(f"Starting cleanup process with correlation ID: {self.correlation_id}")
             if hasattr(self, 'ai_service') and self.ai_service:
                 await self.ai_service.close()
             if hasattr(self, 'metrics_collector') and self.metrics_collector:
