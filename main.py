@@ -62,9 +62,7 @@ class DocumentationGenerator:
         """
         self.config = config
         self.correlation_id = str(uuid.uuid4())
-        self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__),
-        )
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
 
         # Initialize core components with dependency injection
         self.ai_service = AIService()

@@ -22,7 +22,7 @@ def setup_dependencies(correlation_id: Optional[str] = None):
     Injector.register('token_manager', lambda: TokenManager(model="gpt-4"))
     Injector.register('response_parser', lambda: ResponseParsingService(correlation_id=correlation_id))
     Injector.register('prompt_manager', lambda: PromptManager(correlation_id=correlation_id))
-    Injector.register('code_extractor', lambda: CodeExtractor(correlation_id=correlation_id))
+    Injector.register('code_extractor', lambda: CodeExtractor())
     Injector.register('markdown_generator', lambda: MarkdownGenerator())
     Injector.register('cache', lambda: Cache())
     Injector.register('semaphore', lambda: asyncio.Semaphore(5))
