@@ -105,8 +105,7 @@ class CodeExtractor:
         if self.context:
             self.function_extractor = FunctionExtractor(
                 context=self.context,
-                correlation_id=self.correlation_id,
-                docstring_processor=self.docstring_processor
+                correlation_id=self.correlation_id
             )
             self.class_extractor = ClassExtractor(
                 context=self.context,
