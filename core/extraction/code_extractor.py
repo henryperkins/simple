@@ -106,7 +106,6 @@ class CodeExtractor:
             self.function_extractor = FunctionExtractor(
                 context=self.context,
                 correlation_id=self.correlation_id,
-                metrics_collector=self.metrics_collector,
                 docstring_processor=self.docstring_processor
             )
             self.class_extractor = ClassExtractor(
