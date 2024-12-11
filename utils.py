@@ -77,6 +77,15 @@ def check_module_exists(module_name: str) -> bool:
     return spec is not None
 
 #-----------------------------------------------------------------------------
+# Module Path Utilities
+#-----------------------------------------------------------------------------
+
+def get_module_path(module_name: str) -> Optional[str]:
+    """Get the file path of a module if it exists."""
+    spec = importlib.util.find_spec(module_name)
+    return spec.origin if spec else None
+
+#-----------------------------------------------------------------------------
 # AST Processing Utilities
 #-----------------------------------------------------------------------------
 
