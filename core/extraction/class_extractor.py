@@ -65,6 +65,12 @@ class ClassExtractor:
         self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
         self.metrics_calculator = self.metrics_calculator or Injector.get('metrics_calculator')
         self.docstring_parser = self.docstring_parser or Injector.get('docstring_parser')
+        if self.metrics_calculator is None:
+            self.logger.warning("Metrics calculator not initialized, using default")
+            self.metrics_calculator = Metrics(metrics_collector=self.metrics_collector, correlation_id=correlation_id)
+        if self.docstring_parser is None:
+            self.logger.warning("Docstring parser not initialized, using default")
+            self.docstring_parser = DocstringProcessor()
         self.errors: List[str] = []
 
     async def extract_classes(

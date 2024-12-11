@@ -59,6 +59,12 @@ class FunctionExtractor:
         self.errors: List[str] = []
         self.metrics_calculator = self.metrics_calculator or Injector.get('metrics_calculator')
         self.docstring_parser = self.docstring_parser or Injector.get('docstring_parser')
+        if self.metrics_calculator is None:
+            self.logger.warning("Metrics calculator not initialized, using default")
+            self.metrics_calculator = Metrics()
+        if self.docstring_parser is None:
+            self.logger.warning("Docstring parser not initialized, using default")
+            self.docstring_parser = DocstringProcessor()
 
     def _should_process_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
