@@ -63,8 +63,10 @@ class ClassExtractor:
             self.docstring_parser = DocstringProcessor()
             Injector.register("docstring_parser", self.docstring_parser)
         self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
-        self.metrics_calculator = self.metrics_calculator or Injector.get('metrics_calculator')
-        self.docstring_parser = self.docstring_parser or Injector.get('docstring_parser')
+        if self.metrics_calculator is None:
+            self.metrics_calculator = Injector.get('metrics_calculator')
+        if self.docstring_parser is None:
+            self.docstring_parser = Injector.get('docstring_parser')
         if self.metrics_calculator is None:
             self.logger.warning("Metrics calculator not initialized, using default")
             self.metrics_calculator = Metrics(metrics_collector=self.metrics_collector, correlation_id=correlation_id)

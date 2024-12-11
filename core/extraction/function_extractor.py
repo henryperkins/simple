@@ -57,8 +57,10 @@ class FunctionExtractor:
             self.docstring_parser = DocstringProcessor()
             Injector.register("docstring_parser", self.docstring_parser)
         self.errors: List[str] = []
-        self.metrics_calculator = self.metrics_calculator or Injector.get('metrics_calculator')
-        self.docstring_parser = self.docstring_parser or Injector.get('docstring_parser')
+        if self.metrics_calculator is None:
+            self.metrics_calculator = Injector.get('metrics_calculator')
+        if self.docstring_parser is None:
+            self.docstring_parser = Injector.get('docstring_parser')
         if self.metrics_calculator is None:
             self.logger.warning("Metrics calculator not initialized, using default")
             self.metrics_calculator = Metrics()
