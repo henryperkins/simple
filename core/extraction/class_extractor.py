@@ -63,6 +63,8 @@ class ClassExtractor:
             self.docstring_parser = DocstringProcessor()
             Injector.register("docstring_parser", self.docstring_parser)
         self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
+        self.metrics_calculator = self.metrics_calculator or Injector.get('metrics_calculator')
+        self.docstring_parser = self.docstring_parser or Injector.get('docstring_parser')
         self.errors: List[str] = []
 
     async def extract_classes(

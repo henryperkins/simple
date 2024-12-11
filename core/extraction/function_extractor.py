@@ -57,6 +57,8 @@ class FunctionExtractor:
             self.docstring_parser = DocstringProcessor()
             Injector.register("docstring_parser", self.docstring_parser)
         self.errors: List[str] = []
+        self.metrics_calculator = self.metrics_calculator or Injector.get('metrics_calculator')
+        self.docstring_parser = self.docstring_parser or Injector.get('docstring_parser')
 
     def _should_process_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
