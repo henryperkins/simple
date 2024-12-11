@@ -51,8 +51,7 @@ class DocumentationOrchestrator:
             LoggerSetup.get_logger(__name__),
             correlation_id=self.correlation_id
         )
-        self.ai_service = ai_service or AIService(
-            config=self.config.ai, correlation_id=self.correlation_id)
+        self.ai_service = ai_service or Injector.get('ai_service')
         self.code_extractor = CodeExtractor(correlation_id=self.correlation_id)
         self.markdown_generator = MarkdownGenerator()
 

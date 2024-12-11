@@ -57,10 +57,7 @@ class DocumentationGenerator:
         )
 
         # Initialize core components with dependency injection
-        self.ai_service = AIService(
-            config=self.config.ai,
-            correlation_id=self.correlation_id
-        )
+        self.ai_service = Injector.get('ai_service')
         self.doc_orchestrator = DocumentationOrchestrator(
             ai_service=self.ai_service,
             correlation_id=self.correlation_id
