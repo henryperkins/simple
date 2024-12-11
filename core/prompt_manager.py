@@ -17,10 +17,7 @@ class PromptManager:
             correlation_id: Optional correlation ID for tracking related operations
         """
         self.correlation_id = correlation_id
-        self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__),
-            correlation_id=self.correlation_id
-        )
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
 
         # Define the function schema for structured output
         self.function_schema = {

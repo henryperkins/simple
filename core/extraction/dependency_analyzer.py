@@ -34,8 +34,7 @@ class DependencyAnalyzer:
         correlation_id: Optional[str] = None
     ) -> None:
         """Initialize the dependency analyzer."""
-        self.logger = CorrelationLoggerAdapter(
-            Injector.get('logger'), correlation_id)
+        self.logger = CorrelationLoggerAdapter(Injector.get('logger'))
         self.docstring_parser = Injector.get('docstring_parser')
         self.context = context
         self.module_name = context.module_name

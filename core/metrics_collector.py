@@ -28,7 +28,7 @@ class MetricsCollector:
         if not cls._instance:
             instance = super().__new__(cls)
             if not cls._initialized:
-                instance.logger = LoggerSetup.get_logger(__name__)
+                instance.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
                 instance.correlation_id = correlation_id
                 instance.metrics_history = {}
                 instance.operations = []

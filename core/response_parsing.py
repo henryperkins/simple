@@ -31,8 +31,7 @@ class ResponseParsingService:
 
     def __init__(self, correlation_id: Optional[str] = None) -> None:
         """Initialize the response parsing service."""
-        self.logger = CorrelationLoggerAdapter(
-            base_logger, correlation_id)  # Use correlation logger adapter
+        self.logger = CorrelationLoggerAdapter(base_logger)
         self.docstring_processor = DocstringProcessor()
         self.docstring_schema = self._load_schema("docstring_schema.json")
         self.function_schema = self._load_schema("function_tools_schema.json")

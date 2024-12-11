@@ -108,7 +108,7 @@ class LoggerSetup:
                     console.print(f"Failed to set up file handler: {e}", style="red")
 
         cls._loggers[name] = logger
-        return CorrelationLoggerAdapter(logger, {'correlation_id': get_correlation_id()})
+        return CorrelationLoggerAdapter(logger)
 
     @classmethod
     def configure(

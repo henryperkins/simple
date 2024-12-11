@@ -43,7 +43,7 @@ class DocstringProcessor:
         Args:
             metrics (Optional[Metrics]): The metrics instance for handling code metrics.
         """
-        self.logger = logger
+        self.logger = CorrelationLoggerAdapter(logger)
         self.metrics = metrics or Injector.get('metrics_calculator')
         self.docstring_schema: Dict[str, Any] = {}
 

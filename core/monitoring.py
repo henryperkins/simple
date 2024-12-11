@@ -35,9 +35,7 @@ class SystemMonitor:
             metrics_collector: Optional metrics collector for tracking metrics
             correlation_id: Optional correlation ID for tracking related operations
         """
-        self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__)
-        )
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         # Set the correlation ID using the context variable
         from core.logger import set_correlation_id
         set_correlation_id(correlation_id)

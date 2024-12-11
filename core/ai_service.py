@@ -37,9 +37,7 @@ class AIService:
         """
         self.config = config or Injector.get('config')().ai
         self.correlation_id = correlation_id
-        self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__)
-        )
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.prompt_manager: PromptManager = Injector.get('prompt_manager')
         self.response_parser: ResponseParsingService = Injector.get('response_parser')
         self.docstring_processor: DocstringProcessor = Injector.get('docstring_processor')
