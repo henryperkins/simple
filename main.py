@@ -97,7 +97,7 @@ class DocumentationGenerator:
     async def process_file(self, file_path: Path, output_path: Path) -> bool:
         """Process a single file and generate documentation."""
         try:
-            print_info(f"Processing file: {file_path}", correlation_id=self.correlation_id)
+            print_info(f"Processing file: {file_path} with correlation ID: {self.correlation_id}")
             start_time = asyncio.get_event_loop().time()
 
             source_code = read_file_safe(file_path)
@@ -105,7 +105,7 @@ class DocumentationGenerator:
 
             # Analyze syntax before processing
             if not self.analyze_syntax(source_code, file_path):
-                print_info(f"Skipping file due to syntax errors: {file_path}", correlation_id=self.correlation_id)
+                print_info(f"Skipping file due to syntax errors: {file_path} with correlation ID: {self.correlation_id}")
                 return False
 
             try:
@@ -116,10 +116,10 @@ class DocumentationGenerator:
                 )
                 success = True
             except DocumentationError as e:
-                print_error(f"Failed to generate documentation for {file_path}: {e}", correlation_id=self.correlation_id)
+                print_error(f"Failed to generate documentation for {file_path}: {e} with correlation ID: {self.correlation_id}")
                 success = False
             except Exception as e:
-                print_error(f"Error processing file {file_path}: {e}", correlation_id=self.correlation_id)
+                print_error(f"Error processing file {file_path}: {e} with correlation ID: {self.correlation_id}")
                 success = False
 
             processing_time = asyncio.get_event_loop().time() - start_time
@@ -130,11 +130,11 @@ class DocumentationGenerator:
                 duration=processing_time
             )
 
-            print_info(f"Finished processing file: {file_path}", correlation_id=self.correlation_id)
+            print_info(f"Finished processing file: {file_path} with correlation ID: {self.correlation_id}")
             return success
 
         except (FileNotFoundError, ValueError, IOError) as process_error:
-            print_error(f"Error processing file: {process_error}", correlation_id=self.correlation_id)
+            print_error(f"Error processing file: {process_error} with correlation ID: {self.correlation_id}")
             return False
 
     def _fix_indentation(self, source_code: str) -> str:
@@ -179,7 +179,7 @@ class DocumentationGenerator:
             success = await self._process_local_repository(local_path, output_dir)
 
         except (FileNotFoundError, ValueError, IOError) as repo_error:
-            print_error(f"Error processing repository {repo_path}: {repo_error}", correlation_id=self.correlation_id)
+            print_error(f"Error processing repository {repo_path}: {repo_error} with correlation ID: {self.correlation_id}")
             success = False
         finally:
             processing_time = asyncio.get_event_loop().time() - start_time
@@ -198,21 +198,21 @@ class DocumentationGenerator:
 
     async def _clone_repository(self, repo_url: str) -> Path:
         """Clone a repository and return its local path."""
-        print_info(f"Cloning repository: {repo_url}", correlation_id=self.correlation_id)
+        print_info(f"Cloning repository: {repo_url} with correlation ID: {self.correlation_id}")
         try:
             if not self.repo_manager:
                 self.repo_manager = RepositoryManager(Path('.'))
             repo_path = await self.repo_manager.clone_repository(repo_url)
-            print_info(f"Successfully cloned repository to {repo_path}", correlation_id=self.correlation_id)
+            print_info(f"Successfully cloned repository to {repo_path} with correlation ID: {self.correlation_id}")
             return repo_path
         except (git.GitCommandError, ValueError, IOError) as clone_error:
-            print_error(f"Error cloning repository {repo_url}: {clone_error}", correlation_id=self.correlation_id)
+            print_error(f"Error cloning repository {repo_url}: {clone_error} with correlation ID: {self.correlation_id}")
             raise DocumentationError(f"Repository cloning failed: {clone_error}") from clone_error
 
     async def _process_local_repository(self, repo_path: Path, output_dir: Path) -> bool:
         """Process a local repository."""
         try:
-            print_info(f"Processing local repository: {repo_path}", correlation_id=self.correlation_id)
+            print_info(f"Processing local repository: {repo_path} with correlation ID: {self.correlation_id}")
             output_dir = ensure_directory(output_dir)
             python_files = repo_path.rglob("*.py")
 
@@ -220,19 +220,19 @@ class DocumentationGenerator:
                 output_file = output_dir / (file_path.stem + ".md")
                 success = await self.process_file(file_path, output_file)
                 if not success:
-                    print_error(f"Failed to process file: {file_path}", correlation_id=self.correlation_id)
+                    print_error(f"Failed to process file: {file_path} with correlation ID: {self.correlation_id}")
 
-            print_info(f"Finished processing local repository: {repo_path}", correlation_id=self.correlation_id)
+            print_info(f"Finished processing local repository: {repo_path} with correlation ID: {self.correlation_id}")
             return True
 
         except (FileNotFoundError, ValueError, IOError) as local_repo_error:
-            print_error(f"Error processing local repository: {local_repo_error}", correlation_id=self.correlation_id)
+            print_error(f"Error processing local repository: {local_repo_error} with correlation ID: {self.correlation_id}")
             return False
 
     async def display_metrics(self) -> None:
         """Display collected metrics and system performance metrics."""
         try:
-            print_info("Displaying metrics", correlation_id=self.correlation_id)
+            print_info(f"Displaying metrics with correlation ID: {self.correlation_id}")
             collected_metrics = self.metrics_collector.get_metrics()
             system_metrics = self.system_monitor.get_metrics()
 
@@ -243,7 +243,7 @@ class DocumentationGenerator:
             print("-" * 40)
 
         except (KeyError, ValueError, IOError) as display_error:
-            print_error(f"Error displaying metrics: {display_error}", correlation_id=self.correlation_id)
+            print_error(f"Error displaying metrics: {display_error} with correlation ID: {self.correlation_id}")
 
     async def cleanup(self) -> None:
         """Cleanup resources used by the DocumentationGenerator."""
@@ -255,9 +255,9 @@ class DocumentationGenerator:
                 await self.metrics_collector.close()
             if hasattr(self, 'system_monitor') and self.system_monitor:
                 await self.system_monitor.stop()
-            print_info("Cleanup completed successfully", correlation_id=self.correlation_id)
+            print_info(f"Cleanup completed successfully with correlation ID: {self.correlation_id}")
         except (RuntimeError, ValueError, IOError) as cleanup_error:
-            print_error(f"Error during cleanup: {cleanup_error}", correlation_id=self.correlation_id)
+            print_error(f"Error during cleanup: {cleanup_error} with correlation ID: {self.correlation_id}")
 
 
 async def main(args: argparse.Namespace) -> int:

@@ -71,7 +71,7 @@ class DocumentationOrchestrator:
             DocumentationError: If documentation generation fails.
         """
         try:
-            print_info("Starting documentation generation process", correlation_id=self.correlation_id)
+            print_info(f"Starting documentation generation process with correlation ID: {self.correlation_id}")
 
             if not context.source_code or not context.source_code.strip():
                 raise DocumentationError("Source code is empty or missing")
@@ -102,14 +102,11 @@ class DocumentationOrchestrator:
 
                 self._validate_documentation_data(documentation_data)
 
-                print_info("Documentation generation completed successfully", correlation_id=self.correlation_id)
+                print_info(f"Documentation generation completed successfully with correlation ID: {self.correlation_id}")
                 return context.source_code, markdown_doc
 
         except Exception as e:
-            print_error(e, {
-                "context": "documentation_generation",
-                "module_path": str(context.module_path)
-            }, correlation_id=self.correlation_id)
+            print_error(f"Error: {e} in documentation_generation for module_path: {context.module_path} with correlation ID: {self.correlation_id}")
             raise DocumentationError(f"Failed to generate documentation: {e}")
 
     def _create_extraction_context(self, context: DocumentationContext) -> ExtractionContext:
@@ -218,8 +215,7 @@ class DocumentationOrchestrator:
             DocumentationError: If documentation generation fails.
         """
         try:
-            self.logger.info(f"Generating documentation for {file_path}", extra={
-                'correlation_id': self.correlation_id})
+            self.logger.info(f"Generating documentation for {file_path} with correlation ID: {self.correlation_id}")
             output_dir = ensure_directory(output_dir)
             output_path = output_dir / file_path.with_suffix(".md").name
 
@@ -242,18 +238,15 @@ class DocumentationOrchestrator:
             output_path.write_text(markdown_doc, encoding="utf-8")
             file_path.write_text(updated_code, encoding="utf-8")
 
-            self.logger.info(f"Documentation written to {output_path}", extra={
-                'correlation_id': self.correlation_id})
+            self.logger.info(f"Documentation written to {output_path} with correlation ID: {self.correlation_id}")
 
         except DocumentationError as de:
             error_msg = f"Module documentation generation failed for {file_path}: {de}"
-            self.logger.error(error_msg, extra={
-                'correlation_id': self.correlation_id})
+            self.logger.error(f"{error_msg} with correlation ID: {self.correlation_id}")
             raise DocumentationError(error_msg) from de
         except Exception as e:
             error_msg = f"Unexpected error generating documentation for {file_path}: {e}"
-            self.logger.error(error_msg, extra={
-                'correlation_id': self.correlation_id})
+            self.logger.error(f"{error_msg} with correlation ID: {self.correlation_id}")
             raise DocumentationError(error_msg) from e
 
     async def generate_batch_documentation(
@@ -277,12 +270,10 @@ class DocumentationOrchestrator:
                 await self.generate_module_documentation(file_path, output_dir)
                 results[file_path] = True
             except DocumentationError as e:
-                self.logger.error(f"Failed to generate docs for {file_path}: {e}", extra={
-                    'correlation_id': self.correlation_id})
+                self.logger.error(f"Failed to generate docs for {file_path}: {e} with correlation ID: {self.correlation_id}")
                 results[file_path] = False
             except Exception as e:
-                self.logger.error(f"Unexpected error for {file_path}: {e}", extra={
-                    'correlation_id': self.correlation_id})
+                self.logger.error(f"Unexpected error for {file_path}: {e} with correlation ID: {self.correlation_id}")
                 results[file_path] = False
         return results
 

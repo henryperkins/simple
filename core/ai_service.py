@@ -78,7 +78,7 @@ class AIService:
             )
 
             if parsed_response.errors:
-                print_error(f"Error parsing AI response: {parsed_response.errors}", correlation_id=self.correlation_id)
+                print_error(f"Error parsing AI response: {parsed_response.errors} with correlation ID: {self.correlation_id}")
                 self.logger.error(f"Error parsing AI response: {parsed_response.errors}")
                 return ProcessingResult(
                     content={"error": "Failed to parse AI response"},
@@ -96,7 +96,7 @@ class AIService:
             is_valid, validation_errors = self.docstring_processor.validate(docstring_data)
 
             if not is_valid:
-                print_warning(f"Docstring validation failed: {validation_errors}", correlation_id=self.correlation_id)
+                print_warning(f"Docstring validation failed: {validation_errors} with correlation ID: {self.correlation_id}")
                 self.logger.warning(f"Docstring validation failed: {validation_errors}")
 
                 # Attempt to fix common docstring issues
@@ -106,7 +106,7 @@ class AIService:
                 if is_valid:
                     parsed_response.content = fixed_content
                 else:
-                    print_error(f"Failed to fix docstring issues: {validation_errors}", correlation_id=self.correlation_id)
+                    print_error(f"Failed to fix docstring issues: {validation_errors} with correlation ID: {self.correlation_id}")
                     self.logger.error(f"Failed to fix docstring issues: {validation_errors}")
                     return ProcessingResult(
                         content={"error": "Failed to fix docstring issues"},
@@ -137,10 +137,7 @@ class AIService:
 
         except Exception as e:
             self.logger.error(f"Error generating documentation: {e}", exc_info=True)
-            print_error(f"Error: {e}", {
-                "operation": "generate_documentation",
-                "context": "ai_service"
-            }, correlation_id=self.correlation_id)
+            print_error(f"Error: {e} during generate_documentation in ai_service with correlation ID: {self.correlation_id}")
             return ProcessingResult(
                 content={"error": str(e)},
                 usage={},

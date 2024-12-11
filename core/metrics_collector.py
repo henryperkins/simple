@@ -94,8 +94,7 @@ class MetricsCollector:
             self.accumulated_classes = 0
 
         except Exception as e:
-            print_error(f"Error initializing progress: {e}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error initializing progress: {e} with correlation ID: {self.correlation_id}")
 
     def collect_metrics(self, module_name: str, metrics: MetricData) -> None:
         """Collect metrics for a module."""
@@ -146,8 +145,7 @@ class MetricsCollector:
                         (metrics.scanned_classes, metrics.total_classes)
                     )
         except Exception as e:
-            print_error(f"Error collecting metrics: {e}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error collecting metrics: {e} with correlation ID: {self.correlation_id}")
 
     def update_scan_progress(self, module_name: str, item_type: str, name: str) -> None:
         """Update and log scan progress for a module."""
@@ -177,8 +175,7 @@ class MetricsCollector:
                         )
 
         except Exception as e:
-            print_error(f"Error updating scan progress: {e}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error updating scan progress: {e} with correlation ID: {self.correlation_id}")
 
     def _update_progress(
         self,
@@ -233,8 +230,7 @@ class MetricsCollector:
                 'complexity_graph': getattr(metrics, 'complexity_graph', None)
             }
         except Exception as e:
-            print_error(f"Error converting metrics to dict: {e}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error converting metrics to dict: {e} with correlation ID: {self.correlation_id}")
             return {}
 
     async def track_operation(
@@ -262,8 +258,7 @@ class MetricsCollector:
             self.operations.append(operation)
 
         except Exception as e:
-            print_error(f"Error tracking operation: {e}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error tracking operation: {e} with correlation ID: {self.correlation_id}")
 
     async def close(self) -> None:
         """Clean up resources and save final state."""
@@ -271,8 +266,7 @@ class MetricsCollector:
             self.stop_progress()
             self._save_history()
         except Exception as e:
-            print_error(f"Error closing MetricsCollector: {e}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error closing MetricsCollector: {e} with correlation ID: {self.correlation_id}")
 
     def _load_history(self) -> None:
         """Load metrics history from storage."""
@@ -281,8 +275,7 @@ class MetricsCollector:
                 with open('metrics_history.json', 'r') as f:
                     self.metrics_history = json.load(f)
         except Exception as e:
-            print_error(f"Error loading metrics history: {str(e)}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error loading metrics history: {str(e)} with correlation ID: {self.correlation_id}")
             self.metrics_history = {}
 
     def _save_history(self) -> None:
@@ -291,8 +284,7 @@ class MetricsCollector:
             with open('metrics_history.json', 'w') as f:
                 json.dump(self.metrics_history, f, indent=2, default=str)
         except Exception as e:
-            print_error(f"Error saving metrics history: {str(e)}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error saving metrics history: {str(e)} with correlation ID: {self.correlation_id}")
 
     def clear_history(self) -> None:
         """Clear all metrics history."""
@@ -315,11 +307,11 @@ class MetricsCollector:
     async def display_metrics(self) -> None:
         """Display collected metrics and system performance metrics."""
         try:
-            print_info("Displaying metrics", correlation_id=self.correlation_id)
+            print_info(f"Displaying metrics with correlation ID: {self.correlation_id}")
             collected_metrics = self.metrics_history
 
             if not collected_metrics:
-                print_warning("No metrics collected", correlation_id=self.correlation_id)
+                print_warning(f"No metrics collected with correlation ID: {self.correlation_id}")
                 return
 
             for module_name, history in collected_metrics.items():
@@ -339,5 +331,4 @@ class MetricsCollector:
                     )
 
         except Exception as e:
-            print_error(f"Error displaying metrics: {e}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error displaying metrics: {e} with correlation ID: {self.correlation_id}")
