@@ -127,10 +127,14 @@ class PromptManager:
             Formatted prompt string for the AI model
         """
         prompt = (
-            f"Generate comprehensive Google-style documentation for the following Python module.\n\n"
+            f"Objective: Generate comprehensive Google-style documentation for the following Python module.\n\n"
+            f"Context: This module is part of a larger system aimed at providing AI-driven solutions. "
+            f"Consider the target audience as developers who will use this documentation to understand and maintain the code.\n\n"
             f"Module Name: {module_name}\n"
             f"File Path: {file_path}\n\n"
             "Code Structure:\n\n"
+            "Examples of desired documentation include clear summaries, detailed descriptions, and well-defined argument lists.\n"
+            "Avoid vague descriptions and incomplete argument details.\n\n"
         )
 
         # Add class information
@@ -168,14 +172,18 @@ class PromptManager:
             Formatted prompt for code analysis
         """
         return (
-            "Analyze the following code for quality and provide specific improvements:\n\n"
-            f"{code}\n\n"
+            "Objective: Analyze the following code for quality and provide specific improvements.\n\n"
+            "Context: This code is part of a critical system component where performance and reliability are paramount. "
+            "Consider historical issues such as performance bottlenecks and error handling failures.\n\n"
+            f"Code:\n{code}\n\n"
             "Consider the following aspects:\n"
             "1. Code complexity and readability\n"
             "2. Best practices and design patterns\n"
             "3. Error handling and edge cases\n"
             "4. Performance considerations\n"
-            "5. Documentation completeness"
+            "5. Documentation completeness\n\n"
+            "Examples of good practices include clear variable naming and efficient algorithms. "
+            "Avoid practices like deep nesting and lack of error handling."
         )
 
     def _format_function_info(self, func: ExtractedFunction) -> str:
