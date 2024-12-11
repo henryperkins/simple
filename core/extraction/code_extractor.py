@@ -59,7 +59,7 @@ class CodeExtractor:
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
-            extra={'correlation_id': self.correlation_id}
+            {'correlation_id': self.correlation_id}
         )
         self.context = context or ExtractionContext()
         self.metrics_collector = self._get_metrics_collector()
