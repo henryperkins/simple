@@ -1,6 +1,6 @@
 """Token management module for interacting with the OpenAI API."""
 import tiktoken
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, Union
 from core.config import AIConfig
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from utils import serialize_for_logging, get_env_var
