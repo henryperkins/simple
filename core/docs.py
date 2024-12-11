@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
+from core.logger import LoggerSetup
 from core.extraction.code_extractor import CodeExtractor
 from core.markdown_generator import MarkdownGenerator
 from core.ai_service import AIService
