@@ -64,7 +64,6 @@ class DocumentationGenerator:
         self.correlation_id = str(uuid.uuid4())
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
-            correlation_id=self.correlation_id
         )
 
         # Initialize core components with dependency injection
