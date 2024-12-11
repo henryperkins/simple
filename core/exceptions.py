@@ -31,6 +31,10 @@ class IntegrationError(Exception):
     pass
 
 
+class LiveError(Exception):
+    """Live error for real-time processing issues."""
+    pass
+
 class DocumentationError(Exception):
     """Raised when documentation generation fails."""
     pass
