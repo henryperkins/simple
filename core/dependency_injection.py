@@ -5,6 +5,8 @@ from core.types.base import Injector
 from core.metrics_collector import MetricsCollector
 from api.token_management import TokenManager
 from core.response_parsing import ResponseParsingService
+from core.logger import LoggerSetup
+from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.ai_service import AIService
 from core.config import AIConfig
 from core.cache import Cache
@@ -24,3 +26,5 @@ def setup_dependencies(correlation_id: Optional[str] = None):
     Injector.register('cache', lambda: Cache())
     Injector.register('semaphore', lambda: asyncio.Semaphore(5))
     Injector.register('ai_service', lambda: AIService(config=AIConfig(), correlation_id=correlation_id))
+    Injector.register('logger', lambda: LoggerSetup.get_logger(__name__))
+    Injector.register('dependency_analyzer', lambda: DependencyAnalyzer)

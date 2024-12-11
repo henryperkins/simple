@@ -12,7 +12,7 @@ import sysconfig
 from typing import Dict, Set, Optional, List, Tuple, Any
 from pathlib import Path
 
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.types.base import Injector
 from core.types import ExtractionContext
 from utils import (
     NodeNameVisitor,
@@ -33,7 +33,7 @@ class DependencyAnalyzer:
     ) -> None:
         """Initialize the dependency analyzer."""
         self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__), correlation_id)
+            Injector.get('logger'), correlation_id)
         self.context = context
         self.module_name = context.module_name
         self._function_errors: List[str] = []

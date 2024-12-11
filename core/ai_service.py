@@ -44,7 +44,7 @@ class AIService:
         """
         self.config = config
         self.correlation_id = correlation_id
-        self.logger = LoggerSetup.get_logger(__name__)
+        self.logger = Injector.get('logger')
         self.cache = Injector.get('cache')
         self.semaphore = Injector.get('semaphore')
         self._client = None
