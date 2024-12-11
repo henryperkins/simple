@@ -51,7 +51,12 @@ class FunctionExtractor:
 
         # Get docstring parser with fallback
         try:
-            self.docstring_parser = Injector.get("docstring_parser")
+            try:
+                self.docstring_parser = Injector.get("docstring_parser")
+            except KeyError:
+                self.logger.warning("Docstring parser not registered, using default")
+                self.docstring_parser = DocstringProcessor()
+                Injector.register("docstring_parser", self.docstring_parser)
         except KeyError:
             self.logger.warning("Docstring parser not registered, using default")
             self.docstring_parser = DocstringProcessor()

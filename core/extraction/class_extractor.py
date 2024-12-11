@@ -47,7 +47,12 @@ class ClassExtractor:
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.metrics_collector = metrics_collector or self._get_metrics_collector()
         self.metrics_calculator = self._get_metrics_calculator()
-        self.docstring_parser = docstring_processor or self._get_docstring_parser()
+        try:
+            self.docstring_parser = docstring_processor or Injector.get('docstring_processor')
+        except KeyError:
+            self.logger.warning("Docstring parser not registered, using default")
+            self.docstring_parser = DocstringProcessor()
+            Injector.register("docstring_parser", self.docstring_parser)
         self.errors: List[str] = []
 
     def _get_metrics_collector(self) -> MetricsCollector:

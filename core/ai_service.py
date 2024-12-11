@@ -39,7 +39,12 @@ class AIService:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.prompt_manager: PromptManager = Injector.get('prompt_manager')
         self.response_parser: ResponseParsingService = Injector.get('response_parser')
-        self.docstring_processor = Injector.get('docstring_processor')
+        try:
+            self.docstring_processor = Injector.get('docstring_processor')
+        except KeyError:
+            self.logger.warning("Docstring processor not registered, using default")
+            self.docstring_processor = DocstringProcessor()
+            Injector.register('docstring_processor', self.docstring_processor)
         self.token_manager: TokenManager = Injector.get('token_manager')
         self.semaphore = Injector.get('semaphore')
         self._client = None
