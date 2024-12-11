@@ -141,6 +141,13 @@ class PromptManager:
             "Avoid:\n"
             "- Vague descriptions that do not add value.\n"
             "- Incomplete argument details that could lead to misunderstandings.\n\n"
+            "Classes and Functions:\n"
+            "Provide detailed documentation for each class and function, including their purpose, usage, and any important details.\n"
+            "Source Code:\n"
+            f"{source_code}\n\n"
+            "Analyze the code and generate comprehensive Google-style documentation. "
+            "Include a brief summary, detailed description, arguments, return values, and possible exceptions. "
+            "Ensure all descriptions are clear and technically accurate."
         )
 
         # Add class information
@@ -194,7 +201,8 @@ class PromptManager:
             "- Efficient algorithms that improve performance.\n"
             "Avoid:\n"
             "- Deep nesting that complicates understanding.\n"
-            "- Lack of error handling that could lead to failures."
+            "- Lack of error handling that could lead to failures.\n\n"
+            "Provide specific examples of improvements where applicable, and suggest alternative approaches or refactorings."
         )
 
     def _format_function_info(self, func: ExtractedFunction) -> str:
