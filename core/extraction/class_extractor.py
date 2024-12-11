@@ -6,6 +6,7 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 """
 
 import ast
+import uuid
 from typing import Any, Optional, Dict, List, Union
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics import Metrics
