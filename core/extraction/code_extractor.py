@@ -47,7 +47,7 @@ class CodeExtractor:
             Injector.register("metrics_collector", MetricsCollector(correlation_id=self.correlation_id))
         self.metrics_collector = Injector.get("metrics_collector")
 
-        if "metrics_calculator" not in Injector._instances:
+        if "metrics_calculator" not in Injector._dependencies:
             Injector.register("metrics_calculator", Metrics(metrics_collector=self.metrics_collector, correlation_id=self.correlation_id))
         self.metrics = Injector.get("metrics_calculator")
 
