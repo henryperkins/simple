@@ -16,7 +16,7 @@ from core.prompt_manager import PromptManager
 from core.response_parsing import ResponseParsingService
 from core.docstring_processor import DocstringProcessor
 from api.token_management import TokenManager
-from console import (
+from core.console import (
     print_info,
     print_error,
     print_warning,
