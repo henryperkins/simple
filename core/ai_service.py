@@ -52,6 +52,10 @@ class AIService:
 
         print_info("Initializing AI service")
 
+        # Ensure prompt_manager is an instance of PromptManager
+        if not isinstance(self.prompt_manager, PromptManager):
+            self.prompt_manager = PromptManager(correlation_id=self.correlation_id)
+
     async def generate_documentation(self, context: DocumentationContext) -> ProcessingResult:
         """
         Generates documentation using the AI model.

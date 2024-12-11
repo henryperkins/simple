@@ -47,6 +47,10 @@ class DocstringProcessor:
         self.metrics = metrics or Injector.get('metrics_calculator')
         self.docstring_schema: Dict[str, Any] = {}
 
+    def __call__(self, docstring: Union[Dict[str, Any], str]) -> DocstringData:
+        """Make the class callable to parse docstrings."""
+        return self.parse(docstring)
+
     def parse(self, docstring: Union[Dict[str, Any], str]) -> DocstringData:
         """Parse a docstring from a string or dictionary.
 

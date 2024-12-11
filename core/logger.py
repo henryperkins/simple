@@ -107,6 +107,10 @@ class LoggerSetup:
                 except Exception as e:
                     console.print(f"Failed to set up file handler: {e}", style="red")
 
+        # Ensure the logger has the correct methods
+        if not hasattr(logger, 'isEnabledFor'):
+            logger.isEnabledFor = lambda level: True  # Dummy method to avoid AttributeError
+
         cls._loggers[name] = logger
         return CorrelationLoggerAdapter(logger, extra={'correlation_id': get_correlation_id()})
 
