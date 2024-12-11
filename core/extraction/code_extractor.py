@@ -34,7 +34,7 @@ from utils import (
     get_source_segment,
     handle_extraction_error
 )
-from console import (
+from core.console import (
     print_info,
     print_error,
     print_warning,
