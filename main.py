@@ -23,6 +23,7 @@ from core.response_parsing import ResponseParsingService
 from api.token_management import TokenManager
 from core.repo_manager import RepoManager
 
+from hello import hello
 from console import (
     print_info,
     print_error,
