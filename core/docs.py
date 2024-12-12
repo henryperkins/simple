@@ -133,10 +133,10 @@ class DocumentationOrchestrator:
             self.progress.update(task, advance=20, description="Extracting code...")
 
             extraction_context = self._create_extraction_context(context)
-                extraction_result = await self.code_extractor.extract_code(
-                    context.source_code, extraction_context
-                )
-                context.classes = [
+            extraction_result = await self.code_extractor.extract_code(
+                context.source_code, extraction_context
+            )
+            context.classes = [
                     self._create_extracted_class(cls) for cls in extraction_result.classes
                 ]
                 context.functions = [
