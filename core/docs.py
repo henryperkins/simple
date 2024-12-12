@@ -137,9 +137,9 @@ class DocumentationOrchestrator:
                 context.source_code, extraction_context
             )
             context.classes = [
-                    self._create_extracted_class(cls) for cls in extraction_result.classes
-                ]
-                context.functions = [
+                self._create_extracted_class(cls) for cls in extraction_result.classes
+            ]
+            context.functions = [
                     self._create_extracted_function(func) for func in extraction_result.functions
                 ]
 
