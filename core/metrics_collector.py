@@ -66,12 +66,12 @@ class MetricsCollector:
         """Initialize and start progress tracking."""
         async with self.semaphore:
             if self.progress is not None:
-                self.stop_progress()
+                await self.stop_progress()
             self.progress = create_progress()
             self.progress.start()
             self.current_task_id = None
 
-    def stop_progress(self) -> None:
+    async def stop_progress(self) -> None:
         """Stop and cleanup progress tracking."""
         async with self.semaphore:
             if self.progress is not None:
