@@ -63,9 +63,10 @@ class MetricsCollector:
 
     def start_progress(self) -> None:
         """Initialize and start progress tracking."""
-        if self.progress is None:
-            self.progress = create_progress()
-            self.progress.start()
+        if self.progress is not None:
+            self.stop_progress()
+        self.progress = create_progress()
+        self.progress.start()
 
     def stop_progress(self) -> None:
         """Stop and cleanup progress tracking."""
@@ -77,8 +78,10 @@ class MetricsCollector:
     def _init_progress(self, module_name: str, total_items: int) -> None:
         """Initialize or update the progress tracking for a new module."""
         try:
-            if self.progress is None:
-                self.start_progress()
+            if self.progress is not None:
+                self.stop_progress()
+
+            self.start_progress()
 
             if self.current_task_id is not None:
                 self.progress.remove_task(self.current_task_id)
