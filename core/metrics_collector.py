@@ -1,9 +1,9 @@
 """Metrics collection and storage module."""
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any, Optional
 from datetime import datetime
 import json
 import os
-from pathlib import Path
+import uuid
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import MetricData
@@ -12,8 +12,7 @@ from core.console import (
     display_metrics,
     print_error,
     print_info,
-    print_warning,
-    print_debug
+    print_warning
 )
 
 class MetricsCollector:
@@ -29,10 +28,10 @@ class MetricsCollector:
             instance = super().__new__(cls)
             if not cls._initialized:
                 instance.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
-                instance.correlation_id = correlation_id
-                instance.metrics_history = {}
-                instance.operations = []
-                instance.current_module_metrics = {}
+                instance.correlation_id = correlation_id or str(uuid.uuid4())
+                instance.metrics_history: dict[str, list[dict[str, Any]]] = {}
+                instance.operations: list[dict[str, Any]] = []
+                instance.current_module_metrics: dict[str, MetricData] = {}
                 instance.accumulated_functions = 0
                 instance.accumulated_classes = 0
                 instance.progress = None
@@ -179,8 +178,8 @@ class MetricsCollector:
     def _update_progress(
         self,
         module_name: str,
-        functions: Tuple[int, int],
-        classes: Tuple[int, int]
+        functions: tuple[int, int],
+        classes: tuple[int, int]
     ) -> None:
         """Update the progress tracking with current counts."""
         try:
@@ -208,10 +207,9 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            print_error(f"Error updating progress: {e}",
-                       correlation_id=self.correlation_id)
+            print_error(f"Error updating progress: {e} with correlation ID: {self.correlation_id}")
 
-    def _metrics_to_dict(self, metrics: MetricData) -> Dict[str, Any]:
+    def _metrics_to_dict(self, metrics: MetricData) -> dict[str, Any]:
         """Convert MetricData to dictionary format."""
         try:
             return {
@@ -237,8 +235,8 @@ class MetricsCollector:
         operation_type: str,
         success: bool,
         duration: float,
-        metadata: Optional[Dict[str, Any]] = None,
-        usage: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None,
+        usage: Optional[dict[str, Any]] = None
     ) -> None:
         """Track an operation with its metrics."""
         try:
@@ -291,7 +289,7 @@ class MetricsCollector:
         if os.path.exists('metrics_history.json'):
             os.remove('metrics_history.json')
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Get the current metrics data."""
         return {
             'current_metrics': self.current_module_metrics,
@@ -299,7 +297,7 @@ class MetricsCollector:
             'operations': self.operations
         }
 
-    def get_metrics_history(self, module_name: str) -> List[Dict[str, Any]]:
+    def get_metrics_history(self, module_name: str) -> list[dict[str, Any]]:
         """Get metrics history for a specific module."""
         return self.metrics_history.get(module_name, [])
 
