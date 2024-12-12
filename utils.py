@@ -89,6 +89,8 @@ def handle_extraction_error(
     errors.append(error_message)
     log_kwargs = {"extra": {"correlation_id": correlation_id or get_correlation_id(), **kwargs}}
     logger.error(error_message, **log_kwargs)
+    if isinstance(e, DocumentationError):
+        logger.error(f"DocumentationError in {context}: {e}", **log_kwargs)
 
 def handle_error(func):
     """Decorator to handle common exceptions with logging."""
@@ -96,6 +98,10 @@ def handle_error(func):
     async def wrapper(*args, **kwargs):
         try:
             return await func(*args, **kwargs)
+        except DocumentationError as de:
+            logger = LoggerSetup.get_logger()
+            handle_extraction_error(logger, [], func.__name__, correlation_id=get_correlation_id(), e=de)
+            raise
         except Exception as e:
             logger = LoggerSetup.get_logger()
             handle_extraction_error(logger, [], func.__name__, correlation_id=get_correlation_id(), e=e)
