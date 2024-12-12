@@ -79,16 +79,16 @@ class AIService:
                 response,
                 expected_format="docstring"
             )
-                return ProcessingResult(
-                    content={"error": "Failed to parse AI response"},
-                    usage={},
-                    metrics={},
-                    is_cached=False,
-                    processing_time=0.0,
-                    validation_status=False,
-                    validation_errors=parsed_response.errors,
-                    schema_errors=[]
-                )
+            return ProcessingResult(
+                content={"error": "Failed to parse AI response"},
+                usage={},
+                metrics={},
+                is_cached=False,
+                processing_time=0.0,
+                validation_status=False,
+                validation_errors=parsed_response.errors,
+                schema_errors=[]
+            )
 
             # Further processing and validation of the parsed response
             docstring_data = self.docstring_processor.parse(parsed_response.content)
