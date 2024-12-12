@@ -27,8 +27,8 @@ class MarkdownGenerator:
                 return "# Error: Missing Source Code\n\nDocumentation cannot be generated without source code."
 
             if not self._has_complete_information(documentation_data):
-                log_warning(
-                    "Incomplete information received for markdown generation")
+                self.logger.warning(
+                    "Incomplete information received for markdown generation", extra={'correlation_id': self.correlation_id})
                 # Continue with partial documentation but add warning header
                 sections = [
                     "# ⚠️ Warning: Partial Documentation\n\nSome information may be missing or incomplete.\n"]
@@ -62,8 +62,13 @@ class MarkdownGenerator:
             else:
                 log_debug("Generated complete documentation successfully")
             return markdown
+        except DocumentationError as de:
+            error_msg = f"DocumentationError: {de} in markdown generation with correlation ID: {self.correlation_id}"
+            self.logger.error(error_msg, extra={'correlation_id': self.correlation_id})
+            return f"# Error Generating Documentation\n\nDocumentationError: {de}"
         except Exception as e:
-            self.logger.error(f"Error generating markdown: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
+            error_msg = f"Unexpected error: {e} in markdown generation with correlation ID: {self.correlation_id}"
+            self.logger.error(error_msg, exc_info=True, extra={'correlation_id': self.correlation_id})
             return f"# Error Generating Documentation\n\nAn error occurred: {e}"
 
     def _has_complete_information(self, documentation_data: DocumentationData) -> bool:
@@ -97,7 +102,8 @@ class MarkdownGenerator:
             self.logger.warning(
                 f"Module {documentation_data.module_name} is missing AI-generated content", extra={'correlation_id': self.correlation_id})
             documentation_data.ai_content = {
-                'summary': documentation_data.module_summary}
+                'summary': documentation_data.module_summary
+            }
 
         # Only fail validation if critical fields are missing
         if missing_fields:
