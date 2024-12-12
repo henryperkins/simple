@@ -53,8 +53,8 @@ class SystemMonitor:
     async def start(self) -> None:
         """Start monitoring system resources."""
         if self._running:
-            self.logger.warning("System monitoring is already running")
-            return
+            await self.stop()
+            self.logger.warning("System monitoring was already running, restarting")
 
         self._running = True
         self._task = asyncio.create_task(self._monitor_loop())
@@ -116,7 +116,7 @@ class SystemMonitor:
             }
 
             if self.token_manager:
-                token_stats = self.token_manager().get_usage_stats()
+                token_stats = self.token_manager.get_usage_stats()
                 metrics["tokens"] = token_stats
 
             self.logger.debug("Collected system metrics",
