@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from core.logger import LoggerSetup, log_debug, log_error, log_warning
 from core.types import DocumentationData, ExtractedClass, ExtractedFunction
+from core.exceptions import DocumentationError
 
 
 class MarkdownGenerator:
