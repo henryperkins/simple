@@ -68,6 +68,8 @@ class MetricsCollector:
         self.progress = create_progress()
         self.progress.start()
         self.current_task_id = None
+        if self.current_task_id is not None:
+            self.progress.remove_task(self.current_task_id)
 
     def stop_progress(self) -> None:
         """Stop and cleanup progress tracking."""
@@ -97,6 +99,7 @@ class MetricsCollector:
 
         except Exception as e:
             print_error(f"Error initializing progress: {e} with correlation ID: {self.correlation_id}")
+            self.current_task_id = None
 
     def collect_metrics(self, module_name: str, metrics: MetricData) -> None:
         """Collect metrics for a module."""
