@@ -83,9 +83,9 @@ class MetricsCollector:
         """Initialize or update the progress tracking for a new module."""
         try:
             if self.progress is not None:
-                self.stop_progress()
+                await self.stop_progress()
 
-            self.start_progress()
+            await self.start_progress()
 
             if self.current_task_id is not None:
                 self.progress.remove_task(self.current_task_id)
