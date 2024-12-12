@@ -35,6 +35,8 @@ def setup_dependencies(correlation_id: Optional[str] = None):
     Injector.register('config', lambda: Config())
     Injector.register('token_manager', lambda: TokenManager(model="gpt-4", config=Injector.get('config').ai))
     Injector.register('response_parser', lambda: ResponseParsingService(correlation_id=correlation_id))
+    if 'docstring_processor' not in Injector._dependencies:
+        Injector.register('docstring_processor', lambda: DocstringProcessor())
     Injector.register('prompt_manager', lambda: PromptManager(correlation_id=correlation_id))
     Injector.register('code_extractor', lambda: CodeExtractor(context=ExtractionContext(), correlation_id=correlation_id))
     Injector.register('markdown_generator', lambda: MarkdownGenerator())
