@@ -261,12 +261,12 @@ class PromptManager:
         )
 
         # Safely access docstring_info
-        docstring_info = cls.docstring_info or {}
+        docstring_info = cls.docstring_info or DocstringData()
 
         formatted_info = (
             f"Class: {cls.name}\n"
             f"Base Classes: {', '.join(cls.bases) if cls.bases else 'None'}\n"
-            f"Existing Docstring: {docstring_info.get('summary', 'None')}\n"
+            f"Existing Docstring: {docstring_info.summary}\n"
             f"Methods:\n    {methods_str}\n"
             f"Attributes: {', '.join(a['name'] for a in cls.attributes)}\n"
             f"Instance Attributes: {', '.join(a['name'] for a in cls.instance_attributes)}\n"
