@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 import json
 
-from core.types.base import ExtractedClass, ExtractedFunction
+from core.types.base import ExtractedClass, ExtractedFunction, DocstringData
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 
 class PromptManager:
