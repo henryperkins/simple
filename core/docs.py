@@ -127,9 +127,10 @@ class DocumentationOrchestrator:
             if not context.source_code or not context.source_code.strip():
                 raise DocumentationError("Source code is empty or missing")
 
-            with create_progress() as progress:
-                task = progress.add_task("Generating documentation", total=100)
-                progress.update(task, advance=20, description="Extracting code...")
+            if not hasattr(self, 'progress') or self.progress is None:
+                self.progress = create_progress()
+            task = self.progress.add_task("Generating documentation", total=100)
+            self.progress.update(task, advance=20, description="Extracting code...")
 
                 extraction_context = self._create_extraction_context(context)
                 extraction_result = await self.code_extractor.extract_code(

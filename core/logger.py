@@ -62,7 +62,7 @@ class LoggerSetup:
     _file_logging_enabled: bool = True
     _configured: bool = False
     _default_level: int = logging.INFO
-    _default_format: str = "%(levelname)s: %(message)s"
+    _default_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     _max_bytes: int = 10 * 1024 * 1024  # 10MB
     _backup_count: int = 5
 
@@ -82,7 +82,7 @@ class LoggerSetup:
 
         if not logger.handlers:
             # Console handler
-            console_handler = RichHandler(console=console)
+            console_handler = RichHandler(console=console, show_time=False, show_level=False, show_path=False)
             console_formatter = logging.Formatter(cls._default_format)
             console_handler.setFormatter(console_formatter)
             logger.addHandler(console_handler)

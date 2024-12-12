@@ -64,10 +64,9 @@ class MetricsCollector:
 
     def start_progress(self) -> None:
         """Initialize and start progress tracking."""
-        if self.progress is not None:
-            self.stop_progress()
-        self.progress = create_progress()
-        self.progress.start()
+        if self.progress is None:
+            self.progress = create_progress()
+            self.progress.start()
         self.current_task_id = None
 
     def stop_progress(self) -> None:
