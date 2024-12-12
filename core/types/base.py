@@ -364,7 +364,7 @@ class ExtractionContext:
             except Exception as e:
                 raise ValueError(f"Failed to unparse AST: {e}")
 
-        # Initialize function_extractor if not already set
+        # Ensure function_extractor is initialized
         if self.function_extractor is None:
             from core.extraction.function_extractor import FunctionExtractor
             self.function_extractor = FunctionExtractor(context=self)
