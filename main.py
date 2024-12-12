@@ -118,7 +118,7 @@ class DocumentationGenerator:
                 success = False
             except Exception as e:
                 print_error(f"Error processing file {file_path}: {e}")
-                success = False
+                raise DocumentationError(f"Error processing file {file_path}") from e
 
             processing_time = asyncio.get_event_loop().time() - start_time
             await self.metrics_collector.track_operation(
