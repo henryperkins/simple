@@ -14,7 +14,7 @@ from core.types.base import Injector
 from core.types.base import DocumentationContext, ProcessingResult
 from core.docstring_processor import DocstringProcessor
 from core.prompt_manager import PromptManager
-from core.response_parsing import ResponseParsingService
+from core.response_parasing import ResponseParsingService
 from api.token_management import TokenManager
 from core.console import (
     print_info,
