@@ -3,6 +3,29 @@ Documentation generation orchestrator.
 
 Coordinates the process of generating documentation from source code files,
 using AI services and managing the overall documentation workflow.
+
+**Dependencies:**
+- **AIService:** For AI-driven documentation generation. Install with `pip install ai-service`.
+- **CodeExtractor:** For extracting code elements. Part of the core package.
+- **MarkdownGenerator:** For generating markdown documentation. Part of the core package.
+- **Cache:** For caching results. Part of the core package.
+- **Injector:** For dependency injection. Part of the core package.
+
+**Setup:**
+To use this module, ensure the following dependencies are installed:
+```bash
+pip install ai-service
+```
+
+**Usage:**
+```python
+from core.docs import DocumentationOrchestrator
+from core.ai_service import AIService
+
+ai_service = AIService()
+orchestrator = DocumentationOrchestrator(ai_service=ai_service)
+await orchestrator.generate_module_documentation(Path("/path/to/module.py"), Path("/path/to/output"))
+```
 """
 
 from datetime import datetime
@@ -48,8 +71,19 @@ class DocumentationOrchestrator:
         Initialize the DocumentationOrchestrator.
 
         Args:
-            ai_service: Service for AI interactions. Created if not provided.
-            correlation_id: Optional correlation ID for tracking related operations
+            ai_service (Optional[AIService]): Service for AI interactions. If not provided, it will be created using the Injector.
+            correlation_id (Optional[str]): Optional correlation ID for tracking related operations.
+
+        Note:
+            - The `ai_service` is crucial for generating documentation. Ensure it's properly configured or injected.
+            - The `correlation_id` helps in logging and tracking operations across the system.
+
+        Example:
+            ```python
+            from core.ai_service import AIService
+            ai_service = AIService()
+            orchestrator = DocumentationOrchestrator(ai_service=ai_service, correlation_id="12345")
+            ```
         """
         self.correlation_id = correlation_id or str(uuid.uuid4())
         print_info(f"Initializing DocumentationOrchestrator")
@@ -63,13 +97,29 @@ class DocumentationOrchestrator:
         Generate documentation for the given source code.
 
         Args:
-            context: Information about the source code and its environment.
+            context (DocumentationContext): Information about the source code and its environment.
 
         Returns:
-            Updated source code and generated markdown documentation.
+            Tuple[str, str]: A tuple containing the updated source code and the generated markdown documentation.
 
         Raises:
-            DocumentationError: If documentation generation fails.
+            DocumentationError: If documentation generation fails. This can occur due to:
+                - Empty or missing source code
+                - AI service errors
+                - Extraction or processing errors
+
+        Example:
+            ```python
+            context = DocumentationContext(
+                source_code="def example_function(): pass",
+                module_path=Path("/path/to/module.py"),
+                include_source=True,
+                metadata={"module_name": "example_module"}
+            )
+            orchestrator = DocumentationOrchestrator()
+            updated_code, markdown_doc = await orchestrator.generate_documentation(context)
+            print(markdown_doc)
+            ```
         """
         try:
             print_info(f"Starting documentation generation process with correlation ID: {self.correlation_id}")
@@ -111,7 +161,26 @@ class DocumentationOrchestrator:
             raise DocumentationError(f"Failed to generate documentation: {e}") from e
 
     def _create_extraction_context(self, context: DocumentationContext) -> ExtractionContext:
-        """Creates an extraction context from the documentation context."""
+        """
+        Creates an extraction context from the documentation context.
+
+        Args:
+            context (DocumentationContext): The documentation context containing source code and metadata.
+
+        Returns:
+            ExtractionContext: An extraction context object with settings for code extraction.
+
+        Example:
+            ```python
+            context = DocumentationContext(
+                source_code="def example_function(): pass",
+                module_path=Path("/path/to/module.py"),
+                include_source=True,
+                metadata={"module_name": "example_module"}
+            )
+            extraction_context = orchestrator._create_extraction_context(context)
+            ```
+        """
         return ExtractionContext(
             module_name=context.metadata.get("module_name", context.module_path.stem),
             source_code=context.source_code,
@@ -165,7 +234,28 @@ class DocumentationOrchestrator:
         )
 
     def _create_documentation_data(self, context: DocumentationContext, processing_result: ProcessingResult, extraction_result: ExtractionResult) -> DocumentationData:
-        """Creates a DocumentationData instance from processing and extraction results."""
+        """
+        Creates a DocumentationData instance from processing and extraction results.
+
+        Args:
+            context (DocumentationContext): The documentation context containing source code and metadata.
+            processing_result (ProcessingResult): The result from AI processing.
+            extraction_result (ExtractionResult): The result from code extraction.
+
+        Returns:
+            DocumentationData: An instance containing all necessary data for documentation generation.
+
+        Note:
+            - If `ai_content.get('summary')` and `docstring_data.summary` are both empty, the `module_summary` will fallback to "No module summary available."
+
+        Example:
+            ```python
+            context = DocumentationContext(...)
+            processing_result = ProcessingResult(...)
+            extraction_result = ExtractionResult(...)
+            doc_data = orchestrator._create_documentation_data(context, processing_result, extraction_result)
+            ```
+        """
         docstring_data = DocstringData(
             summary=processing_result.content.get("summary", ""),
             description=processing_result.content.get("description", ""),
@@ -198,7 +288,21 @@ class DocumentationOrchestrator:
         )
 
     def _validate_documentation_data(self, documentation_data: DocumentationData) -> None:
-        """Validates the generated documentation data."""
+        """
+        Validates the generated documentation data.
+
+        Args:
+            documentation_data (DocumentationData): The documentation data to validate.
+
+        Raises:
+            DocumentationError: If the documentation data is incomplete or invalid.
+
+        Example:
+            ```python
+            doc_data = DocumentationData(...)
+            orchestrator._validate_documentation_data(doc_data)
+            ```
+        """
         if not self.markdown_generator.has_complete_information(documentation_data):
             self.logger.warning("Documentation generated with missing information", extra={
                 'correlation_id': self.correlation_id})
@@ -208,12 +312,22 @@ class DocumentationOrchestrator:
         Generate documentation for a single module.
 
         Args:
-            file_path: Path to the module file.
-            output_dir: Directory where documentation will be output.
-            source_code: The source code to use (optional).
+            file_path (Path): Path to the module file.
+            output_dir (Path): Directory where documentation will be output.
+            source_code (Optional[str]): The source code to use (optional). If not provided, the file will be read.
 
         Raises:
-            DocumentationError: If documentation generation fails.
+            DocumentationError: If documentation generation fails. See `generate_documentation` for more details.
+
+        Note:
+            The `updated_code` returned by `generate_documentation` is not actually modified in this implementation.
+            It writes the original source code back to the file.
+
+        Example:
+            ```python
+            orchestrator = DocumentationOrchestrator()
+            await orchestrator.generate_module_documentation(Path("/path/to/module.py"), Path("/path/to/output"))
+            ```
         """
         try:
             source_code = source_code or read_file_safe(file_path)
@@ -259,11 +373,25 @@ class DocumentationOrchestrator:
         Generate documentation for multiple files.
 
         Args:
-            file_paths: List of file paths to process.
-            output_dir: Output directory for documentation.
+            file_paths (List[Path]): List of file paths to process.
+            output_dir (Path): Output directory for documentation.
 
         Returns:
-            Dictionary mapping file paths to success status.
+            Dict[Path, bool]: A dictionary mapping file paths to success status.
+
+        Note:
+            This method uses `generate_module_documentation` for each file, so refer to its documentation for details on error handling and behavior.
+
+        Example:
+            ```python
+            orchestrator = DocumentationOrchestrator()
+            results = await orchestrator.generate_batch_documentation(
+                [Path("/path/to/module1.py"), Path("/path/to/module2.py")],
+                Path("/path/to/output")
+            )
+            for file_path, success in results.items():
+                print(f"{file_path}: {'Success' if success else 'Failed'}")
+            ```
         """
         results = {}
         for file_path in file_paths:
