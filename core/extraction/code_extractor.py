@@ -89,6 +89,8 @@ class CodeExtractor:
 
         try:
             # Create a single progress bar for the entire extraction process
+            if progress is not None:
+                progress.stop()
             progress = create_progress()
             extraction_task = progress.add_task("Extracting code elements", total=100)
 
