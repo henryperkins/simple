@@ -143,9 +143,9 @@ class DocumentationOrchestrator:
                     self._create_extracted_function(func) for func in extraction_result.functions
                 ]
 
-                processing_result = await self.ai_service.generate_documentation(context)
+            processing_result = await self.ai_service.generate_documentation(context)
 
-                documentation_data = self._create_documentation_data(
+            documentation_data = self._create_documentation_data(
                     context, processing_result, extraction_result
                 )
 
