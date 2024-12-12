@@ -87,6 +87,7 @@ class CodeExtractor:
         module_metrics = MetricData()
         module_metrics.module_name = module_name
 
+        progress = None
         try:
             # Create a single progress bar for the entire extraction process
             if progress is not None:
