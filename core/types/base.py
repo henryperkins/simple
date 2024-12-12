@@ -364,6 +364,11 @@ class ExtractionContext:
             except Exception as e:
                 raise ValueError(f"Failed to unparse AST: {e}")
 
+        # Initialize function_extractor if not already set
+        if self.function_extractor is None:
+            from core.extraction.function_extractor import FunctionExtractor
+            self.function_extractor = FunctionExtractor(context=self)
+
     def _fix_indentation(self, code: str) -> str:
         """Fix inconsistent indentation in the source code."""
         lines = code.splitlines()
