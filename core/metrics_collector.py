@@ -62,30 +62,28 @@ class MetricsCollector:
             f"[blue]Classes:[/blue] {scanned_classes}/{total_classes} ({class_ratio:.0%})"
         )
 
-    async def start_progress(self) -> None:
+    def start_progress(self) -> None:
         """Initialize and start progress tracking."""
-        async with self.semaphore:
-            if self.progress is not None:
-                await self.stop_progress()
-            self.progress = create_progress()
-            self.progress.start()
+        if self.progress is not None:
+            self.stop_progress()
+        self.progress = create_progress()
+        self.progress.start()
+        self.current_task_id = None
+
+    def stop_progress(self) -> None:
+        """Stop and cleanup progress tracking."""
+        if self.progress is not None:
+            self.progress.stop()
+            self.progress = None
             self.current_task_id = None
 
-    async def stop_progress(self) -> None:
-        """Stop and cleanup progress tracking."""
-        async with self.semaphore:
-            if self.progress is not None:
-                self.progress.stop()
-                self.progress = None
-                self.current_task_id = None
-
-    async def _init_progress(self, module_name: str, total_items: int) -> None:
+    def _init_progress(self, module_name: str, total_items: int) -> None:
         """Initialize or update the progress tracking for a new module."""
         try:
             if self.progress is not None:
-                await self.stop_progress()
+                self.stop_progress()
 
-            await self.start_progress()
+            self.start_progress()
 
             if self.current_task_id is not None:
                 self.progress.remove_task(self.current_task_id)

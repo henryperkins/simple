@@ -36,7 +36,7 @@ def setup_logging(level: int = logging.INFO) -> None:
     """
     logging.basicConfig(
         level=level,
-        format="%(message)s",
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[RichHandler(console=console, rich_tracebacks=True)]
     )
 
