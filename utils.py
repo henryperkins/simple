@@ -77,15 +77,12 @@ def handle_extraction_error(
     logger: CorrelationLoggerAdapter,
     errors: List[str],
     context: str,
+    e: Exception,
     correlation_id: Optional[str] = None,
     **kwargs
 ) -> None:
     """Handle errors during extraction processes."""
-    e = kwargs.get('e')
-    if isinstance(e, LiveError):
-        error_message = f"Error in {context}: {str(e)}"
-    else:
-        error_message = f"Error in {context}: {str(e or 'Unknown error')}"
+    error_message = f"Error in {context}: {str(e)}"
     errors.append(error_message)
     log_kwargs = {"extra": {"correlation_id": correlation_id or get_correlation_id(), **kwargs}}
     logger.error(error_message, **log_kwargs)
