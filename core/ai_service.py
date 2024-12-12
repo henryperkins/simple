@@ -79,6 +79,36 @@ class AIService:
                 response,
                 expected_format="docstring"
             )
+
+            # Further processing and validation of the parsed response
+            docstring_data = self.docstring_processor.parse(parsed_response.content)
+            is_valid, validation_errors = self.docstring_processor.validate(docstring_data)
+
+            if not is_valid:
+                print_warning(f"Docstring validation failed: {validation_errors} with correlation ID: {self.correlation_id}")
+                self.logger.warning(f"Docstring validation failed: {validation_errors}")
+
+                # Attempt to fix common docstring issues
+                fixed_content = self.docstring_processor.fix_common_docstring_issues(parsed_response.content)
+                docstring_data = self.docstring_processor.parse(fixed_content)
+                is_valid, validation_errors = self.docstring_processor.validate(docstring_data)
+                if is_valid:
+                    parsed_response.content = fixed_content
+                else:
+                    print_error(f"Failed to fix docstring issues: {validation_errors} with correlation ID: {self.correlation_id}")
+                    self.logger.error(f"Failed to fix docstring issues: {validation_errors}")
+                    return ProcessingResult(
+                        content={"error": "Failed to fix docstring issues"},
+                        usage={},
+                        metrics={},
+                        is_cached=False,
+                        processing_time=0.0,
+                        validation_status=False,
+                        validation_errors=validation_errors,
+                        schema_errors=[]
+                    )
+
+            # Return the validated and processed docstring
             return ProcessingResult(
                 content=docstring_data.to_dict(),
                 usage=response.get("usage", {}),
