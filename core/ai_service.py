@@ -47,7 +47,7 @@ class AIService:
             self.docstring_processor = DocstringProcessor()
             Injector.register('docstring_processor', self.docstring_processor)
         self.token_manager: TokenManager = Injector.get('token_manager')
-        self.semaphore = Injector.get('semaphore')
+        self.semaphore = asyncio.Semaphore(5)  # Initialize semaphore with a value
         self._client = None
 
         print_info("Initializing AI service")
