@@ -46,7 +46,7 @@ class AIService:
             self.logger.warning("Docstring processor not registered, using default")
             self.docstring_processor = DocstringProcessor()
             Injector.register('docstring_processor', self.docstring_processor)
-        self.token_manager = Injector.get('token_manager')
+        self.token_manager = Injector.get('token_manager')(model="gpt-4")
         self.semaphore = asyncio.Semaphore(5)  # Initialize semaphore with a value
         self._client = None
 
