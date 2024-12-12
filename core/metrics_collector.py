@@ -62,7 +62,7 @@ class MetricsCollector:
             f"[blue]Classes:[/blue] {scanned_classes}/{total_classes} ({class_ratio:.0%})"
         )
 
-    def start_progress(self) -> None:
+    async def start_progress(self) -> None:
         """Initialize and start progress tracking."""
         async with self.semaphore:
             if self.progress is not None:
