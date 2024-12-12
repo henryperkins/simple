@@ -1,47 +1,56 @@
-"""
-Enhanced Logging Configuration and Utilities.
-Provides structured, contextual, and robust logging across the application.
-"""
-
+"""Enhanced logging configuration with structured output."""
 import logging
 import sys
 import re
 from pathlib import Path
 from datetime import datetime
-from typing import Any, Dict, MutableMapping, Optional
+from typing import Any, Dict, MutableMapping, Optional, Union
 from logging.handlers import RotatingFileHandler
-import uuid
-from collections.abc import Mapping, Sequence
+from rich.logging import RichHandler
+from contextvars import ContextVar
+from functools import wraps
+from core.console import console
+
+# Context variable for the correlation ID
+correlation_id_var = ContextVar('correlation_id')
+
+def set_correlation_id(correlation_id: str):
+    """Set the correlation ID in the context."""
+    correlation_id_var.set(correlation_id)
+
+def get_correlation_id() -> str:
+    """Retrieve the correlation ID from the context or return 'N/A' if not set."""
+    return correlation_id_var.get('N/A')
 
 class SanitizedLogFormatter(logging.Formatter):
     """Custom formatter to sanitize and format log records."""
 
     def format(self, record):
-        # Ensure 'correlation_id' and 'sanitized_info' fields are present with default values
-        record.correlation_id = getattr(record, 'correlation_id', "N/A")
+        # Ensure correlation_id and sanitized_info fields exist
+        record.correlation_id = get_correlation_id()
         record.sanitized_info = getattr(record, 'sanitized_info', {"info": "[Sanitized]"})
 
-        # Sanitize the message and arguments recursively
+        # Sanitize the message and arguments
         record.msg = self._sanitize(record.msg)
         if record.args:
             record.args = tuple(self._sanitize(arg) for arg in record.args)
 
-        # Format the timestamp in ISO8601 format
+        # Format the timestamp
         if self.usesTime():
             record.asctime = datetime.fromtimestamp(record.created).isoformat() + 'Z'
 
-        # Now format the message using the parent class
         return super().format(record)
 
-    def _sanitize(self, item: Any) -> Any:  # Generalized sanitization
-        if isinstance(item, Mapping):
+    def _sanitize(self, item: Any) -> Any:
+        """Sanitize sensitive information from logs."""
+        if isinstance(item, dict):
             return {k: self._sanitize(v) for k, v in item.items()}
-        elif isinstance(item, Sequence) and not isinstance(item, str):
+        elif isinstance(item, (list, tuple)) and not isinstance(item, str):
             return [self._sanitize(it) for it in item]
         elif isinstance(item, str):
-            # Example sanitization: Redact file paths and secrets (customize as needed)
-            item = re.sub(r'(/[a-zA-Z0-9_\-./]+)', '[SANITIZED_PATH]', item)  # File paths
-            item = re.sub(r'(secret_key|password|token)=[^&\s]+', r'\1=[REDACTED]', item) # Secrets
+            # Sanitize file paths and secrets
+            item = re.sub(r'(/[a-zA-Z0-9_\-./]+)', '[SANITIZED_PATH]', item)
+            item = re.sub(r'(secret_key|password|token)=[^&\s]+', r'\1=[REDACTED]', item)
             return item
         return item
 
@@ -53,8 +62,8 @@ class LoggerSetup:
     _file_logging_enabled: bool = True
     _configured: bool = False
     _default_level: int = logging.INFO
-    _default_format: str = "%(levelname)s: %(message)s"
-    _max_bytes: int = 10 * 1024 * 1024  # 10MB default
+    _default_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    _max_bytes: int = 10 * 1024 * 1024  # 10MB
     _backup_count: int = 5
 
     @classmethod
@@ -71,26 +80,14 @@ class LoggerSetup:
 
         logger = logging.getLogger(name)
 
-        if not logger.hasHandlers():
-
-            # Correlation ID handling: generate or retrieve from logger's existing context
-            extra = getattr(logger, '_extra_context', {}) # retrieve existing context from logger object if it exists
-
-            correlation_id = extra.get('correlation_id')
-            if not correlation_id:
-                correlation_id = str(uuid.uuid4())
-                extra['correlation_id'] = correlation_id
-                logger._extra_context = extra  # Attach context to logger
-
-            logger.setLevel(cls._default_level)
-
-            # Console handler (using extra now)
-            console_handler = logging.StreamHandler(sys.stdout)
+        if not logger.handlers:
+            # Console handler
+            console_handler = RichHandler(console=console, show_time=False, show_level=False, show_path=False)
             console_formatter = logging.Formatter(cls._default_format)
             console_handler.setFormatter(console_formatter)
             logger.addHandler(console_handler)
 
-            # File handler (enhanced error handling and extra usage)
+            # File handler
             if cls._file_logging_enabled:
                 try:
                     cls._log_dir.mkdir(parents=True, exist_ok=True)
@@ -99,20 +96,23 @@ class LoggerSetup:
                         maxBytes=cls._max_bytes,
                         backupCount=cls._backup_count
                     )
-                    sanitized_formatter = SanitizedLogFormatter(
+                    file_formatter = SanitizedLogFormatter(
                         fmt='{"timestamp": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", '
                             '"message": "%(message)s", "correlation_id": "%(correlation_id)s", '
-                            '"sanitized_info": %(sanitized_info)s}', # no quotes around sanitized_info because the .format method handles dicts
+                            '"sanitized_info": %(sanitized_info)s}',
                         datefmt='%Y-%m-%dT%H:%M:%S'
                     )
-                    file_handler.setFormatter(sanitized_formatter)
+                    file_handler.setFormatter(file_formatter)
                     logger.addHandler(file_handler)
                 except Exception as e:
-                    log_error(f"Failed to set up file handler: {e}", exc_info=True) # Log the exception to console or elsewhere
-                    # Fallback mechanism (e.g., write to a temporary file) if needed.
+                    console.print(f"Failed to set up file handler: {e}", style="red")
+
+        # Ensure the logger has the correct methods
+        if not hasattr(logger, 'isEnabledFor'):
+            logger.isEnabledFor = lambda level: True  # Dummy method to avoid AttributeError
 
         cls._loggers[name] = logger
-        return logger
+        return CorrelationLoggerAdapter(logger, extra={'correlation_id': get_correlation_id()})
 
     @classmethod
     def configure(
@@ -121,7 +121,7 @@ class LoggerSetup:
         format_str: Optional[str] = None,
         log_dir: Optional[str] = None,
         file_logging_enabled: bool = True,
-        max_bytes: int = 10 * 1024 * 1024,  # 10MB default
+        max_bytes: int = 10 * 1024 * 1024,
         backup_count: int = 5,
     ) -> None:
         """Configure global logging settings."""
@@ -143,8 +143,7 @@ class LoggerSetup:
     def shutdown(cls) -> None:
         """Cleanup logging handlers and close files."""
         for logger in cls._loggers.values():
-            handlers = logger.handlers[:]
-            for handler in handlers:
+            for handler in logger.handlers[:]:
                 handler.close()
                 logger.removeHandler(handler)
         cls._loggers.clear()
@@ -160,57 +159,53 @@ class LoggerSetup:
                 exc_info=(exc_type, exc_value, exc_traceback),
                 extra={'correlation_id': 'N/A', 'sanitized_info': {}}
             )
-        # Call the default excepthook if needed
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
-
-
 class CorrelationLoggerAdapter(logging.LoggerAdapter):
-    """LoggerAdapter to add a correlation ID to logs."""
+    """Logger adapter that adds correlation ID to logs."""
 
-    def __init__(self, logger: logging.Logger, correlation_id: Optional[str] = None):
-        super().__init__(logger, {})
-        self.correlation_id = correlation_id if correlation_id is not None else "N/A"
+    def __init__(self, logger, extra=None, correlation_id=None):
+        if extra is None:
+            extra = {}
+        if correlation_id is not None:
+            set_correlation_id(correlation_id)
+        super().__init__(logger, extra={'correlation_id': get_correlation_id()})
 
     def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
-        # Avoid mutating the original kwargs
         extra = kwargs.get('extra', {})
-        extra['correlation_id'] = self.correlation_id
+        extra['correlation_id'] = get_correlation_id()
         kwargs['extra'] = extra
         return msg, kwargs
 
-# Module-level utility functions (optional)
+# Utility functions
 def log_error(msg: str, *args: Any, exc_info: bool = True, **kwargs: Any) -> None:
-    """Log an error message at module level."""
+    """Log an error message."""
     logger = LoggerSetup.get_logger()
     logger.error(msg, *args, exc_info=exc_info, **kwargs)
 
 def log_debug(msg: str, *args: Any, **kwargs: Any) -> None:
-    """Log a debug message at module level."""
+    """Log a debug message."""
     logger = LoggerSetup.get_logger()
     logger.debug(msg, *args, **kwargs)
 
 def log_info(msg: str, *args: Any, **kwargs: Any) -> None:
-    """Log an info message at module level."""
+    """Log an info message."""
     logger = LoggerSetup.get_logger()
     logger.info(msg, *args, **kwargs)
 
 def log_warning(msg: str, *args: Any, **kwargs: Any) -> None:
-    """Log a warning message at module level."""
+    """Log a warning message."""
     logger = LoggerSetup.get_logger()
     logger.warning(msg, *args, **kwargs)
 
-__all__ = [
-    'LoggerSetup',
-    'CorrelationLoggerAdapter',
-    'log_error',
-    'log_debug',
-    'log_info',
-    'log_warning'
-]
-
-# Optional: Set up the root logger if needed
-# LoggerSetup.configure()
-
-# Optionally, set the global exception handler
-# sys.excepthook = LoggerSetup.handle_exception
+def handle_error(func):
+    """Decorator to handle common exceptions with logging."""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            logger = LoggerSetup.get_logger()
+            logger.error(f"Error in {func.__name__}: {e}", exc_info=True)
+            raise
+    return wrapper

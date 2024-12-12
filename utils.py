@@ -7,7 +7,6 @@ This module provides comprehensive utilities for:
 - Token counting and management
 - File system operations
 - JSON processing
-- Schema validation
 - Configuration management
 - String processing
 - Error handling
@@ -27,83 +26,106 @@ import tiktoken
 import importlib.util
 from pathlib import Path
 from datetime import datetime
+from contextvars import ContextVar
+from functools import wraps
 from typing import Dict, Any, List, Optional, Union, Tuple, Set, Type
+import importlib.util
+from ast import NodeVisitor
 from dataclasses import dataclass
 from git.exc import GitCommandError
 
-from core.logger import LoggerSetup
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import DocstringData, TokenUsage
 from exceptions import DocumentationError
+from core.exceptions import LiveError, DocumentationError
+from typing import List
 
 # Initialize logger
+correlation_id_var = ContextVar('correlation_id', default=None)
+
+def get_correlation_id() -> Optional[str]:
+    """Retrieve the correlation ID from the context or return 'N/A' if not set."""
+    return correlation_id_var.get('N/A')
+
+def set_correlation_id(correlation_id: str):
+    """Set the correlation ID in the context."""
+    correlation_id_var.set(correlation_id)
+
 logger = LoggerSetup.get_logger(__name__)
+
+#-----------------------------------------------------------------------------
+# AST Node Visitor
+#-----------------------------------------------------------------------------
+
+class NodeNameVisitor(NodeVisitor):
+    """Visitor to extract the name from an AST node."""
+
+    def __init__(self):
+        self.name = None
+
+    def visit_Name(self, node: ast.Name):
+        self.name = node.id
+
+    def visit_Attribute(self, node: ast.Attribute):
+        self.name = node.attr
+
+#-----------------------------------------------------------------------------
+# Error Handling Utilities
+#-----------------------------------------------------------------------------
+
+def handle_extraction_error(
+    logger: CorrelationLoggerAdapter,
+    errors: List[str],
+    context: str,
+    e: Exception,
+    correlation_id: Optional[str] = None,
+    **kwargs
+) -> None:
+    """Handle errors during extraction processes."""
+    error_message = f"Error in {context}: {str(e)}"
+    errors.append(error_message)
+    log_kwargs = {"extra": {"correlation_id": correlation_id or get_correlation_id(), **kwargs}}
+    logger.error(error_message, **log_kwargs)
+    if isinstance(e, DocumentationError):
+        logger.error(f"DocumentationError in {context}: {e}", **log_kwargs)
+
+def handle_error(func):
+    """Decorator to handle common exceptions with logging."""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except DocumentationError as de:
+            logger = LoggerSetup.get_logger()
+            handle_extraction_error(logger, [], func.__name__, correlation_id=get_correlation_id(), e=de)
+            raise
+        except Exception as e:
+            logger = LoggerSetup.get_logger()
+            handle_extraction_error(logger, [], func.__name__, correlation_id=get_correlation_id(), e=e)
+            raise
+    return wrapper
+
+#-----------------------------------------------------------------------------
+# Module Existence Check Utility
+#-----------------------------------------------------------------------------
+
+def check_module_exists(module_name: str) -> bool:
+    """Check if a module can be imported without actually importing it."""
+    spec = importlib.util.find_spec(module_name)
+    return spec is not None
+
+#-----------------------------------------------------------------------------
+# Module Path Utilities
+#-----------------------------------------------------------------------------
+
+def get_module_path(module_name: str) -> Optional[str]:
+    """Get the file path of a module if it exists."""
+    spec = importlib.util.find_spec(module_name)
+    return spec.origin if spec else None
 
 #-----------------------------------------------------------------------------
 # AST Processing Utilities
 #-----------------------------------------------------------------------------
-
-class NodeNameVisitor(ast.NodeVisitor):
-    """AST visitor for extracting names from nodes."""
-
-    def __init__(self) -> None:
-        self.name = ""
-
-    def visit_Name(self, node: ast.Name) -> None:
-        """Visit a Name node."""
-        self.name = node.id
-
-    def visit_Attribute(self, node: ast.Attribute) -> None:
-        """Visit an Attribute node."""
-        self.visit(node.value)
-        self.name += f".{node.attr}"
-
-    def visit_Constant(self, node: ast.Constant) -> None:
-        """Visit a Constant node."""
-        self.name = repr(node.value)
-
-    def visit_Subscript(self, node: ast.Subscript) -> None:
-        """Visit a Subscript node."""
-        try:
-            value = self.visit_and_get(node.value)
-            slice_val = self.visit_and_get(node.slice)
-            self.name = f"{value}[{slice_val}]"
-        except Exception as e:
-            logger.debug(f"Error visiting Subscript node: {e}")
-            self.name = "unknown_subscript"
-
-    def visit_List(self, node: ast.List) -> None:
-        """Visit a List node."""
-        try:
-            elements = [self.visit_and_get(elt) for elt in node.elts]
-            self.name = f"[{', '.join(elements)}]"
-        except Exception as e:
-            logger.debug(f"Error visiting List node: {e}")
-            self.name = "[]"
-
-    def visit_Tuple(self, node: ast.Tuple) -> None:
-        """Visit a Tuple node."""
-        try:
-            elements = [self.visit_and_get(elt) for elt in node.elts]
-            self.name = f"({', '.join(elements)})"
-        except Exception as e:
-            logger.debug(f"Error visiting Tuple node: {e}")
-            self.name = "()"
-
-    def visit_Call(self, node: ast.Call) -> None:
-        """Visit a Call node."""
-        try:
-            func_name = self.visit_and_get(node.func)
-            args = [self.visit_and_get(arg) for arg in node.args]
-            self.name = f"{func_name}({', '.join(args)})"
-        except Exception as e:
-            logger.debug(f"Error visiting Call node: {e}")
-            self.name = "unknown_call"
-
-    def visit_and_get(self, node: ast.AST) -> str:
-        """Helper method to visit a node and return its name."""
-        visitor = NodeNameVisitor()
-        visitor.visit(node)
-        return visitor.name or "unknown"
 
 def get_node_name(node: Optional[ast.AST]) -> str:
     """Get the name from an AST node."""
@@ -152,7 +174,7 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
 
         return '\n'.join(normalized_lines).rstrip()
     except Exception as e:
-        logger.error(f"Error extracting source segment: {e}")
+        logger.error(f"Error extracting source segment: {e}", exc_info=True)
         return None
 
 #-----------------------------------------------------------------------------
@@ -162,9 +184,10 @@ def get_source_segment(source_code: str, node: ast.AST) -> Optional[str]:
 class RepositoryManager:
     """Handles git repository operations."""
 
-    def __init__(self, repo_path: Path):
+    def __init__(self, repo_path: Path, correlation_id: Optional[str] = None):
         self.repo_path = repo_path
         self.repo = None
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
 
     async def clone_repository(self, repo_url: str) -> Path:
         """Clone a repository and return its path."""
@@ -172,12 +195,12 @@ class RepositoryManager:
             clone_dir = self.repo_path / Path(repo_url).stem
             if clone_dir.exists():
                 if not self._verify_repository(clone_dir):
-                    logger.warning(f"Invalid repository at {clone_dir}, re-cloning")
+                    self.logger.warning(f"Invalid repository at {clone_dir}, re-cloning")
                     shutil.rmtree(clone_dir)
                 else:
                     return clone_dir
 
-            logger.info(f"Cloning repository from {repo_url}")
+            self.logger.info(f"Cloning repository from {repo_url}")
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, git.Repo.clone_from, repo_url, clone_dir)
 
@@ -186,7 +209,7 @@ class RepositoryManager:
 
             return clone_dir
         except Exception as e:
-            logger.error(f"Failed to clone repository: {e}")
+            self.logger.error(f"Failed to clone repository: {e}", exc_info=True)
             raise
 
     def _verify_repository(self, path: Path) -> bool:
@@ -211,19 +234,20 @@ class RepositoryManager:
 class TokenCounter:
     """Handles token counting and usage calculation."""
 
-    def __init__(self, model: str = "gpt-4"):
+    def __init__(self, model: str = "gpt-4", correlation_id: Optional[str] = None):
         try:
             self.encoding = tiktoken.encoding_for_model(model)
         except KeyError:
-            logger.warning(f"Model {model} not found. Using cl100k_base encoding.")
+            self.logger.warning(f"Model {model} not found. Using cl100k_base encoding.")
             self.encoding = tiktoken.get_encoding("cl100k_base")
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
 
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count for text."""
         try:
             return len(self.encoding.encode(text))
         except Exception as e:
-            logger.error(f"Error estimating tokens: {e}")
+            self.logger.error(f"Error estimating tokens: {e}", exc_info=True)
             return 0
 
     def calculate_usage(
@@ -280,7 +304,8 @@ def get_env_var(
     name: str,
     default: Any = None,
     var_type: Type = str,
-    required: bool = False
+    required: bool = False,
+    correlation_id: Optional[str] = None
 ) -> Any:
     """
     Get environment variable with type conversion and validation.
@@ -298,6 +323,7 @@ def get_env_var(
         ValueError: If required variable is missing or type conversion fails
     """
     value = os.getenv(name)
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
 
     if value is None:
         if required:
@@ -312,43 +338,37 @@ def get_env_var(
         raise ValueError(f"Error converting {name} to {var_type.__name__}: {str(e)}")
 
 #-----------------------------------------------------------------------------
+# File Reading Utility
+#-----------------------------------------------------------------------------
+
+def read_file_safe(file_path: Union[str, Path], correlation_id: Optional[str] = None) -> str:
+    """Safely read a file and return its contents."""
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except (FileNotFoundError, IOError) as e:
+        logger.error(f"Error reading file {file_path}: {e}", exc_info=True)
+        return ""
+        
+#-----------------------------------------------------------------------------
 # File System Utilities
 #-----------------------------------------------------------------------------
 
-def ensure_directory(path: Union[str, Path]) -> Path:
+def ensure_directory(path: Union[str, Path], correlation_id: Optional[str] = None) -> Path:
     """Ensure directory exists and return Path object."""
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
     path = Path(path)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-def read_file_safe(file_path: Union[str, Path], encoding: str = 'utf-8') -> str:
-    """Safely read file content with multiple encoding attempts."""
-    encodings = ['utf-8', 'latin-1', 'utf-16']
-
-    if encoding not in encodings:
-        encodings.insert(0, encoding)
-
-    for enc in encodings:
-        try:
-            with open(file_path, 'r', encoding=enc) as f:
-                return f.read()
-        except UnicodeDecodeError:
-            continue
-
-    raise ValueError(f"Could not read file {file_path} with any supported encoding")
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    except Exception as e:
+        logger.error(f"Error ensuring directory {path}: {e}", exc_info=True)
+        return path
 
 #-----------------------------------------------------------------------------
 # String Processing Utilities
 #-----------------------------------------------------------------------------
-
-def sanitize_identifier(text: str) -> str:
-    """Convert text to a valid Python identifier."""
-    # Replace non-alphanumeric chars with underscores
-    identifier = re.sub(r'\W+', '_', text)
-    # Ensure it starts with a letter or underscore
-    if identifier and identifier[0].isdigit():
-        identifier = f"_{identifier}"
-    return identifier
 
 def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
     """Truncate text to specified length."""
@@ -357,117 +377,10 @@ def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
     return text[:max_length - len(suffix)] + suffix
 
 #-----------------------------------------------------------------------------
-# Error Handling Utilities
-#-----------------------------------------------------------------------------
-
-def handle_extraction_error(
-    logger: Any,
-    errors: List[str],
-    process_name: str,
-    exception: Exception,
-    **kwargs: Any
-) -> None:
-    """
-    Handle and log extraction errors uniformly.
-
-    Args:
-        logger: Logger instance
-        errors: List to store error messages
-        process_name: Name of the process that failed
-        exception: The exception that occurred
-        **kwargs: Additional context for logging
-    """
-    error_message = f"{process_name}: {str(exception)}"
-    errors.append(error_message)
-
-    sanitized_info = kwargs.get('sanitized_info', {
-        'error': str(exception),
-        'process': process_name
-    })
-
-    logger.error(
-        "%s failed: %s",
-        process_name,
-        exception,
-        exc_info=True,
-        extra={'sanitized_info': sanitized_info}
-    )
-
-#-----------------------------------------------------------------------------
-# Module Inspection Utilities
-#-----------------------------------------------------------------------------
-
-def check_module_exists(module_name: str) -> bool:
-    """
-    Check if a Python module exists in the current environment.
-
-    Args:
-        module_name: Name of the module to check
-
-    Returns:
-        True if module exists, False otherwise
-    """
-    try:
-        spec = importlib.util.find_spec(module_name)
-        return spec is not None
-    except Exception:
-        return False
-
-def get_module_path(module_name: str) -> Optional[str]:
-    """
-    Get the file system path for a module.
-
-    Args:
-        module_name: Name of the module
-
-    Returns:
-        Path to the module file or None if not found
-    """
-    try:
-        spec = importlib.util.find_spec(module_name)
-        if spec and spec.origin:
-            return spec.origin
-        return None
-    except Exception:
-        return None
-
-#-----------------------------------------------------------------------------
-# Time and Date Utilities
-#-----------------------------------------------------------------------------
-
-def get_timestamp(fmt: str = "%Y-%m-%d_%H-%M-%S") -> str:
-    """
-    Get formatted timestamp string.
-
-    Args:
-        fmt: DateTime format string
-
-    Returns:
-        Formatted timestamp string
-    """
-    return datetime.now().strftime(fmt)
-
-def parse_timestamp(timestamp: str, fmt: str = "%Y-%m-%d_%H-%M-%S") -> datetime:
-    """
-    Parse timestamp string to datetime object.
-
-    Args:
-        timestamp: Timestamp string to parse
-        fmt: DateTime format string
-
-    Returns:
-        datetime object
-
-    Raises:
-        ValueError: If parsing fails
-    """
-    return datetime.strptime(timestamp, fmt)
-
-#-----------------------------------------------------------------------------
 # Path Manipulation Utilities
 #-----------------------------------------------------------------------------
 
-def normalize_path(path: Union[str, Path]) -> Path:
+def normalize_path(path: Union[str, Path], correlation_id: Optional[str] = None) -> Path:
     """
     Normalize a file system path.
 
@@ -477,111 +390,16 @@ def normalize_path(path: Union[str, Path]) -> Path:
     Returns:
         Normalized Path object
     """
-    return Path(path).resolve()
-
-def is_subpath(path: Union[str, Path], parent: Union[str, Path]) -> bool:
-    """
-    Check if path is a subpath of parent directory.
-
-    Args:
-        path: Path to check
-        parent: Parent directory path
-
-    Returns:
-        True if path is a subpath of parent
-    """
-    path = normalize_path(path)
-    parent = normalize_path(parent)
+    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={'correlation_id': correlation_id or get_correlation_id()})
     try:
-        path.relative_to(parent)
-        return True
-    except ValueError:
-        return False
-
-#-----------------------------------------------------------------------------
-# Type Checking Utilities
-#-----------------------------------------------------------------------------
-
-def is_optional_type(type_hint: Any) -> bool:
-    """
-    Check if a type hint is Optional.
-
-    Args:
-        type_hint: Type hint to check
-
-    Returns:
-        True if type is Optional
-    """
-    origin = getattr(type_hint, '__origin__', None)
-    args = getattr(type_hint, '__args__', ())
-    return origin is Union and type(None) in args
-
-def get_optional_type(type_hint: Any) -> Optional[Type]:
-    """
-    Get the type parameter of an Optional type hint.
-
-    Args:
-        type_hint: Optional type hint
-
-    Returns:
-        The type parameter or None if not Optional
-    """
-    if is_optional_type(type_hint):
-        args = [arg for arg in type_hint.__args__ if arg is not type(None)]
-        return args[0] if args else None
-    return None
-
-#-----------------------------------------------------------------------------
-# Main Utility Functions
-#-----------------------------------------------------------------------------
-
-def safe_getattr(obj: Any, attr: str, default: Any = None) -> Any:
-    """
-    Safely get object attribute with default value.
-
-    Args:
-        obj: Object to get attribute from
-        attr: Attribute name
-        default: Default value if attribute doesn't exist
-
-    Returns:
-        Attribute value or default
-    """
-    try:
-        return getattr(obj, attr, default)
-    except Exception:
-        return default
-
-def batch_process(
-    items: List[Any],
-    batch_size: int,
-    process_func: callable
-) -> List[Any]:
-    """
-    Process items in batches.
-
-    Args:
-        items: Items to process
-        batch_size: Size of each batch
-        process_func: Function to process each batch
-
-    Returns:
-        List of processed results
-    """
-    results = []
-    for i in range(0, len(items), batch_size):
-        batch = items[i:i + batch_size]
-        results.extend(process_func(batch))
-    return results
-
-#-----------------------------------------------------------------------------
-# Exported Utilities
-#-----------------------------------------------------------------------------
+        return Path(path).resolve()
+    except Exception as e:
+        logger.error(f"Error normalizing path {path}: {e}", exc_info=True)
+        return Path(path)
 
 # List of all utility functions and classes to be exported
 __all__ = [
     # AST Processing
-    'NodeNameVisitor',
     'get_node_name',
     'get_source_segment',
 
@@ -600,32 +418,12 @@ __all__ = [
 
     # File System
     'ensure_directory',
-    'read_file_safe',
 
     # String Processing
-    'sanitize_identifier',
     'truncate_text',
-
-    # Error Handling
-    'handle_extraction_error',
-
-    # Module Inspection
-    'check_module_exists',
-    'get_module_path',
-
-    # Time and Date
-    'get_timestamp',
-    'parse_timestamp',
 
     # Path Manipulation
     'normalize_path',
-    'is_subpath',
-
-    # Type Checking
-    'is_optional_type',
-    'get_optional_type',
-
-    # Main Utilities
-    'safe_getattr',
-    'batch_process'
+    'handle_extraction_error',
+    'handle_error'
 ]

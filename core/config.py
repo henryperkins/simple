@@ -8,34 +8,37 @@ import uuid
 # Load environment variables
 load_dotenv()
 
+
 def get_env_var(key: str, default: Any = None, var_type: type = str, required: bool = False) -> Any:
     """Get environment variable with type conversion and validation.
-    
+
     Args:
         key: Environment variable key
         default: Default value if not found
         var_type: Type to convert the value to
         required: Whether the variable is required
-        
+
     Returns:
         The environment variable value converted to the specified type
-        
+
     Raises:
         ValueError: If a required variable is missing or type conversion fails
     """
     value = os.getenv(key)
-    
+
     if value is None:
         if required:
             raise ValueError(f"Required environment variable {key} is not set")
         return default
-        
+
     try:
         if var_type == bool:
             return value.lower() in ('true', '1', 'yes', 'on')
         return var_type(value)
     except (ValueError, TypeError) as e:
-        raise ValueError(f"Failed to convert {key}={value} to type {var_type.__name__}: {str(e)}")
+        raise ValueError(
+            f"Failed to convert {key}={value} to type {var_type.__name__}: {str(e)}")
+
 
 @dataclass
 class ModelConfig:
@@ -43,6 +46,7 @@ class ModelConfig:
     max_tokens: int
     chunk_size: int
     cost_per_token: float
+
 
 @dataclass
 class AIConfig:
@@ -80,6 +84,7 @@ class AIConfig:
             timeout=get_env_var("TIMEOUT", 30, int)
         )
 
+
 @dataclass
 class AppConfig:
     """Application configuration."""
@@ -100,8 +105,10 @@ class AppConfig:
             cache_ttl=get_env_var("CACHE_TTL", 3600, int)
         )
 
+
 class Config:
     """Main configuration class combining all config sections."""
+
     def __init__(self):
         """Initialize configuration from environment."""
         self.ai = AIConfig.from_env()
@@ -110,7 +117,7 @@ class Config:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary.
-        
+
         Returns:
             Dictionary representation of the configuration
         """
@@ -140,6 +147,7 @@ class Config:
             },
             "correlation_id": self.correlation_id
         }
+
 
 # Create global configuration instance
 config = Config()

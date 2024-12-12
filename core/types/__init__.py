@@ -1,35 +1,41 @@
-"""Type definitions package."""
+"""
+Core type definitions for Python code analysis and documentation generation.
+Handles all data structures needed for code extraction, analysis, metrics,
+and documentation generation throughout the application.
+"""
 
-from core.types.metrics_types import MetricData
 from core.types.base import (
     BaseData,
-    ParsedResponse,
+    DocumentationContext,
+    DocumentationData,
     DocstringData,
-    TokenUsage,
+    ExtractionContext,
     ExtractedArgument,
     ExtractedElement,
     ExtractedFunction,
     ExtractedClass,
     ExtractionResult,
+    Injector,
+    MetricData,
+    ParsedResponse,
     ProcessingResult,
-    DocumentationContext,
-    ExtractionContext,
-    DocumentationData
+    TokenUsage
 )
 
 __all__ = [
-    "MetricData",
     "BaseData",
-    "ParsedResponse",
+    "DocumentationContext",
+    "DocumentationData",
     "DocstringData",
-    "TokenUsage",
+    "ExtractionContext",
     "ExtractedArgument",
     "ExtractedElement",
     "ExtractedFunction",
     "ExtractedClass",
     "ExtractionResult",
+    "Injector",
+    "MetricData",
+    "ParsedResponse",
     "ProcessingResult",
-    "DocumentationContext",
-    "ExtractionContext",
-    "DocumentationData"
+    "TokenUsage"
 ]
