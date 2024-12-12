@@ -228,7 +228,7 @@ class FunctionExtractor:
                 source=source,
                 docstring=docstring,
                 metrics=MetricData(),  # Will be populated below
-                dependencies=self.context.dependency_analyzer.extract_dependencies(
+                dependencies=self.context.dependency_analyzer.analyze_dependencies(
                     node
                 ),
                 decorators=decorators,

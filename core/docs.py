@@ -310,7 +310,7 @@ class DocumentationOrchestrator:
             orchestrator._validate_documentation_data(doc_data)
             ```
         """
-        if not self.markdown_generator.has_complete_information(documentation_data):
+        if not self.markdown_generator._has_complete_information(documentation_data):
             self.logger.warning("Documentation generated with missing information", extra={
                 'correlation_id': self.correlation_id})
 
