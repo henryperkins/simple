@@ -63,7 +63,7 @@ class MarkdownGenerator:
                 log_debug("Generated complete documentation successfully")
             return markdown
         except Exception as e:
-            log_error(f"Error generating markdown: {e}", exc_info=True)
+            self.logger.error(f"Error generating markdown: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             return f"# Error Generating Documentation\n\nAn error occurred: {e}"
 
     def _has_complete_information(self, documentation_data: DocumentationData) -> bool:
@@ -85,8 +85,8 @@ class MarkdownGenerator:
 
         # These fields are optional but we'll log if they're missing
         if not documentation_data.module_summary:
-            log_warning(
-                f"Module {documentation_data.module_name} is missing a summary")
+            self.logger.warning(
+                f"Module {documentation_data.module_name} is missing a summary", extra={'correlation_id': self.correlation_id})
             documentation_data.module_summary = (
                 documentation_data.ai_content.get('summary') or
                 documentation_data.docstring_data.summary or
@@ -94,15 +94,15 @@ class MarkdownGenerator:
             )
 
         if not documentation_data.ai_content:
-            log_warning(
-                f"Module {documentation_data.module_name} is missing AI-generated content")
+            self.logger.warning(
+                f"Module {documentation_data.module_name} is missing AI-generated content", extra={'correlation_id': self.correlation_id})
             documentation_data.ai_content = {
                 'summary': documentation_data.module_summary}
 
         # Only fail validation if critical fields are missing
         if missing_fields:
-            log_warning(
-                f"Missing required fields: {', '.join(missing_fields)}")
+            self.logger.warning(
+                f"Missing required fields: {', '.join(missing_fields)}", extra={'correlation_id': self.correlation_id})
             return False
 
         return True

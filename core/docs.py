@@ -156,8 +156,13 @@ class DocumentationOrchestrator:
                 print_info(f"Documentation generation completed successfully with correlation ID: {self.correlation_id}")
                 return context.source_code, markdown_doc
 
+        except DocumentationError as de:
+            print_error(f"DocumentationError: {de} in documentation_generation for module_path: {context.module_path} with correlation ID: {self.correlation_id}")
+            self.logger.error(f"DocumentationError: {de}", extra={'correlation_id': self.correlation_id})
+            raise
         except Exception as e:
-            print_error(f"Error: {e} in documentation_generation for module_path: {context.module_path} with correlation ID: {self.correlation_id}")
+            print_error(f"Unexpected error: {e} in documentation_generation for module_path: {context.module_path} with correlation ID: {self.correlation_id}")
+            self.logger.error(f"Unexpected error: {e}", exc_info=True, extra={'correlation_id': self.correlation_id})
             raise DocumentationError(f"Failed to generate documentation: {e}") from e
 
     def _create_extraction_context(self, context: DocumentationContext) -> ExtractionContext:
