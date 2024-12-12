@@ -79,7 +79,7 @@ class MetricsCollector:
                 self.progress = None
                 self.current_task_id = None
 
-    def _init_progress(self, module_name: str, total_items: int) -> None:
+    async def _init_progress(self, module_name: str, total_items: int) -> None:
         """Initialize or update the progress tracking for a new module."""
         try:
             if self.progress is not None:
