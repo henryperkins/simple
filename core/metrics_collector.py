@@ -68,8 +68,6 @@ class MetricsCollector:
         self.progress = create_progress()
         self.progress.start()
         self.current_task_id = None
-        if self.current_task_id is not None:
-            self.progress.remove_task(self.current_task_id)
 
     def stop_progress(self) -> None:
         """Stop and cleanup progress tracking."""
