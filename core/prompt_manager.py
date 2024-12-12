@@ -228,14 +228,14 @@ class PromptManager:
         )
 
         # Safely access docstring_info and returns
-        docstring_info = func.docstring_info or {}
-        returns_info = func.returns or {}
+        docstring_info = func.docstring_info or DocstringData()
+        returns_info = func.returns or {"type": "Any", "description": ""}
 
         formatted_info = (
             f"Function: {func.name}\n"
             f"Arguments: ({args_str})\n"
-            f"Returns: {returns_info.get('type', 'Any')}\n"
-            f"Existing Docstring: {docstring_info.get('summary', 'None')}\n"
+            f"Returns: {returns_info['type']}\n"
+            f"Existing Docstring: {docstring_info.summary}\n"
             f"Decorators: {', '.join(func.decorators) if func.decorators else 'None'}\n"
             f"Is Async: {'Yes' if func.is_async else 'No'}\n"
             f"Complexity Score: {func.metrics.cyclomatic_complexity if func.metrics else 'Unknown'}\n"

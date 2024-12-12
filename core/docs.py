@@ -90,7 +90,7 @@ class DocumentationOrchestrator:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.ai_service = ai_service or Injector.get('ai_service')
         self.code_extractor = CodeExtractor()
-        self.markdown_generator = Injector.get('markdown_generator')
+        self.markdown_generator = MarkdownGenerator()
 
     async def generate_documentation(self, context: DocumentationContext) -> Tuple[str, str]:
         """

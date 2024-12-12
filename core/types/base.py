@@ -364,10 +364,13 @@ class ExtractionContext:
             except Exception as e:
                 raise ValueError(f"Failed to unparse AST: {e}")
 
-        # Ensure function_extractor is initialized
+        # Ensure function_extractor and dependency_analyzer are initialized
         if self.function_extractor is None:
             from core.extraction.function_extractor import FunctionExtractor
             self.function_extractor = FunctionExtractor(context=self)
+        if self.dependency_analyzer is None:
+            from core.extraction.dependency_analyzer import DependencyAnalyzer
+            self.dependency_analyzer = DependencyAnalyzer(context=self)
 
     def _fix_indentation(self, code: str) -> str:
         """Fix inconsistent indentation in the source code."""
