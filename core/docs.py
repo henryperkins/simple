@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.extraction.code_extractor import CodeExtractor
+from core.extraction.code_extractor import CodeExtractor, ExtractionResult
 from core.markdown_generator import MarkdownGenerator
 from core.ai_service import AIService
 from core.cache import Cache
@@ -216,10 +216,6 @@ class DocumentationOrchestrator:
             DocumentationError: If documentation generation fails.
         """
         try:
-            self.logger.info(f"Generating documentation for {file_path} with correlation ID: {self.correlation_id}, module name: {context.metadata.get('module_name', 'Unknown')}")
-            output_dir = ensure_directory(output_dir)
-            output_path = output_dir / file_path.with_suffix(".md").name
-
             source_code = source_code or read_file_safe(file_path)
 
             context = DocumentationContext(
@@ -232,6 +228,10 @@ class DocumentationOrchestrator:
                     "creation_time": datetime.now().isoformat(),
                 }
             )
+
+            self.logger.info(f"Generating documentation for {file_path} with correlation ID: {self.correlation_id}, module name: {context.metadata.get('module_name', 'Unknown')}")
+            output_dir = ensure_directory(output_dir)
+            output_path = output_dir / file_path.with_suffix(".md").name
 
             updated_code, markdown_doc = await self.generate_documentation(context)
 
