@@ -38,15 +38,15 @@ class AIService:
         self.config = config or Injector.get('config')().ai
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
-        self.prompt_manager: PromptManager = Injector.get('prompt_manager')
-        self.response_parser: ResponseParsingService = Injector.get('response_parser')
+        self.prompt_manager = PromptManager(correlation_id=correlation_id)
+        self.response_parser = Injector.get('response_parser')
         try:
             self.docstring_processor = Injector.get('docstring_processor')
         except KeyError:
             self.logger.warning("Docstring processor not registered, using default")
             self.docstring_processor = DocstringProcessor()
             Injector.register('docstring_processor', self.docstring_processor)
-        self.token_manager: TokenManager = Injector.get('token_manager')
+        self.token_manager = Injector.get('token_manager')
         self.semaphore = asyncio.Semaphore(5)  # Initialize semaphore with a value
         self._client = None
 
@@ -80,13 +80,17 @@ class AIService:
                 expected_format="docstring"
             )
             return ProcessingResult(
-                content={"error": "Failed to parse AI response"},
-                usage={},
-                metrics={},
+                content=docstring_data.to_dict(),
+                usage=response.get("usage", {}),
+                metrics={
+                    "processing_time": parsed_response.parsing_time,
+                    "response_size": len(str(response)),
+                    "validation_success": is_valid
+                },
                 is_cached=False,
-                processing_time=0.0,
-                validation_status=False,
-                validation_errors=parsed_response.errors,
+                processing_time=parsed_response.parsing_time,
+                validation_status=is_valid,
+                validation_errors=validation_errors,
                 schema_errors=[]
             )
 
