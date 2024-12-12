@@ -132,7 +132,7 @@ class DocumentationOrchestrator:
             task = self.progress.add_task("Generating documentation", total=100)
             self.progress.update(task, advance=20, description="Extracting code...")
 
-                extraction_context = self._create_extraction_context(context)
+            extraction_context = self._create_extraction_context(context)
                 extraction_result = await self.code_extractor.extract_code(
                     context.source_code, extraction_context
                 )
