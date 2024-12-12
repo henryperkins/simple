@@ -32,8 +32,7 @@ from core.console import (
     print_error,
     print_warning,
     display_metrics,
-    create_progress,
-    display_metrics
+    create_progress
 )
 
 class DocumentationOrchestrator:
@@ -109,7 +108,7 @@ class DocumentationOrchestrator:
 
         except Exception as e:
             print_error(f"Error: {e} in documentation_generation for module_path: {context.module_path} with correlation ID: {self.correlation_id}")
-            raise DocumentationError(f"Failed to generate documentation: {e}")
+            raise DocumentationError(f"Failed to generate documentation: {e}") from e
 
     def _create_extraction_context(self, context: DocumentationContext) -> ExtractionContext:
         """Creates an extraction context from the documentation context."""
@@ -165,7 +164,7 @@ class DocumentationOrchestrator:
             parent_class=func_data.parent_class
         )
 
-    def _create_documentation_data(self, context: DocumentationContext, processing_result: ProcessingResult, extraction_result: Any) -> DocumentationData:
+    def _create_documentation_data(self, context: DocumentationContext, processing_result: ProcessingResult, extraction_result: ExtractionResult) -> DocumentationData:
         """Creates a DocumentationData instance from processing and extraction results."""
         docstring_data = DocstringData(
             summary=processing_result.content.get("summary", ""),
@@ -200,7 +199,7 @@ class DocumentationOrchestrator:
 
     def _validate_documentation_data(self, documentation_data: DocumentationData) -> None:
         """Validates the generated documentation data."""
-        if not self.markdown_generator._has_complete_information(documentation_data):
+        if not self.markdown_generator.has_complete_information(documentation_data):
             self.logger.warning("Documentation generated with missing information", extra={
                 'correlation_id': self.correlation_id})
 
@@ -217,7 +216,7 @@ class DocumentationOrchestrator:
             DocumentationError: If documentation generation fails.
         """
         try:
-            self.logger.info(f"Generating documentation for {file_path} with correlation ID: {self.correlation_id}")
+            self.logger.info(f"Generating documentation for {file_path} with correlation ID: {self.correlation_id}, module name: {context.metadata.get('module_name', 'Unknown')}")
             output_dir = ensure_directory(output_dir)
             output_path = output_dir / file_path.with_suffix(".md").name
 
