@@ -33,7 +33,7 @@ def setup_dependencies(correlation_id: Optional[str] = None):
 
     # Register or update existing dependencies
     Injector.register('config', lambda: Config())
-    Injector.register('token_manager', lambda: TokenManager(model="gpt-4"))
+    Injector.register('token_manager', lambda: TokenManager(model="gpt-4", config=Injector.get('config').ai))
     Injector.register('response_parser', lambda: ResponseParsingService(correlation_id=correlation_id))
     Injector.register('prompt_manager', lambda: PromptManager(correlation_id=correlation_id))
     Injector.register('code_extractor', lambda: CodeExtractor(context=ExtractionContext(), correlation_id=correlation_id))
