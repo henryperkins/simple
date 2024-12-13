@@ -7,14 +7,12 @@ them against specified schemas, and managing parsing statistics.
 
 import json
 import os
-from datetime import datetime
 from typing import Dict, Any, Optional, List, Union, Tuple
 from jsonschema import validate, ValidationError
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.docstring_processor import DocstringProcessor
 
 from core.types import ParsedResponse
-from core.exceptions import ResponseParsingError
 
 # Set up the base logger
 base_logger = LoggerSetup.get_logger(__name__)
@@ -32,7 +30,9 @@ class ResponseParsingService:
 
     def __init__(self, correlation_id: Optional[str] = None) -> None:
         """Initialize the response parsing service."""
-        self.logger = CorrelationLoggerAdapter(base_logger)
+        self.logger = CorrelationLoggerAdapter(
+            base_logger, extra={"correlation_id": correlation_id}
+        )
         self.docstring_processor = DocstringProcessor()
         self.docstring_schema = self._load_schema("docstring_schema.json")
         self.function_schema = self._load_schema("function_tools_schema.json")
@@ -53,15 +53,18 @@ class ResponseParsingService:
             Dictionary containing the loaded schema
         """
         try:
-            schema_path = os.path.join(os.path.dirname(
-                os.path.dirname(__file__)), 'schemas', schema_name)
-            with open(schema_path, 'r') as f:
+            schema_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "schemas", schema_name
+            )
+            with open(schema_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception as e:
+        except (FileNotFoundError, json.JSONDecodeError) as e:
             self.logger.error(f"Error loading schema {schema_name}: {e}")
             return {}
 
-    async def _parse_docstring_response(self, response: Union[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    async def _parse_docstring_response(
+        self, response: Union[str, Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
         """Parse a docstring response, handling both string and dictionary inputs.
 
         Args:
@@ -78,22 +81,19 @@ class ResponseParsingService:
             elif isinstance(response, str):
                 self.logger.debug("Processing response as a string")
                 response = response.strip()
-                if response.startswith('{') and response.endswith('}'):
+                if response.startswith("{") and response.endswith("}"):
                     try:
                         parsed_dict = json.loads(response)
-                        parsed_content = self.docstring_processor.parse(
-                            parsed_dict)
+                        parsed_content = self.docstring_processor.parse(parsed_dict)
                         return parsed_content.__dict__ if parsed_content else None
                     except json.JSONDecodeError as json_error:
-                        self.logger.warning(
-                            "JSON decoding failed: %s", json_error)
+                        self.logger.warning("JSON decoding failed: %s", json_error)
                 parsed_content = self.docstring_processor.parse(response)
                 return parsed_content.__dict__ if parsed_content else None
             self.logger.error(f"Unsupported response type: {type(response)}")
             return None
         except Exception as e:
-            self.logger.error(
-                f"Failed to parse docstring response: {e}", exc_info=True)
+            self.logger.error(f"Failed to parse docstring response: {e}", exc_info=True)
             return None
 
     async def parse_response(
@@ -105,19 +105,37 @@ class ResponseParsingService:
         """
         Parses the AI model response and returns a ParsedResponse object.
 
+        This method handles the parsing of AI responses, including validation against
+        specified schemas. It also manages fallback responses when parsing fails.
+
         Args:
-            response: The raw response from the AI model.
-            expected_format: The expected format of the content.
-            validate_schema: Whether to validate the content against a schema.
+            response (Dict[str, Any]): The raw response from the AI model.
+            expected_format (str): The expected format of the content, defaults to "docstring".
+            validate_schema (bool): Whether to validate the content against a schema, defaults to True.
 
         Returns:
-            ParsedResponse: The parsed response containing content and metadata.
+            ParsedResponse: An object containing the parsed content, metadata, and validation results.
         """
         try:
+            self.logger.debug(f"Raw response: {response}")
+            if not isinstance(response, dict):
+                self.logger.error(f"Response is not a dictionary: {response}")
+                fallback_content = self._create_fallback_response()
+                return ParsedResponse(
+                    content=fallback_content,
+                    format_type=expected_format,
+                    parsing_time=0.0,
+                    validation_success=False,
+                    errors=["Response is not a dictionary."],
+                    metadata={},
+                )
             # Check if 'choices' exists and is a non-empty list
-            if "choices" not in response or not isinstance(response["choices"], list) or not response["choices"]:
-                self.logger.error("Missing or empty 'choices' in response.")
-                # Return a fallback ParsedResponse instead of raising an exception
+            if (
+                "choices" not in response
+                or not isinstance(response["choices"], list)
+                or not response["choices"]
+            ):
+                self.logger.error(f"Missing or empty 'choices' in response: {response}")
                 fallback_content = self._create_fallback_response()
                 return ParsedResponse(
                     content=fallback_content,
@@ -128,9 +146,28 @@ class ResponseParsingService:
                     metadata={},
                 )
 
-            # Extract the content from the response
-            content_str = response["choices"][0]["message"]["function_call"]["arguments"]
-            content = json.loads(content_str)
+            message = response["choices"][0]["message"]
+
+            if "function_call" in message:
+                content_str = message["function_call"].get("arguments", "")
+                try:
+                    content = json.loads(content_str)
+                except json.JSONDecodeError:
+                    content = content_str
+                    self.logger.warning(
+                        "Failed to parse arguments as JSON, treating as string"
+                    )
+            else:
+                self.logger.warning("Missing 'function_call' in response.")
+                fallback_content = self._create_fallback_response()
+                return ParsedResponse(
+                    content=fallback_content,
+                    format_type=expected_format,
+                    parsing_time=0.0,
+                    validation_success=False,
+                    errors=["Missing 'function_call' in response."],
+                    metadata={},
+                )
 
             parsing_time = response.get("usage", {}).get("processing_ms", 0)
 
@@ -138,7 +175,9 @@ class ResponseParsingService:
             is_valid = True
             validation_errors = []
             if validate_schema:
-                is_valid, validation_errors = self._validate_content(content, expected_format)
+                is_valid, validation_errors = self._validate_content(
+                    content, expected_format
+                )
 
             # Return the parsed response
             return ParsedResponse(
@@ -151,7 +190,7 @@ class ResponseParsingService:
             )
         except Exception as e:
             self.logger.error(f"Error parsing response: {e}")
-            # Optionally, return a fallback ParsedResponse here as well
+            # Return a fallback ParsedResponse when parsing fails
             fallback_content = self._create_fallback_response()
             return ParsedResponse(
                 content=fallback_content,
@@ -181,15 +220,13 @@ class ResponseParsingService:
 
             parsed_content = json.loads(response)
 
-            required_fields = {"summary", "description",
-                               "args", "returns", "raises"}
+            required_fields = {"summary", "description", "args", "returns", "raises"}
             for field in required_fields:
                 if field not in parsed_content:
                     if field in {"args", "raises"}:
                         parsed_content[field] = []
                     elif field == "returns":
-                        parsed_content[field] = {
-                            "type": "Any", "description": ""}
+                        parsed_content[field] = {"type": "Any", "description": ""}
                     else:
                         parsed_content[field] = ""
 
@@ -208,10 +245,13 @@ class ResponseParsingService:
             return None
         except Exception as e:
             self.logger.error(
-                f"Unexpected error during JSON response parsing: {e}", exc_info=True)
+                f"Unexpected error during JSON response parsing: {e}", exc_info=True
+            )
             return None
 
-    async def _validate_response(self, content: Dict[str, Any], format_type: str) -> bool:
+    async def _validate_response(
+        self, content: Dict[str, Any], format_type: str
+    ) -> bool:
         """Validate response against appropriate schema.
 
         Args:
@@ -226,23 +266,21 @@ class ResponseParsingService:
                 if not self.docstring_schema:
                     self.logger.error("Docstring schema not loaded")
                     return False
-                validate(instance=content,
-                         schema=self.docstring_schema["schema"])
+                validate(instance=content, schema=self.docstring_schema["schema"])
             elif format_type == "function":
                 if not self.function_schema:
                     self.logger.error("Function schema not loaded")
                     return False
-                validate(instance=content,
-                         schema=self.function_schema["schema"])
+                validate(instance=content, schema=self.function_schema["schema"])
             self.logger.debug("Schema validation successful")
             return True
         except ValidationError as e:
-            self.logger.error(
-                f"Schema validation failed: {e.message}", exc_info=True)
+            self.logger.error(f"Schema validation failed: {e.message}", exc_info=True)
             return False
         except Exception as e:
             self.logger.error(
-                f"Unexpected error during schema validation: {e}", exc_info=True)
+                f"Unexpected error during schema validation: {e}", exc_info=True
+            )
             return False
 
     def _create_fallback_response(self) -> Dict[str, Any]:
@@ -276,8 +314,7 @@ class ResponseParsingService:
             self.logger.debug("Markdown response parsed successfully")
             return parsed_content if parsed_content else None
         except Exception as e:
-            self.logger.error(
-                f"Failed to parse markdown response: {e}", exc_info=True)
+            self.logger.error(f"Failed to parse markdown response: {e}", exc_info=True)
             return None
 
     def _extract_markdown_sections(self, response: str) -> Dict[str, str]:
@@ -296,8 +333,7 @@ class ResponseParsingService:
         for line in response.splitlines():
             if line.startswith("#"):
                 if current_section:
-                    sections[current_section] = "\n".join(
-                        current_content).strip()
+                    sections[current_section] = "\n".join(current_content).strip()
                 current_section = line.strip("# ").strip()
                 current_content = []
             else:
@@ -306,11 +342,12 @@ class ResponseParsingService:
         if current_section:
             sections[current_section] = "\n".join(current_content).strip()
 
-        self.logger.debug(
-            f"Extracted markdown sections: {list(sections.keys())}")
+        self.logger.debug(f"Extracted markdown sections: {list(sections.keys())}")
         return sections
 
-    def _validate_content(self, content: Dict[str, Any], format_type: str) -> Tuple[bool, List[str]]:
+    def _validate_content(
+        self, content: Dict[str, Any], format_type: str
+    ) -> Tuple[bool, List[str]]:
         """
         Validate the content against the appropriate schema.
 
@@ -321,9 +358,8 @@ class ResponseParsingService:
         Returns:
             Tuple containing validation success status and list of validation errors
         """
+        validation_errors = []
         try:
-            validation_errors = []
-            
             if format_type == "docstring":
                 if not self.docstring_schema:
                     validation_errors.append("Docstring schema not loaded")
@@ -334,12 +370,11 @@ class ResponseParsingService:
                     validation_errors.append("Function schema not loaded")
                     return False, validation_errors
                 validate(instance=content, schema=self.function_schema)
-                
+
             return True, validation_errors
-            
+
         except ValidationError as e:
             validation_errors.append(str(e))
-            return False, validation_errors
         except Exception as e:
             validation_errors.append(f"Unexpected validation error: {str(e)}")
-            return False, validation_errors
+        return False, validation_errors

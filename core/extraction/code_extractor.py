@@ -78,102 +78,87 @@ class CodeExtractor:
         module_name = self.context.module_name or "unnamed_module"
         module_metrics = MetricData()
         module_metrics.module_name = module_name
-
-        progress = create_progress()
         try:
-            # Create a single progress bar for the entire extraction process
-            with progress:
-                extraction_task = progress.add_task(
-                    "Extracting code elements", total=100
-                )
+            # Initialize progress tracking
+            self.metrics_collector.start_progress(
+                module_name, len(source_code.splitlines())
+            )
+            
+            tree = ast.parse(source_code)
+            # Update progress
+            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
 
-                progress.update(
-                    extraction_task, advance=10, description="Validating source code..."
-                )
-                self._validate_source_code(source_code)
+            self._validate_source_code(source_code)
 
-                progress.update(
-                    extraction_task, advance=10, description="Parsing AST..."
-                )
-                tree = ast.parse(source_code)
+            
+            # Update progress
+            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
 
-                progress.update(
-                    extraction_task,
-                    advance=10,
-                    description="Extracting dependencies...",
-                )
-                dependencies = self.dependency_analyzer.analyze_dependencies(tree)
+            dependencies = self.dependency_analyzer.analyze_dependencies(tree)
+            
+            # Update progress
+            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
 
-                progress.update(
-                    extraction_task, advance=15, description="Extracting classes..."
-                )
-                classes = await self.class_extractor.extract_classes(tree)
-                module_metrics.total_classes = len(classes)
-                module_metrics.scanned_classes = len(
-                    [cls for cls in classes if cls.docstring_info]
-                )
+            classes = await self.class_extractor.extract_classes(
+                tree
+            )
+            module_metrics.total_classes = len(classes)
+            module_metrics.scanned_classes = len(
+                [cls for cls in classes if cls.docstring_info]
+            )
 
-                progress.update(
-                    extraction_task, advance=15, description="Extracting functions..."
-                )
-                functions = await self.function_extractor.extract_functions(tree)
-                module_metrics.total_functions = len(functions)
-                module_metrics.scanned_functions = len(
-                    [func for func in functions if func.docstring_info]
-                )
+            # Update progress
+            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
 
-                progress.update(
-                    extraction_task, advance=10, description="Extracting variables..."
-                )
-                variables = self._extract_variables(tree)
+            functions = await self.function_extractor.extract_functions(
+                tree
+            )
+            module_metrics.total_functions = len(functions)
+            module_metrics.scanned_functions = len(
+                [func for func in functions if func.docstring_info]
+            )
+            # Update progress
+            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
+            variables = self._extract_variables(tree)
+            # Update progress
+            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
+            constants = self._extract_constants(tree)
+            # Update progress
+            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
+            module_docstring = self._extract_module_docstring(tree)
 
-                progress.update(
-                    extraction_task, advance=10, description="Extracting constants..."
-                )
-                constants = self._extract_constants(tree)
+            module_metrics = self.metrics.calculate_metrics(source_code, module_name)
 
-                progress.update(
-                    extraction_task, advance=10, description="Extracting docstrings..."
-                )
-                module_docstring = self._extract_module_docstring(tree)
+            # Display extraction metrics
+            metrics_display = {
+                "Classes": len(classes),
+                "Functions": len(functions),
+                "Variables": len(variables),
+                "Constants": len(constants),
+                "Lines of Code": len(source_code.splitlines()),
+                "Cyclomatic Complexity": module_metrics.cyclomatic_complexity,
+                "Maintainability Index": f"{module_metrics.maintainability_index:.2f}",
+                "Halstead Volume": f"{module_metrics.halstead_metrics.get('volume', 0):.2f}",
+                "Dependencies": len(dependencies),
+            }
+            display_metrics(
+                metrics_display, title=f"Code Extraction Results for {module_name}"
+            )
 
-                progress.update(
-                    extraction_task, advance=10, description="Calculating metrics..."
-                )
-                module_metrics = self.metrics.calculate_metrics(
-                    source_code, module_name
-                )
-
-                # Display extraction metrics
-                metrics_display = {
-                    "Classes": len(classes),
-                    "Functions": len(functions),
-                    "Variables": len(variables),
-                    "Constants": len(constants),
-                    "Lines of Code": len(source_code.splitlines()),
-                    "Cyclomatic Complexity": module_metrics.cyclomatic_complexity,
-                    "Maintainability Index": f"{module_metrics.maintainability_index:.2f}",
-                    "Halstead Volume": f"{module_metrics.halstead_metrics.get('volume', 0):.2f}",
-                    "Dependencies": len(dependencies),
-                }
-                display_metrics(
-                    metrics_display, title=f"Code Extraction Results for {module_name}"
-                )
-
-                return ExtractionResult(
-                    module_docstring=module_docstring,
-                    classes=classes,
-                    functions=functions,
-                    variables=variables,
-                    constants=constants,
-                    dependencies=dependencies,
-                    metrics=module_metrics,
-                    source_code=source_code,
-                    module_name=module_name,
-                    file_path=(
-                        str(self.context.base_path) if self.context.base_path else ""
-                    ),
-                )
+            return ExtractionResult(
+                module_docstring=module_docstring,
+                classes=classes,
+                functions=functions,
+                variables=variables,
+                constants=constants,
+                dependencies=dependencies,
+                metrics=module_metrics,
+                source_code=source_code,
+                module_name=module_name,
+                file_path=(
+                    str(self.context.base_path) if self.context.base_path else ""
+                ),
+            )
 
         except ProcessingError as pe:
             handle_extraction_error(
@@ -202,6 +187,8 @@ class CodeExtractor:
                 e=e,
             )
             raise ExtractionError(f"Unexpected error during extraction: {e}") from e
+        finally:
+            self.metrics_collector.stop_progress()
 
     def _validate_source_code(self, source_code: str) -> None:
         """

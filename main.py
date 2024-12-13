@@ -75,6 +75,7 @@ class DocumentationGenerator:
         )
         self.repo_manager = None
         self.doc_orchestrator = Injector.get("doc_orchestrator")  # Add this line
+        self.ai_service = Injector.get("ai_service")  # Add this line
 
     async def initialize(self) -> None:
         """Start systems that require asynchronous setup."""

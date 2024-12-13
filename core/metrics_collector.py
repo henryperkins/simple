@@ -63,28 +63,13 @@ class MetricsCollector:
             f"[blue]Classes:[/blue] {scanned_classes}/{total_classes} ({class_ratio:.0%})"
         )
 
-    def start_progress(self) -> None:
+    def start_progress(self, module_name: str, total_items: int) -> None:
         """Initialize and start progress tracking."""
-        if self.progress is None:
-            self.progress = create_progress()
-            self.progress.start()
-        self.current_task_id = None
-
-    def stop_progress(self) -> None:
-        """Stop and cleanup progress tracking."""
-        if self.progress is not None:
-            self.progress.stop()
-            self.progress = None
-            self.current_task_id = None
-
-    def _init_progress(self, module_name: str, total_items: int) -> None:
-        """Initialize or update the progress tracking for a new module."""
         try:
-            if self.progress is not None:
-                self.stop_progress()
-
-            self.start_progress()
-
+            if self.progress is None:
+                self.progress = create_progress()
+                self.progress.start()
+            
             if self.current_task_id is not None:
                 self.progress.remove_task(self.current_task_id)
 
@@ -93,15 +78,49 @@ class MetricsCollector:
                 desc, total=max(1, total_items)
             )
             self.current_module = module_name
-
             self.accumulated_functions = 0
             self.accumulated_classes = 0
-
         except Exception as e:
             print_error(
                 f"Error initializing progress: {e} with correlation ID: {self.correlation_id}"
             )
             self.current_task_id = None
+
+    def stop_progress(self) -> None:
+        """Stop and cleanup progress tracking."""
+        if self.progress is not None:
+            self.progress.stop()
+            self.progress = None
+            self.current_task_id = None
+            self.current_module = None
+
+    def update_progress(
+        self,
+        module_name: str,
+        scanned_funcs: int,
+        total_funcs: int,
+        scanned_classes: int,
+        total_classes: int,
+    ) -> None:
+        """Update and log scan progress for a module."""
+        try:
+            if self.current_task_id is None or self.progress is None:
+                return
+
+            desc = self._format_progress_desc(
+                module_name, scanned_funcs, total_funcs, scanned_classes, total_classes
+            )
+            self.progress.update(
+                self.current_task_id,
+                description=desc,
+                completed=scanned_funcs + scanned_classes,
+                total=max(1, total_funcs + total_classes),
+            )
+
+        except Exception as e:
+            print_error(
+                f"Error updating progress: {e} with correlation ID: {self.correlation_id}"
+            )
 
     def collect_metrics(self, module_name: str, metrics: Any) -> None:
         """Collect metrics for a module."""
@@ -146,15 +165,6 @@ class MetricsCollector:
                 self.metrics_history[module_name] = [entry]
                 self._save_history()
 
-            total_items = metrics.total_functions + metrics.total_classes
-            if total_items > 0:
-                if self.current_module != module_name:
-                    self._init_progress(module_name, total_items)
-                    self._update_progress(
-                        module_name,
-                        (metrics.scanned_functions, metrics.total_functions),
-                        (metrics.scanned_classes, metrics.total_classes),
-                    )
         except Exception as e:
             print_error(
                 f"Error collecting metrics: {e} with correlation ID: {self.correlation_id}"
@@ -163,62 +173,22 @@ class MetricsCollector:
     def update_scan_progress(self, module_name: str, item_type: str, name: str) -> None:
         """Update and log scan progress for a module."""
         try:
-            if module_name in self.current_module_metrics:
+             if module_name in self.current_module_metrics:
                 metrics = self.current_module_metrics[module_name]
-
                 if item_type == "function":
                     self.accumulated_functions += 1
-                    metrics.scanned_functions = self.accumulated_functions
                     if self.current_task_id is not None and self.progress is not None:
                         self.progress.advance(self.current_task_id)
-                        self._update_progress(
-                            module_name,
-                            (self.accumulated_functions, metrics.total_functions),
-                            (self.accumulated_classes, metrics.total_classes),
-                        )
+                        self.update_progress(module_name, self.accumulated_functions, metrics.total_functions, self.accumulated_classes, metrics.total_classes)
                 elif item_type == "class":
-                    self.accumulated_classes += 1
-                    metrics.scanned_classes = self.accumulated_classes
-                    if self.current_task_id is not None and self.progress is not None:
-                        self.progress.advance(self.current_task_id)
-                        self._update_progress(
-                            module_name,
-                            (self.accumulated_functions, metrics.total_functions),
-                            (self.accumulated_classes, metrics.total_classes),
-                        )
+                     self.accumulated_classes += 1
+                     if self.current_task_id is not None and self.progress is not None:
+                         self.progress.advance(self.current_task_id)
+                         self.update_progress(module_name, self.accumulated_functions, metrics.total_functions, self.accumulated_classes, metrics.total_classes)
 
         except Exception as e:
             print_error(
                 f"Error updating scan progress: {e} with correlation ID: {self.correlation_id}"
-            )
-
-    def _update_progress(
-        self, module_name: str, functions: tuple[int, int], classes: tuple[int, int]
-    ) -> None:
-        """Update the progress tracking with current counts."""
-        try:
-            if self.current_task_id is None or self.progress is None:
-                return
-
-            scanned_funcs, total_funcs = functions
-            scanned_classes, total_classes = classes
-
-            total_items = total_funcs + total_classes
-            completed_items = scanned_funcs + scanned_classes
-
-            desc = self._format_progress_desc(
-                module_name, scanned_funcs, total_funcs, scanned_classes, total_classes
-            )
-            self.progress.update(
-                self.current_task_id,
-                description=desc,
-                completed=completed_items,
-                total=max(1, total_items),
-            )
-
-        except Exception as e:
-            print_error(
-                f"Error updating progress: {e} with correlation ID: {self.correlation_id}"
             )
 
     def _metrics_to_dict(self, metrics: Any) -> dict[str, Any]:

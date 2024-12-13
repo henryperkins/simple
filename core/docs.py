@@ -18,11 +18,11 @@ from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
 import ast
 
+# Group imports from core package
 from core.docstring_processor import DocstringProcessor
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.extraction.code_extractor import CodeExtractor
 from core.markdown_generator import MarkdownGenerator
-from core.response_parsing import ResponseParsingService
 from core.ai_service import AIService
 from core.prompt_manager import PromptManager
 from core.types.base import (
@@ -33,8 +33,10 @@ from core.types.base import (
     ExtractedClass,
     ExtractedFunction,
     ProcessingResult,
+    MetricData,
+    ExtractedArgument,
 )
-from core.exceptions import DocumentationError, ResponseParsingError
+from core.exceptions import DocumentationError
 from utils import ensure_directory, read_file_safe_async
 from core.console import print_info, print_error, create_progress
 
@@ -51,7 +53,7 @@ class DocumentationOrchestrator:
         markdown_generator: MarkdownGenerator,
         prompt_manager: PromptManager,
         docstring_processor: DocstringProcessor,
-        response_parser: ResponseParsingService,
+        response_parser: Any,
         correlation_id: Optional[str] = None,
     ) -> None:
         """
@@ -73,6 +75,13 @@ class DocumentationOrchestrator:
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
             extra={"correlation_id": self.correlation_id},
+        )
+        self.logger.info(
+            "DocumentationOrchestrator initialized",
+            extra={
+                "correlation_id": self.correlation_id,
+                "ai_service": str(ai_service),
+            },
         )
 
         # Use constructor injection for dependencies
@@ -109,7 +118,9 @@ class DocumentationOrchestrator:
                 raise DocumentationError("Source code is empty or missing")
 
             source_code = context.source_code
-            module_name = context.metadata.get("module_name", "")
+            module_name = (
+                context.metadata.get("module_name", "") if context.metadata else ""
+            )
 
             # Reuse existing progress bar if available
             if self.progress:
@@ -166,16 +177,19 @@ class DocumentationOrchestrator:
                 self.progress.update(
                     extraction_task, advance=10, description="Extracting variables..."
                 )
+                # Accessing protected method for internal use
                 variables = self.code_extractor._extract_variables(tree)
 
                 self.progress.update(
                     extraction_task, advance=10, description="Extracting constants..."
                 )
+                # Accessing protected method for internal use
                 constants = self.code_extractor._extract_constants(tree)
 
                 self.progress.update(
                     extraction_task, advance=10, description="Extracting docstrings..."
                 )
+                # Accessing protected method for internal use
                 module_docstring = self.code_extractor._extract_module_docstring(tree)
 
                 self.progress.update(
@@ -189,7 +203,9 @@ class DocumentationOrchestrator:
 
             # Create documentation prompt
             prompt = await self.prompt_manager.create_documentation_prompt(
-                module_name=context.metadata.get("module_name", ""),
+                module_name=(
+                    context.metadata.get("module_name", "") if context.metadata else ""
+                ),
                 file_path=str(context.module_path),
                 source_code=context.source_code,
                 classes=classes,
@@ -266,6 +282,22 @@ class DocumentationOrchestrator:
             )
             raise DocumentationError(f"Failed to generate documentation: {e}") from e
 
+    def _validate_source_code(self, source_code: str) -> None:
+        """
+        Validates the source code for any issues before processing.
+
+        Args:
+            source_code (str): The source code to validate.
+
+        Raises:
+            DocumentationError: If the source code is invalid or contains errors.
+        """
+        try:
+            ast.parse(source_code)
+        except SyntaxError as e:
+            raise DocumentationError(f"Syntax error in source code: {e}")
+        # Add more validation checks as needed
+
     def _create_extraction_context(
         self, context: DocumentationContext
     ) -> ExtractionContext:
@@ -279,7 +311,11 @@ class DocumentationOrchestrator:
             ExtractionContext: Context for code extraction.
         """
         return ExtractionContext(
-            module_name=context.metadata.get("module_name", context.module_path.stem),
+            module_name=(
+                context.metadata.get("module_name", context.module_path.stem)
+                if context.metadata
+                else context.module_path.stem
+            ),
             source_code=context.source_code,
             base_path=context.module_path,
             metrics_enabled=True,
@@ -304,7 +340,7 @@ class DocumentationOrchestrator:
             lineno=cls_data.lineno,
             source=cls_data.source,
             docstring=cls_data.docstring,
-            metrics=cls_data.metrics,
+            metrics=MetricData(**cls_data.metrics),
             dependencies=cls_data.dependencies,
             decorators=cls_data.decorators,
             complexity_warnings=cls_data.complexity_warnings,
@@ -333,11 +369,11 @@ class DocumentationOrchestrator:
             lineno=func_data.lineno,
             source=func_data.source,
             docstring=func_data.docstring,
-            metrics=func_data.metrics,
+            metrics=MetricData(**func_data.metrics),
             dependencies=func_data.dependencies,
             decorators=func_data.decorators,
             complexity_warnings=func_data.complexity_warnings,
-            args=func_data.args,
+            args=[ExtractedArgument(**arg) for arg in func_data.args],
             returns=func_data.returns,
             raises=func_data.raises,
             body_summary=func_data.body_summary,
@@ -356,7 +392,10 @@ class DocumentationOrchestrator:
             dependencies=cls_dict.get("dependencies", {}),
             decorators=cls_dict.get("decorators", []),
             complexity_warnings=cls_dict.get("complexity_warnings", []),
-            methods=[self._map_to_extracted_function(method) for method in cls_dict.get("methods", [])],
+            methods=[
+                self._map_to_extracted_function(method)
+                for method in cls_dict.get("methods", [])
+            ],
             attributes=cls_dict.get("attributes", []),
             instance_attributes=cls_dict.get("instance_attributes", []),
             bases=cls_dict.get("bases", []),
@@ -364,7 +403,9 @@ class DocumentationOrchestrator:
             is_exception=cls_dict.get("is_exception", False),
         )
 
-    def _map_to_extracted_function(self, func_dict: Dict[str, Any]) -> ExtractedFunction:
+    def _map_to_extracted_function(
+        self, func_dict: Dict[str, Any]
+    ) -> ExtractedFunction:
         return ExtractedFunction(
             name=func_dict.get("name", "Unknown"),
             lineno=func_dict.get("lineno", 0),
@@ -390,9 +431,9 @@ class DocumentationOrchestrator:
         docstring_data: DocstringData,
         classes: List[ExtractedClass],
         functions: List[ExtractedFunction],
-        variables: List[str],
-        constants: List[str],
-        module_docstring: Optional[str],
+        variables: List[Dict[str, Any]],
+        constants: List[Dict[str, Any]],
+        module_docstring: Dict[str, Any] | None,
     ) -> DocumentationData:
         """
         Create DocumentationData from the given context and AI processing results.
@@ -411,7 +452,9 @@ class DocumentationOrchestrator:
             DocumentationData: Structured documentation data.
         """
         return DocumentationData(
-            module_name=str(context.metadata.get("module_name", "")),
+            module_name=(
+                str(context.metadata.get("module_name", "")) if context.metadata else ""
+            ),
             module_path=context.module_path,
             module_summary=str(processing_result.content.get("summary", "")),
             source_code=context.source_code,
@@ -446,6 +489,7 @@ class DocumentationOrchestrator:
         Raises:
             DocumentationError: If the documentation data is incomplete or invalid.
         """
+        # Accessing protected method for internal use
         if not self.markdown_generator._has_complete_information(documentation_data):
             self.logger.warning(
                 "Documentation generated with missing information",
@@ -507,57 +551,3 @@ class DocumentationOrchestrator:
             )
             self.logger.error(f"{error_msg} with correlation ID: {self.correlation_id}")
             raise DocumentationError(error_msg) from e
-
-    async def generate_batch_documentation(
-        self, file_paths: List[Path], output_dir: Path
-    ) -> Dict[Path, bool]:
-        """
-        Generates documentation for multiple files in batch.
-
-        Args:
-            file_paths: List of paths to the source files.
-            output_dir: Directory to write the output documentation.
-
-        Returns:
-            Dict[Path, bool]: A dictionary with file paths as keys and boolean values indicating success or failure.
-        """
-        results = {}
-        for file_path in file_paths:
-            try:
-                await self.generate_module_documentation(file_path, output_dir)
-                results[file_path] = True
-            except DocumentationError as e:
-                self.logger.error(
-                    f"Failed to generate docs for {file_path}: {e} with correlation ID: {self.correlation_id}"
-                )
-                results[file_path] = False
-            except Exception as e:
-                self.logger.error(
-                    f"Unexpected error for {file_path}: {e} with correlation ID: {self.correlation_id}"
-                )
-                results[file_path] = False
-        return results
-
-    async def __aenter__(self) -> "DocumentationOrchestrator":
-        """Enter the async context manager."""
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Exit the async context manager."""
-        if self.ai_service:
-            await self.ai_service.close()
-
-    def _validate_source_code(self, source_code: str) -> None:
-        """
-        Validates the source code for syntax errors.
-
-        Args:
-            source_code: The source code to validate.
-
-        Raises:
-            DocumentationError: If the source code has syntax errors.
-        """
-        try:
-            ast.parse(source_code)
-        except SyntaxError as e:
-            raise DocumentationError(f"Syntax error in source code: {e}")

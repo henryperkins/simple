@@ -1,7 +1,6 @@
 from typing import Dict, Any, Optional
 import asyncio
 from urllib.parse import urljoin
-import json
 
 import aiohttp
 
@@ -35,7 +34,7 @@ class AIService:
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
-            extra={"correlation_id": self.correlation_id},
+            extra={"correlation_id": self.correlation_id}
         )
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")
@@ -59,6 +58,17 @@ class AIService:
         print_info(
             f"Initializing AI service with correlation ID: {self.correlation_id}"
         )
+        self.logger.info(
+            "AIService instance created",
+            extra={"correlation_id": self.correlation_id},
+        )
+
+    async def start(self) -> None:
+        """
+        Start the AI service by initializing the client session.
+        """
+        if self._client is None:
+            self._client = aiohttp.ClientSession()
 
     async def generate_documentation(
         self, context: "DocumentationContext"
@@ -75,9 +85,11 @@ class AIService:
         Raises:
             DocumentationGenerationError: If there's an issue generating documentation.
         """
+        self.logger.info(
+            "generate_documentation called",
+            extra={"correlation_id": self.correlation_id},
+        )
         try:
-            from core.types.base import DocstringData, ProcessingResult
-
             module_name = (
                 context.metadata.get("module_name", "") if context.metadata else ""
             )
@@ -106,6 +118,7 @@ class AIService:
             is_valid, validation_errors = self.docstring_processor.validate(
                 docstring_data
             )
+            self.logger.info(f"Docstring validation status: {is_valid}")
 
             if not is_valid:
                 print_warning(
@@ -128,7 +141,7 @@ class AIService:
                     processing_time=parsed_response.parsing_time,
                     validation_status=False,
                     validation_errors=validation_errors,
-                    schema_errors=[],
+                    schema_errors=parsed_response.errors,
                 )
 
             # Return the validated and processed docstring
@@ -144,7 +157,7 @@ class AIService:
                 processing_time=parsed_response.parsing_time,
                 validation_status=is_valid,
                 validation_errors=validation_errors,
-                schema_errors=[],
+                schema_errors=parsed_response.errors,
             )
 
         except Exception as e:
@@ -195,16 +208,16 @@ class AIService:
             try:
                 endpoint = self.config.endpoint.rstrip("/") + "/"
                 path = f"openai/deployments/{self.config.deployment}/chat/completions"
-                url = urljoin(endpoint, path) + "?api-version=2024-02-15-preview"
+                url = urljoin(endpoint, path) + "?api-version=2024-10-21"
 
                 if self._client is None:
-                    self._client = aiohttp.ClientSession()
+                    await self.start()
 
                 async with self._client.post(
                     url,
                     headers=headers,
                     json=request_params,
-                    timeout=self.config.timeout,
+                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
                 ) as response:
                     if response.status == 200:
                         return await response.json()
@@ -213,7 +226,7 @@ class AIService:
                         self.logger.error(
                             f"API call failed with status {response.status}: "
                             f"{error_text}",
-                            extra={"correlation_id": self.correlation_id},
+                            extra={"correlation_id": self.correlation_id, "response_text": error_text, "status_code": response.status},
                         )
                         if attempt == max_retries - 1:
                             raise APICallError(
@@ -243,6 +256,7 @@ class AIService:
 
     async def __aenter__(self) -> "AIService":
         """Enter method for async context manager."""
+        await self.start()
         return self
 
     async def __aexit__(
