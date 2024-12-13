@@ -8,12 +8,13 @@ them against specified schemas, and managing parsing statistics.
 import json
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Tuple
 from jsonschema import validate, ValidationError
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.docstring_processor import DocstringProcessor
 
 from core.types import ParsedResponse
+from core.exceptions import ResponseParsingError
 
 # Set up the base logger
 base_logger = LoggerSetup.get_logger(__name__)
@@ -95,83 +96,70 @@ class ResponseParsingService:
                 f"Failed to parse docstring response: {e}", exc_info=True)
             return None
 
-    async def parse_response(self, response: Union[str, Dict[str, Any]], expected_format: str = "json", validate_schema: bool = True) -> ParsedResponse:
-        """Parse and validate an AI response.
+    async def parse_response(
+        self,
+        response: Dict[str, Any],
+        expected_format: str = "docstring",
+        validate_schema: bool = True,
+    ) -> "ParsedResponse":
+        """
+        Parses the AI model response and returns a ParsedResponse object.
 
         Args:
-            response (Union[str, Dict[str, Any]]): The AI response to parse.
-            expected_format (str): The expected format of the response (e.g., "json", "markdown", "docstring").
-            validate_schema (bool): Whether to validate the parsed response against a schema.
+            response: The raw response from the AI model.
+            expected_format: The expected format of the content.
+            validate_schema: Whether to validate the content against a schema.
 
         Returns:
-            ParsedResponse: An object containing the parsed content and metadata about the parsing process.
+            ParsedResponse: The parsed response containing content and metadata.
         """
-        start_time = datetime.now()
-        errors: List[str] = []
-        parsed_content = None
-
-        self._parsing_stats["total_processed"] += 1
-        self.logger.info(
-            f"Parsing response, expected format: {expected_format}")
-        self.logger.debug(f"Response size: {len(str(response))} characters")
-
         try:
-            if expected_format == "json":
-                parsed_content = await self._parse_json_response(response)
-            elif expected_format == "markdown":
-                parsed_content = await self._parse_markdown_response(response)
-            elif expected_format == "docstring":
-                parsed_content = await self._parse_docstring_response(response)
-            else:
-                raise ValueError(f"Unsupported format: {expected_format}")
+            # Check if 'choices' exists and is a non-empty list
+            if "choices" not in response or not isinstance(response["choices"], list) or not response["choices"]:
+                self.logger.error("Missing or empty 'choices' in response.")
+                # Return a fallback ParsedResponse instead of raising an exception
+                fallback_content = self._create_fallback_response()
+                return ParsedResponse(
+                    content=fallback_content,
+                    format_type=expected_format,
+                    parsing_time=0.0,
+                    validation_success=False,
+                    errors=["Missing or empty 'choices' in response."],
+                    metadata={},
+                )
 
-            validation_success = False
-            if parsed_content and validate_schema:
-                validation_success = await self._validate_response(parsed_content, expected_format)
-                if not validation_success:
-                    errors.append("Schema validation failed")
-                    self._parsing_stats["validation_failures"] += 1
-                    parsed_content = self._create_fallback_response()
+            # Extract the content from the response
+            content_str = response["choices"][0]["message"]["function_call"]["arguments"]
+            content = json.loads(content_str)
 
-            if parsed_content:
-                self._parsing_stats["successful_parses"] += 1
-            else:
-                self._parsing_stats["failed_parses"] += 1
-                parsed_content = self._create_fallback_response()
+            parsing_time = response.get("usage", {}).get("processing_ms", 0)
 
-            processing_time = (datetime.now() - start_time).total_seconds()
-            self.logger.debug(
-                f"Parsing completed in {processing_time:.6f} seconds")
+            # Validate the content if required
+            is_valid = True
+            validation_errors = []
+            if validate_schema:
+                is_valid, validation_errors = self._validate_content(content, expected_format)
 
+            # Return the parsed response
             return ParsedResponse(
-                content=parsed_content,
+                content=content,
                 format_type=expected_format,
-                parsing_time=processing_time,
-                validation_success=validation_success,
-                errors=errors,
-                metadata={
-                    "timestamp": datetime.now().isoformat(),
-                    "response_size": len(str(response)),
-                },
+                parsing_time=parsing_time,
+                validation_success=is_valid,
+                errors=validation_errors,
+                metadata={},
             )
-
         except Exception as e:
-            error_message = f"Response parsing failed: {e}"
-            self.logger.error(error_message, exc_info=True)
-            errors.append(error_message)
-            self._parsing_stats["failed_parses"] += 1
-
+            self.logger.error(f"Error parsing response: {e}")
+            # Optionally, return a fallback ParsedResponse here as well
+            fallback_content = self._create_fallback_response()
             return ParsedResponse(
-                content=self._create_fallback_response(),
+                content=fallback_content,
                 format_type=expected_format,
-                parsing_time=(datetime.now() - start_time).total_seconds(),
+                parsing_time=0.0,
                 validation_success=False,
-                errors=errors,
-                metadata={
-                    "timestamp": datetime.now().isoformat(),
-                    "response_size": len(str(response)),
-                    "error": str(e)
-                },
+                errors=[f"Failed to parse response: {e}"],
+                metadata={},
             )
 
     async def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
@@ -321,3 +309,37 @@ class ResponseParsingService:
         self.logger.debug(
             f"Extracted markdown sections: {list(sections.keys())}")
         return sections
+
+    def _validate_content(self, content: Dict[str, Any], format_type: str) -> Tuple[bool, List[str]]:
+        """
+        Validate the content against the appropriate schema.
+
+        Args:
+            content: The content to validate
+            format_type: The type of format to validate against
+
+        Returns:
+            Tuple containing validation success status and list of validation errors
+        """
+        try:
+            validation_errors = []
+            
+            if format_type == "docstring":
+                if not self.docstring_schema:
+                    validation_errors.append("Docstring schema not loaded")
+                    return False, validation_errors
+                validate(instance=content, schema=self.docstring_schema)
+            elif format_type == "function":
+                if not self.function_schema:
+                    validation_errors.append("Function schema not loaded")
+                    return False, validation_errors
+                validate(instance=content, schema=self.function_schema)
+                
+            return True, validation_errors
+            
+        except ValidationError as e:
+            validation_errors.append(str(e))
+            return False, validation_errors
+        except Exception as e:
+            validation_errors.append(f"Unexpected validation error: {str(e)}")
+            return False, validation_errors

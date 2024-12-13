@@ -14,7 +14,7 @@ Note:
 
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
 import ast
 
@@ -34,7 +34,7 @@ from core.types.base import (
     ExtractedFunction,
     ProcessingResult,
 )
-from core.exceptions import DocumentationError
+from core.exceptions import DocumentationError, ResponseParsingError
 from utils import ensure_directory, read_file_safe_async
 from core.console import print_info, print_error, create_progress
 
@@ -344,6 +344,43 @@ class DocumentationOrchestrator:
             is_async=func_data.is_async,
             is_method=func_data.is_method,
             parent_class=func_data.parent_class,
+        )
+
+    def _map_to_extracted_class(self, cls_dict: Dict[str, Any]) -> ExtractedClass:
+        return ExtractedClass(
+            name=cls_dict.get("name", "Unknown"),
+            lineno=cls_dict.get("lineno", 0),
+            source=cls_dict.get("source", ""),
+            docstring=cls_dict.get("docstring", ""),
+            metrics=MetricData(**cls_dict.get("metrics", {})),
+            dependencies=cls_dict.get("dependencies", {}),
+            decorators=cls_dict.get("decorators", []),
+            complexity_warnings=cls_dict.get("complexity_warnings", []),
+            methods=[self._map_to_extracted_function(method) for method in cls_dict.get("methods", [])],
+            attributes=cls_dict.get("attributes", []),
+            instance_attributes=cls_dict.get("instance_attributes", []),
+            bases=cls_dict.get("bases", []),
+            metaclass=cls_dict.get("metaclass", None),
+            is_exception=cls_dict.get("is_exception", False),
+        )
+
+    def _map_to_extracted_function(self, func_dict: Dict[str, Any]) -> ExtractedFunction:
+        return ExtractedFunction(
+            name=func_dict.get("name", "Unknown"),
+            lineno=func_dict.get("lineno", 0),
+            source=func_dict.get("source", ""),
+            docstring=func_dict.get("docstring", ""),
+            metrics=MetricData(**func_dict.get("metrics", {})),
+            dependencies=func_dict.get("dependencies", {}),
+            decorators=func_dict.get("decorators", []),
+            complexity_warnings=func_dict.get("complexity_warnings", []),
+            args=[ExtractedArgument(**arg) for arg in func_dict.get("args", [])],
+            returns=func_dict.get("returns", {"type": "Any", "description": ""}),
+            raises=func_dict.get("raises", []),
+            body_summary=func_dict.get("body_summary", ""),
+            is_async=func_dict.get("is_async", False),
+            is_method=func_dict.get("is_method", False),
+            parent_class=func_dict.get("parent_class", None),
         )
 
     def _create_documentation_data(

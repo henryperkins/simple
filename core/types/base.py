@@ -1,11 +1,13 @@
 """Base type definitions for code extraction."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Set, Callable, Union
 import ast
 
 from core.dependency_injection import Injector
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
+
 
 @dataclass
 class MetricData:
@@ -81,6 +83,10 @@ class DocstringData:
         if self.returns is None:
             self.returns = {"type": "None", "description": ""}
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert DocstringData to a dictionary."""
+        return asdict(self)
+
 
 @dataclass
 class TokenUsage:
@@ -117,15 +123,15 @@ class ExtractedElement:
     complexity_warnings: List[str] = field(default_factory=list)
     ast_node: Optional[ast.AST] = None
     metric_calculator: Optional[Callable] = None
+    _logger: Optional[CorrelationLoggerAdapter] = field(init=False)
 
     def __post_init__(self):
         """Initialize dependencies."""
         if self.metric_calculator is None:
             self.metric_calculator = Injector.get("metrics_calculator")
         if self.source:
-            self.metrics = self.metric_calculator.calculate_metrics(self.source)
-        from core.logger import LoggerSetup, CorrelationLoggerAdapter
-
+            if self.metric_calculator:
+                self.metrics = self.metric_calculator.calculate_metrics(self.source)
         self._logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
 
     def get_docstring_info(self) -> Optional[DocstringData]:
@@ -133,7 +139,10 @@ class ExtractedElement:
         if not hasattr(self, "_docstring_info"):
             from core.docstring_processor import DocstringProcessor
 
-            self._docstring_info = DocstringProcessor().parse(self.docstring)
+            if self.docstring is not None:
+                self._docstring_info = DocstringProcessor().parse(self.docstring)
+            else:
+                self._docstring_info = DocstringData(summary="No docstring available.")
         return self._docstring_info
 
 
@@ -166,6 +175,7 @@ class ExtractedClass(ExtractedElement):
     bases: List[str] = field(default_factory=list)
     metaclass: Optional[str] = None
     is_exception: bool = False
+    docstring_info: Optional[DocstringData] = field(default=None)
 
 
 @dataclass
@@ -191,7 +201,7 @@ class ExtractionResult:
         """Initialize dependencies."""
         if self.metric_calculator is None:
             self.metric_calculator = Injector.get("metrics_calculator")
-        if hasattr(self.metric_calculator, "calculate_metrics"):
+        if self.source_code and self.metric_calculator:
             self.metrics = self.metric_calculator.calculate_metrics(self.source_code)
 
 
@@ -300,11 +310,14 @@ class DocumentationData:
     validation_status: bool = False
     validation_errors: List[str] = field(default_factory=list)
     docstring_parser: Optional[Callable] = None
+    metric_calculator: Optional[Callable] = None
 
     def __post_init__(self):
         """Initialize dependencies."""
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get("docstring_processor")
+        if self.metric_calculator is None:
+            self.metric_calculator = Injector.get("metrics_calculator")
         self.docstring_data = self.docstring_parser(self.source_code)
 
         # Ensure module summary is never None

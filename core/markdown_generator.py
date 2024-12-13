@@ -2,9 +2,9 @@
 Markdown documentation generator module.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.types import DocumentationData
+from core.types import DocumentationData, ExtractedClass
 from core.exceptions import DocumentationError
 
 
@@ -21,7 +21,7 @@ class MarkdownGenerator:
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
-            extra={"correlation_id": self.correlation_id}
+            extra={"correlation_id": self.correlation_id},
         )
 
     def generate(self, documentation_data: DocumentationData) -> str:
@@ -32,15 +32,19 @@ class MarkdownGenerator:
             # Check for complete information
             if not documentation_data.source_code:
                 self.logger.error(
-                    "Source code is missing - cannot generate documentation")
+                    "Source code is missing - cannot generate documentation"
+                )
                 return "# Error: Missing Source Code\n\nDocumentation cannot be generated without source code."
 
             if not self._has_complete_information(documentation_data):
                 self.logger.warning(
-                    "Incomplete information received for markdown generation", extra={'correlation_id': self.correlation_id})
+                    "Incomplete information received for markdown generation",
+                    extra={"correlation_id": self.correlation_id},
+                )
                 # Continue with partial documentation but add warning header
                 sections = [
-                    "# ⚠️ Warning: Partial Documentation\n\nSome information may be missing or incomplete.\n"]
+                    "# ⚠️ Warning: Partial Documentation\n\nSome information may be missing or incomplete.\n"
+                ]
             else:
                 sections = []
 
@@ -48,36 +52,43 @@ class MarkdownGenerator:
             module_info = {
                 "module_name": documentation_data.module_name,
                 "file_path": str(documentation_data.module_path),
-                "description": documentation_data.module_summary
+                "description": documentation_data.module_summary,
             }
 
             sections = [
                 self._generate_header(module_info["module_name"]),
                 self._generate_overview(
-                    module_info["file_path"], module_info["description"]),
+                    module_info["file_path"], module_info["description"]
+                ),
                 self._generate_ai_doc_section(documentation_data.ai_content),
                 self._generate_class_tables(
-                    documentation_data.code_metadata.get("classes", [])),
+                    documentation_data.code_metadata.get("classes", [])
+                ),
                 self._generate_function_tables(
-                    documentation_data.code_metadata.get("functions", [])),
+                    documentation_data.code_metadata.get("functions", [])
+                ),
                 self._generate_constants_table(
-                    documentation_data.code_metadata.get("constants", [])),
+                    documentation_data.code_metadata.get("constants", [])
+                ),
                 self._generate_source_code(documentation_data.source_code),
             ]
             markdown = "\n\n".join(filter(None, sections))
             if not self._has_complete_information(documentation_data):
                 self.logger.warning(
-                    "Generated partial documentation due to incomplete information")
+                    "Generated partial documentation due to incomplete information"
+                )
             else:
                 self.logger.debug("Generated complete documentation successfully")
             return markdown
         except DocumentationError as de:
             error_msg = f"DocumentationError: {de} in markdown generation with correlation ID: {self.correlation_id}"
-            self.logger.error(error_msg, extra={'correlation_id': self.correlation_id})
+            self.logger.error(error_msg, extra={"correlation_id": self.correlation_id})
             return f"# Error Generating Documentation\n\nDocumentationError: {de}"
         except Exception as e:
             error_msg = f"Unexpected error: {e} in markdown generation with correlation ID: {self.correlation_id}"
-            self.logger.error(error_msg, exc_info=True, extra={'correlation_id': self.correlation_id})
+            self.logger.error(
+                error_msg, exc_info=True, extra={"correlation_id": self.correlation_id}
+            )
             return f"# Error Generating Documentation\n\nAn error occurred: {e}"
 
     def _has_complete_information(self, documentation_data: DocumentationData) -> bool:
@@ -86,38 +97,45 @@ class MarkdownGenerator:
 
         # Check required fields have content
         required_fields = {
-            'module_name': documentation_data.module_name,
-            'module_path': documentation_data.module_path,
-            'source_code': documentation_data.source_code,
-            'code_metadata': documentation_data.code_metadata
+            "module_name": documentation_data.module_name,
+            "module_path": documentation_data.module_path,
+            "source_code": documentation_data.source_code,
+            "code_metadata": documentation_data.code_metadata,
         }
 
         missing_fields = [
-            field for field, value in required_fields.items()
+            field
+            for field, value in required_fields.items()
             if not value or (isinstance(value, str) and not value.strip())
         ]
 
         # These fields are optional but we'll log if they're missing
         if not documentation_data.module_summary:
             self.logger.warning(
-                f"Module {documentation_data.module_name} is missing a summary", extra={'correlation_id': self.correlation_id})
+                f"Module {documentation_data.module_name} is missing a summary",
+                extra={"correlation_id": self.correlation_id},
+            )
             documentation_data.module_summary = (
-                documentation_data.ai_content.get('summary') or
-                documentation_data.docstring_data.summary or
-                "No module summary provided."
+                documentation_data.ai_content.get("summary")
+                or documentation_data.docstring_data.summary
+                or "No module summary provided."
             )
 
         if not documentation_data.ai_content:
             self.logger.warning(
-                f"Module {documentation_data.module_name} is missing AI-generated content", extra={'correlation_id': self.correlation_id})
+                f"Module {documentation_data.module_name} is missing AI-generated content",
+                extra={"correlation_id": self.correlation_id},
+            )
             documentation_data.ai_content = {
-                'summary': documentation_data.module_summary
+                "summary": documentation_data.module_summary
             }
 
         # Only fail validation if critical fields are missing
         if missing_fields:
             self.logger.warning(
-                f"Missing required fields: {', '.join(missing_fields)}", extra={'correlation_id': self.correlation_id})
+                f"Missing required fields: {', '.join(missing_fields)}",
+                extra={"correlation_id": self.correlation_id},
+            )
             return False
 
         return True
@@ -200,66 +218,25 @@ class MarkdownGenerator:
 
         return "\n".join(sections)
 
-    def _generate_class_tables(self, classes: list) -> str:
-        """Generate the classes section with tables."""
-        try:
-            if not classes:
-                return ""
+    def _generate_class_tables(self, classes: List[Dict[str, Any]]) -> str:
+        """Generate markdown tables for classes.
 
-            # Initialize the markdown tables
-            classes_table = [
-                "## Classes",
-                "",
-                "| Class | Inherits From | Complexity Score* |",
-                "|-------|---------------|-------------------|",
-            ]
+        Args:
+            classes: List of class dictionaries.
 
-            methods_table = [
-                "### Class Methods",
-                "",
-                "| Class | Method | Parameters | Returns | Complexity Score* |",
-                "|-------|--------|------------|---------|-------------------|",
-            ]
-
-            for cls in classes:
-                # Safely retrieve class properties
-                class_name = cls.get("name", "Unknown")
-                complexity = cls.get("metrics", {}).get("complexity", 0)
-                warning = " ⚠️" if complexity > 10 else ""
-                bases = ", ".join(cls.get("bases", []))
-
-                # Add a row for the class
-                classes_table.append(
-                    f"| `{class_name}` | `{bases}` | {complexity}{warning} |"
-                )
-
-                # Check if the class has methods and iterate over them safely
-                for method in cls.get("methods", []):
-                    method_name = method.get("name", "Unknown")
-                    method_complexity = method.get(
-                        "metrics", {}).get("complexity", 0)
-                    method_warning = " ⚠️" if method_complexity > 10 else ""
-                    return_type = method.get("returns", {}).get("type", "Any")
-
-                    # Generate parameters safely
-                    params = ", ".join(
-                        f"{arg.get('name', 'unknown')}: {arg.get('type', 'Any')}"
-                        + (f" = {arg.get('default_value', '')}" if arg.get('default_value') else "")
-                        for arg in method.get("args", [])
-                    )
-
-                    # Add a row for the method
-                    methods_table.append(
-                        f"| `{class_name}` | `{method_name}` | "
-                        f"`({params})` | `{return_type}` | "
-                        f"{method_complexity}{method_warning} |"
-                    )
-
-            # Combine the tables and return the final markdown string
-            return "\n".join(classes_table + [""] + methods_table)
-        except Exception as e:
-            self.logger.error(f"Error generating class tables: {e}", exc_info=True)
-            return "An error occurred while generating class documentation."
+        Returns:
+            str: Markdown tables for classes.
+        """
+        tables = []
+        for cls_dict in classes:
+            # Exclude '_logger' from cls_dict if present
+            cls_dict.pop('_logger', None)
+            cls = ExtractedClass(**cls_dict)  # Convert dictionary to ExtractedClass instance
+            class_name = cls.name
+            # ...existing code...
+            tables.append(f"### {class_name}\n\n")
+            # ...existing code...
+        return "\n".join(tables)
 
     def _generate_function_tables(self, functions: list) -> str:
         """Generate the functions section."""
@@ -282,7 +259,11 @@ class MarkdownGenerator:
                 # Generate parameters safely
                 params = ", ".join(
                     f"{arg.get('name', 'unknown')}: {arg.get('type', 'Any')}"
-                    + (f" = {arg.get('default_value', '')}" if arg.get('default_value') else "")
+                    + (
+                        f" = {arg.get('default_value', '')}"
+                        if arg.get("default_value")
+                        else ""
+                    )
                     for arg in func.get("args", [])
                 )
 
@@ -340,5 +321,6 @@ class MarkdownGenerator:
             )
         except Exception as e:
             self.logger.error(
-                f"Error generating source code section: {e}", exc_info=True)
+                f"Error generating source code section: {e}", exc_info=True
+            )
             return "An error occurred while generating source code documentation."

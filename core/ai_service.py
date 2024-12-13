@@ -1,18 +1,3 @@
-"""
-AI service module for interacting with the AI model.
-
-This module provides functionality to:
-- Communicate with the AI model to generate documentation.
-- Handle API calls with retry logic.
-- Process and validate AI responses.
-- Manage token usage and costs.
-
-Dependencies:
-- aiohttp for asynchronous HTTP requests.
-- json for JSON handling.
-- urllib.parse for URL manipulation.
-"""
-
 from typing import Dict, Any, Optional
 import asyncio
 from urllib.parse import urljoin
@@ -117,7 +102,7 @@ class AIService:
             )
 
             # Process and validate the parsed response
-            docstring_data = await self.docstring_processor.parse(parsed_response.content)
+            docstring_data = self.docstring_processor.parse(parsed_response.content)
             is_valid, validation_errors = self.docstring_processor.validate(
                 docstring_data
             )
@@ -148,11 +133,7 @@ class AIService:
 
             # Return the validated and processed docstring
             return ProcessingResult(
-                content=(
-                    docstring_data.to_dict()
-                    if hasattr(docstring_data, "to_dict")
-                    else {}
-                ),
+                content=docstring_data.to_dict(),
                 usage=response.get("usage", {}),
                 metrics={
                     "processing_time": parsed_response.parsing_time,

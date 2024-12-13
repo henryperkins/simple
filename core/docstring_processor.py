@@ -69,42 +69,69 @@ class DocstringProcessor:
             raise
 
     def parse(self, docstring: Union[Dict[str, Any], str]) -> "DocstringData":
-        if isinstance(docstring, dict):
-            return self._create_docstring_data_from_dict(docstring)
-        else:
-            docstring_str = docstring.strip()
+        """Parse docstring into structured data.
+        
+        Args:
+            docstring: Raw docstring as dict or string.
+
+        Returns:
+            DocstringData: Parsed docstring data.
+
+        Raises:
+            DocumentationError: If parsing fails.
+        """
+        try:
+            if isinstance(docstring, dict):
+                self.logger.debug("Received dictionary docstring, processing directly")
+                return self._create_docstring_data_from_dict(docstring)
+            
+            docstring_str = str(docstring).strip()
             if docstring_str.startswith("{") and docstring_str.endswith("}"):
-                doc_dict = json.loads(docstring_str)
-                return self._create_docstring_data_from_dict(doc_dict)
-            else:
-                parsed = parse_docstring(docstring)
-                if parsed is None:
-                    raise DocumentationError("Failed to parse the provided docstring.")
-                return self._create_docstring_data_from_dict(
-                    {
-                        "summary": parsed.short_description or "",
-                        "description": parsed.long_description or "",
-                        "args": [
-                            {
-                                "name": p.arg_name,
-                                "type": p.type_name or "Any",
-                                "description": p.description or "",
-                            }
-                            for p in parsed.params
-                        ],
-                        "returns": {
-                            "type": parsed.returns.type_name if parsed.returns else "Any",
-                            "description": (
-                                parsed.returns.description if parsed.returns else ""
-                            ),
-                        },
-                        "raises": [
-                            {"exception": e.type_name, "description": e.description}
-                            for e in (parsed.raises or [])
-                        ],
-                        "complexity": 1,
-                    }
-                )
+                try:
+                    doc_dict = json.loads(docstring_str)
+                    self.logger.debug("Successfully parsed JSON from string docstring")
+                    return self._create_docstring_data_from_dict(doc_dict)
+                except json.JSONDecodeError:
+                    self.logger.warning("Failed to parse JSON from docstring string")
+            
+            # Parse with docstring_parser
+            parsed = parse_docstring(docstring_str)
+            if parsed is None:
+                self.logger.error("Failed to parse docstring")
+                raise DocumentationError("Failed to parse the provided docstring")
+                
+            return self._create_docstring_data_from_parsed(parsed)
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing docstring: {e}")
+            raise DocumentationError(f"Failed to parse docstring: {e}") from e
+
+    def _create_docstring_data_from_parsed(self, parsed_docstring) -> "DocstringData":
+        """Create DocstringData from a parsed docstring object."""
+        return DocstringData(
+            summary=parsed_docstring.short_description or "",
+            description=parsed_docstring.long_description or "",
+            args=[
+                {
+                    "name": param.arg_name,
+                    "type": param.type_name or "Any",
+                    "description": param.description or "",
+                }
+                for param in parsed_docstring.params
+            ],
+            returns={
+                "type": parsed_docstring.returns.type_name if parsed_docstring.returns else "Any",
+                "description": parsed_docstring.returns.description if parsed_docstring.returns else "",
+            },
+            raises=[
+                {
+                    "exception": exc.type_name or "Exception",
+                    "description": exc.description or "",
+                }
+                for exc in parsed_docstring.raises
+            ],
+            complexity=1,
+        )
 
     def _create_docstring_data_from_dict(
         self, docstring_dict: Dict[str, Any]
@@ -121,8 +148,8 @@ class DocstringProcessor:
             complexity = docstring_dict.get("complexity", 1)
 
             return DocstringData(
-                summary=docstring_dict.get("summary", ""),
-                description=docstring_dict.get("description", ""),
+                summary=docstring_dict.get("summary", "No summary provided."),
+                description=docstring_dict.get("description", "No description provided."),
                 args=docstring_dict.get("args", []),
                 returns=returns,
                 raises=docstring_dict.get("raises", []),
@@ -137,8 +164,6 @@ class DocstringProcessor:
     @handle_error
     def validate(self, data: "DocstringData") -> Tuple[bool, List[str]]:
         errors = []
-        required_fields = ["summary", "description", "args", "returns"]
-
         if not data.summary:
             errors.append("Summary is missing.")
         if not data.description:
@@ -289,9 +314,12 @@ class DocstringProcessor:
             if hasattr(ast, "unparse"):
                 return ast.unparse(tree)
             else:
-                import astor
-
-                return astor.to_source(tree)
+                try:
+                    import astor
+                    return astor.to_source(tree)
+                except ImportError:
+                    self.logger.warning("astor library not found, using ast.dump instead.")
+                    return ast.dump(tree, annotate_fields=True)
         except Exception as e:
             self.logger.error(f"Error generating code from AST: {e}")
             raise DocumentationError(f"Failed to generate code from AST: {e}")

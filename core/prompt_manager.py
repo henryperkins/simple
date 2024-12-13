@@ -44,9 +44,9 @@ class PromptManager:
     @handle_error
     async def create_documentation_prompt(
         self,
-        module_name: str,
-        file_path: str,
-        source_code: str,
+        module_name: str = "",
+        file_path: str = "",
+        source_code: str = "",
         classes: Optional[List[ExtractedClass]] = None,
         functions: Optional[List[ExtractedFunction]] = None,
     ) -> str:
@@ -104,7 +104,8 @@ class PromptManager:
             f"{source_code}\n\n"
             "Analyze the code and generate comprehensive Google-style documentation. "
             "Include a brief summary, detailed description, arguments, return values, and possible exceptions. "
-            "Ensure all descriptions are clear and technically accurate."
+            "Ensure all descriptions are clear and technically accurate. "
+            "If any information is missing or cannot be determined, explicitly state that it is not available."
         )
 
         self.logger.debug("Documentation prompt created successfully")
@@ -146,7 +147,8 @@ class PromptManager:
             "Avoid:\n"
             "- Deep nesting that complicates understanding.\n"
             "- Lack of error handling that could lead to failures.\n\n"
-            "Provide specific examples of improvements where applicable, and suggest alternative approaches or refactorings."
+            "Provide specific examples of improvements where applicable, and suggest alternative approaches or refactorings. "
+            "If any information is missing or cannot be determined, explicitly state that it is not available."
         )
 
         self.logger.debug("Code analysis prompt created successfully")
@@ -215,18 +217,22 @@ class PromptManager:
         self.logger.debug(f"Formatting class info for: {cls.name}")
 
         if not cls.name:
-            raise ValueError("Class name is required to format class information.")
+            raise ValueValueError("Class name is required to format class information.")
 
         methods_str = "\n    ".join(
             f"- {m.name}({', '.join(a.name for a in m.args)})" for m in cls.methods
         )
 
-        # Use the injected docstring_processor to create a DocstringData instance
-        docstring_info = (
-            self.docstring_processor.parse(cls.docstring)
-            if cls.docstring
-            else DocstringData(summary="")
-        )
+        # Use synchronous parse with fallback to empty DocstringData
+        try:
+            docstring_info = (
+                self.docstring_processor.parse(cls.docstring)
+                if cls.docstring
+                else DocstringData(summary="")
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to parse docstring for {cls.name}: {e}")
+            docstring_info = DocstringData(summary="Failed to parse docstring")
 
         formatted_info = (
             f"Class: {cls.name}\n"
@@ -258,4 +264,44 @@ class PromptManager:
         if not self._function_schema:
             raise ValueError("Function schema is not properly defined.")
 
-        return self._function_schema
+        return {
+            "name": "generate_docstring",
+            "description": "Generates structured documentation from source code.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string"},
+                    "description": {"type": "string"},
+                    "args": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "type": {"type": "string"},
+                                "description": {"type": "string"},
+                            },
+                        },
+                    },
+                    "returns": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
+                    },
+                    "raises": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "exception": {"type": "string"},
+                                "description": {"type": "string"},
+                            },
+                        },
+                    },
+                    "complexity": {"type": "integer"},
+                },
+                "required": ["summary", "description"],
+            },
+        }

@@ -1,5 +1,3 @@
-"""Metrics module for calculating code complexity and performance metrics."""
-
 import ast
 import base64
 import io

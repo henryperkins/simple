@@ -47,6 +47,15 @@ from utils import (
     get_logger
 )
 
+# Import additional components
+from core.ai_service import AIService
+from core.extraction.code_extractor import CodeExtractor
+from core.docstring_processor import DocstringProcessor
+from core.docs import DocumentationOrchestrator
+from core.markdown_generator import MarkdownGenerator
+from core.prompt_manager import PromptManager
+from core.response_parsing import ResponseParsingService
+
 class DocumentationGenerator:
     def __init__(self, config: Config) -> None:
         """
