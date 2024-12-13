@@ -1,4 +1,5 @@
 """Configuration module for AI documentation service."""
+
 import os
 from dataclasses import dataclass, field
 from typing import Dict, Any
@@ -9,7 +10,9 @@ import uuid
 load_dotenv()
 
 
-def get_env_var(key: str, default: Any = None, var_type: type = str, required: bool = False) -> Any:
+def get_env_var(
+    key: str, default: Any = None, var_type: type = str, required: bool = False
+) -> Any:
     """Get environment variable with type conversion and validation.
 
     Args:
@@ -33,16 +36,18 @@ def get_env_var(key: str, default: Any = None, var_type: type = str, required: b
 
     try:
         if var_type == bool:
-            return value.lower() in ('true', '1', 'yes', 'on')
+            return value.lower() in ("true", "1", "yes", "on")
         return var_type(value)
     except (ValueError, TypeError) as e:
         raise ValueError(
-            f"Failed to convert {key}={value} to type {var_type.__name__}: {str(e)}")
+            f"Failed to convert {key}={value} to type {var_type.__name__}: {str(e)}"
+        )
 
 
 @dataclass
 class ModelConfig:
     """Configuration for a specific model."""
+
     max_tokens: int
     chunk_size: int
     cost_per_token: float
@@ -51,6 +56,7 @@ class ModelConfig:
 @dataclass
 class AIConfig:
     """Core AI service configuration."""
+
     api_key: str
     endpoint: str
     deployment: str
@@ -58,21 +64,19 @@ class AIConfig:
     max_tokens: int = 8192
     temperature: float = 0.7
     timeout: int = 30
-    model_limits: Dict[str, ModelConfig] = field(default_factory=lambda: {
-        "gpt-4": ModelConfig(
-            max_tokens=8192,
-            chunk_size=4096,
-            cost_per_token=0.00003
-        ),
-        "gpt-3.5-turbo": ModelConfig(
-            max_tokens=4096,
-            chunk_size=2048,
-            cost_per_token=0.000002
-        )
-    })
+    model_limits: Dict[str, ModelConfig] = field(
+        default_factory=lambda: {
+            "gpt-4": ModelConfig(
+                max_tokens=8192, chunk_size=4096, cost_per_token=0.00003
+            ),
+            "gpt-3.5-turbo": ModelConfig(
+                max_tokens=4096, chunk_size=2048, cost_per_token=0.000002
+            ),
+        }
+    )
 
     @classmethod
-    def from_env(cls) -> 'AIConfig':
+    def from_env(cls) -> "AIConfig":
         """Create configuration from environment variables."""
         return cls(
             api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
@@ -81,28 +85,31 @@ class AIConfig:
             model=get_env_var("MODEL_NAME", "gpt-4"),
             max_tokens=get_env_var("MAX_TOKENS", 8192, int),
             temperature=get_env_var("TEMPERATURE", 0.7, float),
-            timeout=get_env_var("TIMEOUT", 30, int)
+            timeout=get_env_var("TIMEOUT", 30, int),
         )
 
 
 @dataclass
 class AppConfig:
     """Application configuration."""
+
     debug: bool = False
     log_level: str = "INFO"
     output_dir: str = "docs"
+    log_dir: str = "logs"
     use_cache: bool = False
     cache_ttl: int = 3600
 
     @classmethod
-    def from_env(cls) -> 'AppConfig':
+    def from_env(cls) -> "AppConfig":
         """Create configuration from environment variables."""
         return cls(
             debug=get_env_var("DEBUG", False, bool),
             log_level=get_env_var("LOG_LEVEL", "INFO"),
             output_dir=get_env_var("OUTPUT_DIR", "docs"),
+            log_dir=get_env_var("LOG_DIR", "logs"),
             use_cache=get_env_var("USE_CACHE", False, bool),
-            cache_ttl=get_env_var("CACHE_TTL", 3600, int)
+            cache_ttl=get_env_var("CACHE_TTL", 3600, int),
         )
 
 
@@ -123,6 +130,7 @@ class Config:
         """
         return {
             "ai": {
+                "api_key": "[REDACTED]",
                 "endpoint": self.ai.endpoint,
                 "deployment": self.ai.deployment,
                 "model": self.ai.model,
@@ -133,19 +141,20 @@ class Config:
                     model: {
                         "max_tokens": config.max_tokens,
                         "chunk_size": config.chunk_size,
-                        "cost_per_token": config.cost_per_token
+                        "cost_per_token": config.cost_per_token,
                     }
                     for model, config in self.ai.model_limits.items()
-                }
+                },
             },
             "app": {
                 "debug": self.app.debug,
                 "log_level": self.app.log_level,
                 "output_dir": self.app.output_dir,
+                "log_dir": self.app.log_dir,
                 "use_cache": self.app.use_cache,
-                "cache_ttl": self.app.cache_ttl
+                "cache_ttl": self.app.cache_ttl,
             },
-            "correlation_id": self.correlation_id
+            "correlation_id": self.correlation_id,
         }
 
 

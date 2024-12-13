@@ -1,40 +1,40 @@
 """
 AI service module for interacting with the AI model.
+
+This module provides functionality to:
+- Communicate with the AI model to generate documentation.
+- Handle API calls with retry logic.
+- Process and validate AI responses.
+- Manage token usage and costs.
+
+Dependencies:
+- aiohttp for asynchronous HTTP requests.
+- json for JSON handling.
+- urllib.parse for URL manipulation.
 """
 
 from typing import Dict, Any, Optional
 import asyncio
 from urllib.parse import urljoin
+import json
 
-import aiohttp  # Ensure aiohttp is installed: pip install aiohttp
+import aiohttp
 
 from core.config import AIConfig
 from core.console import print_info, print_error, print_warning
 from core.docstring_processor import DocstringProcessor
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.prompt_manager import PromptManager
-from core.types.base import (
-    Injector,
-    DocumentationContext,
-    ProcessingResult,
-)
+from core.dependency_injection import Injector
 from api.token_management import TokenManager
-
-
-class DocumentationGenerationError(Exception):
-    """Custom exception for documentation generation errors."""
-
-    pass
-
-
-class APICallError(Exception):
-    """Custom exception for API call errors."""
-
-    pass
+from core.exceptions import DocumentationGenerationError, APICallError
+from core.types.base import ProcessingResult, DocumentationContext
 
 
 class AIService:
-    """Service for interacting with the AI model."""
+    """
+    Service for interacting with the AI model to generate documentation.
+    """
 
     def __init__(
         self, config: Optional[AIConfig] = None, correlation_id: Optional[str] = None
@@ -44,42 +44,55 @@ class AIService:
 
         Args:
             config: AI service configuration.
-            correlation_id: Optional correlation ID for tracking
-                related operations.
+            correlation_id: Optional correlation ID for tracking related operations.
         """
         self.config = config or Injector.get("config")().ai
         self.correlation_id = correlation_id
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__),
+            extra={"correlation_id": self.correlation_id},
+        )
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")
         try:
             self.docstring_processor = Injector.get("docstring_processor")
         except KeyError:
-            self.logger.warning("Docstring processor not registered, using default")
+            self.logger.warning(
+                "Docstring processor not registered, using default",
+                extra={"correlation_id": self.correlation_id},
+            )
             self.docstring_processor = DocstringProcessor()
             Injector.register("docstring_processor", self.docstring_processor)
-        self.token_manager = TokenManager(model="gpt-4", config=self.config)
+        self.token_manager = TokenManager(
+            model=self.config.model,
+            config=self.config,
+            correlation_id=self.correlation_id,
+        )
         self.semaphore = asyncio.Semaphore(10)  # Default semaphore value
-        self._client = aiohttp.ClientSession()
+        self._client = None
 
-        print_info("Initializing AI service")
+        print_info(
+            f"Initializing AI service with correlation ID: {self.correlation_id}"
+        )
 
     async def generate_documentation(
-        self, context: DocumentationContext
-    ) -> ProcessingResult:
+        self, context: "DocumentationContext"
+    ) -> "ProcessingResult":
         """
         Generates documentation using the AI model.
 
         Args:
-            context: Documentation context containing source code
-                and metadata.
+            context: Documentation context containing source code and metadata.
 
         Returns:
-            ProcessingResult containing enhanced documentation or
-            error information.
-        """
+            ProcessingResult containing enhanced documentation or error information.
 
+        Raises:
+            DocumentationGenerationError: If there's an issue generating documentation.
+        """
         try:
+            from core.types.base import DocstringData, ProcessingResult
+
             module_name = (
                 context.metadata.get("module_name", "") if context.metadata else ""
             )
@@ -87,7 +100,8 @@ class AIService:
                 context.metadata.get("file_path", "") if context.metadata else ""
             )
 
-            prompt = self.prompt_manager.create_documentation_prompt(
+            # Create documentation prompt
+            prompt = await self.prompt_manager.create_documentation_prompt(
                 module_name=module_name,
                 file_path=file_path,
                 source_code=context.source_code,
@@ -102,10 +116,62 @@ class AIService:
                 response, expected_format="docstring"
             )
 
-            return await self._process_and_validate_response(parsed_response, response)
+            # Process and validate the parsed response
+            docstring_data = await self.docstring_processor.parse(parsed_response.content)
+            is_valid, validation_errors = self.docstring_processor.validate(
+                docstring_data
+            )
+
+            if not is_valid:
+                print_warning(
+                    f"Docstring validation failed: {', '.join(validation_errors)} with correlation ID: {self.correlation_id}"
+                )
+                self.logger.warning(
+                    f"Docstring validation failed: {', '.join(validation_errors)}",
+                    extra={"correlation_id": self.correlation_id},
+                )
+
+                return ProcessingResult(
+                    content={"error": "Docstring validation failed"},
+                    usage={},
+                    metrics={
+                        "processing_time": parsed_response.parsing_time,
+                        "response_size": len(str(response)),
+                        "validation_success": is_valid,
+                    },
+                    is_cached=False,
+                    processing_time=parsed_response.parsing_time,
+                    validation_status=False,
+                    validation_errors=validation_errors,
+                    schema_errors=[],
+                )
+
+            # Return the validated and processed docstring
+            return ProcessingResult(
+                content=(
+                    docstring_data.to_dict()
+                    if hasattr(docstring_data, "to_dict")
+                    else {}
+                ),
+                usage=response.get("usage", {}),
+                metrics={
+                    "processing_time": parsed_response.parsing_time,
+                    "response_size": len(str(response)),
+                    "validation_success": is_valid,
+                },
+                is_cached=False,
+                processing_time=parsed_response.parsing_time,
+                validation_status=is_valid,
+                validation_errors=validation_errors,
+                schema_errors=[],
+            )
 
         except Exception as e:
-            self.logger.error(f"Error generating documentation: {e}", exc_info=True)
+            self.logger.error(
+                f"Error generating documentation: {e}",
+                exc_info=True,
+                extra={"correlation_id": self.correlation_id},
+            )
             print_error(
                 f"Error: {e} during generate_documentation in ai_service "
                 f"with correlation ID: {self.correlation_id}"
@@ -124,6 +190,9 @@ class AIService:
 
         Returns:
             Dict[str, Any]: The raw response from the AI model.
+
+        Raises:
+            APICallError: If all retries fail.
         """
         headers = {"api-key": self.config.api_key, "Content-Type": "application/json"}
 
@@ -137,15 +206,14 @@ class AIService:
         )
 
         # Add function calling parameters
-        request_params["functions"] = [self.prompt_manager.get_function_schema()]
+        function_schema = self.prompt_manager.get_function_schema()
+        request_params["functions"] = [function_schema]
         request_params["function_call"] = {"name": "generate_docstring"}
 
         for attempt in range(max_retries):
             try:
                 endpoint = self.config.endpoint.rstrip("/") + "/"
-                path = (
-                    f"openai/deployments/{self.config.deployment}" "/chat/completions"
-                )
+                path = f"openai/deployments/{self.config.deployment}/chat/completions"
                 url = urljoin(endpoint, path) + "?api-version=2024-02-15-preview"
 
                 if self._client is None:
@@ -163,7 +231,8 @@ class AIService:
                         error_text = await response.text()
                         self.logger.error(
                             f"API call failed with status {response.status}: "
-                            f"{error_text}"
+                            f"{error_text}",
+                            extra={"correlation_id": self.correlation_id},
                         )
                         if attempt == max_retries - 1:
                             raise APICallError(
@@ -173,68 +242,16 @@ class AIService:
                         await asyncio.sleep(2**attempt)  # Exponential backoff
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                self.logger.error(f"Error during API call attempt {attempt + 1}: {e}")
+                self.logger.error(
+                    f"Error during API call attempt {attempt + 1}: {e}",
+                    extra={"correlation_id": self.correlation_id},
+                )
                 if attempt == max_retries - 1:
                     raise APICallError(
                         f"API call failed after {max_retries} retries due to client error: {e}"
                     ) from e
 
         raise APICallError(f"API call failed after {max_retries} retries.")
-
-    async def _process_and_validate_response(
-        self, parsed_response, response
-    ) -> ProcessingResult:
-        """
-        Process and validate the parsed response.
-
-        Args:
-            parsed_response: The parsed response from the AI model.
-            response: The raw response from the AI model.
-
-        Returns:
-            ProcessingResult containing the validated and processed
-            docstring or error information.
-        """
-        docstring_data = self.docstring_processor.parse(parsed_response.content)
-        is_valid, validation_errors = self.docstring_processor.validate(docstring_data)
-
-        if not is_valid:
-            print_warning(
-                f"Docstring validation failed: {validation_errors} with "
-                f"correlation ID: {self.correlation_id}"
-            )
-            self.logger.warning(f"Docstring validation failed: {validation_errors}")
-
-            return ProcessingResult(
-                content={"error": "Docstring validation failed"},
-                usage={},
-                metrics={},
-                is_cached=False,
-                processing_time=0.0,
-                validation_status=False,
-                validation_errors=validation_errors,
-                schema_errors=[],
-            )
-
-        # Return the validated and processed docstring
-        return ProcessingResult(
-            content=(
-                docstring_data.to_dict()
-                if hasattr(docstring_data, "to_dict")
-                else {}
-            ),
-            usage=response.get("usage", {}),
-            metrics={
-                "processing_time": parsed_response.parsing_time,
-                "response_size": len(str(response)),
-                "validation_success": is_valid,
-            },
-            is_cached=False,
-            processing_time=parsed_response.parsing_time,
-            validation_status=is_valid,
-            validation_errors=validation_errors,
-            schema_errors=[],
-        )
 
     async def close(self) -> None:
         """Closes the aiohttp client session."""

@@ -1,24 +1,22 @@
 """Metrics module for calculating code complexity and performance metrics."""
+
 import ast
 import base64
 import io
 import math
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.types import MetricData
-from core.types.base import Injector
-from core.metrics_collector import MetricsCollector
 from core.console import (
     create_progress,
     display_metrics,
+    print_debug,
     print_error,
     print_info,
     print_warning,
-    print_debug
 )
+from core.metrics_collector import MetricsCollector
 
 if TYPE_CHECKING:
     from core.metrics_collector import MetricsCollector
@@ -26,6 +24,7 @@ if TYPE_CHECKING:
 # Try to import matplotlib, but provide fallback if not available
 try:
     import matplotlib.pyplot as plt
+
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
@@ -34,19 +33,37 @@ except ImportError:
 class Metrics:
     """Calculates various code complexity metrics for Python code."""
 
-    def __init__(self, metrics_collector: Optional["MetricsCollector"] = None, correlation_id: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        metrics_collector: Optional["MetricsCollector"] = None,
+        correlation_id: Optional[str] = None,
+    ) -> None:
+        """Initialize the Metrics class."""
         self.module_name: Optional[str] = None
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
+        self.logger = self._get_logger()
         self.error_counts: Dict[str, int] = {}
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.metrics_collector = metrics_collector or MetricsCollector(
-            correlation_id=self.correlation_id)
+            correlation_id=self.correlation_id
+        )
 
         # Ensure metrics calculator is registered with Injector
-        if 'metrics_calculator' not in Injector._dependencies:
-            Injector.register('metrics_calculator', self)
+        self._register_with_injector()
 
-    def calculate_metrics(self, code: str, module_name: Optional[str] = None) -> MetricData:
+    def _get_logger(self) -> "CorrelationLoggerAdapter":
+        """Get a logger instance."""
+        from core.logger import CorrelationLoggerAdapter, LoggerSetup
+
+        return CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
+
+    def _register_with_injector(self) -> None:
+        """Registers the metrics calculator with the Injector."""
+        from core.types.base import Injector
+
+        if "metrics_calculator" not in Injector._dependencies:
+            Injector.register("metrics_calculator", self)
+
+    def calculate_metrics(self, code: str, module_name: Optional[str] = None) -> Any:
         """Calculate all metrics for the given code.
 
         Args:
@@ -56,8 +73,10 @@ class Metrics:
         Returns:
             MetricData containing all calculated metrics
         """
-        self.module_name = module_name
         try:
+            from core.types import MetricData
+
+            self.module_name = module_name
             # Parse code once and reuse the AST
             tree = ast.parse(code)
 
@@ -71,9 +90,7 @@ class Metrics:
 
             # Calculate maintainability using pre-calculated values
             maintainability = self._calculate_maintainability_direct(
-                lines_of_code,
-                cyclomatic,
-                halstead.get('volume', 0)
+                lines_of_code, cyclomatic, halstead.get("volume", 0)
             )
 
             metrics = MetricData()
@@ -84,10 +101,14 @@ class Metrics:
             metrics.lines_of_code = lines_of_code
 
             # Count total functions and classes
-            total_functions = sum(1 for node in ast.walk(tree)
-                                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))
-            total_classes = sum(1 for node in ast.walk(tree)
-                                if isinstance(node, ast.ClassDef))
+            total_functions = sum(
+                1
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+            total_classes = sum(
+                1 for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+            )
 
             metrics.total_functions = total_functions
             metrics.total_classes = total_classes
@@ -103,15 +124,18 @@ class Metrics:
                 metrics.complexity_graph = None
 
             # Log metrics collection
-            self.metrics_collector.collect_metrics(
-                module_name or "unknown", metrics)
+            self.metrics_collector.collect_metrics(module_name or "unknown", metrics)
 
             return metrics
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating metrics: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating metrics: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
             # Return default metrics on error
+            from core.types import MetricData
+
             return MetricData()
 
     def calculate_maintainability_index(self, code: str) -> float:
@@ -131,15 +155,17 @@ class Metrics:
             maintainability = self._calculate_maintainability_direct(
                 lines_of_code,
                 cyclomatic,
-                halstead_metrics.get('volume', 0)
+                halstead_metrics.get("volume", 0),
             )
             return maintainability
         except Exception as e:
             self.logger.error(
-                f"Error calculating maintainability index: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating maintainability index: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
             return 0.0
 
-    def calculate_metrics_for_class(self, class_data: Any) -> MetricData:
+    def calculate_metrics_for_class(self, class_data: Any) -> Any:
         """Calculate metrics for a class.
 
         Args:
@@ -149,6 +175,8 @@ class Metrics:
             MetricData containing the calculated metrics
         """
         try:
+            from core.types import MetricData
+
             source_code = class_data.source
             if not source_code:
                 return MetricData()
@@ -161,10 +189,14 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating class metrics: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating class metrics: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
+            from core.types import MetricData
+
             return MetricData()
 
-    def calculate_metrics_for_function(self, function_data: Any) -> MetricData:
+    def calculate_metrics_for_function(self, function_data: Any) -> Any:
         """Calculate metrics for a function.
 
         Args:
@@ -174,6 +206,8 @@ class Metrics:
             MetricData containing the calculated metrics
         """
         try:
+            from core.types import MetricData
+
             source_code = function_data.source
             if not source_code:
                 return MetricData()
@@ -186,7 +220,11 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating function metrics: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating function metrics: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
+            from core.types import MetricData
+
             return MetricData()
 
     def _calculate_cyclomatic_complexity(self, tree: Union[ast.AST, ast.Module]) -> int:
@@ -195,8 +233,17 @@ class Metrics:
             complexity = 1  # Base complexity
 
             for node in ast.walk(tree):
-                if isinstance(node, (ast.If, ast.While, ast.For, ast.Assert,
-                                     ast.Try, ast.ExceptHandler)):
+                if isinstance(
+                    node,
+                    (
+                        ast.If,
+                        ast.While,
+                        ast.For,
+                        ast.Assert,
+                        ast.Try,
+                        ast.ExceptHandler,
+                    ),
+                ):
                     complexity += 1
                 elif isinstance(node, ast.BoolOp):
                     complexity += len(node.values) - 1
@@ -204,7 +251,9 @@ class Metrics:
             return complexity
         except Exception as e:
             self.logger.error(
-                f"Error calculating cyclomatic complexity: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating cyclomatic complexity: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
             return 1
 
     def _calculate_cognitive_complexity(self, tree: ast.AST) -> int:
@@ -215,7 +264,7 @@ class Metrics:
 
             for node in ast.walk(tree):
                 if isinstance(node, (ast.If, ast.While, ast.For)):
-                    complexity += (1 + nesting_level)
+                    complexity += 1 + nesting_level
                     nesting_level += 1
                 elif isinstance(node, ast.Try):
                     complexity += nesting_level
@@ -223,10 +272,14 @@ class Metrics:
             return complexity
         except Exception as e:
             self.logger.error(
-                f"Error calculating cognitive complexity: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating cognitive complexity: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
             return 0
 
-    def _calculate_maintainability_direct(self, loc: int, cyclomatic: int, volume: float) -> float:
+    def _calculate_maintainability_direct(
+        self, loc: int, cyclomatic: int, volume: float
+    ) -> float:
         """Calculate maintainability index using pre-calculated metrics."""
         try:
             # Ensure non-zero values
@@ -235,13 +288,19 @@ class Metrics:
             cyclomatic = max(1, cyclomatic)
 
             # Use log1p to handle small values safely
-            mi = 171 - 5.2 * math.log1p(volume) - \
-                0.23 * cyclomatic - 16.2 * math.log1p(loc)
+            mi = (
+                171
+                - 5.2 * math.log1p(volume)
+                - 0.23 * cyclomatic
+                - 16.2 * math.log1p(loc)
+            )
             return max(0.0, min(100.0, mi))
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating maintainability index: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating maintainability index: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
             return 50.0  # Return a neutral value on error
 
     def _calculate_halstead_metrics(self, code: str) -> Dict[str, float]:
@@ -259,10 +318,14 @@ class Metrics:
 
             n1 = max(1, len(operators))  # Ensure non-zero values
             n2 = max(1, len(operands))
-            N1 = max(1, sum(1 for node in ast.walk(tree)
-                     if isinstance(node, ast.operator)))
-            N2 = max(1, sum(1 for node in ast.walk(
-                tree) if isinstance(node, ast.Name)))
+            N1 = max(
+                1,
+                sum(1 for node in ast.walk(tree) if isinstance(node, ast.operator)),
+            )
+            N2 = max(
+                1,
+                sum(1 for node in ast.walk(tree) if isinstance(node, ast.Name)),
+            )
 
             # Use log1p for safe logarithm calculation
             volume = (N1 + N2) * math.log1p(n1 + n2)
@@ -270,39 +333,44 @@ class Metrics:
             effort = difficulty * volume
 
             return {
-                'volume': max(0.0, volume),
-                'difficulty': max(0.0, difficulty),
-                'effort': max(0.0, effort),
-                'time': max(0.0, effort / 18),
-                'bugs': max(0.0, volume / 3000)
+                "volume": max(0.0, volume),
+                "difficulty": max(0.0, difficulty),
+                "effort": max(0.0, effort),
+                "time": max(0.0, effort / 18),
+                "bugs": max(0.0, volume / 3000),
             }
 
         except Exception as e:
             self.logger.error(
-                f"Error calculating Halstead metrics: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating Halstead metrics: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
             return {
-                'volume': 0.0,
-                'difficulty': 0.0,
-                'effort': 0.0,
-                'time': 0.0,
-                'bugs': 0.0
+                "volume": 0.0,
+                "difficulty": 0.0,
+                "effort": 0.0,
+                "time": 0.0,
+                "bugs": 0.0,
             }
 
     def _calculate_halstead_volume(self, code: str) -> float:
         """Calculate Halstead volume metric."""
         try:
             metrics = self._calculate_halstead_metrics(code)
-            return max(0.0, metrics['volume'])
+            return max(0.0, metrics["volume"])
         except Exception as e:
             self.logger.error(
-                f"Error calculating Halstead volume: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error calculating Halstead volume: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
             return 0.0
 
     def _generate_complexity_graph(self) -> Optional[str]:
         """Generate a base64 encoded PNG of the complexity metrics graph."""
         if not MATPLOTLIB_AVAILABLE:
             self.logger.warning(
-                "Matplotlib not available, skipping complexity graph generation")
+                "Matplotlib not available, skipping complexity graph generation"
+            )
             return None
 
         try:
@@ -314,39 +382,40 @@ class Metrics:
             if self.module_name and self.metrics_collector:
                 try:
                     history = self.metrics_collector.get_metrics_history(
-                        self.module_name)
+                        self.module_name
+                    )
                     if not history:
                         self.logger.debug(
-                            f"No metrics history found for {self.module_name}")
+                            f"No metrics history found for {self.module_name}"
+                        )
                         plt.close(fig)
                         return None
 
-                    dates = []
-                    complexities = []
+                    dates: List[str] = []
+                    complexities: List[int] = []
                     for entry in history:
                         try:
-                            dates.append(entry['timestamp'])
+                            dates.append(entry["timestamp"])
                             complexities.append(
-                                entry['metrics']['cyclomatic_complexity'])
+                                entry["metrics"]["cyclomatic_complexity"]
+                            )
                         except (KeyError, TypeError) as e:
-                            self.logger.warning(
-                                f"Skipping invalid metrics entry: {e}")
+                            self.logger.warning(f"Skipping invalid metrics entry: {e}")
                             continue
 
                     if dates and complexities:
-                        plt.plot(dates, complexities, marker='o')
-                        plt.title(f'Complexity Trend: {self.module_name}')
-                        plt.xlabel('Time')
-                        plt.ylabel('Cyclomatic Complexity')
+                        plt.plot(dates, complexities, marker="o")
+                        plt.title(f"Complexity Trend: {self.module_name}")
+                        plt.xlabel("Time")
+                        plt.ylabel("Cyclomatic Complexity")
                         plt.xticks(rotation=45)
                         plt.tight_layout()
 
                         # Convert plot to base64 string
                         buf = io.BytesIO()
-                        plt.savefig(buf, format='png')
+                        plt.savefig(buf, format="png")
                         buf.seek(0)
-                        encoded_image = base64.b64encode(
-                            buf.getvalue()).decode('utf-8')
+                        encoded_image = base64.b64encode(buf.getvalue()).decode("utf-8")
 
                         # Clean up
                         plt.close(fig)
@@ -354,7 +423,9 @@ class Metrics:
 
                         return encoded_image
                 except Exception as e:
-                    self.logger.error(f"Error processing metrics history: {e} with correlation ID: {self.correlation_id}")
+                    self.logger.error(
+                        f"Error processing metrics history: {e} with correlation ID: {self.correlation_id}"
+                    )
                     plt.close(fig)
                     return None
 
@@ -364,7 +435,9 @@ class Metrics:
 
         except Exception as e:
             self.logger.error(
-                f"Error generating complexity graph: {e} with correlation ID: {self.correlation_id}", exc_info=True)
+                f"Error generating complexity graph: {e} with correlation ID: {self.correlation_id}",
+                exc_info=True,
+            )
             # Ensure figure is closed even on error
-            plt.close('all')
+            plt.close("all")
             return None

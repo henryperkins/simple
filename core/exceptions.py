@@ -35,6 +35,7 @@ class LiveError(Exception):
     """Live error for real-time processing issues."""
     pass
 
+
 class DocumentationError(Exception):
     """Raised when documentation generation fails."""
     pass
@@ -47,4 +48,14 @@ class WorkflowError(Exception):
 
 class TokenLimitError(Exception):
     """Raised when token limits are exceeded."""
+    pass
+
+
+class DocumentationGenerationError(Exception):
+    """Raised when there is an error in generating documentation."""
+    pass
+
+
+class APICallError(Exception):
+    """Raised when an API call fails."""
     pass

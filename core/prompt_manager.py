@@ -4,8 +4,10 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 import json
 
-from core.types.base import ExtractedClass, ExtractedFunction, DocstringData
+from core.types.base import ExtractedClass, ExtractedFunction, DocstringData, Injector
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from utils import handle_error
+
 
 class PromptManager:
     """Manages the generation and formatting of prompts for AI interactions."""
@@ -14,121 +16,52 @@ class PromptManager:
         """Initialize the PromptManager.
 
         Args:
-            correlation_id: Optional correlation ID for tracking related operations
+            correlation_id: Optional correlation ID for tracking related operations.
         """
         self.correlation_id = correlation_id
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
+        self.logger = CorrelationLoggerAdapter(
+            Injector.get("logger"), extra={"correlation_id": self.correlation_id}
+        )
+        self.docstring_processor = Injector.get("docstring_processor")
 
-        # Define the function schema for structured output
-        self.function_schema = {
-            "name": "generate_docstring",
-            "description": "Generate Google-style documentation for code",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "summary": {
-                        "type": "string",
-                        "description": "A brief one-line summary of what the code does",
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Detailed explanation of the functionality and purpose",
-                    },
-                    "args": {
-                        "type": "array",
-                        "description": "List of arguments for the method or function",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {
-                                    "type": "string",
-                                    "description": "The name of the argument",
-                                },
-                                "type": {
-                                    "type": "string",
-                                    "description": "The data type of the argument",
-                                },
-                                "description": {
-                                    "type": "string",
-                                    "description": "A brief description of the argument",
-                                },
-                            },
-                            "required": ["name", "type", "description"],
-                        },
-                    },
-                    "returns": {
-                        "type": "object",
-                        "description": "Details about the return value",
-                        "properties": {
-                            "type": {
-                                "type": "string",
-                                "description": "The data type of the return value",
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": "A brief description of the return value",
-                            },
-                        },
-                        "required": ["type", "description"],
-                    },
-                    "raises": {
-                        "type": "array",
-                        "description": "List of exceptions that may be raised",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "exception": {
-                                    "type": "string",
-                                    "description": "The name of the exception that may be raised",
-                                },
-                                "description": {
-                                    "type": "string",
-                                    "description": "A brief description of when this exception is raised",
-                                },
-                            },
-                            "required": ["exception", "description"],
-                        },
-                    },
-                    "complexity": {
-                        "type": "integer",
-                        "description": "McCabe complexity score",
-                    },
-                },
-                "required": [
-                    "summary",
-                    "description",
-                    "args",
-                    "returns",
-                    "raises",
-                    "complexity",
-                ],
-            },
-        }
+        # Load the function schema from a file
+        schema_path = Path(__file__).parent / "function_schema.json"
+        with open(schema_path, "r") as f:
+            self._function_schema = json.load(f)
 
-    def create_documentation_prompt(
+    @handle_error
+    async def create_documentation_prompt(
         self,
         module_name: str,
         file_path: str,
         source_code: str,
         classes: Optional[List[ExtractedClass]] = None,
-        functions: Optional[List[ExtractedFunction]] = None
+        functions: Optional[List[ExtractedFunction]] = None,
     ) -> str:
         """Create a comprehensive prompt for documentation generation.
 
         Args:
-            module_name: Name of the module
-            file_path: Path to the source file
-            source_code: The source code to document
-            classes: List of extracted class information
-            functions: List of extracted function information
+            module_name: Name of the module.
+            file_path: Path to the source file.
+            source_code: The source code to document.
+            classes: List of extracted class information.
+            functions: List of extracted function information.
 
         Returns:
-            Formatted prompt string for the AI model
+            Formatted prompt string for the AI model.
+
+        Raises:
+            ValueError: If required information is missing for prompt generation.
         """
-        self.logger.debug("Creating documentation prompt", extra={
-            'module_name': module_name,
-            'file_path': file_path
-        })
+        self.logger.debug(
+            "Creating documentation prompt",
+            extra={"module_name": module_name, "file_path": file_path},
+        )
+
+        if not module_name or not file_path or not source_code:
+            raise ValueError(
+                "Module name, file path, and source code are required for prompt generation."
+            )
 
         prompt = (
             f"Objective: Generate comprehensive Google-style documentation for the following Python module.\n\n"
@@ -153,7 +86,7 @@ class PromptManager:
         if classes:
             prompt += "Classes:\n"
             for cls in classes:
-                prompt += self._format_class_info(cls)
+                prompt += await self._format_class_info(cls)
             prompt += "\n"
 
         # Add function information
@@ -175,16 +108,23 @@ class PromptManager:
         self.logger.debug("Documentation prompt created successfully")
         return prompt
 
+    @handle_error
     def create_code_analysis_prompt(self, code: str) -> str:
         """Create a prompt for code quality analysis.
 
         Args:
-            code: Source code to analyze
+            code: Source code to analyze.
 
         Returns:
-            Formatted prompt for code analysis
+            Formatted prompt for code analysis.
+
+        Raises:
+            ValueError: If the code is empty or None.
         """
         self.logger.debug("Creating code analysis prompt")
+
+        if not code:
+            raise ValueError("Source code is required for prompt generation.")
 
         prompt = (
             "Objective: Analyze the following code for quality and provide specific improvements.\n\n"
@@ -210,16 +150,25 @@ class PromptManager:
         self.logger.debug("Code analysis prompt created successfully")
         return prompt
 
+    @handle_error
     def _format_function_info(self, func: ExtractedFunction) -> str:
         """Format function information for prompt.
 
         Args:
-            func: The extracted function information
+            func: The extracted function information.
 
         Returns:
-            Formatted function string
+            Formatted function string for the prompt.
+
+        Raises:
+            ValueError: If the function name is missing.
         """
         self.logger.debug(f"Formatting function info for: {func.name}")
+
+        if not func.name:
+            raise ValueError(
+                "Function name is required to format function information."
+            )
 
         args_str = ", ".join(
             f"{arg.name}: {arg.type or 'Any'}"
@@ -227,8 +176,12 @@ class PromptManager:
             for arg in func.args
         )
 
-        # Safely access docstring_info and returns
-        docstring_info = func.docstring_info or DocstringData()
+        # Use the injected docstring_processor to create a DocstringData instance
+        docstring_info = (
+            self.docstring_processor.parse(func.docstring)
+            if func.docstring
+            else DocstringData(summary="")
+        )
         returns_info = func.returns or {"type": "Any", "description": ""}
 
         formatted_info = (
@@ -244,24 +197,34 @@ class PromptManager:
         self.logger.debug(f"Function info formatted for: {func.name}")
         return formatted_info
 
-    def _format_class_info(self, cls: ExtractedClass) -> str:
+    @handle_error
+    async def _format_class_info(self, cls: ExtractedClass) -> str:
         """Format class information for prompt.
 
         Args:
-            cls: The extracted class information
+            cls: The extracted class information.
 
         Returns:
-            Formatted class string
+            Formatted class string for the prompt.
+
+        Raises:
+            ValueError: If the class name is missing.
         """
         self.logger.debug(f"Formatting class info for: {cls.name}")
 
+        if not cls.name:
+            raise ValueError("Class name is required to format class information.")
+
         methods_str = "\n    ".join(
-            f"- {m.name}({', '.join(a.name for a in m.args)})"
-            for m in cls.methods
+            f"- {m.name}({', '.join(a.name for a in m.args)})" for m in cls.methods
         )
 
-        # Safely access docstring_info
-        docstring_info = cls.docstring_info or DocstringData()
+        # Use the injected docstring_processor to create a DocstringData instance
+        docstring_info = (
+            self.docstring_processor.parse(cls.docstring)
+            if cls.docstring
+            else DocstringData(summary="")
+        )
 
         formatted_info = (
             f"Class: {cls.name}\n"
@@ -278,11 +241,19 @@ class PromptManager:
         self.logger.debug(f"Class info formatted for: {cls.name}")
         return formatted_info
 
+    @handle_error
     def get_function_schema(self) -> Dict[str, Any]:
         """Get the function schema for structured output.
 
         Returns:
-            Function schema dictionary
+            Function schema dictionary.
+
+        Raises:
+            ValueError: If the schema is not properly formatted.
         """
         self.logger.debug("Retrieving function schema")
-        return self.function_schema
+
+        if not self._function_schema:
+            raise ValueError("Function schema is not properly defined.")
+
+        return self._function_schema

@@ -27,8 +27,7 @@ class TokenManager:
             metrics_collector: Optional metrics collector instance.
         """
         self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__),
-            correlation_id=correlation_id
+            logger=LoggerSetup.get_logger(__name__)
         )
         self.config = config if config else AIConfig.from_env()
         self.model = model
@@ -139,6 +138,7 @@ class TokenManager:
             ProcessingError: If request preparation fails.
         """
         try:
+            prompt = await prompt  # Ensure prompt is awaited
             prompt_tokens = self._estimate_tokens(prompt)
             available_tokens = self.model_config.max_tokens - prompt_tokens
 
@@ -272,3 +272,4 @@ class TokenManager:
         except Exception as e:
             self.logger.error(f"Error processing completion: {e}", exc_info=True)  # Using logger with stack trace
             raise ProcessingError(f"Failed to process completion: {str(e)}")
+

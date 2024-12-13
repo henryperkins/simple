@@ -2,28 +2,36 @@
 Markdown documentation generator module.
 """
 
-from datetime import datetime
 from typing import Optional, Dict, Any
-from core.logger import LoggerSetup, log_debug, log_error, log_warning
-from core.types import DocumentationData, ExtractedClass, ExtractedFunction
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.types import DocumentationData
 from core.exceptions import DocumentationError
 
 
 class MarkdownGenerator:
     """Generates formatted markdown documentation."""
 
-    def __init__(self) -> None:
-        """Initialize the markdown generator."""
-        self.logger = LoggerSetup.get_logger(__name__)
+    def __init__(self, correlation_id: Optional[str] = None) -> None:
+        """
+        Initialize the markdown generator.
+
+        Args:
+            correlation_id: Optional correlation ID for tracking related operations.
+        """
+        self.correlation_id = correlation_id
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__),
+            extra={"correlation_id": self.correlation_id}
+        )
 
     def generate(self, documentation_data: DocumentationData) -> str:
         """Generate markdown documentation."""
         try:
-            log_debug("Generating markdown documentation.")
+            self.logger.debug("Generating markdown documentation.")
 
             # Check for complete information
             if not documentation_data.source_code:
-                log_error(
+                self.logger.error(
                     "Source code is missing - cannot generate documentation")
                 return "# Error: Missing Source Code\n\nDocumentation cannot be generated without source code."
 
@@ -58,10 +66,10 @@ class MarkdownGenerator:
             ]
             markdown = "\n\n".join(filter(None, sections))
             if not self._has_complete_information(documentation_data):
-                log_warning(
+                self.logger.warning(
                     "Generated partial documentation due to incomplete information")
             else:
-                log_debug("Generated complete documentation successfully")
+                self.logger.debug("Generated complete documentation successfully")
             return markdown
         except DocumentationError as de:
             error_msg = f"DocumentationError: {de} in markdown generation with correlation ID: {self.correlation_id}"
@@ -116,20 +124,20 @@ class MarkdownGenerator:
 
     def _generate_header(self, module_name: str) -> str:
         """Generate the module header."""
-        log_debug(f"Generating header for module_name: {module_name}.")
+        self.logger.debug(f"Generating header for module_name: {module_name}.")
         return f"# Module: {module_name}"
 
     def _generate_overview(self, file_path: str, description: str) -> str:
         """Generate the overview section."""
-        log_debug(f"Generating overview for file_path: {file_path}")
+        self.logger.debug(f"Generating overview for file_path: {file_path}")
 
         # Use a default description if none provided
         if not description or description.isspace():
             description = "No description available."
-            log_warning(f"No description provided for {file_path}")
+            self.logger.warning(f"No description provided for {file_path}")
 
         # Log the description being used
-        log_debug(f"Using description: {description[:100]}...")
+        self.logger.debug(f"Using description: {description[:100]}...")
 
         return "\n".join(
             [
@@ -250,7 +258,7 @@ class MarkdownGenerator:
             # Combine the tables and return the final markdown string
             return "\n".join(classes_table + [""] + methods_table)
         except Exception as e:
-            log_error(f"Error generating class tables: {e}", exc_info=True)
+            self.logger.error(f"Error generating class tables: {e}", exc_info=True)
             return "An error occurred while generating class documentation."
 
     def _generate_function_tables(self, functions: list) -> str:
@@ -288,7 +296,7 @@ class MarkdownGenerator:
 
             return "\n".join(lines)
         except Exception as e:
-            log_error(f"Error generating function tables: {e}", exc_info=True)
+            self.logger.error(f"Error generating function tables: {e}", exc_info=True)
             return "An error occurred while generating function documentation."
 
     def _generate_constants_table(self, constants: list) -> str:
@@ -313,7 +321,7 @@ class MarkdownGenerator:
 
             return "\n".join(lines)
         except Exception as e:
-            log_error(f"Error generating constants table: {e}", exc_info=True)
+            self.logger.error(f"Error generating constants table: {e}", exc_info=True)
             return "An error occurred while generating constants documentation."
 
     def _generate_source_code(self, source_code: Optional[str]) -> str:
@@ -331,6 +339,6 @@ class MarkdownGenerator:
                 ]
             )
         except Exception as e:
-            log_error(
+            self.logger.error(
                 f"Error generating source code section: {e}", exc_info=True)
             return "An error occurred while generating source code documentation."

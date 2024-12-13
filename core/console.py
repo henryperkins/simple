@@ -1,13 +1,25 @@
 """Rich console utilities for enhanced visual feedback."""
-from typing import Any, Optional
+from typing import Optional
 from rich.console import Console
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn, BarColumn, TimeRemainingColumn
 from rich.syntax import Syntax
 from rich.logging import RichHandler
 import logging
 
-# Initialize rich console
-console = Console()
+# Initialize rich console with default settings
+DEFAULT_CONSOLE = Console(
+    color_system="auto",
+    width=None,
+    height=None, 
+    markup=True,
+    emoji=True,
+    highlight=True,
+    log_path=False,
+    log_time=True
+)
+
+# Use the default console instance
+console = DEFAULT_CONSOLE
 
 
 def display_code_snippet(
@@ -37,8 +49,12 @@ def setup_logging(level: int = logging.INFO) -> None:
     logging.basicConfig(
         level=level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[RichHandler(console=console, rich_tracebacks=True)]
+        handlers=[RichHandler(console=DEFAULT_CONSOLE, rich_tracebacks=True)]
     )
+    # Ensure consistent logging format
+    for handler in logging.root.handlers:
+        if isinstance(handler, RichHandler):
+            handler.setFormatter(logging.Formatter("%(message)s"))
 
 
 def print_status(message: str, style: str = "bold blue") -> None:
@@ -105,9 +121,19 @@ def display_metrics(metrics: dict, title: str = "Metrics") -> None:
     for key, value in metrics.items():
         console.print(f"[bold]{key}:[/bold] {value}")
 
+
 def create_progress() -> Progress:
     """Create and return a Rich Progress instance."""
-    return Progress()
+    progress = Progress(
+        SpinnerColumn(),
+        "[progress.description]{task.description}",
+        BarColumn(),
+        "[progress.percentage]{task.percentage:>3.1f}%",
+        TimeRemainingColumn(),
+    )
+    return progress
+
+
 if __name__ == "__main__":
     # Set up logging
     setup_logging(logging.DEBUG)

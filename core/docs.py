@@ -12,17 +12,20 @@ Note:
 
 """
 
-from datetime import datetime
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-import uuid
+from datetime import datetime
 
+from core.docstring_processor import DocstringProcessor
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.extraction.code_extractor import CodeExtractor, ExtractionResult
 from core.markdown_generator import MarkdownGenerator
+from core.response_parsing import ResponseParsingService
 from core.ai_service import AIService
-from core.types.base import Injector
+from core.prompt_manager import PromptManager
 from core.types.base import (
+    Injector,
     DocstringData,
     DocumentationContext,
     DocumentationData,
@@ -32,31 +35,75 @@ from core.types.base import (
     ProcessingResult,
 )
 from core.exceptions import DocumentationError
-from utils import ensure_directory, read_file_safe
+from utils import ensure_directory, read_file_safe_async
 from core.console import (
     print_info,
     print_error,
-    create_progress,
+    create_progress
 )
 
 
 class DocumentationOrchestrator:
+    """
+    Orchestrates the entire documentation generation process.
+    """
+
     def __init__(
         self,
-        ai_service: Optional[AIService] = None,
+        ai_service: AIService,
+        code_extractor: CodeExtractor,
+        markdown_generator: MarkdownGenerator,
+        prompt_manager: PromptManager,
+        docstring_processor: DocstringProcessor,
+        response_parser: ResponseParsingService,
         correlation_id: Optional[str] = None,
     ) -> None:
+        """
+        Initialize DocumentationOrchestrator with necessary services.
+
+        Args:
+            ai_service: AI service for documentation generation.
+            code_extractor: Service for extracting code elements.
+            markdown_generator: Service for generating markdown documentation.
+            prompt_manager: Service for creating prompts for the AI model.
+            docstring_processor: Service for processing docstrings.
+            response_parser: Service for parsing AI responses.
+            correlation_id: Unique identifier for tracking operations.
+        """
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        print_info("Initializing DocumentationOrchestrator")
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
-        self.ai_service = ai_service or Injector.get("ai_service")
-        self.code_extractor = CodeExtractor()
-        self.markdown_generator = MarkdownGenerator()
+        print_info(
+            f"Initializing DocumentationOrchestrator with correlation ID: {self.correlation_id}"
+        )
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__),
+            extra={"correlation_id": self.correlation_id},
+        )
+
+        # Use constructor injection for dependencies
+        self.ai_service = ai_service
+        self.code_extractor = code_extractor
+        self.markdown_generator = markdown_generator
+        self.prompt_manager = prompt_manager
+        self.docstring_processor = docstring_processor
+        self.response_parser = response_parser
+
         self.progress = None  # Initialize progress here
 
     async def generate_documentation(
         self, context: DocumentationContext
     ) -> Tuple[str, str]:
+        """
+        Generates documentation for the given context.
+
+        Args:
+            context: Documentation context containing source code and metadata.
+
+        Returns:
+            Tuple[str, str]: The updated source code and generated markdown documentation.
+
+        Raises:
+            DocumentationError: If there's an issue generating documentation.
+        """
         try:
             print_info(
                 f"Starting documentation generation process with correlation ID: {self.correlation_id}"
@@ -65,37 +112,76 @@ class DocumentationOrchestrator:
             if not context.source_code or not context.source_code.strip():
                 raise DocumentationError("Source code is empty or missing")
 
-            if not self.progress:
-                self.progress = create_progress()
-            task = self.progress.add_task("Generating documentation", total=100)
-            self.progress.update(task, advance=20, description="Extracting code...")
+            async with create_progress() as progress:
+                task = progress.add_task("Generating documentation", total=100)
+                progress.update(task, advance=20, description="Extracting code...")
 
-            extraction_context = self._create_extraction_context(context)
-            extraction_result = await self.code_extractor.extract_code(
-                context.source_code, extraction_context
-            )
-            context.classes = [
-                self._create_extracted_class(cls) for cls in extraction_result.classes
-            ]
-            context.functions = [
-                self._create_extracted_function(func)
-                for func in extraction_result.functions
-            ]
+                extraction_context = self._create_extraction_context(context)
+                extraction_result = await self.code_extractor.extract_code(context.source_code)
+                context.classes = [
+                    self._create_extracted_class(cls) for cls in extraction_result.classes
+                ]
+                context.functions = [
+                    self._create_extracted_function(func)
+                    for func in extraction_result.functions
+                ]
 
-            processing_result = await self.ai_service.generate_documentation(context)
+                # Create documentation prompt
+                prompt = await self.prompt_manager.create_documentation_prompt(
+                    module_name=context.metadata.get("module_name", ""),
+                    file_path=str(context.module_path),
+                    source_code=context.source_code,
+                    classes=context.classes,
+                    functions=context.functions,
+                )
 
-            documentation_data = self._create_documentation_data(
-                context, processing_result, extraction_result
-            )
+                # Generate documentation through AI service
+                processing_result = await self.ai_service.generate_documentation(
+                    DocumentationContext(
+                        source_code=prompt,
+                        module_path=context.module_path,
+                        include_source=False,
+                        metadata=context.metadata,
+                    )
+                )
+                progress.update(
+                    task, advance=50, description="Generating documentation..."
+                )
 
-            markdown_doc = self.markdown_generator.generate(documentation_data)
-            self.progress.update(task, advance=80, description="Generating markdown...")
+                # Parse and validate the AI response
+                parsed_response = await self.response_parser.parse_response(
+                    processing_result.content,
+                    expected_format="docstring",
+                    validate_schema=True,
+                )
+                self.logger.info(
+                    f"AI response parsed and validated with status: {parsed_response.validation_success}"
+                )
 
-            self._validate_documentation_data(documentation_data)
+                # Process and validate the docstring
+                docstring_data = await self.docstring_processor.parse(parsed_response.content)
+                is_valid, validation_errors = self.docstring_processor.validate(
+                    docstring_data
+                )
+                self.logger.info(f"Docstring validation status: {is_valid}")
+
+                if not is_valid:
+                    self.logger.warning(
+                        f"Docstring validation failed: {', '.join(validation_errors)}"
+                    )
+                    self._handle_docstring_validation_errors(validation_errors)
+
+                documentation_data = self._create_documentation_data(
+                    context, processing_result, extraction_result, docstring_data
+                )
+
+                markdown_doc = self.markdown_generator.generate(documentation_data)
+                progress.update(task, advance=30, description="Generating markdown...")
 
             print_info(
                 f"Documentation generation completed successfully with correlation ID: {self.correlation_id}"
             )
+
             return context.source_code, markdown_doc
 
         except DocumentationError as de:
@@ -120,6 +206,15 @@ class DocumentationOrchestrator:
     def _create_extraction_context(
         self, context: DocumentationContext
     ) -> ExtractionContext:
+        """
+        Create an extraction context from the given documentation context.
+
+        Args:
+            context: Documentation context to extract from.
+
+        Returns:
+            ExtractionContext: Context for code extraction.
+        """
         return ExtractionContext(
             module_name=context.metadata.get("module_name", context.module_path.stem),
             source_code=context.source_code,
@@ -132,7 +227,15 @@ class DocumentationOrchestrator:
         )
 
     def _create_extracted_class(self, cls_data: ExtractedClass) -> ExtractedClass:
-        """Creates an ExtractedClass instance from extracted data."""
+        """
+        Creates an ExtractedClass instance from extracted data.
+
+        Args:
+            cls_data: Extracted class data.
+
+        Returns:
+            ExtractedClass: A formatted ExtractedClass instance.
+        """
         return ExtractedClass(
             name=cls_data.name,
             lineno=cls_data.lineno,
@@ -148,13 +251,20 @@ class DocumentationOrchestrator:
             bases=cls_data.bases,
             metaclass=cls_data.metaclass,
             is_exception=cls_data.is_exception,
-            docstring_info=cls_data.docstring_info,
         )
 
     def _create_extracted_function(
         self, func_data: ExtractedFunction
     ) -> ExtractedFunction:
-        """Creates an ExtractedFunction instance from extracted data."""
+        """
+        Creates an ExtractedFunction instance from extracted data.
+
+        Args:
+            func_data: Extracted function data.
+
+        Returns:
+            ExtractedFunction: A formatted ExtractedFunction instance.
+        """
         return ExtractedFunction(
             name=func_data.name,
             lineno=func_data.lineno,
@@ -180,6 +290,17 @@ class DocumentationOrchestrator:
         processing_result: ProcessingResult,
         extraction_result: ExtractionResult,
     ) -> DocumentationData:
+        """
+        Create DocumentationData from the given context and AI processing results.
+
+        Args:
+            context: The documentation context.
+            processing_result: Result from AI documentation generation.
+            extraction_result: Result from code extraction.
+
+        Returns:
+            DocumentationData: Structured documentation data.
+        """
         docstring_data = DocstringData(
             summary=processing_result.content.get("summary", ""),
             description=processing_result.content.get("description", ""),
@@ -225,17 +346,13 @@ class DocumentationOrchestrator:
         self, documentation_data: DocumentationData
     ) -> None:
         """
-        Validates the provided documentation data.
-
-        This method checks if the provided documentation data contains complete 
-        information using the markdown generator. If the information is incomplete, 
-        it logs a warning message.
+        Validates the provided documentation data for completeness.
 
         Args:
-            documentation_data (DocumentationData): The documentation data to be validated.
+            documentation_data: The documentation data to validate.
 
-        Returns:
-            None
+        Raises:
+            DocumentationError: If the documentation data is incomplete or invalid.
         """
         if not self.markdown_generator._has_complete_information(documentation_data):
             self.logger.warning(
@@ -246,8 +363,19 @@ class DocumentationOrchestrator:
     async def generate_module_documentation(
         self, file_path: Path, output_dir: Path, source_code: Optional[str] = None
     ) -> None:
+        """
+        Generates documentation for a single module file.
+
+        Args:
+            file_path: Path to the source file.
+            output_dir: Directory to write the output documentation.
+            source_code: Optional source code to process; if not provided, it will be read from the file_path.
+
+        Raises:
+            DocumentationError: If there's an issue processing the module.
+        """
         try:
-            source_code = source_code or read_file_safe(file_path)
+            source_code = source_code or await read_file_safe_async(file_path)
 
             context = DocumentationContext(
                 source_code=source_code,
@@ -291,6 +419,16 @@ class DocumentationOrchestrator:
     async def generate_batch_documentation(
         self, file_paths: List[Path], output_dir: Path
     ) -> Dict[Path, bool]:
+        """
+        Generates documentation for multiple files in batch.
+
+        Args:
+            file_paths: List of paths to the source files.
+            output_dir: Directory to write the output documentation.
+
+        Returns:
+            Dict[Path, bool]: A dictionary with file paths as keys and boolean values indicating success or failure.
+        """
         results = {}
         for file_path in file_paths:
             try:

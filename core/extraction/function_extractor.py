@@ -6,10 +6,8 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 """
 
 import ast
-from typing import List, Any, Optional, Union
-from core.logger import LoggerSetup, CorrelationLoggerAdapter, log_error
-from core.metrics_collector import MetricsCollector
-from core.docstring_processor import DocstringProcessor
+from typing import List, Optional, Union
+from core.logger import CorrelationLoggerAdapter, set_correlation_id
 from core.types import (
     ExtractedFunction,
     ExtractedArgument,
@@ -25,53 +23,24 @@ class FunctionExtractor:
 
     def __init__(
         self,
-        context: "ExtractionContext",
+        context: ExtractionContext,
         correlation_id: Optional[str] = None,
     ) -> None:
         """Initialize the function extractor.
 
         Args:
-            context (ExtractionContext): The context for extraction, including settings and source code.
-            correlation_id (Optional[str]): An optional correlation ID for logging purposes.
+            context: The context for extraction, including settings and source code.
+            correlation_id: An optional correlation ID for logging purposes.
         """
+        if correlation_id:
+            set_correlation_id(correlation_id)
         self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__), correlation_id=correlation_id
+            Injector.get("logger")
         )
         self.context = context
-        # Get metrics calculator with fallback
-        try:
-            self.metrics_calculator = Injector.get("metrics_calculator")
-        except KeyError:
-            self.logger.warning(
-                "Metrics calculator not registered, creating new instance"
-            )
-            from core.metrics import Metrics
-
-            self.metrics_calculator = Metrics()
-
-        # Get docstring parser with fallback
-        try:
-            try:
-                self.docstring_parser = Injector.get("docstring_parser")
-            except KeyError:
-                self.logger.warning("Docstring parser not registered, using default")
-                self.docstring_parser = DocstringProcessor()
-                Injector.register("docstring_parser", self.docstring_parser)
-        except KeyError:
-            self.logger.warning("Docstring parser not registered, using default")
-            self.docstring_parser = DocstringProcessor()
-            Injector.register("docstring_parser", self.docstring_parser)
+        self.metrics_calculator = Injector.get("metrics_calculator")
+        self.docstring_parser = Injector.get("docstring_processor")
         self.errors: List[str] = []
-        if not hasattr(self, 'metrics_calculator') or self.metrics_calculator is None:
-            self.metrics_calculator = Injector.get('metrics_calculator')
-        if not hasattr(self, 'docstring_parser') or self.docstring_parser is None:
-            self.docstring_parser = Injector.get('docstring_parser')
-        if self.metrics_calculator is None:
-            self.logger.warning("Metrics calculator not initialized, using default")
-            self.metrics_calculator = Metrics()
-        if self.docstring_parser is None:
-            self.logger.warning("Docstring parser not initialized, using default")
-            self.docstring_parser = DocstringProcessor()
 
     def _should_process_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
@@ -82,7 +51,7 @@ class FunctionExtractor:
             node: The function node to check
 
         Returns:
-            bool: True if the function should be processed, False otherwise
+            True if the function should be processed, False otherwise
         """
         # Skip private functions if not included in settings
         if not self.context.include_private and node.name.startswith("_"):
@@ -97,9 +66,11 @@ class FunctionExtractor:
             return False
 
         # Skip nested functions if not included in settings
-        if not self.context.include_nested:
+        if not self.context.include_nested and self.context.tree:
             for parent in ast.walk(self.context.tree):
-                if isinstance(parent, ast.FunctionDef) and node in ast.walk(parent):
+                if isinstance(
+                    parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                ) and node in ast.walk(parent):
                     if parent != node:  # Don't count the node itself
                         return False
 
@@ -111,10 +82,10 @@ class FunctionExtractor:
         """Extract function definitions from AST nodes.
 
         Args:
-            nodes (Union[ast.AST, List[ast.AST]]): The AST nodes to process.
+            nodes: The AST nodes to process.
 
         Returns:
-            List[ExtractedFunction]: A list of extracted function metadata.
+            A list of extracted function metadata.
         """
         functions: List[ExtractedFunction] = []
 
@@ -140,7 +111,7 @@ class FunctionExtractor:
                                     node.name,
                                 )
                     except Exception as e:
-                        log_error(
+                        self.logger.error(
                             f"Error extracting function {node.name if hasattr(node, 'name') else 'unknown'}: {e}",
                             exc_info=True,
                             extra={
@@ -171,10 +142,10 @@ class FunctionExtractor:
         """Process a function node to extract information.
 
         Args:
-            node (Union[ast.FunctionDef, ast.AsyncFunctionDef]): The function node to process.
+            node: The function node to process.
 
         Returns:
-            Optional[ExtractedFunction]: The extracted function metadata, or None if processing fails.
+            The extracted function metadata, or None if processing fails.
         """
         try:
             # Extract basic information
@@ -237,7 +208,6 @@ class FunctionExtractor:
                 args=args,
                 returns={"type": return_type, "description": ""},
                 is_async=isinstance(node, ast.AsyncFunctionDef),
-                docstring_info=self.docstring_parser(docstring),
             )
 
             # Calculate metrics using the metrics calculator
@@ -248,11 +218,9 @@ class FunctionExtractor:
 
             return extracted_function
         except Exception as e:
-            log_error(
+            self.logger.error(
                 f"Failed to process function {node.name}: {e}",
                 exc_info=True,
                 extra={"function_name": node.name},
             )
             raise
-
-    # ... rest of the methods remain unchanged ...
