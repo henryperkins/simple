@@ -1,0 +1,27 @@
+Objective: Generate comprehensive Google-style documentation for the following Python module.
+
+Context: This module is part of a larger system aimed at providing AI-driven solutions. Consider the target audience as developers who will use this documentation to understand and maintain the code. Ensure the documentation is detailed enough to facilitate onboarding and maintenance.
+
+Module Name: {{ module_name }}
+File Path: {{ file_path }}
+
+Code Structure:
+
+{% if classes %}
+Classes:
+{% for cls in classes %}
+{{ _format_class_info(cls) }}
+{% endfor %}
+{% endif %}
+
+{% if functions %}
+Functions:
+{% for func in functions %}
+{{ _format_function_info(func) }}
+{% endfor %}
+{% endif %}
+
+Source Code:
+{{ source_code }}
+
+Analyze the code and generate comprehensive Google-style documentation. Include a brief summary, detailed description, arguments, return values, and possible exceptions. Ensure all descriptions are clear and technically accurate. If any information is missing or cannot be determined, explicitly state that it is not available.

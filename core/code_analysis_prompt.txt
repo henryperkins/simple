@@ -1,0 +1,23 @@
+Objective: Analyze the following code for quality and provide specific improvements.
+
+Context: This code is part of a critical system component where performance and reliability are paramount. Consider historical issues such as performance bottlenecks and error handling failures. The analysis should help in identifying potential risks and areas for optimization.
+
+Code:
+{{ code }}
+
+Consider the following aspects:
+1. Code complexity and readability
+2. Best practices and design patterns
+3. Error handling and edge cases
+4. Performance considerations
+5. Documentation completeness
+
+Examples of good practices include:
+- Clear variable naming that enhances readability.
+- Efficient algorithms that improve performance.
+
+Avoid:
+- Deep nesting that complicates understanding.
+- Lack of error handling that could lead to failures.
+
+Provide specific examples of improvements where applicable, and suggest alternative approaches or refactorings. If any information is missing or cannot be determined, explicitly state that it is not available.
