@@ -30,8 +30,10 @@
                             "description": "A brief description of the argument."
                         }
                     },
-                    "required": ["name", "type", "description"]
-                }
+                    "required": ["name", "type", "description"],
+                    "additionalProperties": false
+                },
+                "default": []
             },
             "returns": {
                 "type": "object",
@@ -46,7 +48,8 @@
                         "description": "A brief description of the return value."
                     }
                 },
-                "required": ["type", "description"]
+                "required": ["type", "description"],
+                "additionalProperties": false
             },
             "raises": {
                 "type": "array",
@@ -63,14 +66,18 @@
                             "description": "A brief description of the circumstances under which the exception is raised."
                         }
                     },
-                    "required": ["exception", "description"]
-                }
+                    "required": ["exception", "description"],
+                    "additionalProperties": false
+                },
+                "default": []
             },
             "complexity": {
                 "type": "integer",
-                "description": "McCabe complexity score"
+                "description": "McCabe complexity score",
+                 "default": 1
             }
         },
-        "required": ["summary", "description", "args", "returns", "raises", "complexity"]
+        "required": ["summary", "description", "returns"],
+        "additionalProperties": false
     }
 }
