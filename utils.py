@@ -110,7 +110,7 @@ def handle_error(func):
     """Decorator for common error handling with enhanced logging."""
 
     @wraps(func)
-    async def wrapper(*args, **kwargs):
+    async def async_wrapper(*args, **kwargs):
         try:
             return await func(*args, **kwargs)
         except Exception as e:
@@ -126,7 +126,27 @@ def handle_error(func):
             )
             raise
 
-    return wrapper
+    @wraps(func)
+    def sync_wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            logger = get_logger()
+            logger.error(
+                f"Error in {func.__name__}: {str(e)}",
+                exc_info=True,
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "function_args": args,
+                    "function_kwargs": kwargs,
+                },
+            )
+            raise
+
+    # Check if the decorated function is a coroutine function
+    if asyncio.iscoroutinefunction(func):
+        return async_wrapper
+    return sync_wrapper
 
 
 # -----------------------------------------------------------------------------

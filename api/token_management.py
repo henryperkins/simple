@@ -3,10 +3,8 @@ import tiktoken
 from typing import Dict, Any, Optional, Tuple, Union
 from core.config import AIConfig
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from utils import serialize_for_logging, get_env_var
 from core.types import TokenUsage
 from core.exceptions import ProcessingError
-from core.console import display_metrics, print_info, print_error
 
 class TokenManager:
     """Manages token usage and cost estimation for OpenAI API interactions."""
@@ -138,7 +136,6 @@ class TokenManager:
             ProcessingError: If request preparation fails.
         """
         try:
-            prompt = await prompt  # Ensure prompt is awaited
             prompt_tokens = self._estimate_tokens(prompt)
             available_tokens = self.model_config.max_tokens - prompt_tokens
 
@@ -203,7 +200,6 @@ class TokenManager:
             "total_tokens": self.total_prompt_tokens + self.total_completion_tokens,
             "estimated_cost": usage.estimated_cost,
         }
-        display_metrics(stats, title="Token Usage Statistics")
         return stats
 
     def track_request(self, prompt_tokens: int, max_completion: int) -> None:
@@ -254,7 +250,7 @@ class TokenManager:
                         "token_usage",
                         success=True,
                         duration=0,
-                        usage=self._calculate_usage(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)).to_dict(),  # Convert to dict
+                        usage=self._calculate_usage(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)).__dict__,  # Convert to dict
                         metadata={
                             "model": self.model,
                             "deployment_id": self.deployment_id,
@@ -272,4 +268,3 @@ class TokenManager:
         except Exception as e:
             self.logger.error(f"Error processing completion: {e}", exc_info=True)  # Using logger with stack trace
             raise ProcessingError(f"Failed to process completion: {str(e)}")
-

@@ -5,8 +5,8 @@ from pathlib import Path
 import json
 
 from core.types.base import ExtractedClass, ExtractedFunction, DocstringData, Injector
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from utils import handle_error
+from core.logger import CorrelationLoggerAdapter
 
 
 class PromptManager:
@@ -20,14 +20,26 @@ class PromptManager:
         """
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(
-            Injector.get("logger"), extra={"correlation_id": self.correlation_id}
+            Injector.get("logger"), extra={"correlation_id": correlation_id}
         )
         self.docstring_processor = Injector.get("docstring_processor")
 
         # Load the function schema from a file
         schema_path = Path(__file__).parent / "function_schema.json"
-        with open(schema_path, "r") as f:
-            self._function_schema = json.load(f)
+        try:
+            with open(schema_path, "r") as f:
+                self._function_schema = json.load(f)
+        except FileNotFoundError:
+            self.logger.error(
+                "Function schema file not found", extra={"path": str(schema_path)}
+            )
+            raise
+        except json.JSONDecodeError:
+            self.logger.error(
+                "Failed to parse JSON in function schema file",
+                extra={"path": str(schema_path)},
+            )
+            raise
 
     @handle_error
     async def create_documentation_prompt(
@@ -71,32 +83,22 @@ class PromptManager:
             f"Module Name: {module_name}\n"
             f"File Path: {file_path}\n\n"
             "Code Structure:\n\n"
-            "Examples of desired documentation include:\n"
-            "- Clear summaries that succinctly describe the purpose of each component.\n"
-            "- Detailed descriptions that explain the functionality and usage.\n"
-            "- Well-defined argument lists with types and descriptions.\n"
-            "Avoid:\n"
-            "- Vague descriptions that do not add value.\n"
-            "- Incomplete argument details that could lead to misunderstandings.\n\n"
-            "Classes and Functions:\n"
-            "Provide detailed documentation for each class and function, including their purpose, usage, and any important details.\n"
         )
 
-        # Add class information
         if classes:
             prompt += "Classes:\n"
             for cls in classes:
-                prompt += await self._format_class_info(cls)
+                class_info = await self._format_class_info(cls)
+                prompt += class_info
             prompt += "\n"
 
-        # Add function information
         if functions:
             prompt += "Functions:\n"
             for func in functions:
-                prompt += self._format_function_info(func)
+                func_info = await self._format_function_info(func)
+                prompt += func_info
             prompt += "\n"
 
-        # Add source code
         prompt += (
             "Source Code:\n"
             f"{source_code}\n\n"
@@ -151,7 +153,7 @@ class PromptManager:
         return prompt
 
     @handle_error
-    def _format_function_info(self, func: ExtractedFunction) -> str:
+    async def _format_function_info(self, func: ExtractedFunction) -> str:
         """Format function information for prompt.
 
         Args:

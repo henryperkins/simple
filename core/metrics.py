@@ -367,77 +367,9 @@ class Metrics:
 
     def _generate_complexity_graph(self) -> Optional[str]:
         """Generate a base64 encoded PNG of the complexity metrics graph."""
-        if not MATPLOTLIB_AVAILABLE:
-            self.logger.warning(
-                "Matplotlib not available, skipping complexity graph generation"
-            )
-            return None
+        # Skip graph generation by default to avoid threading issues
+        return None
 
-        try:
-            # Create figure and immediately get current figure to ensure we close the right one
-            fig = plt.figure(figsize=(10, 6))
-            plt.clf()
-
-            # Get historical metrics from collector
-            if self.module_name and self.metrics_collector:
-                try:
-                    history = self.metrics_collector.get_metrics_history(
-                        self.module_name
-                    )
-                    if not history:
-                        self.logger.debug(
-                            f"No metrics history found for {self.module_name}"
-                        )
-                        plt.close(fig)
-                        return None
-
-                    dates: List[str] = []
-                    complexities: List[int] = []
-                    for entry in history:
-                        try:
-                            dates.append(entry["timestamp"])
-                            complexities.append(
-                                entry["metrics"]["cyclomatic_complexity"]
-                            )
-                        except (KeyError, TypeError) as e:
-                            self.logger.warning(f"Skipping invalid metrics entry: {e}")
-                            continue
-
-                    if dates and complexities:
-                        plt.plot(dates, complexities, marker="o")
-                        plt.title(f"Complexity Trend: {self.module_name}")
-                        plt.xlabel("Time")
-                        plt.ylabel("Cyclomatic Complexity")
-                        plt.xticks(rotation=45)
-                        plt.tight_layout()
-
-                        # Convert plot to base64 string
-                        buf = io.BytesIO()
-                        plt.savefig(buf, format="png")
-                        buf.seek(0)
-                        encoded_image = base64.b64encode(buf.getvalue()).decode("utf-8")
-
-                        # Clean up
-                        plt.close(fig)
-                        buf.close()
-
-                        return encoded_image
-                except Exception as e:
-                    self.logger.error(
-                        f"Error processing metrics history: {e} with correlation ID: {self.correlation_id}"
-                    )
-                    plt.close(fig)
-                    return None
-
-            # Clean up if no graph was generated
-            plt.close(fig)
-            return None
-
-        except Exception as e:
-            self.logger.error(
-                f"Error generating complexity graph: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
-            )
-            # Ensure figure is closed even on error
-            plt.close("all")
-            return None
+        # Note: The graph generation code is disabled to prevent Tcl threading errors.
+        # To re-enable, implement with proper thread safety measures and
+        # use the Agg backend explicitly if needed.

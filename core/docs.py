@@ -16,16 +16,16 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+import ast
 
 from core.docstring_processor import DocstringProcessor
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.extraction.code_extractor import CodeExtractor, ExtractionResult
+from core.extraction.code_extractor import CodeExtractor
 from core.markdown_generator import MarkdownGenerator
 from core.response_parsing import ResponseParsingService
 from core.ai_service import AIService
 from core.prompt_manager import PromptManager
 from core.types.base import (
-    Injector,
     DocstringData,
     DocumentationContext,
     DocumentationData,
@@ -36,11 +36,7 @@ from core.types.base import (
 )
 from core.exceptions import DocumentationError
 from utils import ensure_directory, read_file_safe_async
-from core.console import (
-    print_info,
-    print_error,
-    create_progress
-)
+from core.console import print_info, print_error, create_progress
 
 
 class DocumentationOrchestrator:
@@ -112,71 +108,138 @@ class DocumentationOrchestrator:
             if not context.source_code or not context.source_code.strip():
                 raise DocumentationError("Source code is empty or missing")
 
-            async with create_progress() as progress:
-                task = progress.add_task("Generating documentation", total=100)
-                progress.update(task, advance=20, description="Extracting code...")
+            source_code = context.source_code
+            module_name = context.metadata.get("module_name", "")
 
-                extraction_context = self._create_extraction_context(context)
-                extraction_result = await self.code_extractor.extract_code(context.source_code)
-                context.classes = [
-                    self._create_extracted_class(cls) for cls in extraction_result.classes
-                ]
-                context.functions = [
-                    self._create_extracted_function(func)
-                    for func in extraction_result.functions
-                ]
+            # Reuse existing progress bar if available
+            if self.progress:
+                self.progress.stop()
+            progress = create_progress()
+            progress.start()
+            self.progress = progress
 
-                # Create documentation prompt
-                prompt = await self.prompt_manager.create_documentation_prompt(
-                    module_name=context.metadata.get("module_name", ""),
-                    file_path=str(context.module_path),
-                    source_code=context.source_code,
-                    classes=context.classes,
-                    functions=context.functions,
+            extraction_task = self.progress.add_task(
+                "Extracting code elements", total=100
+            )
+
+            # Initialize variables to ensure they are always defined
+            classes, functions, variables, constants, module_docstring = (
+                [],
+                [],
+                [],
+                [],
+                None,
+            )
+
+            try:
+                self.progress.update(
+                    extraction_task, advance=10, description="Validating source code..."
+                )
+                self._validate_source_code(source_code)
+
+                self.progress.update(
+                    extraction_task, advance=10, description="Parsing AST..."
+                )
+                tree = ast.parse(source_code)
+
+                self.progress.update(
+                    extraction_task,
+                    advance=10,
+                    description="Extracting dependencies...",
+                )
+                self.code_extractor.dependency_analyzer.analyze_dependencies(tree)
+
+                self.progress.update(
+                    extraction_task, advance=15, description="Extracting classes..."
+                )
+                classes = await self.code_extractor.class_extractor.extract_classes(
+                    tree
                 )
 
-                # Generate documentation through AI service
-                processing_result = await self.ai_service.generate_documentation(
-                    DocumentationContext(
-                        source_code=prompt,
-                        module_path=context.module_path,
-                        include_source=False,
-                        metadata=context.metadata,
-                    )
+                self.progress.update(
+                    extraction_task, advance=15, description="Extracting functions..."
                 )
-                progress.update(
-                    task, advance=50, description="Generating documentation..."
+                functions = (
+                    await self.code_extractor.function_extractor.extract_functions(tree)
                 )
 
-                # Parse and validate the AI response
-                parsed_response = await self.response_parser.parse_response(
-                    processing_result.content,
-                    expected_format="docstring",
-                    validate_schema=True,
+                self.progress.update(
+                    extraction_task, advance=10, description="Extracting variables..."
                 )
-                self.logger.info(
-                    f"AI response parsed and validated with status: {parsed_response.validation_success}"
+                variables = self.code_extractor._extract_variables(tree)
+
+                self.progress.update(
+                    extraction_task, advance=10, description="Extracting constants..."
+                )
+                constants = self.code_extractor._extract_constants(tree)
+
+                self.progress.update(
+                    extraction_task, advance=10, description="Extracting docstrings..."
+                )
+                module_docstring = self.code_extractor._extract_module_docstring(tree)
+
+                self.progress.update(
+                    extraction_task, advance=10, description="Calculating metrics..."
+                )
+                self.code_extractor.metrics.calculate_metrics(source_code, module_name)
+            finally:
+                if self.progress:
+                    self.progress.stop()
+                    self.progress = None
+
+            # Create documentation prompt
+            prompt = await self.prompt_manager.create_documentation_prompt(
+                module_name=context.metadata.get("module_name", ""),
+                file_path=str(context.module_path),
+                source_code=context.source_code,
+                classes=classes,
+                functions=functions,
+            )
+
+            # Generate documentation through AI service
+            processing_result = await self.ai_service.generate_documentation(
+                DocumentationContext(
+                    source_code=prompt,
+                    module_path=context.module_path,
+                    include_source=False,
+                    metadata=context.metadata,
+                )
+            )
+
+            # Parse and validate the AI response
+            parsed_response = await self.response_parser.parse_response(
+                processing_result.content,
+                expected_format="docstring",
+                validate_schema=True,
+            )
+            self.logger.info(
+                f"AI response parsed and validated with status: {parsed_response.validation_success}"
+            )
+
+            # Process and validate the docstring
+            docstring_data = self.docstring_processor(parsed_response.content)
+            is_valid, validation_errors = self.docstring_processor.validate(
+                docstring_data
+            )
+            self.logger.info(f"Docstring validation status: {is_valid}")
+
+            if not is_valid:
+                self.logger.warning(
+                    f"Docstring validation failed: {', '.join(validation_errors)}"
                 )
 
-                # Process and validate the docstring
-                docstring_data = await self.docstring_processor.parse(parsed_response.content)
-                is_valid, validation_errors = self.docstring_processor.validate(
-                    docstring_data
-                )
-                self.logger.info(f"Docstring validation status: {is_valid}")
+            documentation_data = self._create_documentation_data(
+                context,
+                processing_result,
+                docstring_data,
+                classes,
+                functions,
+                variables,
+                constants,
+                module_docstring,
+            )
 
-                if not is_valid:
-                    self.logger.warning(
-                        f"Docstring validation failed: {', '.join(validation_errors)}"
-                    )
-                    self._handle_docstring_validation_errors(validation_errors)
-
-                documentation_data = self._create_documentation_data(
-                    context, processing_result, extraction_result, docstring_data
-                )
-
-                markdown_doc = self.markdown_generator.generate(documentation_data)
-                progress.update(task, advance=30, description="Generating markdown...")
+            markdown_doc = self.markdown_generator.generate(documentation_data)
 
             print_info(
                 f"Documentation generation completed successfully with correlation ID: {self.correlation_id}"
@@ -278,7 +341,6 @@ class DocumentationOrchestrator:
             returns=func_data.returns,
             raises=func_data.raises,
             body_summary=func_data.body_summary,
-            docstring_info=func_data.docstring_info,
             is_async=func_data.is_async,
             is_method=func_data.is_method,
             parent_class=func_data.parent_class,
@@ -288,7 +350,12 @@ class DocumentationOrchestrator:
         self,
         context: DocumentationContext,
         processing_result: ProcessingResult,
-        extraction_result: ExtractionResult,
+        docstring_data: DocstringData,
+        classes: List[ExtractedClass],
+        functions: List[ExtractedFunction],
+        variables: List[str],
+        constants: List[str],
+        module_docstring: Optional[str],
     ) -> DocumentationData:
         """
         Create DocumentationData from the given context and AI processing results.
@@ -296,22 +363,16 @@ class DocumentationOrchestrator:
         Args:
             context: The documentation context.
             processing_result: Result from AI documentation generation.
-            extraction_result: Result from code extraction.
+            docstring_data: Parsed docstring data.
+            classes: List of extracted classes.
+            functions: List of extracted functions.
+            variables: List of extracted variables.
+            constants: List of extracted constants.
+            module_docstring: The module-level docstring.
 
         Returns:
             DocumentationData: Structured documentation data.
         """
-        docstring_data = DocstringData(
-            summary=processing_result.content.get("summary", ""),
-            description=processing_result.content.get("description", ""),
-            args=processing_result.content.get("args", []),
-            returns=processing_result.content.get(
-                "returns", {"type": "None", "description": ""}
-            ),
-            raises=processing_result.content.get("raises", []),
-            complexity=int(extraction_result.maintainability_index or 1),
-        )
-
         return DocumentationData(
             module_name=str(context.metadata.get("module_name", "")),
             module_path=context.module_path,
@@ -320,19 +381,13 @@ class DocumentationOrchestrator:
             docstring_data=docstring_data,
             ai_content=processing_result.content,
             code_metadata={
-                "classes": (
-                    [cls.to_dict() for cls in context.classes]
-                    if context.classes
-                    else []
-                ),
-                "functions": (
-                    [func.to_dict() for func in context.functions]
-                    if context.functions
-                    else []
-                ),
-                "constants": context.constants or [],
-                "maintainability_index": extraction_result.maintainability_index,
-                "dependencies": extraction_result.dependencies,
+                "classes": [cls.__dict__ for cls in classes] if classes else [],
+                "functions": [func.__dict__ for func in functions] if functions else [],
+                "variables": variables or [],
+                "constants": constants or [],
+                "module_docstring": module_docstring,
+                "maintainability_index": None,
+                "dependencies": None,
             },
             glossary={},
             changes=[],
@@ -454,3 +509,18 @@ class DocumentationOrchestrator:
         """Exit the async context manager."""
         if self.ai_service:
             await self.ai_service.close()
+
+    def _validate_source_code(self, source_code: str) -> None:
+        """
+        Validates the source code for syntax errors.
+
+        Args:
+            source_code: The source code to validate.
+
+        Raises:
+            DocumentationError: If the source code has syntax errors.
+        """
+        try:
+            ast.parse(source_code)
+        except SyntaxError as e:
+            raise DocumentationError(f"Syntax error in source code: {e}")

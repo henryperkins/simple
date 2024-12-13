@@ -1,18 +1,3 @@
-"""
-Processes docstrings by parsing and validating them.
-
-This module provides methods to:
-- Parse raw docstrings from various formats.
-- Validate docstrings against a predefined schema.
-- Integrate docstrings into source code.
-- Generate documentation from parsed docstrings.
-
-Dependencies:
-- ast: Abstract Syntax Tree module for parsing Python code.
-- json: For JSON handling.
-- docstring_parser: For parsing Google-style docstrings.
-"""
-
 import ast
 import json
 from typing import Any, Dict, List, Union, Optional, Tuple, TYPE_CHECKING
@@ -27,17 +12,7 @@ from core.types.base import DocstringData
 
 
 class DocstringProcessor:
-    """
-    Processes docstrings by parsing, validating, and generating documentation from them.
-    """
-
     def __init__(self, metrics: Optional[Metrics] = None) -> None:
-        """
-        Initialize the DocstringProcessor.
-
-        Args:
-            metrics (Optional[Metrics]): The metrics instance for handling code metrics.
-        """
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.metrics = metrics or Injector.get("metrics_calculator")
         self.docstring_schema: Dict[str, Any] = {
@@ -80,17 +55,6 @@ class DocstringProcessor:
 
     @handle_error
     def __call__(self, docstring: Union[Dict[str, Any], str]) -> "DocstringData":
-        """Make the class callable to parse docstrings.
-
-        Args:
-            docstring: The docstring to parse, either as a string or a dictionary.
-
-        Returns:
-            DocstringData: A structured representation of the parsed docstring.
-
-        Raises:
-            DocumentationError: If parsing fails or the input is not in a recognized format.
-        """
         try:
             if isinstance(docstring, dict):
                 return self._create_docstring_data_from_dict(docstring)
@@ -104,69 +68,47 @@ class DocstringProcessor:
             self.logger.error(f"Unexpected error during parsing: {e}")
             raise
 
-    @handle_error
-    def parse(self, docstring: str) -> "DocstringData":
-        """
-        Parse a docstring from a string.
-
-        Args:
-            docstring: The docstring to parse.
-
-        Returns:
-            DocstringData: A structured representation of the parsed docstring.
-
-        Raises:
-            DocumentationError: If the docstring format is not recognized or parsing fails.
-        """
-        docstring_str = docstring.strip()
-        if docstring_str.startswith("{") and docstring_str.endswith("}"):
-            doc_dict = json.loads(docstring_str)
-            return self._create_docstring_data_from_dict(doc_dict)
+    def parse(self, docstring: Union[Dict[str, Any], str]) -> "DocstringData":
+        if isinstance(docstring, dict):
+            return self._create_docstring_data_from_dict(docstring)
         else:
-            parsed = parse_docstring(docstring)
-            if parsed is None:
-                raise DocumentationError("Failed to parse the provided docstring.")
-            return self._create_docstring_data_from_dict(
-                {
-                    "summary": parsed.short_description or "",
-                    "description": parsed.long_description or "",
-                    "args": [
-                        {
-                            "name": p.arg_name,
-                            "type": p.type_name or "Any",
-                            "description": p.description or "",
-                        }
-                        for p in parsed.params
-                    ],
-                    "returns": {
-                        "type": parsed.returns.type_name if parsed.returns else "Any",
-                        "description": (
-                            parsed.returns.description if parsed.returns else ""
-                        ),
-                    },
-                    "raises": [
-                        {"exception": e.type_name, "description": e.description}
-                        for e in (parsed.raises or [])
-                    ],
-                    "complexity": 1,
-                }
-            )
+            docstring_str = docstring.strip()
+            if docstring_str.startswith("{") and docstring_str.endswith("}"):
+                doc_dict = json.loads(docstring_str)
+                return self._create_docstring_data_from_dict(doc_dict)
+            else:
+                parsed = parse_docstring(docstring)
+                if parsed is None:
+                    raise DocumentationError("Failed to parse the provided docstring.")
+                return self._create_docstring_data_from_dict(
+                    {
+                        "summary": parsed.short_description or "",
+                        "description": parsed.long_description or "",
+                        "args": [
+                            {
+                                "name": p.arg_name,
+                                "type": p.type_name or "Any",
+                                "description": p.description or "",
+                            }
+                            for p in parsed.params
+                        ],
+                        "returns": {
+                            "type": parsed.returns.type_name if parsed.returns else "Any",
+                            "description": (
+                                parsed.returns.description if parsed.returns else ""
+                            ),
+                        },
+                        "raises": [
+                            {"exception": e.type_name, "description": e.description}
+                            for e in (parsed.raises or [])
+                        ],
+                        "complexity": 1,
+                    }
+                )
 
     def _create_docstring_data_from_dict(
         self, docstring_dict: Dict[str, Any]
     ) -> "DocstringData":
-        """
-        Create DocstringData from a dictionary representation.
-
-        Args:
-            docstring_dict: The dictionary containing docstring information.
-
-        Returns:
-            DocstringData: The structured docstring data.
-
-        Raises:
-            KeyError: If required keys are missing from the docstring dictionary.
-        """
         try:
             returns = docstring_dict.get("returns", {})
             if not isinstance(returns, dict):
@@ -194,18 +136,6 @@ class DocstringProcessor:
 
     @handle_error
     def validate(self, data: "DocstringData") -> Tuple[bool, List[str]]:
-        """
-        Validate the docstring data against a predefined schema.
-
-        Args:
-            data: The data to validate.
-
-        Returns:
-            Tuple[bool, List[str]]: A tuple containing a success flag and a list of validation errors.
-
-        Raises:
-            DocumentationError: If the validation process encounters any issues.
-        """
         errors = []
         required_fields = ["summary", "description", "args", "returns"]
 
@@ -227,18 +157,6 @@ class DocstringProcessor:
 
     @handle_error
     def format(self, data: "DocstringData") -> str:
-        """
-        Format the docstring data into a human-readable string.
-
-        Args:
-            data: The DocstringData object to format.
-
-        Returns:
-            str: The formatted docstring.
-
-        Raises:
-            DocumentationError: If formatting fails due to data issues.
-        """
         if not data.summary or not data.description:
             raise DocumentationError(
                 "Summary or description is missing for formatting."
@@ -249,19 +167,6 @@ class DocstringProcessor:
     async def process_batch(
         self, doc_entries: List[Dict[str, Any]], source_code: str
     ) -> Dict[str, str]:
-        """
-        Process a batch of docstring entries and integrate them into the source code.
-
-        Args:
-            doc_entries: The list of docstring entries to process.
-            source_code: The source code to integrate the docstrings into.
-
-        Returns:
-            Dict[str, str]: A dictionary containing the updated code and documentation.
-
-        Raises:
-            DocumentationError: If batch processing encounters any issues.
-        """
         try:
             tree = ast.parse(source_code)
             self.logger.debug(f"Processing {len(doc_entries)} documentation entries")
@@ -324,16 +229,6 @@ class DocstringProcessor:
     def _insert_docstrings(
         self, tree: ast.AST, doc_entries: List[Dict[str, Any]]
     ) -> Optional[ast.AST]:
-        """
-        Insert docstrings into the AST at relevant locations for each entry.
-
-        Args:
-            tree: The AST tree to process.
-            doc_entries: The processed docstring entries.
-
-        Returns:
-            Optional[ast.AST]: The updated AST with docstrings inserted, or None on failure.
-        """
         docstring_map = {
             entry["name"]: entry["docstring"]
             for entry in doc_entries
@@ -390,18 +285,6 @@ class DocstringProcessor:
         return new_tree
 
     def _generate_code_from_ast(self, tree: ast.AST) -> Optional[str]:
-        """
-        Generate source code from an AST.
-
-        Args:
-            tree: The AST representation of the code.
-
-        Returns:
-            Optional[str]: The generated source code, or None on failure.
-
-        Raises:
-            DocumentationError: If code generation from AST fails.
-        """
         try:
             if hasattr(ast, "unparse"):
                 return ast.unparse(tree)
@@ -414,15 +297,6 @@ class DocstringProcessor:
             raise DocumentationError(f"Failed to generate code from AST: {e}")
 
     def _generate_documentation(self, doc_entries: List[Dict[str, Any]]) -> str:
-        """
-        Generate markdown documentation from processed docstring entries.
-
-        Args:
-            doc_entries: The processed docstring entries.
-
-        Returns:
-            str: The generated markdown documentation.
-        """
         doc_parts = ["# API Documentation\n\n"]
 
         module_entry = next(
@@ -458,24 +332,10 @@ class DocstringProcessor:
         return "".join(doc_parts)
 
 
-# Utility functions
 @handle_error
 def handle_extraction_error(
     e: Exception, errors: List[str], context: str, correlation_id: str, **kwargs: Any
 ) -> None:
-    """
-    Handle extraction errors uniformly.
-
-    Args:
-        e: The exception that occurred.
-        errors: List to store error messages.
-        context: The context of the extraction operation.
-        correlation_id: The correlation ID for tracking related operations.
-        **kwargs: Additional context for logging.
-
-    Raises:
-        DocumentationError: If an error occurs during extraction with additional context.
-    """
     error_message = f"{context}: {str(e)}"
     errors.append(error_message)
 
