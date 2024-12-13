@@ -30,9 +30,7 @@ class ResponseParsingService:
 
     def __init__(self, correlation_id: Optional[str] = None) -> None:
         """Initialize the response parsing service."""
-        self.logger = CorrelationLoggerAdapter(
-            base_logger, extra={"correlation_id": correlation_id}
-        )
+        self.logger = CorrelationLoggerAdapter(base_logger)
         self.docstring_processor = DocstringProcessor()
         self.docstring_schema = self._load_schema("docstring_schema.json")
         self.function_schema = self._load_schema("function_tools_schema.json")
@@ -56,9 +54,9 @@ class ResponseParsingService:
             schema_path = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "schemas", schema_name
             )
-            with open(schema_path, "r", encoding="utf-8") as f:
+            with open(schema_path, "r") as f:
                 return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
+        except Exception as e:
             self.logger.error(f"Error loading schema {schema_name}: {e}")
             return {}
 
@@ -104,17 +102,6 @@ class ResponseParsingService:
     ) -> "ParsedResponse":
         """
         Parses the AI model response and returns a ParsedResponse object.
-
-        This method handles the parsing of AI responses, including validation against
-        specified schemas. It also manages fallback responses when parsing fails.
-
-        Args:
-            response (Dict[str, Any]): The raw response from the AI model.
-            expected_format (str): The expected format of the content, defaults to "docstring".
-            validate_schema (bool): Whether to validate the content against a schema, defaults to True.
-
-        Returns:
-            ParsedResponse: An object containing the parsed content, metadata, and validation results.
         """
         try:
             self.logger.debug(f"Raw response: {response}")
@@ -148,24 +135,37 @@ class ResponseParsingService:
 
             message = response["choices"][0]["message"]
 
-            if "function_call" in message:
-                content_str = message["function_call"].get("arguments", "")
-                try:
-                    content = json.loads(content_str)
-                except json.JSONDecodeError:
-                    content = content_str
-                    self.logger.warning(
-                        "Failed to parse arguments as JSON, treating as string"
+            if "tool_calls" in message and message["tool_calls"]:
+                tool_call = message["tool_calls"][0]
+                if "function" in tool_call:
+                    content_str = tool_call["function"].get("arguments", "")
+                    try:
+                        content = json.loads(content_str)
+                    except json.JSONDecodeError:
+                        content = content_str
+                        self.logger.warning(
+                            "Failed to parse arguments as JSON, treating as string"
+                        )
+                else:
+                    self.logger.warning("Missing 'function' in tool_calls.")
+                    fallback_content = self._create_fallback_response()
+                    return ParsedResponse(
+                        content=fallback_content,
+                        format_type=expected_format,
+                        parsing_time=0.0,
+                        validation_success=False,
+                        errors=["Missing 'function' in tool_calls."],
+                        metadata={},
                     )
             else:
-                self.logger.warning("Missing 'function_call' in response.")
+                self.logger.warning("Missing 'tool_calls' in response.")
                 fallback_content = self._create_fallback_response()
                 return ParsedResponse(
                     content=fallback_content,
                     format_type=expected_format,
                     parsing_time=0.0,
                     validation_success=False,
-                    errors=["Missing 'function_call' in response."],
+                    errors=["Missing 'tool_calls' in response."],
                     metadata={},
                 )
 
@@ -190,7 +190,7 @@ class ResponseParsingService:
             )
         except Exception as e:
             self.logger.error(f"Error parsing response: {e}")
-            # Return a fallback ParsedResponse when parsing fails
+            # Optionally, return a fallback ParsedResponse here as well
             fallback_content = self._create_fallback_response()
             return ParsedResponse(
                 content=fallback_content,
@@ -350,13 +350,6 @@ class ResponseParsingService:
     ) -> Tuple[bool, List[str]]:
         """
         Validate the content against the appropriate schema.
-
-        Args:
-            content: The content to validate
-            format_type: The type of format to validate against
-
-        Returns:
-            Tuple containing validation success status and list of validation errors
         """
         validation_errors = []
         try:
@@ -369,10 +362,15 @@ class ResponseParsingService:
                 if not self.function_schema:
                     validation_errors.append("Function schema not loaded")
                     return False, validation_errors
-                validate(instance=content, schema=self.function_schema)
-
+                if self.function_schema.get("strict", False):
+                    validate(
+                        instance=content, schema=self.function_schema["parameters"]
+                    )
+                else:
+                    validate(
+                        instance=content, schema=self.function_schema["parameters"]
+                    )
             return True, validation_errors
-
         except ValidationError as e:
             validation_errors.append(str(e))
         except Exception as e:

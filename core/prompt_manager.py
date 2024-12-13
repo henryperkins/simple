@@ -25,7 +25,7 @@ class PromptManager:
         self.docstring_processor = Injector.get("docstring_processor")
 
         # Load the function schema from a file
-        schema_path = Path(__file__).parent / "function_schema.json"
+        schema_path = Path(__file__).parent / "function_tools_schema.json"
         try:
             with open(schema_path, "r") as f:
                 self._function_schema = json.load(f)

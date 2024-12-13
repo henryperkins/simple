@@ -244,15 +244,30 @@ class DocumentationOrchestrator:
                     f"Docstring validation failed: {', '.join(validation_errors)}"
                 )
 
-            documentation_data = self._create_documentation_data(
-                context,
-                processing_result,
-                docstring_data,
-                classes,
-                functions,
-                variables,
-                constants,
-                module_docstring,
+            documentation_data = DocumentationData(
+                module_name=(
+                    str(context.metadata.get("module_name", "")) if context.metadata else ""
+                ),
+                module_path=context.module_path,
+                module_summary=str(processing_result.content.get("summary", "")),
+                source_code=context.source_code,
+                docstring_data=docstring_data,
+                ai_content=processing_result.content,
+                code_metadata={
+                    "classes": [cls.__dict__ for cls in classes] if classes else [],
+                    "functions": [func.__dict__ for func in functions] if functions else [],
+                    "variables": variables or [],
+                    "constants": constants or [],
+                    "module_docstring": module_docstring,
+                    "maintainability_index": None,
+                    "dependencies": None,
+                },
+                glossary={},
+                changes=[],
+                complexity_scores={},
+                metrics={},
+                validation_status=False,
+                validation_errors=[],
             )
 
             markdown_doc = self.markdown_generator.generate(documentation_data)
@@ -297,204 +312,6 @@ class DocumentationOrchestrator:
         except SyntaxError as e:
             raise DocumentationError(f"Syntax error in source code: {e}")
         # Add more validation checks as needed
-
-    def _create_extraction_context(
-        self, context: DocumentationContext
-    ) -> ExtractionContext:
-        """
-        Create an extraction context from the given documentation context.
-
-        Args:
-            context: Documentation context to extract from.
-
-        Returns:
-            ExtractionContext: Context for code extraction.
-        """
-        return ExtractionContext(
-            module_name=(
-                context.metadata.get("module_name", context.module_path.stem)
-                if context.metadata
-                else context.module_path.stem
-            ),
-            source_code=context.source_code,
-            base_path=context.module_path,
-            metrics_enabled=True,
-            include_private=False,
-            include_magic=False,
-            include_nested=True,
-            include_source=True,
-        )
-
-    def _create_extracted_class(self, cls_data: ExtractedClass) -> ExtractedClass:
-        """
-        Creates an ExtractedClass instance from extracted data.
-
-        Args:
-            cls_data: Extracted class data.
-
-        Returns:
-            ExtractedClass: A formatted ExtractedClass instance.
-        """
-        return ExtractedClass(
-            name=cls_data.name,
-            lineno=cls_data.lineno,
-            source=cls_data.source,
-            docstring=cls_data.docstring,
-            metrics=MetricData(**cls_data.metrics),
-            dependencies=cls_data.dependencies,
-            decorators=cls_data.decorators,
-            complexity_warnings=cls_data.complexity_warnings,
-            methods=cls_data.methods,
-            attributes=cls_data.attributes,
-            instance_attributes=cls_data.instance_attributes,
-            bases=cls_data.bases,
-            metaclass=cls_data.metaclass,
-            is_exception=cls_data.is_exception,
-        )
-
-    def _create_extracted_function(
-        self, func_data: ExtractedFunction
-    ) -> ExtractedFunction:
-        """
-        Creates an ExtractedFunction instance from extracted data.
-
-        Args:
-            func_data: Extracted function data.
-
-        Returns:
-            ExtractedFunction: A formatted ExtractedFunction instance.
-        """
-        return ExtractedFunction(
-            name=func_data.name,
-            lineno=func_data.lineno,
-            source=func_data.source,
-            docstring=func_data.docstring,
-            metrics=MetricData(**func_data.metrics),
-            dependencies=func_data.dependencies,
-            decorators=func_data.decorators,
-            complexity_warnings=func_data.complexity_warnings,
-            args=[ExtractedArgument(**arg) for arg in func_data.args],
-            returns=func_data.returns,
-            raises=func_data.raises,
-            body_summary=func_data.body_summary,
-            is_async=func_data.is_async,
-            is_method=func_data.is_method,
-            parent_class=func_data.parent_class,
-        )
-
-    def _map_to_extracted_class(self, cls_dict: Dict[str, Any]) -> ExtractedClass:
-        return ExtractedClass(
-            name=cls_dict.get("name", "Unknown"),
-            lineno=cls_dict.get("lineno", 0),
-            source=cls_dict.get("source", ""),
-            docstring=cls_dict.get("docstring", ""),
-            metrics=MetricData(**cls_dict.get("metrics", {})),
-            dependencies=cls_dict.get("dependencies", {}),
-            decorators=cls_dict.get("decorators", []),
-            complexity_warnings=cls_dict.get("complexity_warnings", []),
-            methods=[
-                self._map_to_extracted_function(method)
-                for method in cls_dict.get("methods", [])
-            ],
-            attributes=cls_dict.get("attributes", []),
-            instance_attributes=cls_dict.get("instance_attributes", []),
-            bases=cls_dict.get("bases", []),
-            metaclass=cls_dict.get("metaclass", None),
-            is_exception=cls_dict.get("is_exception", False),
-        )
-
-    def _map_to_extracted_function(
-        self, func_dict: Dict[str, Any]
-    ) -> ExtractedFunction:
-        return ExtractedFunction(
-            name=func_dict.get("name", "Unknown"),
-            lineno=func_dict.get("lineno", 0),
-            source=func_dict.get("source", ""),
-            docstring=func_dict.get("docstring", ""),
-            metrics=MetricData(**func_dict.get("metrics", {})),
-            dependencies=func_dict.get("dependencies", {}),
-            decorators=func_dict.get("decorators", []),
-            complexity_warnings=func_dict.get("complexity_warnings", []),
-            args=[ExtractedArgument(**arg) for arg in func_dict.get("args", [])],
-            returns=func_dict.get("returns", {"type": "Any", "description": ""}),
-            raises=func_dict.get("raises", []),
-            body_summary=func_dict.get("body_summary", ""),
-            is_async=func_dict.get("is_async", False),
-            is_method=func_dict.get("is_method", False),
-            parent_class=func_dict.get("parent_class", None),
-        )
-
-    def _create_documentation_data(
-        self,
-        context: DocumentationContext,
-        processing_result: ProcessingResult,
-        docstring_data: DocstringData,
-        classes: List[ExtractedClass],
-        functions: List[ExtractedFunction],
-        variables: List[Dict[str, Any]],
-        constants: List[Dict[str, Any]],
-        module_docstring: Dict[str, Any] | None,
-    ) -> DocumentationData:
-        """
-        Create DocumentationData from the given context and AI processing results.
-
-        Args:
-            context: The documentation context.
-            processing_result: Result from AI documentation generation.
-            docstring_data: Parsed docstring data.
-            classes: List of extracted classes.
-            functions: List of extracted functions.
-            variables: List of extracted variables.
-            constants: List of extracted constants.
-            module_docstring: The module-level docstring.
-
-        Returns:
-            DocumentationData: Structured documentation data.
-        """
-        return DocumentationData(
-            module_name=(
-                str(context.metadata.get("module_name", "")) if context.metadata else ""
-            ),
-            module_path=context.module_path,
-            module_summary=str(processing_result.content.get("summary", "")),
-            source_code=context.source_code,
-            docstring_data=docstring_data,
-            ai_content=processing_result.content,
-            code_metadata={
-                "classes": [cls.__dict__ for cls in classes] if classes else [],
-                "functions": [func.__dict__ for func in functions] if functions else [],
-                "variables": variables or [],
-                "constants": constants or [],
-                "module_docstring": module_docstring,
-                "maintainability_index": None,
-                "dependencies": None,
-            },
-            glossary={},
-            changes=[],
-            complexity_scores={},
-            metrics={},
-            validation_status=False,
-            validation_errors=[],
-        )
-
-    def _validate_documentation_data(
-        self, documentation_data: DocumentationData
-    ) -> None:
-        """
-        Validates the provided documentation data for completeness.
-
-        Args:
-            documentation_data: The documentation data to validate.
-
-        Raises:
-            DocumentationError: If the documentation data is incomplete or invalid.
-        """
-        # Accessing protected method for internal use
-        if not self.markdown_generator._has_complete_information(documentation_data):
-            self.logger.warning(
-                "Documentation generated with missing information",
-                extra={"correlation_id": self.correlation_id},
-            )
 
     async def generate_module_documentation(
         self, file_path: Path, output_dir: Path, source_code: Optional[str] = None
