@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 import json
+from jinja2 import Environment, FileSystemLoader
 
 from core.types.base import ExtractedClass, ExtractedFunction, DocstringData, Injector
 from utils import handle_error
@@ -29,17 +30,29 @@ class PromptManager:
         try:
             with open(schema_path, "r") as f:
                 self._function_schema = json.load(f)
+                self.logger.info(f"Function schema loaded from {schema_path}")
         except FileNotFoundError:
             self.logger.error(
                 "Function schema file not found", extra={"path": str(schema_path)}
             )
             raise
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             self.logger.error(
-                "Failed to parse JSON in function schema file",
-                extra={"path": str(schema_path)},
+                f"Failed to parse JSON in function schema file {schema_path}: {e}",
+                exc_info=True
             )
             raise
+        # Setup Jinja2 environment
+        template_dir = Path(__file__).parent
+        self.env = Environment(loader=FileSystemLoader(template_dir))
+        try:
+            self.env.get_template("documentation_prompt.txt")
+            self.logger.info("Template 'documentation_prompt.txt' loaded successfully.")
+            self.env.get_template("code_analysis_prompt.txt")
+            self.logger.info("Template 'code_analysis_prompt.txt' loaded successfully.")
+        except Exception as e:
+             self.logger.error(f"Error loading template file : {e}", exc_info=True)
+             raise
 
     @handle_error
     async def create_documentation_prompt(
@@ -75,38 +88,17 @@ class PromptManager:
                 "Module name, file path, and source code are required for prompt generation."
             )
 
-        prompt = (
-            f"Objective: Generate comprehensive Google-style documentation for the following Python module.\n\n"
-            f"Context: This module is part of a larger system aimed at providing AI-driven solutions. "
-            f"Consider the target audience as developers who will use this documentation to understand and maintain the code. "
-            f"Ensure the documentation is detailed enough to facilitate onboarding and maintenance.\n\n"
-            f"Module Name: {module_name}\n"
-            f"File Path: {file_path}\n\n"
-            "Code Structure:\n\n"
+        template = self.env.get_template("documentation_prompt.txt")
+        prompt = template.render(
+            module_name=module_name,
+            file_path=file_path,
+            source_code=source_code,
+            classes=classes,
+            functions=functions,
+            _format_class_info=self._format_class_info,
+            _format_function_info=self._format_function_info,
         )
-
-        if classes:
-            prompt += "Classes:\n"
-            for cls in classes:
-                class_info = await self._format_class_info(cls)
-                prompt += class_info
-            prompt += "\n"
-
-        if functions:
-            prompt += "Functions:\n"
-            for func in functions:
-                func_info = await self._format_function_info(func)
-                prompt += func_info
-            prompt += "\n"
-
-        prompt += (
-            "Source Code:\n"
-            f"{source_code}\n\n"
-            "Analyze the code and generate comprehensive Google-style documentation. "
-            "Include a brief summary, detailed description, arguments, return values, and possible exceptions. "
-            "Ensure all descriptions are clear and technically accurate. "
-            "If any information is missing or cannot be determined, explicitly state that it is not available."
-        )
+        prompt += "\n\nPlease respond with a JSON object that matches the schema defined in the function parameters."
 
         self.logger.debug("Documentation prompt created successfully")
         return prompt
@@ -129,33 +121,14 @@ class PromptManager:
         if not code:
             raise ValueError("Source code is required for prompt generation.")
 
-        prompt = (
-            "Objective: Analyze the following code for quality and provide specific improvements.\n\n"
-            "Context: This code is part of a critical system component where performance and reliability are paramount. "
-            "Consider historical issues such as performance bottlenecks and error handling failures. "
-            "The analysis should help in identifying potential risks and areas for optimization.\n\n"
-            f"Code:\n{code}\n\n"
-            "Consider the following aspects:\n"
-            "1. Code complexity and readability\n"
-            "2. Best practices and design patterns\n"
-            "3. Error handling and edge cases\n"
-            "4. Performance considerations\n"
-            "5. Documentation completeness\n\n"
-            "Examples of good practices include:\n"
-            "- Clear variable naming that enhances readability.\n"
-            "- Efficient algorithms that improve performance.\n"
-            "Avoid:\n"
-            "- Deep nesting that complicates understanding.\n"
-            "- Lack of error handling that could lead to failures.\n\n"
-            "Provide specific examples of improvements where applicable, and suggest alternative approaches or refactorings. "
-            "If any information is missing or cannot be determined, explicitly state that it is not available."
-        )
+        template = self.env.get_template("code_analysis_prompt.txt")
+        prompt = template.render(code=code)
 
         self.logger.debug("Code analysis prompt created successfully")
         return prompt
 
     @handle_error
-    async def _format_function_info(self, func: ExtractedFunction) -> str:
+    def _format_function_info(self, func: ExtractedFunction) -> str:
         """Format function information for prompt.
 
         Args:
@@ -202,7 +175,7 @@ class PromptManager:
         return formatted_info
 
     @handle_error
-    async def _format_class_info(self, cls: ExtractedClass) -> str:
+    def _format_class_info(self, cls: ExtractedClass) -> str:
         """Format class information for prompt.
 
         Args:
@@ -217,7 +190,7 @@ class PromptManager:
         self.logger.debug(f"Formatting class info for: {cls.name}")
 
         if not cls.name:
-            raise ValueValueError("Class name is required to format class information.")
+            raise ValueError("Class name is required to format class information.")
 
         methods_str = "\n    ".join(
             f"- {m.name}({', '.join(a.name for a in m.args)})" for m in cls.methods
@@ -267,41 +240,5 @@ class PromptManager:
         return {
             "name": "generate_docstring",
             "description": "Generates structured documentation from source code.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "summary": {"type": "string"},
-                    "description": {"type": "string"},
-                    "args": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string"},
-                                "type": {"type": "string"},
-                                "description": {"type": "string"},
-                            },
-                        },
-                    },
-                    "returns": {
-                        "type": "object",
-                        "properties": {
-                            "type": {"type": "string"},
-                            "description": {"type": "string"},
-                        },
-                    },
-                    "raises": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "exception": {"type": "string"},
-                                "description": {"type": "string"},
-                            },
-                        },
-                    },
-                    "complexity": {"type": "integer"},
-                },
-                "required": ["summary", "description"],
-            },
+            "parameters": self._function_schema["function"]["parameters"]
         }

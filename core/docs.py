@@ -233,10 +233,12 @@ class DocumentationOrchestrator:
             )
 
             # Process and validate the docstring
-            docstring_data = self.docstring_processor(parsed_response.content)
-            is_valid, validation_errors = self.docstring_processor.validate(
-                docstring_data
-            )
+            docstring_data = self.docstring_processor.parse(parsed_response.content)
+            #is_valid, validation_errors = self.docstring_processor.validate( # REMOVED
+            #    docstring_data
+            #)
+            is_valid = parsed_response.validation_success
+            validation_errors = parsed_response.errors
             self.logger.info(f"Docstring validation status: {is_valid}")
 
             if not is_valid:
@@ -267,7 +269,7 @@ class DocumentationOrchestrator:
                 complexity_scores={},
                 metrics={},
                 validation_status=False,
-                validation_errors=[],
+                validation_errors=validation_errors,
             )
 
             markdown_doc = self.markdown_generator.generate(documentation_data)

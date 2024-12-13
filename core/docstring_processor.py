@@ -1,5 +1,6 @@
 import ast
 import json
+import os
 from typing import Any, Dict, List, Union, Optional, Tuple, TYPE_CHECKING
 from docstring_parser import parse as parse_docstring
 
@@ -15,43 +16,27 @@ class DocstringProcessor:
     def __init__(self, metrics: Optional[Metrics] = None) -> None:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
         self.metrics = metrics or Injector.get("metrics_calculator")
-        self.docstring_schema: Dict[str, Any] = {
-            "type": "object",
-            "properties": {
-                "summary": {"type": "string"},
-                "description": {"type": "string"},
-                "args": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "type": {"type": "string"},
-                            "description": {"type": "string"},
-                        },
-                    },
-                },
-                "returns": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"type": "string"},
-                        "description": {"type": "string"},
-                    },
-                },
-                "raises": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "exception": {"type": "string"},
-                            "description": {"type": "string"},
-                        },
-                    },
-                },
-                "complexity": {"type": "integer"},
-            },
-            "required": ["summary", "description", "args", "returns"],
-        }
+        self.docstring_schema: Dict[str, Any] = self._load_schema("docstring_schema.json")
+
+    def _load_schema(self, schema_name: str) -> Dict[str, Any]:
+        """Load a JSON schema for validation."""
+        try:
+            schema_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "schemas", schema_name
+            )
+            with open(schema_path, "r") as f:
+                schema = json.load(f)
+                self.logger.info(f"Schema '{schema_name}' loaded successfully.")
+                return schema
+        except FileNotFoundError:
+            self.logger.error(f"Schema file '{schema_name}' not found.")
+            raise
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse JSON in '{schema_name}': {e}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Error loading schema '{schema_name}': {e}")
+            raise
 
     @handle_error
     def __call__(self, docstring: Union[Dict[str, Any], str]) -> "DocstringData":
@@ -86,13 +71,6 @@ class DocstringProcessor:
                 return self._create_docstring_data_from_dict(docstring)
             
             docstring_str = str(docstring).strip()
-            if docstring_str.startswith("{") and docstring_str.endswith("}"):
-                try:
-                    doc_dict = json.loads(docstring_str)
-                    self.logger.debug("Successfully parsed JSON from string docstring")
-                    return self._create_docstring_data_from_dict(doc_dict)
-                except json.JSONDecodeError:
-                    self.logger.warning("Failed to parse JSON from docstring string")
             
             # Parse with docstring_parser
             parsed = parse_docstring(docstring_str)
@@ -162,33 +140,6 @@ class DocstringProcessor:
             raise DocumentationError(f"Docstring dictionary missing keys: {e}")
 
     @handle_error
-    def validate(self, data: "DocstringData") -> Tuple[bool, List[str]]:
-        errors = []
-        if not data.summary:
-            errors.append("Summary is missing.")
-        if not data.description:
-            errors.append("Description is missing.")
-        if not isinstance(data.args, list):
-            errors.append("Args should be a list.")
-        if not isinstance(data.returns, dict):
-            errors.append("Returns should be a dictionary.")
-        if not isinstance(data.raises, list):
-            errors.append("Raises should be a list.")
-        if not isinstance(data.complexity, int):
-            errors.append("Complexity should be an integer.")
-
-        is_valid = len(errors) == 0
-        return is_valid, errors
-
-    @handle_error
-    def format(self, data: "DocstringData") -> str:
-        if not data.summary or not data.description:
-            raise DocumentationError(
-                "Summary or description is missing for formatting."
-            )
-        return f"{data.summary}\n\n{data.description}"
-
-    @handle_error
     async def process_batch(
         self, doc_entries: List[Dict[str, Any]], source_code: str
     ) -> Dict[str, str]:
@@ -196,16 +147,16 @@ class DocstringProcessor:
             tree = ast.parse(source_code)
             self.logger.debug(f"Processing {len(doc_entries)} documentation entries")
 
-            processed_entries: List[Dict[str, Any]] = []
+            processed_entries: List [Dict[str, Any]] = []
             for entry in doc_entries:
                 try:
-                    if "summary" in entry and "name" not in entry:
+                   if "summary" in entry and "name" not in entry:
                         for node in ast.walk(tree):
                             if isinstance(
                                 node,
                                 (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef),
                             ):
-                                docstring = self.format(DocstringData(**entry))
+                                docstring =  DocstringData(**entry).__dict__
                                 processed_entries.append(
                                     {
                                         "name": node.name,
@@ -217,9 +168,9 @@ class DocstringProcessor:
                                     f"Created processed entry for {node.name}"
                                 )
                                 break
-                    else:
+                   else:
                         if "docstring" not in entry and "summary" in entry:
-                            entry["docstring"] = self.format(DocstringData(**entry))
+                            entry["docstring"] = DocstringData(**entry).__dict__
                         processed_entries.append(entry)
                         self.logger.debug(f"Added entry with name: {entry.get('name')}")
 

@@ -3,6 +3,7 @@ import asyncio
 from urllib.parse import urljoin
 
 import aiohttp
+import json
 
 from core.config import AIConfig
 from core.console import print_info, print_error, print_warning
@@ -50,7 +51,7 @@ class AIService:
         self.token_manager = TokenManager(
             model=self.config.model,
             config=self.config,
-            correlation_id=self.correlation_id,
+            correlation_id=correlation_id,
         )
         self.semaphore = asyncio.Semaphore(10)  # Default semaphore value
         self._client = None
@@ -115,9 +116,11 @@ class AIService:
 
             # Process and validate the parsed response
             docstring_data = self.docstring_processor.parse(parsed_response.content)
-            is_valid, validation_errors = self.docstring_processor.validate(
-                docstring_data
-            )
+            #is_valid, validation_errors = self.docstring_processor.validate( # REMOVED
+            #    docstring_data
+            #)
+            is_valid = parsed_response.validation_success
+            validation_errors = parsed_response.errors
             self.logger.info(f"Docstring validation status: {is_valid}")
 
             if not is_valid:
@@ -213,6 +216,15 @@ class AIService:
                 if self._client is None:
                     await self.start()
 
+                self.logger.debug(
+                    f"API call attempt {attempt + 1}, URL: {url}",
+                    extra={
+                        "correlation_id": self.correlation_id,
+                        "request_headers": headers,
+                        "request_body": json.dumps(request_params),
+                    },
+                )
+
                 async with self._client.post(
                     url,
                     headers=headers,
@@ -220,7 +232,12 @@ class AIService:
                     timeout=aiohttp.ClientTimeout(total=self.config.timeout),
                 ) as response:
                     if response.status == 200:
-                        return await response.json()
+                        response_json = await response.json()
+                        self.logger.debug(
+                            f"API call successful, response: {json.dumps(response_json)}",
+                            extra={"correlation_id": self.correlation_id},
+                        )
+                        return response_json
                     else:
                         error_text = await response.text()
                         self.logger.error(

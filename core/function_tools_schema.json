@@ -25,7 +25,8 @@
                         },
                         "required": ["name", "type", "description"]
                     },
-                    "description": "A list of arguments, each with a name, type, and description."
+                    "description": "A list of arguments, each with a name, type, and description.",
+                     "default": []
                 },
                 "returns": {
                     "type": "object",
@@ -46,14 +47,16 @@
                         },
                         "required": ["exception", "description"]
                     },
-                    "description": "A list of exceptions that may be raised, each with a type and description."
+                    "description": "A list of exceptions that may be raised, each with a type and description.",
+                    "default": []
                 },
                 "complexity": {
                     "type": "integer",
-                    "description": "McCabe complexity score"
+                    "description": "McCabe complexity score",
+                    "default": 1
                 }
             },
-            "required": ["summary", "description", "args", "returns", "raises", "complexity"]
+            "required": ["summary", "description", "returns"]
         }
     }
 }

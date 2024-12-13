@@ -88,8 +88,12 @@ class ResponseParsingService:
                         self.logger.warning("JSON decoding failed: %s", json_error)
                 parsed_content = self.docstring_processor.parse(response)
                 return parsed_content.__dict__ if parsed_content else None
-            self.logger.error(f"Unsupported response type: {type(response)}")
-            return None
+            elif response is None:
+                self.logger.warning("Received none response.")
+                return None
+            else:
+                self.logger.error(f"Unsupported response type: {type(response)}")
+                return None
         except Exception as e:
             self.logger.error(f"Failed to parse docstring response: {e}", exc_info=True)
             return None
@@ -266,12 +270,19 @@ class ResponseParsingService:
                 if not self.docstring_schema:
                     self.logger.error("Docstring schema not loaded")
                     return False
-                validate(instance=content, schema=self.docstring_schema["schema"])
+                validate(instance=content, schema=self.docstring_schema)
             elif format_type == "function":
                 if not self.function_schema:
                     self.logger.error("Function schema not loaded")
                     return False
-                validate(instance=content, schema=self.function_schema["schema"])
+                if self.function_schema.get("strict", False):
+                    validate(
+                        instance=content, schema=self.function_schema["parameters"]
+                    )
+                else:
+                    validate(
+                        instance=content, schema=self.function_schema["parameters"]
+                    )
             self.logger.debug("Schema validation successful")
             return True
         except ValidationError as e:
