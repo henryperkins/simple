@@ -7,7 +7,7 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 
 import ast
 import uuid
-from typing import Any, Optional, Dict, List, Union
+from typing import Any, Optional, Dict, List, Union, Set
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics import Metrics
@@ -347,8 +347,11 @@ class ClassExtractor:
                 source=source,
                 docstring=docstring,
                 metrics=MetricData(),  # Will be populated below
-                dependencies=(self.context.dependency_analyzer.analyze_dependencies(node)
-                              if self.context.dependency_analyzer else {}),
+                dependencies=(
+                    self.context.dependency_analyzer.analyze_dependencies(node)
+                    if self.context.dependency_analyzer
+                    else set()
+                ),
                 decorators=self._extract_decorators(node),
                 complexity_warnings=[],
                 ast_node=node,

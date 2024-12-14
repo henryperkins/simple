@@ -33,7 +33,6 @@ from core.cache import Cache
 from core.config import Config, AppConfig, AIConfig, ModelConfig
 from core.console import (
     display_code_snippet,
-    setup_logging,
     print_status,
     print_error,
     print_success,
@@ -90,7 +89,6 @@ __all__ = [
     "AIConfig",
     "ModelConfig",
     "display_code_snippet",
-    "setup_logging",
     "print_status",
     "print_error",
     "print_success",

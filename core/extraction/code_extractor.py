@@ -28,6 +28,7 @@ from utils import (
 )
 from core.console import display_metrics, create_progress
 from core.exceptions import ProcessingError, ExtractionError
+from rich.progress import Progress
 
 
 class CodeExtractor:
@@ -51,12 +52,13 @@ class CodeExtractor:
             extra={"correlation_id": self.correlation_id},
         )
         self.context = context
-        self.metrics_collector = Injector.get("metrics_collector")
-        self.metrics = Injector.get("metrics_calculator")
-        self.docstring_processor = Injector.get("docstring_processor")
-        self.function_extractor = Injector.get("function_extractor")
-        self.class_extractor = Injector.get("class_extractor")
-        self.dependency_analyzer = Injector.get("dependency_analyzer")
+        self.metrics_collector: MetricsCollector = Injector.get("metrics_collector")
+        self.metrics: Metrics = Injector.get("metrics_calculator")
+        self.docstring_processor: DocstringProcessor = Injector.get("docstring_processor")
+        self.function_extractor: FunctionExtractor = Injector.get("function_extractor")
+        self.class_extractor: ClassExtractor = Injector.get("class_extractor")
+        self.dependency_analyzer: DependencyAnalyzer = Injector.get("dependency_analyzer")
+        self.progress: Optional[Progress] = None
 
     async def extract_code(self, source_code: str) -> ExtractionResult:
         """
@@ -80,25 +82,21 @@ class CodeExtractor:
         module_metrics.module_name = module_name
         try:
             # Initialize progress tracking
-            self.metrics_collector.start_progress(
-                module_name, len(source_code.splitlines())
+            self.progress = create_progress()
+            task_id = self.progress.add_task(
+                f"Extracting code elements from {module_name}",
+                total=len(source_code.splitlines()),
             )
-            
-            tree = ast.parse(source_code)
-            # Update progress
-            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
+            self.progress.start()
 
+            tree = ast.parse(source_code)
+            self.progress.update(task_id, advance=1, description="Validating source code...")
             self._validate_source_code(source_code)
 
-            
-            # Update progress
-            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
-
+            self.progress.update(task_id, advance=1, description="Analyzing dependencies...")
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
             
-            # Update progress
-            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
-
+            self.progress.update(task_id, advance=1, description="Extracting classes...")
             classes = await self.class_extractor.extract_classes(
                 tree
             )
@@ -107,9 +105,7 @@ class CodeExtractor:
                 [cls for cls in classes if cls.docstring_info]
             )
 
-            # Update progress
-            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
-
+            self.progress.update(task_id, advance=1, description="Extracting functions...")
             functions = await self.function_extractor.extract_functions(
                 tree
             )
@@ -117,16 +113,17 @@ class CodeExtractor:
             module_metrics.scanned_functions = len(
                 [func for func in functions if func.docstring_info]
             )
-            # Update progress
-            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
-            variables = self._extract_variables(tree)
-            # Update progress
-            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
-            constants = self._extract_constants(tree)
-            # Update progress
-            self.metrics_collector.update_progress(module_name, 0, 0, 0, 0)
-            module_docstring = self._extract_module_docstring(tree)
 
+            self.progress.update(task_id, advance=1, description="Extracting variables...")
+            variables = self.extract_variables(tree)
+
+            self.progress.update(task_id, advance=1, description="Extracting constants...")
+            constants = self.extract_constants(tree)
+
+            self.progress.update(task_id, advance=1, description="Extracting module docstring...")
+            module_docstring = self.extract_module_docstring(tree)
+
+            self.progress.update(task_id, advance=1, description="Calculating metrics...")
             module_metrics = self.metrics.calculate_metrics(source_code, module_name)
 
             # Display extraction metrics
@@ -188,7 +185,9 @@ class CodeExtractor:
             )
             raise ExtractionError(f"Unexpected error during extraction: {e}") from e
         finally:
-            self.metrics_collector.stop_progress()
+            if self.progress:
+                self.progress.stop()
+                self.progress = None
 
     def _validate_source_code(self, source_code: str) -> None:
         """
@@ -205,7 +204,7 @@ class CodeExtractor:
         except SyntaxError as e:
             raise ProcessingError(f"Syntax error in source code: {e}")
 
-    def _extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:
+    def extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:
         """
         Extract variables from the AST.
 
@@ -229,7 +228,7 @@ class CodeExtractor:
                         )
         return variables
 
-    def _extract_constants(self, tree: ast.AST) -> List[Dict[str, Any]]:
+    def extract_constants(self, tree: ast.AST) -> List[Dict[str, Any]]:
         """
         Extract constants from the AST.
 
@@ -268,16 +267,11 @@ class CodeExtractor:
         elif isinstance(node, ast.Name):
             return node.id
         elif isinstance(node, ast.List):
-            return "[{}]".format(", ".join(self._get_value(elt) for elt in node.elts))
+            return f"[{', '.join(self._get_value(elt) for elt in node.elts)}]"
         elif isinstance(node, ast.Tuple):
-            return "({})".format(", ".join(self._get_value(elt) for elt in node.elts))
+            return f"({', '.join(self._get_value(elt) for elt in node.elts)})"
         elif isinstance(node, ast.Dict):
-            return "{{{}}}".format(
-                ", ".join(
-                    f"{self._get_value(k)}: {self._get_value(v)}"
-                    for k, v in zip(node.keys, node.values)
-                )
-            )
+            return f"{{{', '.join(f'{self._get_value(k)}: {self._get_value(v)}' for k, v in zip(node.keys, node.values))}}}"
         elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
             return "-" + self._get_value(node.operand)
         elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
@@ -295,7 +289,7 @@ class CodeExtractor:
         else:
             return "N/A"
 
-    def _extract_module_docstring(self, tree: ast.AST) -> Dict[str, Any]:
+    def extract_module_docstring(self, tree: ast.AST) -> Dict[str, Any]:
         """
         Extract the module-level docstring.
 

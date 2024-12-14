@@ -14,9 +14,10 @@ Note:
 
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Optional, Tuple
 from datetime import datetime
 import ast
+import time
 
 # Group imports from core package
 from core.docstring_processor import DocstringProcessor
@@ -26,19 +27,11 @@ from core.markdown_generator import MarkdownGenerator
 from core.ai_service import AIService
 from core.prompt_manager import PromptManager
 from core.types.base import (
-    DocstringData,
     DocumentationContext,
     DocumentationData,
-    ExtractionContext,
-    ExtractedClass,
-    ExtractedFunction,
-    ProcessingResult,
-    MetricData,
-    ExtractedArgument,
 )
 from core.exceptions import DocumentationError
 from utils import ensure_directory, read_file_safe_async
-from core.console import print_info, print_error, create_progress
 
 
 class DocumentationOrchestrator:
@@ -69,9 +62,6 @@ class DocumentationOrchestrator:
             correlation_id: Unique identifier for tracking operations.
         """
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        print_info(
-            f"Initializing DocumentationOrchestrator with correlation ID: {self.correlation_id}"
-        )
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
             extra={"correlation_id": self.correlation_id},
@@ -92,8 +82,6 @@ class DocumentationOrchestrator:
         self.docstring_processor = docstring_processor
         self.response_parser = response_parser
 
-        self.progress = None  # Initialize progress here
-
     async def generate_documentation(
         self, context: DocumentationContext
     ) -> Tuple[str, str]:
@@ -110,27 +98,15 @@ class DocumentationOrchestrator:
             DocumentationError: If there's an issue generating documentation.
         """
         try:
-            print_info(
-                f"Starting documentation generation process with correlation ID: {self.correlation_id}"
-            )
-
             if not context.source_code or not context.source_code.strip():
-                raise DocumentationError("Source code is empty or missing")
+                self.logger.warning(
+                    f"Skipping documentation generation for {context.module_path} as the source code is empty or missing."
+                )
+                return context.source_code, ""
 
             source_code = context.source_code
             module_name = (
                 context.metadata.get("module_name", "") if context.metadata else ""
-            )
-
-            # Reuse existing progress bar if available
-            if self.progress:
-                self.progress.stop()
-            progress = create_progress()
-            progress.start()
-            self.progress = progress
-
-            extraction_task = self.progress.add_task(
-                "Extracting code elements", total=100
             )
 
             # Initialize variables to ensure they are always defined
@@ -142,77 +118,27 @@ class DocumentationOrchestrator:
                 None,
             )
 
-            try:
-                self.progress.update(
-                    extraction_task, advance=10, description="Validating source code..."
-                )
-                self._validate_source_code(source_code)
+            self._validate_source_code(source_code)
+            tree = ast.parse(source_code)
 
-                self.progress.update(
-                    extraction_task, advance=10, description="Parsing AST..."
-                )
-                tree = ast.parse(source_code)
+            self.code_extractor.dependency_analyzer.analyze_dependencies(tree)
+            classes = await self.code_extractor.class_extractor.extract_classes(tree)
+            functions = (
+                await self.code_extractor.function_extractor.extract_functions(tree)
+            )
+            variables = self.code_extractor.extract_variables(tree)
+            constants = self.code_extractor.extract_constants(tree)
+            module_docstring = self.code_extractor.extract_module_docstring(tree)
+            self.code_extractor.metrics.calculate_metrics(source_code, module_name)
 
-                self.progress.update(
-                    extraction_task,
-                    advance=10,
-                    description="Extracting dependencies...",
-                )
-                self.code_extractor.dependency_analyzer.analyze_dependencies(tree)
-
-                self.progress.update(
-                    extraction_task, advance=15, description="Extracting classes..."
-                )
-                classes = await self.code_extractor.class_extractor.extract_classes(
-                    tree
-                )
-
-                self.progress.update(
-                    extraction_task, advance=15, description="Extracting functions..."
-                )
-                functions = (
-                    await self.code_extractor.function_extractor.extract_functions(tree)
-                )
-
-                self.progress.update(
-                    extraction_task, advance=10, description="Extracting variables..."
-                )
-                # Accessing protected method for internal use
-                variables = self.code_extractor._extract_variables(tree)
-
-                self.progress.update(
-                    extraction_task, advance=10, description="Extracting constants..."
-                )
-                # Accessing protected method for internal use
-                constants = self.code_extractor._extract_constants(tree)
-
-                self.progress.update(
-                    extraction_task, advance=10, description="Extracting docstrings..."
-                )
-                # Accessing protected method for internal use
-                module_docstring = self.code_extractor._extract_module_docstring(tree)
-
-                self.progress.update(
-                    extraction_task, advance=10, description="Calculating metrics..."
-                )
-                self.code_extractor.metrics.calculate_metrics(source_code, module_name)
-            finally:
-                if self.progress:
-                    self.progress.stop()
-                    self.progress = None
-
-            # Create documentation prompt
             prompt = await self.prompt_manager.create_documentation_prompt(
-                module_name=(
-                    context.metadata.get("module_name", "") if context.metadata else ""
-                ),
+                module_name=module_name,
                 file_path=str(context.module_path),
                 source_code=context.source_code,
                 classes=classes,
                 functions=functions,
             )
 
-            # Generate documentation through AI service
             processing_result = await self.ai_service.generate_documentation(
                 DocumentationContext(
                     source_code=prompt,
@@ -222,34 +148,20 @@ class DocumentationOrchestrator:
                 )
             )
 
-            # Parse and validate the AI response
             parsed_response = await self.response_parser.parse_response(
                 processing_result.content,
                 expected_format="docstring",
                 validate_schema=True,
             )
-            self.logger.info(
-                f"AI response parsed and validated with status: {parsed_response.validation_success}"
-            )
-
-            # Process and validate the docstring
-            docstring_data = self.docstring_processor.parse(parsed_response.content)
-            #is_valid, validation_errors = self.docstring_processor.validate( # REMOVED
-            #    docstring_data
-            #)
-            is_valid = parsed_response.validation_success
-            validation_errors = parsed_response.errors
-            self.logger.info(f"Docstring validation status: {is_valid}")
-
-            if not is_valid:
-                self.logger.warning(
-                    f"Docstring validation failed: {', '.join(validation_errors)}"
+            if not parsed_response.validation_success:
+                raise DocumentationError(
+                    f"AI response validation failed: {parsed_response.errors}"
                 )
 
+            docstring_data = self.docstring_processor.parse(parsed_response.content)
+
             documentation_data = DocumentationData(
-                module_name=(
-                    str(context.metadata.get("module_name", "")) if context.metadata else ""
-                ),
+                module_name=module_name,
                 module_path=context.module_path,
                 module_summary=str(processing_result.content.get("summary", "")),
                 source_code=context.source_code,
@@ -257,43 +169,29 @@ class DocumentationOrchestrator:
                 ai_content=processing_result.content,
                 code_metadata={
                     "classes": [cls.__dict__ for cls in classes] if classes else [],
-                    "functions": [func.__dict__ for func in functions] if functions else [],
+                    "functions": [func.__dict__ for func in functions]
+                    if functions
+                    else [],
                     "variables": variables or [],
                     "constants": constants or [],
                     "module_docstring": module_docstring,
-                    "maintainability_index": None,
-                    "dependencies": None,
                 },
-                glossary={},
-                changes=[],
-                complexity_scores={},
-                metrics={},
-                validation_status=False,
-                validation_errors=validation_errors,
+                validation_status=parsed_response.validation_success,
+                validation_errors=parsed_response.errors,
             )
 
             markdown_doc = self.markdown_generator.generate(documentation_data)
-
-            print_info(
-                f"Documentation generation completed successfully with correlation ID: {self.correlation_id}"
-            )
-
             return context.source_code, markdown_doc
 
         except DocumentationError as de:
-            error_msg = (
-                f"DocumentationError: {de} in documentation_generation for module_path: "
-                f"{context.module_path} with correlation ID: {self.correlation_id}"
-            )
-            print_error(error_msg)
+            error_msg = f"DocumentationError: {de} in documentation_generation for module_path: {context.module_path}"
             self.logger.error(error_msg, extra={"correlation_id": self.correlation_id})
             raise
         except Exception as e:
             error_msg = (
                 f"Unexpected error: {e} in documentation_generation for module_path: "
-                f"{context.module_path} with correlation ID: {self.correlation_id}"
+                f"{context.module_path}"
             )
-            print_error(error_msg)
             self.logger.error(
                 error_msg, exc_info=True, extra={"correlation_id": self.correlation_id}
             )
@@ -312,8 +210,7 @@ class DocumentationOrchestrator:
         try:
             ast.parse(source_code)
         except SyntaxError as e:
-            raise DocumentationError(f"Syntax error in source code: {e}")
-        # Add more validation checks as needed
+            raise DocumentationError(f"Syntax error in source code: {e}") from e
 
     async def generate_module_documentation(
         self, file_path: Path, output_dir: Path, source_code: Optional[str] = None
@@ -332,6 +229,12 @@ class DocumentationOrchestrator:
         try:
             source_code = source_code or await read_file_safe_async(file_path)
 
+            if not source_code or not source_code.strip():
+                self.logger.warning(
+                    f"Skipping documentation generation for {file_path} as the source code is empty or missing."
+                )
+                return
+
             context = DocumentationContext(
                 source_code=source_code,
                 module_path=file_path,
@@ -344,7 +247,7 @@ class DocumentationOrchestrator:
             )
 
             self.logger.info(
-                f"Generating documentation for {file_path} with correlation ID: {self.correlation_id}, "
+                f"Generating documentation for {file_path}, "
                 f"module name: {context.metadata.get('module_name', 'Unknown')}"
             )
             output_dir = ensure_directory(output_dir)
@@ -352,21 +255,21 @@ class DocumentationOrchestrator:
 
             updated_code, markdown_doc = await self.generate_documentation(context)
 
-            # Write output files
             output_path.write_text(markdown_doc, encoding="utf-8")
-            file_path.write_text(updated_code, encoding="utf-8")
+            if updated_code:
+                file_path.write_text(updated_code, encoding="utf-8")
 
             self.logger.info(
-                f"Documentation written to {output_path} with correlation ID: {self.correlation_id}"
+                f"Documentation written to {output_path}"
             )
 
         except DocumentationError as de:
             error_msg = f"Module documentation generation failed for {file_path}: {de}"
-            self.logger.error(f"{error_msg} with correlation ID: {self.correlation_id}")
+            self.logger.error(error_msg)
             raise DocumentationError(error_msg) from de
         except Exception as e:
             error_msg = (
                 f"Unexpected error generating documentation for {file_path}: {e}"
             )
-            self.logger.error(f"{error_msg} with correlation ID: {self.correlation_id}")
+            self.logger.error(error_msg)
             raise DocumentationError(error_msg) from e

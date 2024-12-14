@@ -1,15 +1,16 @@
 """Manages dependency injection for classes."""
 
-from typing import Optional, Any, Dict
-import logging
+from typing import Any
 from core.config import Config
+from core.logger import LoggerSetup
 
 
 class Injector:
     """Manages dependency injection for classes."""
 
-    _dependencies: Dict[str, Any] = {}
+    _dependencies: dict[str, Any] = {}
     _initialized: bool = False
+    _logger = LoggerSetup.get_logger(__name__)
 
     @classmethod
     def register(cls, name: str, dependency: Any, force: bool = False) -> None:
@@ -26,9 +27,7 @@ class Injector:
             )
 
         cls._dependencies[name] = dependency
-        logger = cls._get_logger()
-        if logger:
-            logger.info(f"Dependency '{name}' registered")
+        cls._logger.info(f"Dependency '{name}' registered")
 
     @classmethod
     def get(cls, name: str) -> Any:
@@ -51,25 +50,22 @@ class Injector:
         """Clear all registered dependencies."""
         cls._dependencies.clear()
         cls._initialized = False
-        logger = cls._get_logger()
-        if logger:
-            logger.info("All dependencies cleared")
+        cls._logger.info("All dependencies cleared")
 
     @classmethod
-    def _get_logger(cls) -> Optional[logging.Logger]:
-        logger = logging.getLogger(__name__)
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter("%(message)s")
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-        return logger
+    def is_initialized(cls) -> bool:
+        """Check if the injector is initialized."""
+        return cls._initialized
+
+    @classmethod
+    def set_initialized(cls, value: bool) -> None:
+        """Set the initialization status."""
+        cls._initialized = value
 
 
-def setup_dependencies(config: Config, correlation_id: Optional[str] = None):
+def setup_dependencies(config: Config, correlation_id: str | None = None):
     """Sets up the dependency injection framework."""
-    if Injector._initialized:
+    if Injector.is_initialized():
         return
 
     # Clear existing dependencies first
@@ -119,7 +115,7 @@ def setup_dependencies(config: Config, correlation_id: Optional[str] = None):
     Injector.register("token_manager", token_manager)
 
     # Create and register other instances
-    docstring_processor = DocstringProcessor(metrics=metrics)
+    docstring_processor = DocstringProcessor()
     Injector.register("docstring_processor", docstring_processor)
 
     response_parser = ResponseParsingService(correlation_id=correlation_id)
@@ -167,4 +163,4 @@ def setup_dependencies(config: Config, correlation_id: Optional[str] = None):
     )
     Injector.register("doc_orchestrator", doc_orchestrator)
 
-    Injector._initialized = True
+    Injector.set_initialized(True)

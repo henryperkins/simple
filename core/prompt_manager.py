@@ -223,7 +223,7 @@ class PromptManager:
         return formatted_info
 
     @handle_error
-    def get_function_schema(self) -> Dict[str, Any]:
+    def get_function_schema(self, schema: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Get the function schema for structured output.
 
         Returns:
@@ -234,6 +234,13 @@ class PromptManager:
         """
         self.logger.debug("Retrieving function schema")
 
+        if schema:
+            return {
+                "name": "generate_docstring",
+                "description": "Generates structured documentation from source code.",
+                "parameters": schema
+            }
+
         if not self._function_schema:
             raise ValueError("Function schema is not properly defined.")
 
@@ -242,3 +249,18 @@ class PromptManager:
             "description": "Generates structured documentation from source code.",
             "parameters": self._function_schema["function"]["parameters"]
         }
+    
+    @handle_error
+    def get_prompt_with_schema(self, prompt: str, schema: Dict[str, Any]) -> str:
+        """
+        Adds function calling instructions to a prompt.
+
+        Args:
+            prompt: The base prompt.
+            schema: The schema to use for function calling.
+
+        Returns:
+            The prompt with function calling instructions.
+        """
+        self.logger.debug("Adding function calling instructions to prompt")
+        return f"{prompt}\n\nPlease respond with a JSON object that matches the schema defined in the function parameters."

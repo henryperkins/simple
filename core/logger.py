@@ -1,45 +1,43 @@
 """Enhanced logging configuration with structured output."""
 
 import logging
+from logging import LogRecord, Logger
 import sys
 import re
 from pathlib import Path
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, TypeVar, Generic, cast
+from collections.abc import Mapping, MutableMapping
 from logging.handlers import RotatingFileHandler
-from rich.logging import RichHandler
-from rich.console import Console
 from contextvars import ContextVar
-from core.console import (
-    console as rich_console,
-)  # Use the default console from console.py
+from types import TracebackType
+
+T = TypeVar('T', bound=Logger)
 
 # Context variable for the correlation ID
-correlation_id_var = ContextVar("correlation_id", default=None)
+correlation_id_var: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
-def set_correlation_id(correlation_id: str):
+def set_correlation_id(correlation_id: str) -> None:
     """Set the correlation ID in the context."""
     correlation_id_var.set(correlation_id)
 
 
-def get_correlation_id() -> Optional[str]:
+def get_correlation_id() -> str | None:
     """Retrieve the correlation ID from the context or return None if not set."""
     return correlation_id_var.get()
 
 
-class CorrelationLoggerAdapter(logging.LoggerAdapter):
+class CorrelationLoggerAdapter(logging.LoggerAdapter[T], Generic[T]):
     """Logger adapter that includes correlation ID in log messages."""
 
-    def __init__(self, logger, extra=None):
+    def __init__(self, logger: T, extra: Mapping[str, Any] | None = None) -> None:
         super().__init__(logger, extra or {})
-        # Use the context variable to get the current correlation ID
         self.correlation_id_var = correlation_id_var
 
-    def process(self, msg, kwargs):
-        # Ensure 'extra' in kwargs
-        kwargs["extra"] = kwargs.get("extra", {})
-        # Include correlation ID in 'extra'
+    def process(self, msg: Any, kwargs: MutableMapping[str, Any]) -> tuple[Any, MutableMapping[str, Any]]:
+        extra = kwargs.get("extra", {})
+        kwargs["extra"] = extra
         correlation_id = self.correlation_id_var.get()
         kwargs["extra"]["correlation_id"] = correlation_id or "N/A"
         return msg, kwargs
@@ -48,12 +46,12 @@ class CorrelationLoggerAdapter(logging.LoggerAdapter):
 class SanitizedLogFormatter(logging.Formatter):
     """Custom formatter to sanitize and format log records."""
 
-    def format(self, record):
+    def format(self, record: LogRecord) -> str:
         # Ensure correlation_id and sanitized_info fields exist
-        record.correlation_id = get_correlation_id() or "N/A"
-        record.sanitized_info = getattr(
+        setattr(record, 'correlation_id', get_correlation_id() or "N/A")
+        setattr(record, 'sanitized_info', getattr(
             record, "sanitized_info", {"info": "[Sanitized]"}
-        )
+        ))
 
         # Sanitize the message and arguments
         record.msg = self._sanitize(record.msg)
@@ -69,9 +67,9 @@ class SanitizedLogFormatter(logging.Formatter):
     def _sanitize(self, item: Any) -> Any:
         """Sanitize sensitive information from logs."""
         if isinstance(item, dict):
-            return {k: self._sanitize(v) for k, v in item.items()}
+            return {str(k): self._sanitize(v) for k, v in item.items()}
         elif isinstance(item, (list, tuple)) and not isinstance(item, str):
-            return [self._sanitize(it) for it in item]
+            return [self._sanitize(x) for x in item]
         elif isinstance(item, str):
             # Sanitize file paths and secrets
             item = re.sub(r"(/[a-zA-Z0-9_\-./]+)", "[SANITIZED_PATH]", item)
@@ -85,56 +83,46 @@ class SanitizedLogFormatter(logging.Formatter):
 class LoggerSetup:
     """Configures and manages application logging."""
 
-    _loggers: Dict[str, logging.Logger] = {}
-    _log_dir: Path = Path("logs")  # Set a default or use a placeholder
+    _loggers: dict[str, Logger] = {}
+    _log_dir: Path = Path("logs")
     _file_logging_enabled: bool = True
     _configured: bool = False
     _default_level: int = logging.INFO
-    _default_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    _default_format: str = "%(message)s"
     _max_bytes: int = 10 * 1024 * 1024  # 10MB
     _backup_count: int = 5
 
     @classmethod
-    def configure(
-        cls, console_instance: Optional[Console] = None, config: Optional[Any] = None
-    ) -> None:
+    def configure(cls, config: Any | None = None) -> None:
         """Configure global logging settings."""
         if cls._configured:
             return
 
-        # Use 'config' if provided, otherwise use default settings
         if config is not None:
             cls._default_level = getattr(
                 logging, config.app.log_level.upper(), logging.INFO
             )
             cls._log_dir = Path(config.app.log_dir)
         else:
-            # Use default level and log_dir if not configured
             cls._default_level = logging.INFO
             cls._log_dir = Path("logs")
 
         cls._configured = True
 
-        # Use the provided console instance or the default one
-        console_instance = console_instance or rich_console
-
         # Configure the root logger
         root_logger = logging.getLogger()
         root_logger.setLevel(cls._default_level)
 
-        # Console handler
-        console_handler = RichHandler(
-            console=console_instance,
-            show_time=True,
-            show_level=True,
-            show_path=False,
-            markup=True,
-        )
-        console_formatter = logging.Formatter(cls._default_format)
-        console_handler.setFormatter(console_formatter)
+        # Remove all existing handlers
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+
+        # Console handler with simplified format
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(logging.Formatter(cls._default_format))
         root_logger.addHandler(console_handler)
 
-        # File handler (if enabled)
+        # File handler with detailed JSON format (if enabled)
         if cls._file_logging_enabled:
             try:
                 cls._log_dir.mkdir(parents=True, exist_ok=True)
@@ -152,12 +140,10 @@ class LoggerSetup:
                 file_handler.setFormatter(file_formatter)
                 root_logger.addHandler(file_handler)
             except Exception as e:
-                console_instance.print(
-                    f"Failed to set up file handler: {e}", style="bold red"
-                )
+                sys.stderr.write(f"Failed to set up file handler: {e}\n")
 
     @classmethod
-    def get_logger(cls, name: Optional[str] = None) -> logging.Logger:
+    def get_logger(cls, name: str | None = None) -> Logger:
         """Get a configured logger instance."""
         if not cls._configured:
             cls.configure()
@@ -169,18 +155,14 @@ class LoggerSetup:
             return cls._loggers[name]
 
         logger = logging.getLogger(name)
-
-        # Ensure the logger has the correct methods
         if not hasattr(logger, "isEnabledFor"):
-            logger.isEnabledFor = (
-                lambda level: True
-            )  # Dummy method to avoid AttributeError
+            logger.isEnabledFor = lambda level: True
 
         cls._loggers[name] = logger
-        return cls._get_correlation_logger_adapter(logger)
+        return cast(Logger, cls._get_correlation_logger_adapter(logger))
 
     @classmethod
-    def _get_correlation_logger_adapter(cls, logger):
+    def _get_correlation_logger_adapter(cls, logger: Logger) -> CorrelationLoggerAdapter[Logger]:
         return CorrelationLoggerAdapter(logger)
 
     @classmethod
@@ -195,7 +177,10 @@ class LoggerSetup:
 
     @classmethod
     def handle_exception(
-        cls, exc_type: type, exc_value: BaseException, exc_traceback: Any
+        cls,
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_traceback: TracebackType | None,
     ) -> None:
         """Global exception handler."""
         if not issubclass(exc_type, KeyboardInterrupt):

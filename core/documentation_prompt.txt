@@ -24,4 +24,39 @@ Functions:
 Source Code:
 {{ source_code }}
 
-Analyze the code and generate comprehensive Google-style documentation. Include a brief summary, detailed description, arguments, return values, and possible exceptions. Ensure all descriptions are clear and technically accurate. If any information is missing or cannot be determined, explicitly state that it is not available.
+Analyze the code and generate comprehensive Google-style documentation. Your response must be a JSON object with the following structure:
+
+{
+    "summary": "A brief summary of what the code does",
+    "description": "A detailed description of the functionality",
+    "args": [
+        {
+            "name": "argument_name",
+            "type": "argument_type",
+            "description": "argument description"
+        }
+    ],
+    "returns": {
+        "type": "return_type",
+        "description": "description of the return value"
+    },
+    "raises": [
+        {
+            "exception": "exception_type",
+            "description": "when this exception is raised"
+        }
+    ],
+    "complexity": 1
+}
+
+Required fields:
+- summary: A concise summary of what the code does
+- description: A detailed description of the functionality
+- returns: Must include both type and description
+
+Optional fields with defaults:
+- args: [] (empty array if no arguments)
+- raises: [] (empty array if no exceptions)
+- complexity: 1 (default complexity score)
+
+Ensure all descriptions are clear and technically accurate. If any information is missing or cannot be determined, explicitly state that it is not available. Format your response exactly according to this schema.

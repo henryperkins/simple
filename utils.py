@@ -26,7 +26,7 @@ from contextvars import ContextVar
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union, Callable, Awaitable, TypeVar
 
 from git import Repo
 from git.exc import GitCommandError
@@ -106,11 +106,14 @@ def handle_extraction_error(
     )
 
 
-def handle_error(func):
+F = TypeVar('F', bound=Callable[..., Any])
+
+
+def handle_error(func: F) -> Union[F, Callable[..., Awaitable[Any]]]:
     """Decorator for common error handling with enhanced logging."""
 
     @wraps(func)
-    async def async_wrapper(*args, **kwargs):
+    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return await func(*args, **kwargs)
         except Exception as e:
@@ -127,7 +130,7 @@ def handle_error(func):
             raise
 
     @wraps(func)
-    def sync_wrapper(*args, **kwargs):
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -274,7 +277,8 @@ class RepositoryManager:
 
             return clone_dir
         except Exception as e:
-            self.logger.error(f"Failed to clone repository: {e}", exc_info=True)
+            self.logger.error(
+                f"Failed to clone repository: {e}", exc_info=True)
             raise
 
     def _verify_repository(self, path: Path) -> bool:
@@ -308,7 +312,8 @@ class TokenCounter:
         try:
             self.encoding = tiktoken.encoding_for_model(model)
         except KeyError:
-            self.logger.warning(f"Model {model} not found. Using cl100k_base encoding.")
+            self.logger.warning(
+                f"Model {model} not found. Using cl100k_base encoding.")
             self.encoding = tiktoken.get_encoding("cl100k_base")
 
     def _get_logger(
@@ -411,7 +416,8 @@ def get_env_var(
     value = os.getenv(name)
     if value is None:
         if required:
-            raise ValueError(f"Required environment variable {name} is not set")
+            raise ValueError(
+                f"Required environment variable {name} is not set")
         return default
 
     try:
@@ -419,7 +425,8 @@ def get_env_var(
             return value.lower() in ("true", "1", "yes", "on")
         return var_type(value)
     except ValueError as e:
-        raise ValueError(f"Error converting {name} to {var_type.__name__}: {str(e)}")
+        raise ValueError(
+            f"Error converting {name} to {var_type.__name__}: {str(e)}")
 
 
 # -----------------------------------------------------------------------------

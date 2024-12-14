@@ -1,24 +1,34 @@
+"""Processes and validates docstrings."""
+
 import ast
 import json
 import os
-from typing import Any, Dict, List, Union, Optional, Tuple, TYPE_CHECKING
-from docstring_parser import parse as parse_docstring
+from collections.abc import Sequence
+from typing import Any
 
+try:
+    from docstring_parser import parse, DocstringStyle, Docstring
+except ImportError:
+    print("Warning: docstring_parser not found. Install with: pip install docstring-parser")
+    raise
+
+from core.console import (
+    print_info,
+    print_error,
+    display_validation_results,
+    display_processing_phase
+)
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.dependency_injection import Injector
-from core.metrics import Metrics
 from core.exceptions import DocumentationError
-from utils import handle_error
 from core.types.base import DocstringData
-
+from jsonschema import validate, ValidationError
 
 class DocstringProcessor:
-    def __init__(self, metrics: Optional[Metrics] = None) -> None:
+    def __init__(self) -> None:
         self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
-        self.metrics = metrics or Injector.get("metrics_calculator")
-        self.docstring_schema: Dict[str, Any] = self._load_schema("docstring_schema.json")
+        self.docstring_schema: dict[str, Any] = self._load_schema("docstring_schema.json")
 
-    def _load_schema(self, schema_name: str) -> Dict[str, Any]:
+    def _load_schema(self, schema_name: str) -> dict[str, Any]:
         """Load a JSON schema for validation."""
         try:
             schema_path = os.path.join(
@@ -38,125 +48,215 @@ class DocstringProcessor:
             self.logger.error(f"Error loading schema '{schema_name}': {e}")
             raise
 
-    @handle_error
-    def __call__(self, docstring: Union[Dict[str, Any], str]) -> "DocstringData":
+    def __call__(self, docstring: dict[str, Any] | str) -> DocstringData:
         try:
             if isinstance(docstring, dict):
-                return self._create_docstring_data_from_dict(docstring)
-            elif isinstance(docstring, str):
-                return self.parse(docstring)
-            else:
-                raise DocumentationError(
-                    "Docstring must be either a dictionary or a string."
-                )
+                return self._process_dict_docstring(docstring)
+            return self.parse(str(docstring))
         except Exception as e:
             self.logger.error(f"Unexpected error during parsing: {e}")
             raise
 
-    def parse(self, docstring: Union[Dict[str, Any], str]) -> "DocstringData":
-        """Parse docstring into structured data.
+    def parse(self, docstring: str) -> DocstringData:
+        """Parse a docstring into structured data.
         
         Args:
-            docstring: Raw docstring as dict or string.
-
+            docstring: The docstring to parse as a string.
+            
         Returns:
-            DocstringData: Parsed docstring data.
-
+            DocstringData: The parsed and structured docstring data.
+            
         Raises:
-            DocumentationError: If parsing fails.
+            DocumentationError: If there is an error parsing the docstring.
         """
         try:
-            if isinstance(docstring, dict):
-                self.logger.debug("Received dictionary docstring, processing directly")
-                return self._create_docstring_data_from_dict(docstring)
-            
             docstring_str = str(docstring).strip()
-            
-            # Parse with docstring_parser
-            parsed = parse_docstring(docstring_str)
-            if parsed is None:
-                self.logger.error("Failed to parse docstring")
-                raise DocumentationError("Failed to parse the provided docstring")
-                
-            return self._create_docstring_data_from_parsed(parsed)
-            
-        except Exception as e:
-            self.logger.error(f"Error parsing docstring: {e}")
-            raise DocumentationError(f"Failed to parse docstring: {e}") from e
+            display_processing_phase("Docstring Analysis", {
+                "Format": "String",
+                "Length": len(docstring_str),
+                "Lines": len(docstring_str.split("\n"))
+            })
 
-    def _create_docstring_data_from_parsed(self, parsed_docstring) -> "DocstringData":
+            # Try parsing with AUTO style first, then fall back to specific styles if needed
+            parsed_docstring: Docstring
+            try:
+                parsed_docstring = parse(docstring_str, style=DocstringStyle.AUTO)
+            except Exception:
+                try:
+                    parsed_docstring = parse(docstring_str, style=DocstringStyle.GOOGLE)
+                except Exception:
+                    try:
+                        parsed_docstring = parse(docstring_str, style=DocstringStyle.REST)
+                    except Exception as e:
+                        self.logger.error(f"Failed to parse docstring: {e}")
+                        # Return minimal DocstringData with just the raw docstring as summary
+                        return DocstringData(
+                            summary=docstring_str,
+                            description="",
+                            args=[],
+                            returns={"type": "Any", "description": ""},
+                            raises=[],
+                            complexity=1
+                        )
+            
+            # Debug logging
+            self.logger.debug(f"Raw docstring: {docstring_str}")
+            self.logger.debug(f"Parsed docstring: {parsed_docstring}")
+            if parsed_docstring.params:
+                self.logger.debug(f"Found {len(parsed_docstring.params)} parameters")
+                for param in parsed_docstring.params:
+                    self.logger.debug(f"Parameter: {param.arg_name} ({param.type_name}): {param.description}")
+
+            result = self._create_docstring_data_from_parsed(parsed_docstring)
+
+            # Display validation results
+            display_validation_results({
+                "Summary": bool(result.summary),
+                "Description": bool(result.description),
+                "Arguments": bool(result.args),
+                "Returns": bool(result.returns),
+                "Exceptions": bool(result.raises)
+            }, {
+                "Arguments": f"Count: {len(result.args)}",
+                "Exceptions": f"Count: {len(result.raises)}"
+            })
+
+            return result
+
+        except Exception as e:
+            print_error(f"Parsing Error: {e}")
+            raise
+
+    def _process_dict_docstring(self, docstring_dict: dict[str, Any]) -> DocstringData:
+        """Process a docstring provided as a dictionary."""
+        try:
+            print_info("Validating docstring dictionary structure...")
+            self._validate_dict_docstring(docstring_dict)
+            return self._create_docstring_data_from_dict(docstring_dict)
+        except Exception as e:
+            self.logger.error(f"Error processing dictionary docstring: {e}")
+            raise
+
+    def _validate_dict_docstring(self, docstring_dict: dict[str, Any]) -> bool:
+        """Validate a docstring dictionary against the schema."""
+        try:
+            validate(instance=docstring_dict, schema=self.docstring_schema)
+            print_info("Docstring dictionary validated successfully.")
+            return True
+        except ValidationError as e:
+            print_error(f"Docstring dictionary validation failed: {e}")
+            raise DocumentationError(f"Docstring dictionary validation failed: {e}")
+        except Exception as e:
+            print_error(f"Unexpected error during validation: {e}")
+            raise DocumentationError(f"Unexpected error during validation: {e}")
+
+    def _create_docstring_data_from_parsed(self, parsed_docstring: Docstring) -> DocstringData:
         """Create DocstringData from a parsed docstring object."""
-        return DocstringData(
+        # Debug logging
+        self.logger.debug("Creating DocstringData from parsed docstring")
+        self.logger.debug(f"Short description: {parsed_docstring.short_description}")
+        self.logger.debug(f"Long description: {parsed_docstring.long_description}")
+        self.logger.debug(f"Parameters: {parsed_docstring.params}")
+        self.logger.debug(f"Returns: {parsed_docstring.returns}")
+        self.logger.debug(f"Raises: {parsed_docstring.raises}")
+
+        args: list[dict[str, str | list[dict[str, str]]]] = []
+        for param in parsed_docstring.params:
+            arg: dict[str, str | list[dict[str, str]]] = {
+                "name": param.arg_name or "",
+                "type": param.type_name or "Any",
+                "description": param.description or "",
+                "nested": []  # Add empty list for nested parameters
+            }
+            self.logger.debug(f"Adding argument: {arg}")
+            args.append(arg)
+
+        returns_dict = {
+            "type": "Any",
+            "description": "",
+        }
+        if parsed_docstring.returns:
+            returns_dict["type"] = parsed_docstring.returns.type_name or "Any"
+            returns_dict["description"] = parsed_docstring.returns.description or ""
+
+        raises: list[dict[str, str]] = []
+        for exc in parsed_docstring.raises:
+            exc_dict = {
+                "exception": exc.type_name or "Exception",
+                "description": exc.description or "",
+            }
+            self.logger.debug(f"Adding exception: {exc_dict}")
+            raises.append(exc_dict)
+
+        result = DocstringData(
             summary=parsed_docstring.short_description or "",
             description=parsed_docstring.long_description or "",
-            args=[
-                {
-                    "name": param.arg_name,
-                    "type": param.type_name or "Any",
-                    "description": param.description or "",
-                }
-                for param in parsed_docstring.params
-            ],
-            returns={
-                "type": parsed_docstring.returns.type_name if parsed_docstring.returns else "Any",
-                "description": parsed_docstring.returns.description if parsed_docstring.returns else "",
-            },
-            raises=[
-                {
-                    "exception": exc.type_name or "Exception",
-                    "description": exc.description or "",
-                }
-                for exc in parsed_docstring.raises
-            ],
+            args=args,
+            returns=returns_dict,
+            raises=raises,
             complexity=1,
         )
 
+        self.logger.debug(f"Created DocstringData: {result}")
+        return result
+
     def _create_docstring_data_from_dict(
-        self, docstring_dict: Dict[str, Any]
-    ) -> "DocstringData":
+        self, docstring_dict: dict[str, Any]
+    ) -> DocstringData:
+        """Create DocstringData from a validated dictionary."""
         try:
-            returns = docstring_dict.get("returns", {})
-            if not isinstance(returns, dict):
-                returns = {"type": "Any", "description": ""}
-            if not returns.get("type"):
-                returns["type"] = "Any"
-            if not returns.get("description"):
-                returns["description"] = ""
+            # Extract only the fields we want from the input dictionary
+            cleaned_dict = {
+                "summary": docstring_dict.get("summary", "No summary provided."),
+                "description": docstring_dict.get("description", "No description provided."),
+                "args": docstring_dict.get("args", []),
+                "returns": docstring_dict.get("returns", {"type": "Any", "description": ""}),
+                "raises": docstring_dict.get("raises", []),
+                "complexity": docstring_dict.get("complexity", 1)
+            }
 
-            complexity = docstring_dict.get("complexity", 1)
+            # Ensure returns has the correct structure
+            if not isinstance(cleaned_dict["returns"], dict):
+                cleaned_dict["returns"] = {"type": "Any", "description": ""}
+            if "type" not in cleaned_dict["returns"]:
+                cleaned_dict["returns"]["type"] = "Any"
+            if "description" not in cleaned_dict["returns"]:
+                cleaned_dict["returns"]["description"] = ""
 
-            return DocstringData(
-                summary=docstring_dict.get("summary", "No summary provided."),
-                description=docstring_dict.get("description", "No description provided."),
-                args=docstring_dict.get("args", []),
-                returns=returns,
-                raises=docstring_dict.get("raises", []),
-                complexity=complexity,
-                validation_status=False,
-                validation_errors=[],
-            )
+            return DocstringData(**cleaned_dict)
         except KeyError as e:
             self.logger.warning(f"Missing required key in docstring dict: {e}")
             raise DocumentationError(f"Docstring dictionary missing keys: {e}")
 
-    @handle_error
-    async def process_batch(
-        self, doc_entries: List[Dict[str, Any]], source_code: str
-    ) -> Dict[str, str]:
+    def process_batch(
+        self, doc_entries: Sequence[dict[str, Any]], source_code: str
+    ) -> dict[str, str]:
+        """Process a batch of documentation entries.
+        
+        Args:
+            doc_entries: List of documentation entries to process
+            source_code: Source code to update with docstrings
+            
+        Returns:
+            dict[str, str]: Dictionary containing updated code and documentation
+            
+        Raises:
+            DocumentationError: If there is an error processing the batch
+        """
         try:
             tree = ast.parse(source_code)
             self.logger.debug(f"Processing {len(doc_entries)} documentation entries")
 
-            processed_entries: List [Dict[str, Any]] = []
+            processed_entries: list[dict[str, Any]] = []
             for entry in doc_entries:
                 try:
-                   if "summary" in entry and "name" not in entry:
+                    if "summary" in entry and "name" not in entry:
                         for node in ast.walk(tree):
                             if isinstance(
                                 node,
                                 (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef),
                             ):
-                                docstring =  DocstringData(**entry).__dict__
+                                docstring = self(entry).__dict__
                                 processed_entries.append(
                                     {
                                         "name": node.name,
@@ -168,9 +268,9 @@ class DocstringProcessor:
                                     f"Created processed entry for {node.name}"
                                 )
                                 break
-                   else:
+                    else:
                         if "docstring" not in entry and "summary" in entry:
-                            entry["docstring"] = DocstringData(**entry).__dict__
+                            entry["docstring"] = self(entry).__dict__
                         processed_entries.append(entry)
                         self.logger.debug(f"Added entry with name: {entry.get('name')}")
 
@@ -182,14 +282,12 @@ class DocstringProcessor:
                 self.logger.error("No valid entries were processed")
                 return {"code": source_code, "documentation": ""}
 
-            updated_tree: Optional[ast.AST] = self._insert_docstrings(
-                tree, processed_entries
-            )
+            updated_tree = self._insert_docstrings(tree, processed_entries)
             if not updated_tree:
                 self.logger.error("Failed to update AST with docstrings")
                 return {"code": source_code, "documentation": ""}
 
-            updated_code: Optional[str] = self._generate_code_from_ast(updated_tree)
+            updated_code = self._generate_code_from_ast(updated_tree)
             if not updated_code:
                 self.logger.error("Failed to generate code from AST")
                 return {"code": source_code, "documentation": ""}
@@ -203,8 +301,8 @@ class DocstringProcessor:
             raise DocumentationError(f"Failed to process batch: {e}")
 
     def _insert_docstrings(
-        self, tree: ast.AST, doc_entries: List[Dict[str, Any]]
-    ) -> Optional[ast.AST]:
+        self, tree: ast.AST, doc_entries: Sequence[dict[str, Any]]
+    ) -> ast.AST | None:
         docstring_map = {
             entry["name"]: entry["docstring"]
             for entry in doc_entries
@@ -260,31 +358,31 @@ class DocstringProcessor:
         new_tree = transformer.visit(tree)
         return new_tree
 
-    def _generate_code_from_ast(self, tree: ast.AST) -> Optional[str]:
+    def _generate_code_from_ast(self, tree: ast.AST) -> str | None:
+        """Generate source code from AST."""
         try:
-            if hasattr(ast, "unparse"):
+            if hasattr(ast, "unparse"):  # Python 3.9+
                 return ast.unparse(tree)
             else:
-                try:
-                    import astor
-                    return astor.to_source(tree)
-                except ImportError:
-                    self.logger.warning("astor library not found, using ast.dump instead.")
-                    return ast.dump(tree, annotate_fields=True)
+                # Fallback to string representation if ast.unparse not available
+                return ast.dump(tree, annotate_fields=True)
         except Exception as e:
             self.logger.error(f"Error generating code from AST: {e}")
             raise DocumentationError(f"Failed to generate code from AST: {e}")
 
-    def _generate_documentation(self, doc_entries: List[Dict[str, Any]]) -> str:
+    def _generate_documentation(self, doc_entries: Sequence[dict[str, Any]]) -> str:
         doc_parts = ["# API Documentation\n\n"]
 
         module_entry = next(
             (entry for entry in doc_entries if entry.get("name") == "__module__"), None
         )
-        if module_entry:
-            doc_parts.extend(
-                ["## Module Overview\n\n", f"{module_entry.get('docstring', '')}\n\n"]
-            )
+        if module_entry and module_entry.get("docstring"):
+            docstring = module_entry["docstring"]
+            doc_parts.extend([
+                "## Module Overview\n\n",
+                f"{docstring.get('summary', '')}\n\n",
+                f"{docstring.get('description', '')}\n\n"
+            ])
 
         class_entries = [
             entry for entry in doc_entries if entry.get("type") == "ClassDef"
@@ -292,9 +390,29 @@ class DocstringProcessor:
         if class_entries:
             doc_parts.append("## Classes\n\n")
             for entry in class_entries:
-                doc_parts.extend(
-                    [f"### {entry['name']}\n\n", f"{entry.get('docstring', '')}\n\n"]
-                )
+                if entry.get("docstring"):
+                    docstring = entry["docstring"]
+                    doc_parts.extend([
+                        f"### {entry['name']}\n\n",
+                        f"{docstring.get('summary', '')}\n\n",
+                        f"{docstring.get('description', '')}\n\n"
+                    ])
+                    
+                    if docstring.get("args"):
+                        doc_parts.append("**Arguments:**\n\n")
+                        for arg in docstring["args"]:
+                            doc_parts.append(f"- `{arg['name']}` (`{arg['type']}`): {arg['description']}\n")
+                        doc_parts.append("\n")
+                    
+                    if docstring.get("returns"):
+                        returns = docstring["returns"]
+                        doc_parts.append(f"**Returns:** `{returns['type']}` - {returns['description']}\n\n")
+                    
+                    if docstring.get("raises"):
+                        doc_parts.append("**Raises:**\n\n")
+                        for exc in docstring["raises"]:
+                            doc_parts.append(f"- `{exc['exception']}`: {exc['description']}\n")
+                        doc_parts.append("\n")
 
         func_entries = [
             entry
@@ -304,21 +422,28 @@ class DocstringProcessor:
         if func_entries:
             doc_parts.append("## Functions\n\n")
             for entry in func_entries:
-                doc_parts.extend(
-                    [f"### {entry['name']}\n\n", f"{entry.get('docstring', '')}\n\n"]
-                )
+                if entry.get("docstring"):
+                    docstring = entry["docstring"]
+                    doc_parts.extend([
+                        f"### {entry['name']}\n\n",
+                        f"{docstring.get('summary', '')}\n\n",
+                        f"{docstring.get('description', '')}\n\n"
+                    ])
+                    
+                    if docstring.get("args"):
+                        doc_parts.append("**Arguments:**\n\n")
+                        for arg in docstring["args"]:
+                            doc_parts.append(f"- `{arg['name']}` (`{arg['type']}`): {arg['description']}\n")
+                        doc_parts.append("\n")
+                    
+                    if docstring.get("returns"):
+                        returns = docstring["returns"]
+                        doc_parts.append(f"**Returns:** `{returns['type']}` - {returns['description']}\n\n")
+                    
+                    if docstring.get("raises"):
+                        doc_parts.append("**Raises:**\n\n")
+                        for exc in docstring["raises"]:
+                            doc_parts.append(f"- `{exc['exception']}`: {exc['description']}\n")
+                        doc_parts.append("\n")
 
         return "".join(doc_parts)
-
-
-@handle_error
-def handle_extraction_error(
-    e: Exception, errors: List[str], context: str, correlation_id: str, **kwargs: Any
-) -> None:
-    error_message = f"{context}: {str(e)}"
-    errors.append(error_message)
-
-    logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
-    logger.error(
-        f"Error in {context}: {e}", exc_info=True, extra={"sanitized_info": kwargs}
-    )

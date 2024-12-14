@@ -1,26 +1,37 @@
-"""Rich console utilities for enhanced visual feedback."""
-from typing import Optional
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TimeRemainingColumn
-from rich.syntax import Syntax
-from rich.logging import RichHandler
+"""Console utilities without rich."""
+from typing import Optional, Any
 import logging
 
-# Initialize rich console with default settings
-DEFAULT_CONSOLE = Console(
-    color_system="auto",
-    width=None,
-    height=None, 
-    markup=True,
-    emoji=True,
-    highlight=True,
-    log_path=False,
-    log_time=True
-)
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Use the default console instance
-console = DEFAULT_CONSOLE
+def setup_live_layout() -> None:
+    """Placeholder for setup_live_layout."""
+    pass
 
+def stop_live_layout() -> None:
+    """Placeholder for stop_live_layout."""
+    pass
+
+def update_header(text: str) -> None:
+    """Placeholder for update_header."""
+    print(f"Header: {text}")
+
+def update_footer(text: str) -> None:
+    """Placeholder for update_footer."""
+    print(f"Footer: {text}")
+
+def update_left_panel(renderable: Any) -> None:
+    """Placeholder for update_left_panel."""
+    print(f"Left Panel: {renderable}")
+
+def update_right_panel(renderable: Any) -> None:
+    """Placeholder for update_right_panel."""
+    print(f"Right Panel: {renderable}")
+
+def display_progress(task_description: str) -> None:
+    """Placeholder for display_progress."""
+    print(f"Progress: {task_description}")
 
 def display_code_snippet(
     code: str,
@@ -28,128 +39,93 @@ def display_code_snippet(
     theme: str = "monokai",
     line_numbers: bool = True
 ) -> None:
-    """Display a code snippet with syntax highlighting.
-
-    Args:
-        code: The code string to display
-        language: Programming language for syntax highlighting
-        theme: Color theme to use
-        line_numbers: Whether to show line numbers
-    """
-    syntax = Syntax(code, language, theme=theme, line_numbers=line_numbers)
-    console.print(syntax)
-
-
-def setup_logging(level: int = logging.INFO) -> None:
-    """Configure logging with rich handler and specified level.
-
-    Args:
-        level: Logging level (e.g., logging.INFO, logging.DEBUG)
-    """
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[RichHandler(console=DEFAULT_CONSOLE, rich_tracebacks=True)]
-    )
-    # Ensure consistent logging format
-    for handler in logging.root.handlers:
-        if isinstance(handler, RichHandler):
-            handler.setFormatter(logging.Formatter("%(message)s"))
-
+    """Display a code snippet."""
+    print(f"Code Snippet ({language}):\n{code}")
 
 def print_status(message: str, style: str = "bold blue") -> None:
-    """Print a status message with styling.
-
-    Args:
-        message: The message to display
-        style: Rich style string for formatting
-    """
-    console.print(f"[{style}]{message}[/{style}]")
-
+    """Display status messages."""
+    print(f"Status: {message}")
 
 def print_error(message: str, correlation_id: Optional[str] = None) -> None:
-    """Print an error message in red.
-
-    Args:
-        message: The error message to display
-        correlation_id: Optional correlation ID for tracking
-    """
+    """Display error messages."""
     if correlation_id:
         message = f"{message} (Correlation ID: {correlation_id})"
-    console.print(f"[bold red]Error:[/bold red] {message}")
-
+    print(f"Error: {message}")
 
 def print_success(message: str) -> None:
-    """Print a success message in green.
-
-    Args:
-        message: The success message to display
-    """
-    console.print(f"[bold green]Success:[/bold green] {message}")
-
+    """Print a success message."""
+    print(f"Success: {message}")
 
 def print_warning(message: str) -> None:
-    """Print a warning message in yellow.
-
-    Args:
-        message: The warning message to display
-    """
-    console.print(f"[bold yellow]Warning:[/bold yellow] {message}")
-
+    """Print a warning message."""
+    print(f"Warning: {message}")
 
 def print_info(message: str) -> None:
-    """Print an info message in blue.
-
-    Args:
-        message: The info message to display
-    """
-    console.print(f"[bold blue]Info:[/bold blue] {message}")
-
+    """Display info messages."""
+    print(f"Info: {message}")
 
 def print_debug(message: str) -> None:
-    """Print a debug message in gray.
-
-    Args:
-        message: The debug message to display
-    """
-    console.print(f"[bold gray]Debug:[/bold gray] {message}")
-
+    """Print a debug message."""
+    print(f"Debug: {message}")
 
 def display_metrics(metrics: dict, title: str = "Metrics") -> None:
     """Display metrics in a formatted table."""
-    console.print(f"[bold magenta]{title}[/bold magenta]")
+    print(f"{title}:")
     for key, value in metrics.items():
-        console.print(f"[bold]{key}:[/bold] {value}")
+        print(f"  {key}: {value}")
 
+def create_progress() -> None:
+    """Placeholder for create_progress."""
+    print("Progress started")
 
-def create_progress() -> Progress:
-    """Create and return a Rich Progress instance."""
-    progress = Progress(
-        SpinnerColumn(),
-        "[progress.description]{task.description}",
-        BarColumn(),
-        "[progress.percentage]{task.percentage:>3.1f}%",
-        TimeRemainingColumn(),
-    )
-    return progress
+def print_phase_header(title: str) -> None:
+    """Print a section header with formatting."""
+    print(f"--- {title} ---")
 
+def create_status_table(title: str, data: dict[str, Any]) -> None:
+    """Create and display a status table."""
+    print(f"{title}:")
+    for key, value in data.items():
+        print(f"  {key}: {value}")
 
-if __name__ == "__main__":
-    # Set up logging
-    setup_logging(logging.DEBUG)
-    logger = logging.getLogger(__name__)
+def format_validation_status(success: bool, errors: Optional[list[str]] = None) -> None:
+    """Display validation status with optional errors."""
+    status = "Passed" if success else "Failed"
+    print(f"\nValidation Status: {status}")
+    
+    if not success and errors:
+        for error in errors:
+            print(f"  - {error}")
 
-    # Example code snippet display
-    code = '''
-    def example_function(param: str) -> None:
-        """Example function with syntax highlighting."""
-        print(f"Parameter: {param}")
-    '''
-    display_code_snippet(code)
+def display_metrics_report(metrics: dict[str, Any]) -> None:
+    """Display a formatted metrics report."""
+    print("Metrics Report:")
+    for key, value in metrics.items():
+        print(f"  {key}: {value}")
 
-    # Example status messages
-    print_info("Starting process...")
-    print_status("Processing items", "bold cyan")
-    print_warning("Some items were skipped")
-    print_error("Failed to process item")
-    print_success("Process completed successfully")
+def display_processing_phase(title: str, content: dict[str, Any]) -> None:
+    """Display a processing phase with formatted content."""
+    print(f"--- {title} ---")
+    for key, value in content.items():
+        print(f"  {key}: {value}")
+
+def display_api_metrics(response_data: dict[str, Any]) -> None:
+    """Display API response metrics in a structured format."""
+    print("\nAPI Response Metrics")
+    for key, value in response_data.items():
+        print(f"  {key}: {value}")
+
+def display_validation_results(
+    results: dict[str, bool], 
+    details: Optional[dict[str, Any]] = None
+) -> None:
+    """Display validation results with details."""
+    print("\nValidation Results")
+    for key, value in results.items():
+        print(f"  {key}: {value} Details: {details.get(key, '') if details else ''}")
+
+def display_progress_summary(summary: dict[str, Any]) -> None:
+    """Display a summary of the processing progress."""
+    print("\nProcessing Summary")
+    for key, value in summary.items():
+        print(f"  {key}: {value}")
