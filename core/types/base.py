@@ -4,16 +4,23 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from collections.abc import Callable
 import ast
-from typing import cast, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+
+from core.dependency_injection import Injector
+
+
+@runtime_checkable
+class DependencyAnalyzer(Protocol):
+    """Interface for dependency analyzers."""
+    def analyze_dependencies(self, node: ast.AST) -> dict[str, set[str]]:
+        """Analyze dependencies of an AST node."""
+        ...
+
 
 try:
     from pydantic.v1 import BaseModel, Field
-    from pydantic.v1.class_validators import validator
 except ImportError:
     from pydantic import BaseModel, Field
-    from pydantic.class_validators import validator
-
-from core.dependency_injection import Injector
 
 
 class DocstringSchema(BaseModel):
@@ -48,8 +55,8 @@ class DocstringData:
                 summary=self.summary,
                 description=self.description,
                 args=self.args,
-                returns=cast(dict[str, str], self.returns),
-                raises=cast(list[dict[str, str]], self.raises)
+                returns=self.returns,
+                raises=self.raises
             )
             return True, []
         except ValueError as e:
@@ -65,12 +72,6 @@ class DocstringData:
             "raises": self.raises,
             "complexity": self.complexity
         }
-
-
-@runtime_checkable
-class DependencyAnalyzer(Protocol):
-    """Interface for dependency analyzers."""
-    def analyze_dependencies(self, node: ast.AST) -> dict[str, set[str]]: ...
 
 
 @dataclass
@@ -264,11 +265,9 @@ class DocumentationData:
     def __post_init__(self):
         """Initialize dependencies."""
         if self.docstring_parser is None:
-            parser = cast(Callable[[str], DocstringData], Injector.get("docstring_processor"))
-            self.docstring_parser = parser
+            self.docstring_parser = Injector.get("docstring_processor")
         if self.metric_calculator is None:
-            calculator = cast(Callable[[str], dict[str, object]], Injector.get("metrics_calculator"))
-            self.metric_calculator = calculator
+            self.metric_calculator = Injector.get("metrics_calculator")
 
         # Convert dict to DocstringData if needed
         docstring_data = self.docstring_data

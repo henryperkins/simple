@@ -1,6 +1,7 @@
 """Console utilities without rich."""
 from typing import Optional, Any
 import logging
+from rich.progress import Progress
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -74,9 +75,9 @@ def display_metrics(metrics: dict, title: str = "Metrics") -> None:
     for key, value in metrics.items():
         print(f"  {key}: {value}")
 
-def create_progress() -> None:
-    """Placeholder for create_progress."""
-    print("Progress started")
+def create_progress() -> Progress:
+    """Create a progress object."""
+    return Progress()
 
 def print_phase_header(title: str) -> None:
     """Print a section header with formatting."""

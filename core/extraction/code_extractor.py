@@ -58,6 +58,8 @@ class CodeExtractor:
         self.function_extractor: FunctionExtractor = Injector.get("function_extractor")
         self.class_extractor: ClassExtractor = Injector.get("class_extractor")
         self.dependency_analyzer: DependencyAnalyzer = Injector.get("dependency_analyzer")
+        if self.context.dependency_analyzer is None:
+            self.context.dependency_analyzer = DependencyAnalyzer(self.context)
         self.progress: Optional[Progress] = None
 
     async def extract_code(self, source_code: str) -> ExtractionResult:

@@ -68,24 +68,33 @@ class DocstringProcessor:
     def parse(self, docstring: str) -> DocstringData:
         """Parse a docstring into structured data with validation."""
         try:
-            # Parse the docstring into a dictionary
             parsed_data = self._parse_docstring_content(docstring)
-            
+
+            # Ensure parsed_data is a dictionary before unpacking
+            if isinstance(parsed_data, DocstringData):
+                parsed_data = parsed_data.to_dict()
+
+            # Add default values for required fields with non-empty description
+            parsed_data.setdefault("description", "No description provided.")
+            if not parsed_data["description"] or not parsed_data["description"].strip():
+                parsed_data["description"] = "No description provided."
+
+            parsed_data.setdefault("summary", "No summary available.")
+            if not parsed_data["summary"] or not parsed_data["summary"].strip():
+                parsed_data["summary"] = "No summary available."
+
+            parsed_data.setdefault("args", [])
+            parsed_data.setdefault("returns", {"type": "Any", "description": "No return value documented."})
+            parsed_data.setdefault("raises", [])
+
             # Create and validate DocstringData instance
-            docstring_data = DocstringData(
-                summary=parsed_data["summary"],
-                description=parsed_data["description"],
-                args=parsed_data["args"],
-                returns=cast(ReturnsDict, parsed_data["returns"]),
-                raises=parsed_data["raises"],
-                complexity=parsed_data["complexity"]
-            )
+            docstring_data = DocstringData(**parsed_data)
             is_valid, validation_errors = docstring_data.validate()
-            
+
             if not is_valid:
                 self.logger.error(f"Docstring validation failed: {validation_errors}")
                 raise ValidationError(f"Invalid docstring format: {validation_errors}")
-            
+
             return docstring_data
 
         except Exception as e:
@@ -161,8 +170,8 @@ class DocstringProcessor:
             raises.append(exc_dict)
 
         result = {
-            "summary": parsed_docstring.short_description or "",
-            "description": parsed_docstring.long_description or "",
+            "summary": parsed_docstring.short_description or "No summary available.",
+            "description": parsed_docstring.long_description or "No description provided.",
             "args": args,
             "returns": returns_dict,
             "raises": raises,
