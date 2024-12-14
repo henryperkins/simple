@@ -8,11 +8,15 @@ them against specified schemas, and managing parsing statistics.
 import json
 import os
 from typing import Any, TypeVar, TypedDict, cast
+from pathlib import Path
 
 from jsonschema import validate, ValidationError
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.docstring_processor import DocstringProcessor
-from core.types import ParsedResponse
+from core.markdown_generator import MarkdownGenerator
+from core.types import ParsedResponse, DocumentationData
+from core.types.base import DocstringData, DocstringSchema
+from core.exceptions import ValidationError as CustomValidationError
 
 # Set up the base logger
 base_logger = LoggerSetup.get_logger(__name__)
@@ -47,6 +51,7 @@ class ResponseParsingService:
         """Initialize the response parsing service."""
         self.logger = CorrelationLoggerAdapter(base_logger)
         self.docstring_processor = DocstringProcessor()
+        self.markdown_generator = MarkdownGenerator(correlation_id)
         self.docstring_schema = self._load_schema("docstring_schema.json")
         self.function_schema = self._load_schema("function_tools_schema.json")
         self._parsing_stats = {
@@ -74,73 +79,77 @@ class ResponseParsingService:
         expected_format: str = "docstring",
         validate_schema: bool = True,
     ) -> ParsedResponse:
-        """Parse the AI model response and return a ParsedResponse object."""
+        """Parse the AI model response with strict validation."""
         try:
-            # Handle direct response format
-            if "summary" in response or "description" in response:
-                content = response
-                usage: dict[str, int] = {}
-            else:
-                # Extract content from the response
-                content = self._extract_content(response)
-                if content is None:
+            content = self._extract_content(response)
+            if not content:
+                raise CustomValidationError("Failed to extract content from response")
+
+            # Validate against schema
+            if validate_schema:
+                try:
+                    DocstringSchema(**content)
+                except ValueError as e:
                     fallback = self._create_fallback_response()
                     return ParsedResponse(
                         content=fallback,
+                        markdown=self._generate_markdown(fallback),
                         format_type=expected_format,
                         parsing_time=0.0,
                         validation_success=False,
-                        errors=["Failed to extract content from response"],
-                        metadata={},
+                        errors=[str(e)],
+                        metadata={}
                     )
-                usage = cast(dict[str, int], response.get("usage", {}))
 
-            # Ensure required fields exist
-            content = self._ensure_required_fields(content)
+            # Create DocstringData instance
+            docstring_data = DocstringData(**content)
+            is_valid, validation_errors = docstring_data.validate()
 
-            # Get parsing time safely
-            total_ms = usage.get("total_ms", 0)
-            parsing_time = float(total_ms)
-
-            # Create a new dictionary with only the required fields
-            filtered_content = {
-                "summary": content.get("summary", ""),
-                "description": content.get("description", ""),
-                "args": content.get("args", []),
-                "returns": content.get("returns", {"type": "Any", "description": ""}),
-                "raises": content.get("raises", []),
-                "complexity": content.get("complexity", 1),
-            }
-
-            # Validate the content if required
-            is_valid = True
-            validation_errors: list[str] = []
-            if validate_schema:
-                is_valid, validation_errors = self._validate_content(
-                    filtered_content, expected_format
+            if not is_valid:
+                self.logger.warning(f"Validation errors: {validation_errors}")
+                content_dict = docstring_data.to_dict()
+                return ParsedResponse(
+                    content=content_dict,
+                    markdown=self._generate_markdown(content_dict),
+                    format_type=expected_format,
+                    parsing_time=0.0,
+                    validation_success=False,
+                    errors=validation_errors,
+                    metadata={}
                 )
 
-            # Return the parsed response
+            content_dict = docstring_data.to_dict()
             return ParsedResponse(
-                content=filtered_content,
+                content=content_dict,
+                markdown=self._generate_markdown(content_dict),
                 format_type=expected_format,
-                parsing_time=parsing_time,
-                validation_success=is_valid,
-                errors=validation_errors,
-                metadata={},
+                parsing_time=0.0,
+                validation_success=True,
+                errors=[],
+                metadata={}
             )
 
         except Exception as e:
             self.logger.error(f"Error parsing response: {e}")
-            fallback = self._create_fallback_response()
-            return ParsedResponse(
-                content=fallback,
-                format_type=expected_format,
-                parsing_time=0.0,
-                validation_success=False,
-                errors=[f"Failed to parse response: {e}"],
-                metadata={},
+            raise CustomValidationError(f"Failed to parse response: {e}")
+
+    def _generate_markdown(self, content: dict[str, Any]) -> str:
+        """Convert parsed content to markdown format."""
+        try:
+            # Create a minimal DocumentationData object for markdown generation
+            doc_data = DocumentationData(
+                module_name="",
+                module_path=Path("."),  # Use current directory as default
+                module_summary=content.get("summary", ""),
+                source_code="",
+                code_metadata={},
+                ai_content=content,  # The AI-generated content we want to format
+                docstring_data=DocstringData(**content)
             )
+            return self.markdown_generator.generate(doc_data)
+        except Exception as e:
+            self.logger.error(f"Error generating markdown: {e}")
+            return f"Error generating markdown documentation: {str(e)}"
 
     def _extract_content(self, response: dict[str, Any]) -> dict[str, Any] | None:
         """Extract content from various response formats."""

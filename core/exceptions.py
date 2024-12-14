@@ -51,3 +51,8 @@ class DocumentationGenerationError(Exception):
 
 class APICallError(Exception):
     """Raised when an API call fails."""
+    
+class DataValidationError(Exception):
+    """Raised when data validation fails."""
+    def __init__(self, message: str):
+        super().__init__(message)

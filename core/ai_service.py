@@ -14,8 +14,8 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.prompt_manager import PromptManager
 from core.dependency_injection import Injector
 from api.token_management import TokenManager
-from core.exceptions import APICallError
-from core.types.base import ProcessingResult, DocumentationContext
+from core.exceptions import APICallError, DataValidationError
+from core.types.base import ProcessingResult, DocumentationContext, DocstringData, DocstringSchema
 
 
 class AIService:
@@ -117,53 +117,40 @@ class AIService:
             async with self.semaphore:
                 response = await self._make_api_call_with_retry(prompt, function_schema)
 
-            # Enhanced response format validation
-            formatted_response = self._format_response(response)
+            # Parse response into DocstringData
             parsed_response = await self.response_parser.parse_response(
-                formatted_response, expected_format="docstring", validate_schema=bool(schema)
+                response, 
+                expected_format="docstring",
+                validate_schema=True
             )
 
-            docstring_data = self.docstring_processor.parse(parsed_response.content)
-            is_valid = parsed_response.validation_success
-            validation_errors = parsed_response.errors
+            if not parsed_response.validation_success:
+                raise DataValidationError(
+                    f"Response validation failed: {parsed_response.errors}"
+                )
+
+            # Create validated DocstringData instance
+            docstring_data = DocstringData(**parsed_response.content)
+            is_valid, validation_errors = docstring_data.validate()
 
             if not is_valid:
-                self.logger.warning(
-                    f"Docstring validation failed: {', '.join(validation_errors)}",
-                    extra={"correlation_id": self.correlation_id},
-                )
+                raise DataValidationError(f"Docstring validation failed: {validation_errors}")
 
-                return ProcessingResult(
-                    content={"error": "Docstring validation failed"},
-                    usage={},
-                    metrics={
-                        "processing_time": parsed_response.parsing_time,
-                        "response_size": len(str(response)),
-                        "validation_success": is_valid,
-                    },
-                    is_cached=False,
-                    processing_time=parsed_response.parsing_time,
-                    validation_status=False,
-                    validation_errors=validation_errors,
-                    schema_errors=parsed_response.errors,
-                )
-
-            # Return the validated and processed docstring
             return ProcessingResult(
                 content=docstring_data.to_dict(),
                 usage=response.get("usage", {}),
                 metrics={
                     "processing_time": parsed_response.parsing_time,
-                    "response_size": len(str(response)),
-                    "validation_success": is_valid,
+                    "validation_success": True
                 },
-                is_cached=False,
-                processing_time=parsed_response.parsing_time,
-                validation_status=is_valid,
-                validation_errors=validation_errors,
-                schema_errors=parsed_response.errors,
+                validation_status=True,
+                validation_errors=[],
+                schema_errors=[]
             )
 
+        except DataValidationError as e:
+            self.logger.error(f"Validation error: {e}")
+            raise
         except Exception as e:
             self.logger.error(
                 f"Error generating documentation: {e}",

@@ -5,37 +5,33 @@ and documentation generation throughout the application.
 """
 
 from core.types.base import (
-    BaseData,
-    DocumentationContext,
     DocumentationData,
     DocstringData,
-    ExtractionContext,
+    MetricData,
     ExtractedArgument,
     ExtractedElement,
+    ExtractionContext,
+    ExtractionResult,
     ExtractedFunction,
     ExtractedClass,
-    ExtractionResult,
-    Injector,
-    MetricData,
     ParsedResponse,
+    TokenUsage,
     ProcessingResult,
-    TokenUsage
+    DocumentationContext
 )
 
 __all__ = [
-    "BaseData",
-    "DocumentationContext",
     "DocumentationData",
+    "DocumentationContext",
     "DocstringData",
-    "ExtractionContext",
     "ExtractedArgument",
     "ExtractedElement",
+    "ExtractedContext",
     "ExtractedFunction",
-    "ExtractedClass",
-    "ExtractionResult",
-    "Injector",
     "MetricData",
+    "ExtractionResult",
+    "ExtractedClass",
     "ParsedResponse",
-    "ProcessingResult",
-    "TokenUsage"
+    "TokenUsage",
+    "ProcessingResult"
 ]
