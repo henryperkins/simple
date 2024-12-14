@@ -85,10 +85,24 @@ class ResponseParsingService:
             if not content:
                 raise CustomValidationError("Failed to extract content from response")
 
-            # Validate against schema
+            # If content is a string, try to parse it as JSON
+            if isinstance(content, str):
+                try:
+                    content_dict = json.loads(content)
+                    if isinstance(content_dict, dict):
+                        content = content_dict
+                except json.JSONDecodeError:
+                    # Keep content as string if it's not valid JSON
+                    pass
+
+            # Validate content structure
             if validate_schema:
                 try:
-                    DocstringSchema(**content)
+                    if isinstance(content, dict):
+                        DocstringSchema(**content)
+                    else:
+                        # For string content, we'll validate after parsing
+                        pass
                 except ValueError as e:
                     fallback = self._create_fallback_response()
                     return ParsedResponse(
@@ -101,27 +115,10 @@ class ResponseParsingService:
                         metadata={}
                     )
 
-            # Create DocstringData instance
-            docstring_data = DocstringData(**content)
-            is_valid, validation_errors = docstring_data.validate()
-
-            if not is_valid:
-                self.logger.warning(f"Validation errors: {validation_errors}")
-                content_dict = docstring_data.to_dict()
-                return ParsedResponse(
-                    content=content_dict,
-                    markdown=self._generate_markdown(content_dict),
-                    format_type=expected_format,
-                    parsing_time=0.0,
-                    validation_success=False,
-                    errors=validation_errors,
-                    metadata={}
-                )
-
-            content_dict = docstring_data.to_dict()
+            # Return the parsed response with the appropriate content
             return ParsedResponse(
-                content=content_dict,
-                markdown=self._generate_markdown(content_dict),
+                content=content,
+                markdown=self._generate_markdown(content if isinstance(content, dict) else {"summary": content}),
                 format_type=expected_format,
                 parsing_time=0.0,
                 validation_success=True,

@@ -2,16 +2,30 @@
 Markdown documentation generator module.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any, TypedDict, cast
+
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import DocumentationData, ExtractedClass
 from core.exceptions import DocumentationError
 
 
+class FunctionDict(TypedDict, total=False):
+    name: str
+    metrics: dict[str, Any]
+    args: list[dict[str, Any]]
+    returns: dict[str, str]
+
+
+class ConstantDict(TypedDict, total=False):
+    name: str
+    type: str
+    value: str
+
+
 class MarkdownGenerator:
     """Generates formatted markdown documentation."""
 
-    def __init__(self, correlation_id: Optional[str] = None) -> None:
+    def __init__(self, correlation_id: str | None = None) -> None:
         """
         Initialize the markdown generator.
 
@@ -27,7 +41,13 @@ class MarkdownGenerator:
     def generate(self, documentation_data: DocumentationData) -> str:
         """Generate markdown documentation."""
         try:
-            self.logger.debug("Generating markdown documentation.")
+            # Log detailed information about the documentation_data
+            self.logger.debug(
+                f"Generating markdown for module: {documentation_data.module_name}"
+            )
+            self.logger.debug(
+                f"DocumentationData content: {documentation_data.to_dict()}"
+            )
 
             # Check for complete information
             if not documentation_data.source_code:
@@ -62,13 +82,13 @@ class MarkdownGenerator:
                 ),
                 self._generate_ai_doc_section(documentation_data.ai_content),
                 self._generate_class_tables(
-                    documentation_data.code_metadata.get("classes", [])
+                    cast(list[dict[str, Any]], documentation_data.code_metadata.get("classes", []))
                 ),
                 self._generate_function_tables(
-                    documentation_data.code_metadata.get("functions", [])
+                    cast(list[FunctionDict], documentation_data.code_metadata.get("functions", []))
                 ),
                 self._generate_constants_table(
-                    documentation_data.code_metadata.get("constants", [])
+                    cast(list[ConstantDict], documentation_data.code_metadata.get("constants", []))
                 ),
                 self._generate_source_code(documentation_data.source_code),
             ]
@@ -115,7 +135,7 @@ class MarkdownGenerator:
                 f"Module {documentation_data.module_name} is missing a summary",
                 extra={"correlation_id": self.correlation_id},
             )
-            documentation_data.module_summary = (
+            documentation_data.module_summary = str(
                 documentation_data.ai_content.get("summary")
                 or documentation_data.docstring_data.summary
                 or "No module summary provided."
@@ -165,7 +185,7 @@ class MarkdownGenerator:
             ]
         )
 
-    def _generate_ai_doc_section(self, ai_documentation: Dict[str, Any]) -> str:
+    def _generate_ai_doc_section(self, ai_documentation: dict[str, Any]) -> str:
         """
         Generate the AI documentation section using docstring data and AI enhancements.
 
@@ -218,7 +238,7 @@ class MarkdownGenerator:
 
         return "\n".join(sections)
 
-    def _generate_class_tables(self, classes: List[Dict[str, Any]]) -> str:
+    def _generate_class_tables(self, classes: list[dict[str, Any]]) -> str:
         """Generate markdown tables for classes.
 
         Args:
@@ -233,12 +253,10 @@ class MarkdownGenerator:
             cls_dict.pop('_logger', None)
             cls = ExtractedClass(**cls_dict)  # Convert dictionary to ExtractedClass instance
             class_name = cls.name
-            # ...existing code...
             tables.append(f"### {class_name}\n\n")
-            # ...existing code...
         return "\n".join(tables)
 
-    def _generate_function_tables(self, functions: list) -> str:
+    def _generate_function_tables(self, functions: list[FunctionDict]) -> str:
         """Generate the functions section."""
         try:
             if not functions:
@@ -253,7 +271,8 @@ class MarkdownGenerator:
 
             for func in functions:
                 # Safely get the complexity
-                complexity = func.get("metrics", {}).get("complexity", 0)
+                metrics = func.get("metrics", {})
+                complexity = metrics.get("complexity", 0) if isinstance(metrics, dict) else 0
                 warning = " ⚠️" if complexity > 10 else ""
 
                 # Generate parameters safely
@@ -268,7 +287,8 @@ class MarkdownGenerator:
                 )
 
                 # Safely get the return type
-                return_type = func.get("returns", {}).get("type", "Any")
+                returns = func.get("returns", {})
+                return_type = returns.get("type", "Any") if isinstance(returns, dict) else "Any"
 
                 lines.append(
                     f"| `{func.get('name', 'Unknown')}` | `({params})` | "
@@ -280,7 +300,7 @@ class MarkdownGenerator:
             self.logger.error(f"Error generating function tables: {e}", exc_info=True)
             return "An error occurred while generating function documentation."
 
-    def _generate_constants_table(self, constants: list) -> str:
+    def _generate_constants_table(self, constants: list[ConstantDict]) -> str:
         """Generate the constants section."""
         try:
             if not constants:
@@ -305,7 +325,7 @@ class MarkdownGenerator:
             self.logger.error(f"Error generating constants table: {e}", exc_info=True)
             return "An error occurred while generating constants documentation."
 
-    def _generate_source_code(self, source_code: Optional[str]) -> str:
+    def _generate_source_code(self, source_code: str | None) -> str:
         """Generate the source code section."""
         try:
             if not source_code:

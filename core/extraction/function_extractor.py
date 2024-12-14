@@ -6,7 +6,7 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 """
 
 import ast
-from typing import List, Optional, Union
+from typing import Optional, Union
 from core.logger import CorrelationLoggerAdapter, set_correlation_id
 from core.types import (
     ExtractedFunction,
@@ -14,7 +14,7 @@ from core.types import (
     ExtractionContext,
     MetricData,
 )
-from utils import get_source_segment, get_node_name, NodeNameVisitor
+from utils import get_source_segment, get_node_name, NodeNameVisitor, handle_extraction_error
 from core.types.base import Injector
 
 
@@ -40,7 +40,7 @@ class FunctionExtractor:
         self.context = context
         self.metrics_calculator = Injector.get("metrics_calculator")
         self.docstring_parser = Injector.get("docstring_processor")
-        self.errors: List[str] = []
+        self.errors: list[str] = []
 
     def _should_process_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
@@ -77,8 +77,8 @@ class FunctionExtractor:
         return True
 
     async def extract_functions(
-        self, nodes: Union[ast.AST, List[ast.AST]]
-    ) -> List[ExtractedFunction]:
+        self, nodes: Union[ast.AST, list[ast.AST]]
+    ) -> list[ExtractedFunction]:
         """Extract function definitions from AST nodes.
 
         Args:
@@ -87,7 +87,7 @@ class FunctionExtractor:
         Returns:
             A list of extracted function metadata.
         """
-        functions: List[ExtractedFunction] = []
+        functions: list[ExtractedFunction] = []
 
         # Support for either a list of nodes or a single node
         nodes_to_process = [nodes] if isinstance(nodes, ast.AST) else nodes
@@ -136,91 +136,77 @@ class FunctionExtractor:
             self.logger.error(f"Error extracting functions: {e}", exc_info=True)
             return []
 
-    async def _process_function(
-        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
-    ) -> Optional[ExtractedFunction]:
-        """Process a function node to extract information.
+    def _extract_decorators(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+        """
+        Extract decorator names from a function node.
 
         Args:
             node: The function node to process.
 
         Returns:
-            The extracted function metadata, or None if processing fails.
+            A list of decorator names as strings.
         """
+        decorators = []
+        for decorator in node.decorator_list:
+            if isinstance(decorator, ast.Name):
+                decorators.append(decorator.id)
+            elif isinstance(decorator, ast.Attribute):
+                # Handle cases like `module.decorator`
+                if hasattr(decorator.value, 'id'):
+                    decorators.append(f"{decorator.value.id}.{decorator.attr}")
+            elif isinstance(decorator, ast.Call):
+                # Handle decorated calls like `@decorator(arg)`
+                if isinstance(decorator.func, ast.Name):
+                    decorators.append(decorator.func.id)
+                elif isinstance(decorator.func, ast.Attribute):
+                    if hasattr(decorator.func.value, 'id'):
+                        decorators.append(f"{decorator.func.value.id}.{decorator.func.attr}")
+        return decorators
+
+    def _extract_arguments(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ExtractedArgument]:
+        """
+        Extract arguments from a function node.
+
+        Args:
+            node: The function node to process.
+
+        Returns:
+            A list of extracted arguments.
+        """
+        args = []
+        for arg in node.args.args:
+            args.append(ExtractedArgument(name=arg.arg, type=get_node_name(arg.annotation) or "Any", description=""))
+        return args
+
+    async def _process_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> Optional[ExtractedFunction]:
         try:
-            # Extract basic information
             docstring = ast.get_docstring(node) or ""
             source = get_source_segment(self.context.source_code or "", node) or ""
 
-            # Get the number of default arguments
-            num_defaults = len(node.args.defaults)
-            # Calculate the offset for matching defaults with arguments
-            default_offset = len(node.args.args) - num_defaults
-
             # Extract function components
-            args = []
-            for i, arg in enumerate(node.args.args):
-                if not isinstance(arg, ast.arg):
-                    continue
-
-                # Check if this argument has a default value
-                has_default = i >= default_offset
-                default_index = i - default_offset if has_default else -1
-                default_value = None
-
-                if has_default and default_index < len(node.args.defaults):
-                    default_node = node.args.defaults[default_index]
-                    if isinstance(default_node, ast.Constant):
-                        default_value = repr(default_node.value)
-                    elif isinstance(default_node, ast.Name):
-                        default_value = default_node.id
-                    else:
-                        # For more complex default values, use a generic representation
-                        default_value = "..."
-
-                args.append(
-                    ExtractedArgument(
-                        name=arg.arg,
-                        type=get_node_name(arg.annotation),
-                        default_value=default_value,
-                        is_required=not has_default,
-                    )
-                )
-
+            decorators = self._extract_decorators(node)
+            args = self._extract_arguments(node)
             return_type = get_node_name(node.returns) or "Any"
-            decorators = [
-                NodeNameVisitor().visit(decorator) for decorator in node.decorator_list
-            ]
 
-            # Create the extracted function
             extracted_function = ExtractedFunction(
                 name=node.name,
                 lineno=node.lineno,
                 source=source,
                 docstring=docstring,
-                metrics=MetricData(),  # Will be populated below
-                dependencies=self.context.dependency_analyzer.analyze_dependencies(
-                    node
-                ),
+                metrics=self.metrics_calculator.calculate_metrics(source, self.context.module_name),
+                dependencies=self.context.dependency_analyzer.analyze_dependencies(node),
                 decorators=decorators,
-                complexity_warnings=[],
-                ast_node=node,
                 args=args,
                 returns={"type": return_type, "description": ""},
                 is_async=isinstance(node, ast.AsyncFunctionDef),
             )
-
-            # Calculate metrics using the metrics calculator
-            metrics = self.metrics_calculator.calculate_metrics(
-                source, self.context.module_name
-            )
-            extracted_function.metrics = metrics
-
             return extracted_function
         except Exception as e:
-            self.logger.error(
-                f"Failed to process function {node.name}: {e}",
-                exc_info=True,
-                extra={"function_name": node.name},
+            handle_extraction_error(
+                self.logger,
+                self.errors,
+                "function_extraction",
+                e,
+                function_name=node.name,
             )
-            raise
+            return None

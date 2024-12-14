@@ -1,6 +1,6 @@
 """Manages prompt generation and formatting for AI interactions."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, TypedDict, cast, Literal
 from pathlib import Path
 import json
 from jinja2 import Environment, FileSystemLoader
@@ -10,10 +10,26 @@ from utils import handle_error
 from core.logger import CorrelationLoggerAdapter
 
 
+class MetricsDict(TypedDict, total=False):
+    """Type definition for metrics dictionary."""
+    cyclomatic_complexity: int | Literal["Unknown"]
+
+
+class AttributeDict(TypedDict, total=False):
+    """Type definition for attribute dictionary."""
+    name: str
+
+
+class DocstringDict(TypedDict, total=False):
+    """Type definition for docstring dictionary."""
+    summary: str
+    description: str
+
+
 class PromptManager:
     """Manages the generation and formatting of prompts for AI interactions."""
 
-    def __init__(self, correlation_id: Optional[str] = None) -> None:
+    def __init__(self, correlation_id: str | None = None) -> None:
         """Initialize the PromptManager.
 
         Args:
@@ -60,8 +76,8 @@ class PromptManager:
         module_name: str = "",
         file_path: str = "",
         source_code: str = "",
-        classes: Optional[List[ExtractedClass]] = None,
-        functions: Optional[List[ExtractedFunction]] = None,
+        classes: list[ExtractedClass] | None = None,
+        functions: list[ExtractedFunction] | None = None,
     ) -> str:
         """Create a comprehensive prompt for documentation generation.
 
@@ -157,18 +173,29 @@ class PromptManager:
         docstring_info = (
             self.docstring_processor.parse(func.docstring)
             if func.docstring
-            else DocstringData(summary="")
+            else DocstringData(summary="No summary available", description="No description available")
         )
         returns_info = func.returns or {"type": "Any", "description": ""}
+
+        # Get summary with proper type handling
+        summary = "No summary available"
+        if isinstance(docstring_info, DocstringData):
+            summary = docstring_info.summary
+        elif isinstance(docstring_info, dict):
+            docstring_dict = cast(DocstringDict, docstring_info)
+            summary = docstring_dict.get("summary", "No summary available")
+
+        metrics = cast(MetricsDict, func.metrics or {})
+        complexity = str(metrics.get("cyclomatic_complexity", "Unknown"))
 
         formatted_info = (
             f"Function: {func.name}\n"
             f"Arguments: ({args_str})\n"
             f"Returns: {returns_info['type']}\n"
-            f"Existing Docstring: {docstring_info.summary}\n"
-            f"Decorators: {', '.join(func.decorators) if func.decorators else 'None'}\n"
+            f"Existing Docstring: {summary}\n"
+            f"Decorators: {', '.join(str(d) for d in (func.decorators or []))}\n"
             f"Is Async: {'Yes' if func.is_async else 'No'}\n"
-            f"Complexity Score: {func.metrics.cyclomatic_complexity if func.metrics else 'Unknown'}\n"
+            f"Complexity Score: {complexity}\n"
         )
 
         self.logger.debug(f"Function info formatted for: {func.name}")
@@ -193,7 +220,7 @@ class PromptManager:
             raise ValueError("Class name is required to format class information.")
 
         methods_str = "\n    ".join(
-            f"- {m.name}({', '.join(a.name for a in m.args)})" for m in cls.methods
+            f"- {m.name}({', '.join(str(a.name) for a in m.args)})" for m in cls.methods
         )
 
         # Use synchronous parse with fallback to empty DocstringData
@@ -201,29 +228,45 @@ class PromptManager:
             docstring_info = (
                 self.docstring_processor.parse(cls.docstring)
                 if cls.docstring
-                else DocstringData(summary="")
+                else DocstringData(summary="No summary available", description="No description available")
             )
         except Exception as e:
             self.logger.warning(f"Failed to parse docstring for {cls.name}: {e}")
-            docstring_info = DocstringData(summary="Failed to parse docstring")
+            docstring_info = DocstringData(
+                summary="Failed to parse docstring",
+                description="Failed to parse docstring description"
+            )
+
+        # Get summary with proper type handling
+        summary = "No summary available"
+        if isinstance(docstring_info, DocstringData):
+            summary = docstring_info.summary
+        elif isinstance(docstring_info, dict):
+            docstring_dict = cast(DocstringDict, docstring_info)
+            summary = docstring_dict.get("summary", "No summary available")
+
+        attributes = [cast(AttributeDict, a) for a in cls.attributes]
+        instance_attrs = [cast(AttributeDict, a) for a in cls.instance_attributes]
+        metrics = cast(MetricsDict, cls.metrics or {})
+        complexity = str(metrics.get("cyclomatic_complexity", "Unknown"))
 
         formatted_info = (
             f"Class: {cls.name}\n"
-            f"Base Classes: {', '.join(cls.bases) if cls.bases else 'None'}\n"
-            f"Existing Docstring: {docstring_info.summary}\n"
+            f"Base Classes: {', '.join(str(b) for b in (cls.bases or []))}\n"
+            f"Existing Docstring: {summary}\n"
             f"Methods:\n    {methods_str}\n"
-            f"Attributes: {', '.join(a['name'] for a in cls.attributes)}\n"
-            f"Instance Attributes: {', '.join(a['name'] for a in cls.instance_attributes)}\n"
-            f"Decorators: {', '.join(cls.decorators) if cls.decorators else 'None'}\n"
+            f"Attributes: {', '.join(str(a.get('name', '')) for a in attributes)}\n"
+            f"Instance Attributes: {', '.join(str(a.get('name', '')) for a in instance_attrs)}\n"
+            f"Decorators: {', '.join(str(d) for d in (cls.decorators or []))}\n"
             f"Is Exception: {'Yes' if cls.is_exception else 'No'}\n"
-            f"Complexity Score: {cls.metrics.cyclomatic_complexity if cls.metrics else 'Unknown'}\n"
+            f"Complexity Score: {complexity}\n"
         )
 
         self.logger.debug(f"Class info formatted for: {cls.name}")
         return formatted_info
 
     @handle_error
-    def get_function_schema(self, schema: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def get_function_schema(self, schema: dict[str, Any] | None = None) -> dict[str, Any]:
         """Get the function schema for structured output.
 
         Returns:
@@ -251,7 +294,7 @@ class PromptManager:
         }
     
     @handle_error
-    def get_prompt_with_schema(self, prompt: str, schema: Dict[str, Any]) -> str:
+    def get_prompt_with_schema(self, prompt: str, schema: dict[str, Any]) -> str:
         """
         Adds function calling instructions to a prompt.
 

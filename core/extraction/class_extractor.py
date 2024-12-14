@@ -303,7 +303,10 @@ class ClassExtractor:
             )
 
             # Ensure docstring_info is set correctly
-            extracted_class.docstring_info = self.docstring_parser.parse(docstring)
+            if isinstance(docstring, str):
+                extracted_class.docstring_info = self.docstring_parser.parse(docstring)
+            elif isinstance(docstring, dict):
+                extracted_class.docstring_info = DocstringData(**docstring)
 
             # Calculate metrics using the metrics calculator
             if self.metrics_calculator:

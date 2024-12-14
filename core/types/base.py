@@ -2,11 +2,22 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Set
 import ast
-from typing import Protocol, runtime_checkable
+from typing import (
+    Protocol,
+    runtime_checkable,
+    Any,
+    TypeVar,
+    cast,
+    TypedDict,
+    Union,
+)
 
 from core.dependency_injection import Injector
+
+
+T = TypeVar('T')
 
 
 @runtime_checkable
@@ -27,11 +38,11 @@ class DocstringSchema(BaseModel):
     """Schema for validating docstring data."""
     summary: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
-    args: list[dict[str, object]] = Field(default_factory=list)
+    args: list[dict[str, Any]] = Field(default_factory=list)
     returns: dict[str, str] = Field(...)
     raises: list[dict[str, str]] = Field(default_factory=list)
 
-    def validate_returns(self, v: dict[str, str]) -> dict[str, str]:
+    def validate_returns(self, self_param: Any, v: dict[str, str]) -> dict[str, str]:
         """Validate returns field."""
         if 'type' not in v or 'description' not in v:
             raise ValueError("Returns must contain 'type' and 'description'")
@@ -41,11 +52,11 @@ class DocstringSchema(BaseModel):
 @dataclass
 class DocstringData:
     """Unified data model for docstring information."""
-    summary: str
-    description: str
-    args: list[dict[str, object]] = field(default_factory=list)
-    returns: dict[str, object] = field(default_factory=dict)
-    raises: list[dict[str, object]] = field(default_factory=list)
+    summary: str = "No summary available"
+    description: str = "No description available"
+    args: list[dict[str, Any]] = field(default_factory=list)
+    returns: dict[str, str] = field(default_factory=lambda: {"type": "Any", "description": ""})
+    raises: list[dict[str, str]] = field(default_factory=list)
     complexity: int = 1
 
     def validate(self) -> tuple[bool, list[str]]:
@@ -62,7 +73,7 @@ class DocstringData:
         except ValueError as e:
             return False, [str(e)]
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary format."""
         return {
             "summary": self.summary,
@@ -103,13 +114,13 @@ class ExtractionContext:
 @dataclass
 class ExtractionResult:
     """Holds the results of the code extraction process."""
-    module_docstring: dict[str, object] = field(default_factory=dict)
-    classes: list[dict[str, object]] = field(default_factory=list)
-    functions: list[dict[str, object]] = field(default_factory=list)
-    variables: list[dict[str, object]] = field(default_factory=list)
-    constants: list[dict[str, object]] = field(default_factory=list)
+    module_docstring: dict[str, Any] = field(default_factory=dict)
+    classes: list[dict[str, Any]] = field(default_factory=list)
+    functions: list[dict[str, Any]] = field(default_factory=list)
+    variables: list[dict[str, Any]] = field(default_factory=list)
+    constants: list[dict[str, Any]] = field(default_factory=list)
     dependencies: dict[str, set[str]] = field(default_factory=dict)
-    metrics: dict[str, object] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     source_code: str = ""
     module_name: str = ""
     file_path: str = ""
@@ -121,17 +132,17 @@ class DocumentationContext:
     source_code: str
     module_path: Path | None = None
     include_source: bool = True
-    metadata: dict[str, object] | None = field(default_factory=dict)
-    classes: list[dict[str, object]] | None = field(default_factory=list)
-    functions: list[dict[str, object]] | None = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    classes: list[dict[str, Any]] = field(default_factory=list)
+    functions: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class ProcessingResult:
     """Represents the result of a processing operation."""
-    content: dict[str, object] = field(default_factory=dict)
-    usage: dict[str, object] = field(default_factory=dict)
-    metrics: dict[str, object] = field(default_factory=dict)
+    content: dict[str, Any] = field(default_factory=dict)
+    usage: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     validation_status: bool = False
     validation_errors: list[str] = field(default_factory=list)
     schema_errors: list[str] = field(default_factory=list)
@@ -144,7 +155,7 @@ class MetricData:
     cyclomatic_complexity: int = 0
     cognitive_complexity: int = 0
     maintainability_index: float = 0.0
-    halstead_metrics: dict[str, object] = field(default_factory=dict)
+    halstead_metrics: dict[str, Any] = field(default_factory=dict)
     lines_of_code: int = 0
     total_functions: int = 0
     scanned_functions: int = 0
@@ -152,18 +163,18 @@ class MetricData:
     total_classes: int = 0
     scanned_classes: int = 0
     class_scan_ratio: float = 0.0
-    complexity_graph: object | None = None  # Placeholder for optional graph representation
+    complexity_graph: Any | None = None  # Placeholder for optional graph representation
 
 
 @dataclass
 class ParsedResponse:
     """Response from parsing operations."""
-    content: dict[str, object]
+    content: dict[str, Any]
     format_type: str
     parsing_time: float
     validation_success: bool
     errors: list[str]
-    metadata: dict[str, object]
+    metadata: dict[str, Any]
     markdown: str = ""
 
 
@@ -193,7 +204,7 @@ class ExtractedElement:
     lineno: int
     source: str | None = None
     docstring: str | None = None
-    metrics: dict[str, object] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     dependencies: dict[str, set[str]] = field(default_factory=dict)
     decorators: list[str] = field(default_factory=list)
     complexity_warnings: list[str] = field(default_factory=list)
@@ -225,22 +236,27 @@ class ExtractedFunction(ExtractedElement):
     is_method: bool = False
     parent_class: str | None = None
 
-    def __post_init__(self):
-        """Initialize dependencies."""
-        if self.returns is None:
-            self.returns = {"type": "Any", "description": ""}
-
 
 @dataclass
 class ExtractedClass(ExtractedElement):
     """Represents a class extracted from code."""
     methods: list[ExtractedFunction] = field(default_factory=list)
-    attributes: list[dict[str, object]] = field(default_factory=list)
-    instance_attributes: list[dict[str, object]] = field(default_factory=list)
+    attributes: list[dict[str, Any]] = field(default_factory=list)
+    instance_attributes: list[dict[str, Any]] = field(default_factory=list)
     bases: list[str] = field(default_factory=list)
     metaclass: str | None = None
     is_exception: bool = False
     docstring_info: DocstringData | None = None
+
+
+class DocstringDict(TypedDict, total=False):
+    """Type definition for docstring dictionary."""
+    summary: str
+    description: str
+    args: list[dict[str, Any]]
+    returns: dict[str, str]
+    raises: list[dict[str, str]]
+    complexity: int
 
 
 @dataclass
@@ -250,19 +266,19 @@ class DocumentationData:
     module_path: Path
     module_summary: str
     source_code: str
-    docstring_data: DocstringData
-    ai_content: dict[str, object]
-    code_metadata: dict[str, object]
+    docstring_data: Union[DocstringData, DocstringDict]
+    ai_content: dict[str, Any]
+    code_metadata: dict[str, Any]
     glossary: dict[str, dict[str, str]] = field(default_factory=dict)
-    changes: list[dict[str, object]] = field(default_factory=list)
+    changes: list[dict[str, Any]] = field(default_factory=list)
     complexity_scores: dict[str, float] = field(default_factory=dict)
-    metrics: dict[str, object] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     validation_status: bool = False
     validation_errors: list[str] = field(default_factory=list)
     docstring_parser: Callable[[str], DocstringData] | None = None
-    metric_calculator: Callable[[str], dict[str, object]] | None = None
+    metric_calculator: Callable[[str], dict[str, Any]] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize dependencies."""
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get("docstring_processor")
@@ -270,27 +286,34 @@ class DocumentationData:
             self.metric_calculator = Injector.get("metrics_calculator")
 
         # Convert dict to DocstringData if needed
-        docstring_data = self.docstring_data
-        if not isinstance(docstring_data, DocstringData):
-            self.docstring_data = DocstringData(**docstring_data)
+        if isinstance(self.docstring_data, dict):
+            docstring_dict = self.docstring_data
+            self.docstring_data = DocstringData(
+                summary=str(docstring_dict.get("summary", "")),
+                description=str(docstring_dict.get("description", "")),
+                args=docstring_dict.get("args", []),
+                returns=docstring_dict.get("returns", {}),
+                raises=docstring_dict.get("raises", []),
+                complexity=int(docstring_dict.get("complexity", 1))
+            )
 
         # Ensure module summary is never None
         if not self.module_summary:
             ai_summary = self.ai_content.get("summary")
-            self.module_summary = (
-                str(ai_summary) if isinstance(ai_summary, str)
-                else self.docstring_data.summary if self.docstring_data
+            self.module_summary = str(
+                ai_summary if isinstance(ai_summary, str)
+                else self.docstring_data.summary if isinstance(self.docstring_data, DocstringData)
                 else "No module summary available."
             )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert DocumentationData to a dictionary."""
         return {
             "module_name": self.module_name,
             "module_path": str(self.module_path),
             "module_summary": self.module_summary,
             "source_code": self.source_code,
-            "docstring_data": self.docstring_data.to_dict(),
+            "docstring_data": self.docstring_data.to_dict() if isinstance(self.docstring_data, DocstringData) else self.docstring_data,
             "ai_content": self.ai_content,
             "code_metadata": self.code_metadata,
             "glossary": self.glossary,

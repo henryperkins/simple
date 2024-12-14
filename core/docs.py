@@ -158,7 +158,15 @@ class DocumentationOrchestrator:
                     f"AI response validation failed: {parsed_response.errors}"
                 )
 
-            docstring_data = self.docstring_processor.parse(parsed_response.content)
+            # Handle different response content types
+            try:
+                if isinstance(parsed_response.content, (str, dict)):
+                    docstring_data = self.docstring_processor.parse(parsed_response.content)
+                else:
+                    raise ValueError(f"Unexpected response content type: {type(parsed_response.content)}")
+            except ValidationError as ve:
+                self.logger.error(f"Docstring validation error: {ve}")
+                raise DocumentationError(f"Failed to process docstring: {ve}")
 
             documentation_data = DocumentationData(
                 module_name=module_name,
