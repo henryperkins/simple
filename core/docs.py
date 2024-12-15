@@ -118,6 +118,7 @@ class DocumentationOrchestrator:
                 None,
             )
 
+            self.logger.info(f"Source code read. Length: {len(source_code)}")
             self._validate_source_code(source_code)
             tree = ast.parse(source_code)
 
