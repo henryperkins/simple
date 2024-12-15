@@ -34,6 +34,8 @@ import tiktoken
 
 from core.exceptions import LiveError, DocumentationError
 from exceptions import DocumentationError
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.types import TokenUsage
 
 # Initialize logger
 correlation_id_var = ContextVar("correlation_id", default=None)
@@ -49,10 +51,8 @@ def set_correlation_id(correlation_id: str) -> None:
     correlation_id_var.set(correlation_id)
 
 
-def get_logger() -> "CorrelationLoggerAdapter":
+def get_logger() -> CorrelationLoggerAdapter:
     """Get a logger instance."""
-    from core.logger import LoggerSetup, CorrelationLoggerAdapter
-
     return CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
 
 
@@ -82,7 +82,7 @@ class NodeNameVisitor(ast.NodeVisitor):
 
 
 def handle_extraction_error(
-    logger: "CorrelationLoggerAdapter",
+    logger: CorrelationLoggerAdapter,
     errors: List[str],
     context: str,
     e: Exception,
@@ -247,9 +247,7 @@ class RepositoryManager:
 
     def _get_logger(
         self, correlation_id: Optional[str] = None
-    ) -> "CorrelationLoggerAdapter":
-        from core.logger import LoggerSetup, CorrelationLoggerAdapter
-
+    ) -> CorrelationLoggerAdapter:
         return CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
             extra={"correlation_id": correlation_id or get_correlation_id()},
@@ -318,9 +316,7 @@ class TokenCounter:
 
     def _get_logger(
         self, correlation_id: Optional[str] = None
-    ) -> "CorrelationLoggerAdapter":
-        from core.logger import LoggerSetup, CorrelationLoggerAdapter
-
+    ) -> CorrelationLoggerAdapter:
         return CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
             extra={"correlation_id": correlation_id or get_correlation_id()},
@@ -340,9 +336,8 @@ class TokenCounter:
         completion_tokens: int,
         cost_per_1k_prompt: float = 0.03,
         cost_per_1k_completion: float = 0.06,
-    ) -> "TokenUsage":
+    ) -> TokenUsage:
         """Calculate token usage and cost."""
-        from core.types import TokenUsage
 
         total_tokens = prompt_tokens + completion_tokens
         prompt_cost = (prompt_tokens / 1000) * cost_per_1k_prompt
