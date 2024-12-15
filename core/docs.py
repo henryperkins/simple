@@ -249,8 +249,7 @@ class DocumentationOrchestrator:
             )
 
             self.logger.info(
-                f"Generating documentation for {file_path}, "
-                f"module name: {context.metadata.get('module_name', 'Unknown')}"
+                f"Generating documentation for {file_path}"
             )
             output_dir = ensure_directory(output_dir)
             output_path = output_dir / file_path.with_suffix(".md").name
