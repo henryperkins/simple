@@ -188,6 +188,41 @@ class MarkdownGenerator:
             cls = ExtractedClass(**cls_dict)  # Convert dictionary to ExtractedClass instance
             class_name = cls.name
             tables.append(f"### {class_name}\n\n")
+
+            # Add class docstring if available
+            if cls.docstring:
+                docstring_info = cls.get_docstring_info()
+                if docstring_info:
+                    tables.append(f"**Docstring:**\n\n{docstring_info.summary}\n\n{docstring_info.description}\n\n")
+
+            # Add methods
+            if cls.methods:
+                tables.append("**Methods:**\n\n")
+                for method in cls.methods:
+                    tables.append(f"- **{method.name}**\n")
+                    if method.args:
+                        tables.append("  - **Arguments:**\n")
+                        for arg in method.args:
+                            tables.append(f"    - `{arg.name}`: {arg.type or 'Any'} - {arg.description or 'No description'}\n")
+                    if method.returns:
+                        tables.append(f"  - **Returns:** {method.returns.get('type', 'Any')} - {method.returns.get('description', 'No description')}\n")
+                    if method.raises:
+                        tables.append("  - **Raises:**\n")
+                        for exc in method.raises:
+                            tables.append(f"    - `{exc.get('exception', 'Exception')}`: {exc.get('description', 'No description')}\n")
+
+            # Add attributes
+            if cls.attributes:
+                tables.append("**Attributes:**\n\n")
+                for attr in cls.attributes:
+                    tables.append(f"- `{attr.get('name', 'Unknown')}`: {attr.get('type', 'Any')} - {attr.get('description', 'No description')}\n")
+
+            # Add instance attributes
+            if cls.instance_attributes:
+                tables.append("**Instance Attributes:**\n\n")
+                for attr in cls.instance_attributes:
+                    tables.append(f"- `{attr.get('name', 'Unknown')}`: {attr.get('type', 'Any')} - {attr.get('description', 'No description')}\n")
+
         return "\n".join(tables)
 
     def _generate_function_tables(self, functions: list[FunctionDict]) -> str:
