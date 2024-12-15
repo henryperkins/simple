@@ -454,6 +454,13 @@ def read_file_safe(
 async def read_file_safe_async(file_path: Union[str, Path]) -> str:
     """Safely read a file asynchronously."""
     try:
+        file_path = Path(file_path)
+        if not file_path.exists():
+            logger.error(
+                f"File does not exist: {file_path}",
+                extra={"correlation_id": get_correlation_id()},
+            )
+            return ""
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
     except Exception as e:

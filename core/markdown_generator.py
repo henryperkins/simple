@@ -190,9 +190,11 @@ class MarkdownGenerator:
             tables.append(f"### {class_name}\n\n")
 
             # Add class docstring if available
-            if cls.docstring:
-                docstring_info = cls.get_docstring_info()
-                if docstring_info:
+            docstring_info = cls.get_docstring_info()
+            if docstring_info:
+                if isinstance(docstring_info, dict):
+                    tables.append(f"**Docstring:**\n\n{docstring_info.get('summary', 'No summary available')}\n\n{docstring_info.get('description', 'No description available')}\n\n")
+                elif isinstance(docstring_info, ExtractedClass):
                     tables.append(f"**Docstring:**\n\n{docstring_info.summary}\n\n{docstring_info.description}\n\n")
 
             # Add methods
