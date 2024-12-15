@@ -197,12 +197,11 @@ class DocumentationGenerator:
             self.repo_manager = RepositoryManager(local_path)
 
             # Process each Python file in the repository
-            python_files = local_path.rglob("*.py")
-            total_files = len(list(python_files))
+            python_files = list(local_path.rglob("*.py"))
+            total_files = len(python_files)
             processed_files = 0
             skipped_files = 0
 
-            python_files = local_path.rglob("*.py")
             for file_path in python_files:
                 output_file = output_dir / (file_path.stem + ".md")
                 source_code = await read_file_safe_async(file_path)  # Ensure source code is read
@@ -340,7 +339,10 @@ async def main(args: argparse.Namespace) -> int:
             success = await doc_generator.process_repository(
                 args.repository, Path(args.output), args.fix_indentation
             )
+            metrics = doc_generator.metrics_collector.get_metrics()
+            processed_files = metrics.get('operations', []).count(lambda op: op.get('operation_type') == 'file_processing' and op.get('success'))
             print_success(f"Repository documentation generated successfully: {success}")
+            print_info(f"Processed {processed_files} files.")
 
         if args.files:
             for file_path in args.files:
