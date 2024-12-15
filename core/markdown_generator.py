@@ -56,18 +56,6 @@ class MarkdownGenerator:
                 )
                 return "# Error: Missing Source Code\n\nDocumentation cannot be generated without source code."
 
-            if not self._has_complete_information(documentation_data):
-                self.logger.warning(
-                    "Incomplete information received for markdown generation",
-                    extra={"correlation_id": self.correlation_id},
-                )
-                # Continue with partial documentation but add warning header
-                sections = [
-                    "# ⚠️ Warning: Partial Documentation\n\nSome information may be missing or incomplete.\n"
-                ]
-            else:
-                sections = []
-
             # Create module info from DocumentationData fields
             module_info = {
                 "module_name": documentation_data.module_name,
@@ -93,12 +81,7 @@ class MarkdownGenerator:
                 self._generate_source_code(documentation_data.source_code),
             ]
             markdown = "\n\n".join(filter(None, sections))
-            if not self._has_complete_information(documentation_data):
-                self.logger.warning(
-                    "Generated partial documentation due to incomplete information"
-                )
-            else:
-                self.logger.debug("Generated complete documentation successfully")
+            self.logger.debug("Generated documentation successfully")
             return markdown
         except DocumentationError as de:
             error_msg = f"DocumentationError: {de} in markdown generation with correlation ID: {self.correlation_id}"
@@ -110,55 +93,6 @@ class MarkdownGenerator:
                 error_msg, exc_info=True, extra={"correlation_id": self.correlation_id}
             )
             return f"# Error Generating Documentation\n\nAn error occurred: {e}"
-
-    def _has_complete_information(self, documentation_data: DocumentationData) -> bool:
-        """Check if the documentation data contains complete information."""
-        missing_fields = []
-
-        # Check required fields have content
-        required_fields = {
-            "module_name": documentation_data.module_name,
-            "module_path": documentation_data.module_path,
-            "source_code": documentation_data.source_code,
-            "code_metadata": documentation_data.code_metadata,
-        }
-
-        missing_fields = [
-            field
-            for field, value in required_fields.items()
-            if not value or (isinstance(value, str) and not value.strip())
-        ]
-
-        # These fields are optional but we'll log if they're missing
-        if not documentation_data.module_summary:
-            self.logger.warning(
-                f"Module {documentation_data.module_name} is missing a summary",
-                extra={"correlation_id": self.correlation_id},
-            )
-            documentation_data.module_summary = str(
-                documentation_data.ai_content.get("summary")
-                or documentation_data.docstring_data.summary
-                or "No module summary provided."
-            )
-
-        if not documentation_data.ai_content:
-            self.logger.warning(
-                f"Module {documentation_data.module_name} is missing AI-generated content",
-                extra={"correlation_id": self.correlation_id},
-            )
-            documentation_data.ai_content = {
-                "summary": documentation_data.module_summary
-            }
-
-        # Only fail validation if critical fields are missing
-        if missing_fields:
-            self.logger.warning(
-                f"Missing required fields: {', '.join(missing_fields)}",
-                extra={"correlation_id": self.correlation_id},
-            )
-            return False
-
-        return True
 
     def _generate_header(self, module_name: str) -> str:
         """Generate the module header."""
