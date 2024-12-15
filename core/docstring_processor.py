@@ -98,11 +98,7 @@ class DocstringProcessor:
     def _parse_docstring_content(self, docstring: str) -> dict[str, Any]:
         """Parse docstring content into structured format."""
         docstring_str = docstring.strip()
-        self.logger.info("Docstring Analysis", {
-            "Format": "String",
-            "Length": len(docstring_str),
-            "Lines": len(docstring_str.splitlines())
-        })
+        self.logger.info(f"Docstring Analysis - {{'Format': 'String', 'Length': {len(docstring_str)}, 'Lines': {len(docstring_str.splitlines())}}}")
 
         # Try parsing with AUTO style first, then fall back to specific styles if needed
         parsed_docstring: Docstring
