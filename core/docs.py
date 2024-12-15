@@ -151,12 +151,8 @@ class DocumentationOrchestrator:
             parsed_response = await self.response_parser.parse_response(
                 processing_result.content,
                 expected_format="docstring",
-                validate_schema=True,
+                validate_schema=False,  # Removed validation
             )
-            if not parsed_response.validation_success:
-                raise DocumentationError(
-                    f"AI response validation failed: {parsed_response.errors}"
-                )
 
             # Handle different response content types
             try:
@@ -164,8 +160,8 @@ class DocumentationOrchestrator:
                     docstring_data = self.docstring_processor.parse(parsed_response.content)
                 else:
                     raise ValueError(f"Unexpected response content type: {type(parsed_response.content)}")
-            except ValidationError as ve:
-                self.logger.error(f"Docstring validation error: {ve}")
+            except Exception as ve:
+                self.logger.error(f"Docstring processing error: {ve}")
                 raise DocumentationError(f"Failed to process docstring: {ve}")
 
             documentation_data = DocumentationData(
@@ -184,8 +180,6 @@ class DocumentationOrchestrator:
                     "constants": constants or [],
                     "module_docstring": module_docstring,
                 },
-                validation_status=parsed_response.validation_success,
-                validation_errors=parsed_response.errors,
             )
 
             markdown_doc = self.markdown_generator.generate(documentation_data)
