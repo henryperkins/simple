@@ -220,6 +220,7 @@ class DocumentationGenerator:
             print_error(f"Error processing repository {repo_path}: {repo_error}")
         except asyncio.CancelledError:
             print_error("Operation was cancelled.")
+            return False
         finally:
             processing_time = asyncio.get_event_loop().time() - start_time
             await self.metrics_collector.track_operation(
