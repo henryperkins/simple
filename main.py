@@ -209,6 +209,8 @@ class DocumentationGenerator:
             success = True
         except (FileNotFoundError, ValueError, IOError) as repo_error:
             print_error(f"Error processing repository {repo_path}: {repo_error}")
+        except asyncio.CancelledError:
+            print_error("Operation was cancelled.")
         finally:
             processing_time = asyncio.get_event_loop().time() - start_time
             await self.metrics_collector.track_operation(
@@ -343,6 +345,9 @@ async def main(args: argparse.Namespace) -> int:
         return 1
     except KeyError as ke:
         print_error(f"Dependency injection error: {ke}")
+        return 1
+    except asyncio.CancelledError:
+        print_error("Operation was cancelled.")
         return 1
     finally:
         if doc_generator:
