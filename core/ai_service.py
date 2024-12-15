@@ -157,7 +157,7 @@ class AIService:
             )
 
         except DataValidationError as e:
-            self.logger.error(f"Validation error: {e}")
+            self.logger.error(f"Validation error: {e}", extra={"correlation_id": self.correlation_id})
             raise
         except Exception as e:
             self.logger.error(
