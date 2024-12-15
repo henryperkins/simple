@@ -7,6 +7,7 @@ source files using the ast module.
 
 import ast
 import uuid
+import time
 from typing import Any, Dict, List, Optional
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
@@ -22,13 +23,9 @@ from core.extraction.class_extractor import ClassExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.metrics_collector import MetricsCollector
 from core.types.base import Injector
-from utils import (
-    get_source_segment,
-    handle_extraction_error,
-)
-from core.console import display_metrics, create_progress
+from core.console import print_info, print_error, print_success
 from core.exceptions import ProcessingError, ExtractionError
-from rich.progress import Progress
+from rich.progress import Progress, TaskID
 
 
 class CodeExtractor:
@@ -48,11 +45,11 @@ class CodeExtractor:
         """
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.logger = CorrelationLoggerAdapter(
-            Injector.get("logger"),
+            LoggerSetup.get_logger(__name__),
             extra={"correlation_id": self.correlation_id},
         )
         self.context = context
-        self.metrics_collector: MetricsCollector = Injector.get("metrics_collector")
+        self.metrics_collector: MetricsCollector = MetricsCollector(correlation_id=self.correlation_id)
         self.metrics: Metrics = Injector.get("metrics_calculator")
         self.docstring_processor: DocstringProcessor = Injector.get("docstring_processor")
         self.function_extractor: FunctionExtractor = Injector.get("function_extractor")
@@ -61,6 +58,7 @@ class CodeExtractor:
         if self.context.dependency_analyzer is None:
             self.context.dependency_analyzer = DependencyAnalyzer(self.context)
         self.progress: Optional[Progress] = None
+        print_info("CodeExtractor initialized.")
 
     async def extract_code(self, source_code: str) -> ExtractionResult:
         """
@@ -82,10 +80,11 @@ class CodeExtractor:
         module_name = self.context.module_name or "unnamed_module"
         module_metrics = MetricData()
         module_metrics.module_name = module_name
+        start_time = time.time()
         try:
             # Initialize progress tracking
-            self.progress = create_progress()
-            task_id = self.progress.add_task(
+            self.progress = Progress()
+            task_id: TaskID = self.progress.add_task(
                 f"Extracting code elements from {module_name}",
                 total=len(source_code.splitlines()),
             )
@@ -99,21 +98,17 @@ class CodeExtractor:
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
             
             self.progress.update(task_id, advance=1, description="Extracting classes...")
-            classes = await self.class_extractor.extract_classes(
-                tree
-            )
+            classes = await self.class_extractor.extract_classes(tree)
             module_metrics.total_classes = len(classes)
             module_metrics.scanned_classes = len(
-                [cls for cls in classes if cls.docstring_info]
+                [cls for cls in classes if hasattr(cls, 'docstring_info')]
             )
 
             self.progress.update(task_id, advance=1, description="Extracting functions...")
-            functions = await self.function_extractor.extract_functions(
-                tree
-            )
+            functions = await self.function_extractor.extract_functions(tree)
             module_metrics.total_functions = len(functions)
             module_metrics.scanned_functions = len(
-                [func for func in functions if func.docstring_info]
+                [func for func in functions if hasattr(func, 'docstring_info')]
             )
 
             self.progress.update(task_id, advance=1, description="Extracting variables...")
@@ -140,10 +135,23 @@ class CodeExtractor:
                 "Halstead Volume": f"{module_metrics.halstead_metrics.get('volume', 0):.2f}",
                 "Dependencies": len(dependencies),
             }
-            display_metrics(
+            self.display_metrics(
                 metrics_display, title=f"Code Extraction Results for {module_name}"
             )
 
+            processing_time = time.time() - start_time
+            await self.metrics_collector.track_operation(
+                operation_type="code_extraction",
+                success=True,
+                duration=processing_time,
+                metadata={
+                    "classes_extracted": len(classes),
+                    "functions_extracted": len(functions),
+                    "variables_extracted": len(variables),
+                    "constants_extracted": len(constants),
+                },
+            )
+            print_success(f"Code extraction completed in {processing_time:.2f}s.")
             return ExtractionResult(
                 module_docstring=module_docstring,
                 classes=classes,
@@ -160,31 +168,34 @@ class CodeExtractor:
             )
 
         except ProcessingError as pe:
-            handle_extraction_error(
-                self.logger,
-                [],
-                "code_extraction",
-                correlation_id=self.correlation_id,
-                e=pe,
+            self.logger.error(f"Processing error during code extraction: {pe}", exc_info=True)
+            await self.metrics_collector.track_operation(
+                operation_type="code_extraction",
+                success=False,
+                duration=time.time() - start_time,
+                metadata={"error": str(pe)},
             )
+            print_error(f"Code extraction failed: {pe}")
             raise
         except ExtractionError as ee:
-            handle_extraction_error(
-                self.logger,
-                [],
-                "code_extraction",
-                correlation_id=self.correlation_id,
-                e=ee,
+            self.logger.error(f"Extraction error during code extraction: {ee}", exc_info=True)
+            await self.metrics_collector.track_operation(
+                operation_type="code_extraction",
+                success=False,
+                duration=time.time() - start_time,
+                metadata={"error": str(ee)},
             )
+            print_error(f"Code extraction failed: {ee}")
             raise
         except Exception as e:
-            handle_extraction_error(
-                self.logger,
-                [],
-                "code_extraction",
-                correlation_id=self.correlation_id,
-                e=e,
+            self.logger.error(f"Unexpected error during code extraction: {e}", exc_info=True)
+            await self.metrics_collector.track_operation(
+                operation_type="code_extraction",
+                success=False,
+                duration=time.time() - start_time,
+                metadata={"error": str(e)},
             )
+            print_error(f"Code extraction failed: {e}")
             raise ExtractionError(f"Unexpected error during extraction: {e}") from e
         finally:
             if self.progress:
@@ -303,5 +314,17 @@ class CodeExtractor:
         """
         module_docstring = ast.get_docstring(tree)
         if module_docstring:
-            return self.docstring_processor.parse(module_docstring)
+            return self.docstring_processor.parse(module_docstring).__dict__
         return {}
+
+    def display_metrics(self, metrics: Dict[str, Any], title: str) -> None:
+        """
+        Display the extracted metrics.
+
+        Args:
+            metrics: The metrics to display.
+            title: The title for the metrics display.
+        """
+        print_info(title)
+        for key, value in metrics.items():
+            print_info(f"{key}: {value}")

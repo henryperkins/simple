@@ -1,19 +1,15 @@
-"""
-Response parsing service with consistent error handling and validation.
-
-This module provides functionality for parsing AI responses, validating 
-them against specified schemas, and managing parsing statistics.
-"""
-
 import json
 import os
+import time
 from typing import Any, TypeVar, TypedDict, cast
 from pathlib import Path
 
 from jsonschema import validate, ValidationError
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.console import print_info, print_error, print_success
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
+from core.metrics_collector import MetricsCollector
 from core.types import ParsedResponse, DocumentationData
 from core.types.base import DocstringData, DocstringSchema
 from core.exceptions import ValidationError as CustomValidationError
@@ -44,22 +40,26 @@ class ContentType(TypedDict, total=False):
     raises: list[dict[str, str]]
     complexity: int
 
+
 class ResponseParsingService:
     """Centralized service for parsing and validating AI responses."""
 
     def __init__(self, correlation_id: str | None = None) -> None:
         """Initialize the response parsing service."""
-        self.logger = CorrelationLoggerAdapter(base_logger)
+        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={"correlation_id": correlation_id})
         self.docstring_processor = DocstringProcessor()
         self.markdown_generator = MarkdownGenerator(correlation_id)
         self.docstring_schema = self._load_schema("docstring_schema.json")
         self.function_schema = self._load_schema("function_tools_schema.json")
+        self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
+        self.correlation_id = correlation_id
         self._parsing_stats = {
             "total_processed": 0,
             "successful_parses": 0,
             "failed_parses": 0,
             "validation_failures": 0,
         }
+        print_info("ResponseParsingService initialized.")
 
     def _load_schema(self, schema_name: str) -> dict[str, Any]:
         """Load a JSON schema for validation."""
@@ -80,7 +80,9 @@ class ResponseParsingService:
         validate_schema: bool = True,
     ) -> ParsedResponse:
         """Parse the AI model response with strict validation."""
+        start_time = time.time()
         try:
+            print_info(f"Parsing response with expected format: {expected_format}")
             content = self._extract_content(response)
             if not content:
                 raise CustomValidationError("Failed to extract content from response")
@@ -107,30 +109,46 @@ class ResponseParsingService:
                     fallback = self._create_fallback_response()
                     return ParsedResponse(
                         content=fallback,
-                        markdown=self._generate_markdown(fallback),
+                        markdown=await self._generate_markdown(fallback),
                         format_type=expected_format,
-                        parsing_time=0.0,
+                        parsing_time=time.time() - start_time,
                         validation_success=False,
                         errors=[str(e)],
-                        metadata={}
+                        metadata={"correlation_id": self.correlation_id}
                     )
 
             # Return the parsed response with the appropriate content
+            processing_time = time.time() - start_time
+            self.metrics_collector.track_operation(
+                operation_type="response_parsing",
+                success=True,
+                duration=processing_time,
+                metadata={"response_format": expected_format, "correlation_id": self.correlation_id},
+            )
+            print_success(f"Response parsing completed in {processing_time:.2f}s")
             return ParsedResponse(
                 content=content,
-                markdown=self._generate_markdown(content if isinstance(content, dict) else {"summary": content}),
+                markdown=await self._generate_markdown(content if isinstance(content, dict) else {"summary": content}),
                 format_type=expected_format,
-                parsing_time=0.0,
+                parsing_time=processing_time,
                 validation_success=True,
                 errors=[],
-                metadata={}
+                metadata={"correlation_id": self.correlation_id}
             )
 
         except Exception as e:
-            self.logger.error(f"Error parsing response: {e}")
+            processing_time = time.time() - start_time
+            self.logger.error(f"Error parsing response: {e}", exc_info=True)
+            self.metrics_collector.track_operation(
+                operation_type="response_parsing",
+                success=False,
+                duration=processing_time,
+                metadata={"response_format": expected_format, "error": str(e), "correlation_id": self.correlation_id},
+            )
+            print_error(f"Response parsing failed: {e}")
             raise CustomValidationError(f"Failed to parse response: {e}")
 
-    def _generate_markdown(self, content: dict[str, Any]) -> str:
+    async def _generate_markdown(self, content: dict[str, Any]) -> str:
         """Convert parsed content to markdown format."""
         try:
             # Create a minimal DocumentationData object for markdown generation
@@ -143,12 +161,12 @@ class ResponseParsingService:
                 ai_content=content,  # The AI-generated content we want to format
                 docstring_data=DocstringData(**content)
             )
-            return self.markdown_generator.generate(doc_data)
+            return await self.markdown_generator.generate(doc_data)
         except Exception as e:
             self.logger.error(f"Error generating markdown: {e}")
             return f"Error generating markdown documentation: {str(e)}"
 
-    def _extract_content(self, response: dict[str, Any]) -> dict[str, Any] | None:
+    def _extract_content(self, response: dict[str, Any]) -> dict[str, Any] | str | None:
         """Extract content from various response formats."""
         try:
             # Handle choices format
@@ -164,7 +182,7 @@ class ResponseParsingService:
                         if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
                             return cast(dict[str, Any], args_dict)
                         # Otherwise wrap it in a summary field
-                        return {"summary": json.dumps(args_dict)}
+                        return json.dumps(args_dict)
                     except json.JSONDecodeError:
                         self.logger.warning("Failed to parse function call arguments")
                 
@@ -179,7 +197,7 @@ class ResponseParsingService:
                             if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
                                 return cast(dict[str, Any], args_dict)
                             # Otherwise wrap it in a summary field
-                            return {"summary": json.dumps(args_dict)}
+                            return json.dumps(args_dict)
                         except json.JSONDecodeError:
                             self.logger.warning("Failed to parse tool call arguments")
                 
@@ -192,7 +210,7 @@ class ResponseParsingService:
                             return cast(dict[str, Any], content_dict)
                     except json.JSONDecodeError:
                         # If not JSON, use as plain text summary
-                        return {"summary": message["content"]}
+                        return message["content"]
             
             # Try direct response format
             if "summary" in response or "description" in response:
@@ -203,10 +221,13 @@ class ResponseParsingService:
             self.logger.error(f"Error extracting content: {e}")
             return None
 
-    def _ensure_required_fields(self, content: dict[str, Any]) -> dict[str, Any]:
+    def _ensure_required_fields(self, content: dict[str, Any] | str) -> dict[str, Any]:
         """Ensure all required fields exist in the content."""
         # Create a new dictionary with the content
-        result = dict(content) if hasattr(content, "items") else {"summary": str(content)}
+        if isinstance(content, str):
+            result = {"summary": content}
+        else:
+            result = dict(content)
 
         # Ensure required fields exist
         defaults: dict[str, Any] = {
