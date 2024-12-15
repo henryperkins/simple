@@ -231,7 +231,9 @@ class DocumentationOrchestrator:
         try:
             # Ensure source_code is not None or empty
             if source_code is None or not source_code.strip():
+                self.logger.info(f"Attempting to read source code from {file_path}")
                 source_code = await read_file_safe_async(file_path)
+                self.logger.info(f"Source code read from {file_path}. Length: {len(source_code)}")
                 if not source_code or not source_code.strip():
                     self.logger.error(f"Source code is missing or empty for {file_path}")
                     raise DocumentationError(f"Source code is missing or empty for {file_path}")
