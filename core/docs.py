@@ -229,13 +229,12 @@ class DocumentationOrchestrator:
             DocumentationError: If there's an issue processing the module.
         """
         try:
-            source_code = source_code or await read_file_safe_async(file_path)
-
-            if not source_code or not source_code.strip():
-                self.logger.warning(
-                    f"Skipping documentation generation for {file_path} as the source code is empty or missing."
-                )
-                return
+            # Ensure source_code is not None or empty
+            if source_code is None or not source_code.strip():
+                source_code = await read_file_safe_async(file_path)
+                if not source_code or not source_code.strip():
+                    self.logger.error(f"Source code is missing or empty for {file_path}")
+                    raise DocumentationError(f"Source code is missing or empty for {file_path}")
 
             context = DocumentationContext(
                 source_code=source_code,
