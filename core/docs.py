@@ -100,7 +100,8 @@ class DocumentationOrchestrator:
         try:
             if not context.source_code or not context.source_code.strip():
                 self.logger.warning(
-                    f"Skipping documentation generation for {context.module_path} as the source code is empty or missing."
+                    f"Skipping documentation generation for {context.module_path} as the source code is empty or missing.",
+                    extra={"correlation_id": self.correlation_id}
                 )
                 return context.source_code, ""
 
@@ -118,7 +119,7 @@ class DocumentationOrchestrator:
                 None,
             )
 
-            self.logger.info(f"Source code read. Length: {len(source_code)}")
+            self.logger.info(f"Source code read. Length: {len(source_code)}", extra={"correlation_id": self.correlation_id})
             self._validate_source_code(source_code)
             tree = ast.parse(source_code)
 
@@ -160,10 +161,17 @@ class DocumentationOrchestrator:
                 if isinstance(parsed_response.content, (str, dict)):
                     docstring_data = self.docstring_processor.parse(parsed_response.content)
                 else:
+                    self.logger.error(
+                        f"Unexpected response content type: {type(parsed_response.content)}",
+                        extra={"correlation_id": self.correlation_id}
+                    )
                     raise ValueError(f"Unexpected response content type: {type(parsed_response.content)}")
             except Exception as ve:
-                self.logger.error(f"Docstring processing error: {ve}")
-                raise DocumentationError(f"Failed to process docstring: {ve}")
+                self.logger.error(
+                    f"Docstring processing error: {ve}",
+                    extra={"correlation_id": self.correlation_id}
+                )
+                raise DocumentationError(f"Failed to process docstring: {ve}") from ve
 
             documentation_data = DocumentationData(
                 module_name=module_name,
@@ -188,7 +196,11 @@ class DocumentationOrchestrator:
 
         except DocumentationError as de:
             error_msg = f"DocumentationError: {de} in documentation_generation for module_path: {context.module_path}"
-            self.logger.error(error_msg, extra={"correlation_id": self.correlation_id})
+            self.logger.error(
+                error_msg,
+                exc_info=True,
+                extra={"correlation_id": self.correlation_id}
+            )
             raise
         except Exception as e:
             error_msg = (
@@ -196,7 +208,9 @@ class DocumentationOrchestrator:
                 f"{context.module_path}"
             )
             self.logger.error(
-                error_msg, exc_info=True, extra={"correlation_id": self.correlation_id}
+                error_msg,
+                exc_info=True,
+                extra={"correlation_id": self.correlation_id}
             )
             raise DocumentationError(f"Failed to generate documentation: {e}") from e
 

@@ -125,6 +125,10 @@ class AIService:
             )
 
             if not parsed_response.validation_success:
+                self.logger.error(
+                    f"Response validation failed: {parsed_response.errors}",
+                    extra={"correlation_id": self.correlation_id}
+                )
                 raise DataValidationError(
                     f"Response validation failed: {parsed_response.errors}"
                 )
@@ -134,6 +138,10 @@ class AIService:
             is_valid, validation_errors = docstring_data.validate()
 
             if not is_valid:
+                self.logger.error(
+                    f"Docstring validation failed: {validation_errors}",
+                    extra={"correlation_id": self.correlation_id}
+                )
                 raise DataValidationError(f"Docstring validation failed: {validation_errors}")
 
             return ProcessingResult(
