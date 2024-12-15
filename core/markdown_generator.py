@@ -61,14 +61,18 @@ class MarkdownGenerator:
                 "module_name": documentation_data.module_name,
                 "file_path": str(documentation_data.module_path),
                 "description": documentation_data.module_summary,
+                "file_size": "X KB",  # Placeholder, should be calculated
+                "lines_of_code": len(documentation_data.source_code.splitlines()),
+                "dependencies": documentation_data.dependencies or [],
+                "changes": documentation_data.changes or [],
             }
 
             sections = [
                 self._generate_header(module_info["module_name"]),
                 self._generate_overview(
-                    module_info["file_path"], module_info["description"]
+                    module_info["file_path"], module_info["description"], module_info["file_size"], module_info["lines_of_code"]
                 ),
-                self._generate_ai_doc_section(documentation_data.ai_content),
+                self._generate_summary(module_info["description"], module_info["dependencies"]),
                 self._generate_class_tables(
                     cast(list[dict[str, Any]], documentation_data.code_metadata.get("classes", []))
                 ),
@@ -78,6 +82,7 @@ class MarkdownGenerator:
                 self._generate_constants_table(
                     cast(list[ConstantDict], documentation_data.code_metadata.get("constants", []))
                 ),
+                self._generate_recent_changes(module_info["changes"]),
                 self._generate_source_code(documentation_data.source_code),
             ]
             markdown = "\n\n".join(filter(None, sections))
@@ -97,9 +102,9 @@ class MarkdownGenerator:
     def _generate_header(self, module_name: str) -> str:
         """Generate the module header."""
         self.logger.debug(f"Generating header for module_name: {module_name}.")
-        return f"# Module: {module_name}"
+        return f"# Module: {module_name}\n\n"
 
-    def _generate_overview(self, file_path: str, description: str) -> str:
+    def _generate_overview(self, file_path: str, description: str, file_size: str, lines_of_code: int) -> str:
         """Generate the overview section."""
         self.logger.debug(f"Generating overview for file_path: {file_path}")
 
@@ -111,13 +116,13 @@ class MarkdownGenerator:
         # Log the description being used
         self.logger.debug(f"Using description: {description[:100]}...")
 
-        return "\n".join(
-            [
-                "## Overview",
-                f"**File:** `{file_path}`",
-                f"**Description:** {description}",
-            ]
-        )
+        return f"""
+## Overview
+| **Path**       | `{file_path}` |
+|----------------|----------------|
+| **File Size**  | `{file_size}`  |
+| **Lines of Code** | `{lines_of_code}` |
+"""
 
     def _generate_ai_doc_section(self, ai_documentation: dict[str, Any]) -> str:
         """
@@ -182,48 +187,46 @@ class MarkdownGenerator:
             str: Markdown tables for classes.
         """
         tables = []
+        tables.append("## Classes and Methods\n\n")
+        tables.append("| Class       | Inherits From  | Method          | Complexity Score* | Details |\n")
+        tables.append("| ----------- | -------------- | --------------- | ----------------- | ------- |\n")
+
         for cls_dict in classes:
             # Exclude '_logger' from cls_dict if present
             cls_dict.pop('_logger', None)
             cls = ExtractedClass(**cls_dict)  # Convert dictionary to ExtractedClass instance
             class_name = cls.name
-            tables.append(f"### {class_name}\n\n")
 
             # Add class docstring if available
             docstring_info = cls.get_docstring_info()
+            class_description = ""
             if docstring_info:
                 if isinstance(docstring_info, dict):
-                    tables.append(f"**Docstring:**\n\n{docstring_info.get('summary', 'No summary available')}\n\n{docstring_info.get('description', 'No description available')}\n\n")
+                    class_description = docstring_info.get('description', 'No description available')
                 elif isinstance(docstring_info, ExtractedClass):
-                    tables.append(f"**Docstring:**\n\n{docstring_info.summary}\n\n{docstring_info.description}\n\n")
+                    class_description = docstring_info.description
 
             # Add methods
-            if cls.methods:
-                tables.append("**Methods:**\n\n")
-                for method in cls.methods:
-                    tables.append(f"- **{method.name}**\n")
-                    if method.args:
-                        tables.append("  - **Arguments:**\n")
-                        for arg in method.args:
-                            tables.append(f"    - `{arg.name}`: {arg.type or 'Any'} - {arg.description or 'No description'}\n")
-                    if method.returns:
-                        tables.append(f"  - **Returns:** {method.returns.get('type', 'Any')} - {method.returns.get('description', 'No description')}\n")
-                    if method.raises:
-                        tables.append("  - **Raises:**\n")
-                        for exc in method.raises:
-                            tables.append(f"    - `{exc.get('exception', 'Exception')}`: {exc.get('description', 'No description')}\n")
+            for method in cls.methods:
+                method_complexity = method.metrics.get('complexity', 0)
+                method_warning = " ⚠️" if method_complexity > 10 else ""
+                method_details = f"<details><summary>View</summary><ul>"
+                method_details += f"<li><strong>Description:</strong> {method.description or 'No description'}</li>"
+                if method.args:
+                    method_details += "<li><strong>Parameters:</strong><ul>"
+                    for arg in method.args:
+                        method_details += f"<li>`{arg.name}` ({arg.type or 'Any'}): {arg.description or 'No description'}</li>"
+                    method_details += "</ul></li>"
+                if method.returns:
+                    method_details += f"<li><strong>Returns:</strong> `{method.returns.get('type', 'Any')}`: {method.returns.get('description', 'No description')}</li>"
+                if method.raises:
+                    method_details += "<li><strong>Raises:</strong><ul>"
+                    for exc in method.raises:
+                        method_details += f"<li>`{exc.get('exception', 'Exception')}`: {exc.get('description', 'No description')}</li>"
+                    method_details += "</ul></li>"
+                method_details += "</ul></details>"
 
-            # Add attributes
-            if cls.attributes:
-                tables.append("**Attributes:**\n\n")
-                for attr in cls.attributes:
-                    tables.append(f"- `{attr.get('name', 'Unknown')}`: {attr.get('type', 'Any')} - {attr.get('description', 'No description')}\n")
-
-            # Add instance attributes
-            if cls.instance_attributes:
-                tables.append("**Instance Attributes:**\n\n")
-                for attr in cls.instance_attributes:
-                    tables.append(f"- `{attr.get('name', 'Unknown')}`: {attr.get('type', 'Any')} - {attr.get('description', 'No description')}\n")
+                tables.append(f"| `{class_name}` | `{cls.bases[0] if cls.bases else 'None'}` | `{method.name}` | {method_complexity}{method_warning} | {method_details} |\n")
 
         return "\n".join(tables)
 
@@ -234,10 +237,9 @@ class MarkdownGenerator:
                 return ""
 
             lines = [
-                "## Functions",
-                "",
-                "| Function | Parameters | Returns | Complexity Score* |",
-                "|----------|------------|---------|------------------|",
+                "## Functions\n\n",
+                "| Function | Complexity Score* | Details |\n",
+                "|----------|------------------|---------|\n",
             ]
 
             for func in functions:
@@ -246,24 +248,27 @@ class MarkdownGenerator:
                 complexity = metrics.get("complexity", 0) if isinstance(metrics, dict) else 0
                 warning = " ⚠️" if complexity > 10 else ""
 
-                # Generate parameters safely
-                params = ", ".join(
-                    f"{arg.get('name', 'unknown')}: {arg.get('type', 'Any')}"
-                    + (
-                        f" = {arg.get('default_value', '')}"
-                        if arg.get("default_value")
-                        else ""
-                    )
-                    for arg in func.get("args", [])
-                )
-
-                # Safely get the return type
-                returns = func.get("returns", {})
-                return_type = returns.get("type", "Any") if isinstance(returns, dict) else "Any"
+                func_details = f"<details><summary>View</summary><ul>"
+                func_details += f"<li><strong>Description:</strong> {func.get('description', 'No description')}</li>"
+                if func.get("args"):
+                    func_details += "<li><strong>Parameters:</strong><ul>"
+                    for arg in func.get("args", []):
+                        func_details += f"<li>`{arg.get('name', 'unknown')}` ({arg.get('type', 'Any')}): {arg.get('description', 'No description')}"
+                        if arg.get("default_value"):
+                            func_details += f". Defaults to {arg.get('default_value')}."
+                        func_details += "</li>"
+                    func_details += "</ul></li>"
+                if func.get("returns"):
+                    func_details += f"<li><strong>Returns:</strong> `{func.get('returns', {}).get('type', 'Any')}`: {func.get('returns', {}).get('description', 'No description')}</li>"
+                if func.get("raises"):
+                    func_details += "<li><strong>Raises:</strong><ul>"
+                    for exc in func.get("raises", []):
+                        func_details += f"<li>`{exc.get('exception', 'Exception')}`: {exc.get('description', 'No description')}</li>"
+                    func_details += "</ul></li>"
+                func_details += "</ul></details>"
 
                 lines.append(
-                    f"| `{func.get('name', 'Unknown')}` | `({params})` | "
-                    f"`{return_type}` | {complexity}{warning} |"
+                    f"| `{func.get('name', 'Unknown')}` | {complexity}{warning} | {func_details} |\n"
                 )
 
             return "\n".join(lines)
@@ -278,17 +283,17 @@ class MarkdownGenerator:
                 return ""
 
             lines = [
-                "## Constants and Variables",
-                "",
-                "| Name | Type | Value |",
-                "|------|------|-------|",
+                "## Constants and Variables\n\n",
+                "| Name | Type | Value | Description |\n",
+                "|------|------|-------|-------------|\n",
             ]
 
             for const in constants:
                 lines.append(
                     f"| `{const.get('name', 'Unknown Name')}` | "
                     f"`{const.get('type', 'Unknown Type')}` | "
-                    f"`{const.get('value', 'Unknown Value')}` |"
+                    f"`{const.get('value', 'Unknown Value')}` | "
+                    f"{const.get('description', 'No description')} |"
                 )
 
             return "\n".join(lines)
@@ -315,3 +320,30 @@ class MarkdownGenerator:
                 f"Error generating source code section: {e}", exc_info=True
             )
             return "An error occurred while generating source code documentation."
+    def _generate_summary(self, description: str, dependencies: list[str]) -> str:
+        """Generate the summary section."""
+        self.logger.debug(f"Generating summary for description: {description[:100]}...")
+
+        return f"""
+## Summary
+| **Description** | {description} |
+|-----------------|----------------|
+| **Dependencies** | {', '.join(dependencies)} |
+"""
+    def _generate_recent_changes(self, changes: list[dict[str, Any]]) -> str:
+        """Generate the recent changes section."""
+        if not changes:
+            return ""
+
+        lines = [
+            "## Recent Changes\n\n",
+            "| Date       | Change Description |\n",
+            "|------------|--------------------|\n",
+        ]
+
+        for change in changes:
+            lines.append(
+                f"| {change.get('date', 'Unknown Date')} | {change.get('description', 'No description')} |\n"
+            )
+
+        return "\n".join(lines)
