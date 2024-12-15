@@ -1,13 +1,16 @@
 """Manages prompt generation and formatting for AI interactions."""
 
-from typing import Any, TypedDict, cast, Literal
+from typing import TypedDict, cast, Literal, Optional, Any
 from pathlib import Path
 import json
 from jinja2 import Environment, FileSystemLoader
+import time
 
-from core.types.base import ExtractedClass, ExtractedFunction, DocstringData, Injector
-from utils import handle_error
-from core.logger import CorrelationLoggerAdapter
+from core.types.base import ExtractedClass, ExtractedFunction
+from core.logger import CorrelationLoggerAdapter, LoggerSetup
+from core.metrics_collector import MetricsCollector
+from core.console import print_info, print_success, print_error
+from core.dependency_injection import Injector
 
 
 class MetricsDict(TypedDict, total=False):
@@ -29,18 +32,20 @@ class DocstringDict(TypedDict, total=False):
 class PromptManager:
     """Manages the generation and formatting of prompts for AI interactions."""
 
-    def __init__(self, correlation_id: str | None = None) -> None:
-        """Initialize the PromptManager.
-
-        Args:
-            correlation_id: Optional correlation ID for tracking related operations.
-        """
+    def __init__(self, correlation_id: Optional[str] = None) -> None:
+        """Initialize the PromptManager."""
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(
-            Injector.get("logger"), extra={"correlation_id": correlation_id}
+            LoggerSetup.get_logger(__name__), extra={"correlation_id": correlation_id}
         )
-        self.docstring_processor = Injector.get("docstring_processor")
+        self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
+        self.token_manager = Injector.get("token_manager")
 
+        # Load templates using Jinja2
+        template_dir = Path(__file__).parent
+        self.env = Environment(loader=FileSystemLoader(template_dir))
+        print_info("PromptManager initialized.")
+        
         # Load the function schema from a file
         schema_path = Path(__file__).parent / "function_tools_schema.json"
         try:
@@ -58,92 +63,60 @@ class PromptManager:
                 exc_info=True
             )
             raise
-        # Setup Jinja2 environment
-        template_dir = Path(__file__).parent
-        self.env = Environment(loader=FileSystemLoader(template_dir))
-        try:
-            self.env.get_template("documentation_prompt.txt")
-            self.logger.info("Template 'documentation_prompt.txt' loaded successfully.")
-            self.env.get_template("code_analysis_prompt.txt")
-            self.logger.info("Template 'code_analysis_prompt.txt' loaded successfully.")
-        except Exception as e:
-             self.logger.error(f"Error loading template file : {e}", exc_info=True)
-             raise
 
-    @handle_error
     async def create_documentation_prompt(
         self,
         module_name: str = "",
         file_path: str = "",
         source_code: str = "",
-        classes: list[ExtractedClass] | None = None,
-        functions: list[ExtractedFunction] | None = None,
+        classes: Optional[list[ExtractedClass]] = None,
+        functions: Optional[list[ExtractedFunction]] = None,
     ) -> str:
-        """Create a comprehensive prompt for documentation generation.
+        """Create a comprehensive prompt for documentation generation."""
+        start_time = time.time()
+        try:
+            if not module_name or not file_path or not source_code:
+                raise ValueError("Module name, file path, and source code are required for prompt generation.")
 
-        Args:
-            module_name: Name of the module.
-            file_path: Path to the source file.
-            source_code: The source code to document.
-            classes: List of extracted class information.
-            functions: List of extracted function information.
-
-        Returns:
-            Formatted prompt string for the AI model.
-
-        Raises:
-            ValueError: If required information is missing for prompt generation.
-        """
-        self.logger.debug(
-            "Creating documentation prompt",
-            extra={"module_name": module_name, "file_path": file_path},
-        )
-
-        if not module_name or not file_path or not source_code:
-            raise ValueError(
-                "Module name, file path, and source code are required for prompt generation."
+            print_info("Generating documentation prompt.")
+            template = self.env.get_template("documentation_prompt.txt")
+            prompt = template.render(
+                module_name=module_name,
+                file_path=file_path,
+                source_code=source_code,
+                classes=classes or [],
+                functions=functions or [],
+                _format_class_info=self._format_class_info,
+                _format_function_info=self._format_function_info,
             )
 
-        template = self.env.get_template("documentation_prompt.txt")
-        prompt = template.render(
-            module_name=module_name,
-            file_path=file_path,
-            source_code=source_code,
-            classes=classes,
-            functions=functions,
-            _format_class_info=self._format_class_info,
-            _format_function_info=self._format_function_info,
-        )
-        prompt += "\n\nPlease respond with a JSON object that matches the schema defined in the function parameters."
+            # Estimate tokens
+            prompt_tokens = self.token_manager.estimate_tokens(prompt)
+            print_info(f"Generated prompt with {prompt_tokens} tokens.")
 
-        self.logger.debug("Documentation prompt created successfully")
-        return prompt
+            # Track prompt generation
+            self.metrics_collector.track_operation(
+                operation_type="prompt_generation",
+                success=True,
+                duration=time.time() - start_time,
+                metadata={"prompt_tokens": prompt_tokens, "template": "documentation_prompt.txt"},
+            )
 
-    @handle_error
-    def create_code_analysis_prompt(self, code: str) -> str:
-        """Create a prompt for code quality analysis.
+            processing_time = time.time() - start_time
+            print_success(f"Prompt generation completed in {processing_time:.2f}s.")
+            return prompt
+        except Exception as e:
+            processing_time = time.time() - start_time
+            self.logger.error(f"Error generating prompt: {e}", exc_info=True)
+            self.metrics_collector.track_operation(
+                operation_type="prompt_generation",
+                success=False,
+                duration=processing_time,
+                metadata={"error": str(e)},
+            )
+            print_error(f"Prompt generation failed: {e}")
+            raise
 
-        Args:
-            code: Source code to analyze.
-
-        Returns:
-            Formatted prompt for code analysis.
-
-        Raises:
-            ValueError: If the code is empty or None.
-        """
-        self.logger.debug("Creating code analysis prompt")
-
-        if not code:
-            raise ValueError("Source code is required for prompt generation.")
-
-        template = self.env.get_template("code_analysis_prompt.txt")
-        prompt = template.render(code=code)
-
-        self.logger.debug("Code analysis prompt created successfully")
-        return prompt
-
-    @handle_error
     def _format_function_info(self, func: ExtractedFunction) -> str:
         """Format function information for prompt.
 
@@ -156,8 +129,6 @@ class PromptManager:
         Raises:
             ValueError: If the function name is missing.
         """
-        self.logger.debug(f"Formatting function info for: {func.name}")
-
         if not func.name:
             raise ValueError(
                 "Function name is required to format function information."
@@ -171,19 +142,19 @@ class PromptManager:
 
         # Use the injected docstring_processor to create a DocstringData instance
         docstring_info = (
-            self.docstring_processor.parse(func.docstring)
+            func.docstring
             if func.docstring
-            else DocstringData(summary="No summary available", description="No description available")
+            else {"summary": "No summary available", "description": "No description available"}
         )
         returns_info = func.returns or {"type": "Any", "description": ""}
 
         # Get summary with proper type handling
         summary = "No summary available"
-        if isinstance(docstring_info, DocstringData):
-            summary = docstring_info.summary
-        elif isinstance(docstring_info, dict):
+        if isinstance(docstring_info, dict):
             docstring_dict = cast(DocstringDict, docstring_info)
             summary = docstring_dict.get("summary", "No summary available")
+        else:
+            summary = docstring_info
 
         metrics = cast(MetricsDict, func.metrics or {})
         complexity = str(metrics.get("cyclomatic_complexity", "Unknown"))
@@ -198,10 +169,8 @@ class PromptManager:
             f"Complexity Score: {complexity}\n"
         )
 
-        self.logger.debug(f"Function info formatted for: {func.name}")
         return formatted_info
 
-    @handle_error
     def _format_class_info(self, cls: ExtractedClass) -> str:
         """Format class information for prompt.
 
@@ -214,8 +183,6 @@ class PromptManager:
         Raises:
             ValueError: If the class name is missing.
         """
-        self.logger.debug(f"Formatting class info for: {cls.name}")
-
         if not cls.name:
             raise ValueError("Class name is required to format class information.")
 
@@ -224,26 +191,19 @@ class PromptManager:
         )
 
         # Use synchronous parse with fallback to empty DocstringData
-        try:
-            docstring_info = (
-                self.docstring_processor.parse(cls.docstring)
-                if cls.docstring
-                else DocstringData(summary="No summary available", description="No description available")
-            )
-        except Exception as e:
-            self.logger.warning(f"Failed to parse docstring for {cls.name}: {e}")
-            docstring_info = DocstringData(
-                summary="Failed to parse docstring",
-                description="Failed to parse docstring description"
-            )
+        docstring_info = (
+            cls.docstring
+            if cls.docstring
+            else {"summary": "No summary available", "description": "No description available"}
+        )
 
         # Get summary with proper type handling
         summary = "No summary available"
-        if isinstance(docstring_info, DocstringData):
-            summary = docstring_info.summary
-        elif isinstance(docstring_info, dict):
+        if isinstance(docstring_info, dict):
             docstring_dict = cast(DocstringDict, docstring_info)
             summary = docstring_dict.get("summary", "No summary available")
+        else:
+            summary = docstring_info
 
         attributes = [cast(AttributeDict, a) for a in cls.attributes]
         instance_attrs = [cast(AttributeDict, a) for a in cls.instance_attributes]
@@ -262,11 +222,9 @@ class PromptManager:
             f"Complexity Score: {complexity}\n"
         )
 
-        self.logger.debug(f"Class info formatted for: {cls.name}")
         return formatted_info
 
-    @handle_error
-    def get_function_schema(self, schema: dict[str, Any] | None = None) -> dict[str, Any]:
+    def get_function_schema(self, schema: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """Get the function schema for structured output.
 
         Returns:
@@ -284,7 +242,7 @@ class PromptManager:
                 "parameters": schema
             }
 
-        if not self._function_schema:
+        if not hasattr(self, "_function_schema") or not self._function_schema:
             raise ValueError("Function schema is not properly defined.")
 
         return {
@@ -292,8 +250,7 @@ class PromptManager:
             "description": "Generates structured documentation from source code.",
             "parameters": self._function_schema["function"]["parameters"]
         }
-    
-    @handle_error
+
     def get_prompt_with_schema(self, prompt: str, schema: dict[str, Any]) -> str:
         """
         Adds function calling instructions to a prompt.

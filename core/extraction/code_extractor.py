@@ -8,7 +8,7 @@ source files using the ast module.
 import ast
 import uuid
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, dict, List, Optional
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics import Metrics

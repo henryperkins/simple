@@ -1,10 +1,14 @@
 """Token management module for interacting with the OpenAI API."""
+
 import tiktoken
-from typing import Dict, Any, Optional, Tuple, Union
+from typing import Any, Tuple, Union
+
 from core.config import AIConfig
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import TokenUsage
 from core.exceptions import ProcessingError
+from core.console import print_info, print_success, print_error
+from core.metrics_collector import MetricsCollector
 
 class TokenManager:
     """Manages token usage and cost estimation for OpenAI API interactions."""
@@ -12,9 +16,9 @@ class TokenManager:
     def __init__(
         self,
         model: str,
-        config: Optional[AIConfig] = None,
-        correlation_id: Optional[str] = None,
-        metrics_collector: Optional[Any] = None
+        config: AIConfig | None = None,
+        correlation_id: str | None = None,
+        metrics_collector: MetricsCollector | None = None
     ) -> None:
         """Initialize TokenManager with model and configuration.
 
@@ -25,13 +29,14 @@ class TokenManager:
             metrics_collector: Optional metrics collector instance.
         """
         self.logger = CorrelationLoggerAdapter(
-            logger=LoggerSetup.get_logger(__name__)
+            logger=LoggerSetup.get_logger(__name__),
+            extra={"correlation_id": correlation_id}
         )
         self.config = config if config else AIConfig.from_env()
         self.model = model
         self.deployment_id = self.config.deployment
-        self.metrics_collector = metrics_collector
-        self.correlation_id = correlation_id  # Added correlation_id
+        self.metrics_collector = metrics_collector or MetricsCollector(correlation_id=correlation_id)
+        self.correlation_id = correlation_id
 
         try:
             base_model = self._get_base_model_name(self.model)
@@ -49,7 +54,7 @@ class TokenManager:
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
 
-        self.logger.info("TokenManager initialized.")  # Using logger
+        print_info("TokenManager initialized.", {"model": model, "correlation_id": correlation_id})
 
     def _get_base_model_name(self, model_name: str) -> str:
         """
@@ -91,7 +96,7 @@ class TokenManager:
         try:
             return len(self.encoding.encode(text))
         except Exception as e:
-            self.logger.error(f"Error estimating tokens: {e}")  # Using logger
+            self.logger.error(f"Error estimating tokens: {e}", exc_info=True)
             return len(text) // 4
 
     def _calculate_usage(self, prompt_tokens: int, completion_tokens: int) -> TokenUsage:
@@ -118,9 +123,9 @@ class TokenManager:
     async def validate_and_prepare_request(
         self,
         prompt: str,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None
-    ) -> Dict[str, Any]:
+        max_tokens: int | None = None,
+        temperature: float | None = None
+    ) -> dict[str, Any]:
         """
         Validate and prepare a request with token management.
 
@@ -139,7 +144,7 @@ class TokenManager:
             prompt_tokens = self._estimate_tokens(prompt)
             available_tokens = self.model_config.max_tokens - prompt_tokens
 
-            if prompt_tokens > self.model_config.max_tokens:  # Specific error handling
+            if prompt_tokens > self.model_config.max_tokens:
                 raise ValueError(f"Prompt exceeds maximum token limit for model {self.model}: {prompt_tokens} > {self.model_config.max_tokens}")
 
             if max_tokens:
@@ -151,7 +156,7 @@ class TokenManager:
 
             max_completion = max(1, max_completion)
 
-            if max_completion == 0:  # Warning when max_completion is 0
+            if max_completion == 0:
                 self.logger.warning(
                     f"Estimated prompt tokens ({prompt_tokens}) close to or exceeding model's max tokens limit ({self.model_config.max_tokens}).",
                     extra={"correlation_id": self.correlation_id}
@@ -178,13 +183,15 @@ class TokenManager:
 
             self.track_request(prompt_tokens, max_completion)
 
+            print_info(f"Validated request: {prompt_tokens} tokens in prompt, {available_tokens} available for completion.")
             return request_params
 
         except Exception as e:
-            self.logger.error(f"Error preparing request: {e}", exc_info=True)  # Using logger with stack trace
+            self.logger.error(f"Error preparing request: {e}", exc_info=True)
+            print_error(f"Failed to prepare request: {str(e)}")
             raise ProcessingError(f"Failed to prepare request: {str(e)}")
 
-    def get_usage_stats(self) -> Dict[str, Union[int, float]]:
+    def get_usage_stats(self) -> dict[str, Union[int, float]]:
         """
         Get current token usage statistics.
 
@@ -200,6 +207,7 @@ class TokenManager:
             "total_tokens": self.total_prompt_tokens + self.total_completion_tokens,
             "estimated_cost": usage.estimated_cost,
         }
+        print_info("Token usage stats retrieved.", stats)
         return stats
 
     def track_request(self, prompt_tokens: int, max_completion: int) -> None:
@@ -215,9 +223,10 @@ class TokenManager:
         self.logger.info(
             f"Tracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}",
             extra={"correlation_id": self.correlation_id}
-        )  # Using logger
+        )
+        print_success(f"Tokens tracked: {prompt_tokens + max_completion} total tokens.")
 
-    async def process_completion(self, completion: Any) -> Tuple[str, Dict[str, Any]]:
+    async def process_completion(self, completion: Any) -> Tuple[str, dict[str, Any]]:
         """
         Process completion response and track token usage.
 
@@ -250,21 +259,23 @@ class TokenManager:
                         "token_usage",
                         success=True,
                         duration=0,
-                        usage=self._calculate_usage(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)).__dict__,  # Convert to dict
+                        usage=self._calculate_usage(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)).__dict__,
                         metadata={
                             "model": self.model,
                             "deployment_id": self.deployment_id,
-                            "correlation_id": self.correlation_id  # Added correlation_id
+                            "correlation_id": self.correlation_id
                         },
                     )
 
                 self.logger.info(
                     f"Processed completion - Content Length: {len(content)}, Usage: {usage}",
                     extra={"correlation_id": self.correlation_id}
-                )  # Using logger
+                )
+                print_success("Completion processed successfully.")
 
             return content, usage
 
         except Exception as e:
-            self.logger.error(f"Error processing completion: {e}", exc_info=True)  # Using logger with stack trace
+            self.logger.error(f"Error processing completion: {e}", exc_info=True)
+            print_error(f"Failed to process completion: {str(e)}")
             raise ProcessingError(f"Failed to process completion: {str(e)}")

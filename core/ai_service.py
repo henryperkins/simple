@@ -2,11 +2,11 @@
 Service for interacting with the AI model to generate documentation.
 """
 from typing import Any
+import time
 import asyncio
 from urllib.parse import urljoin
 import json
 import aiohttp
-import time
 
 from core.config import AIConfig
 from core.docstring_processor import DocstringProcessor
@@ -57,7 +57,7 @@ class AIService:
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")
         self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
-        
+
         try:
             self.docstring_processor = Injector.get("docstring_processor")
         except KeyError:
@@ -70,7 +70,7 @@ class AIService:
             )
             self.docstring_processor = DocstringProcessor()
             Injector.register("docstring_processor", self.docstring_processor)
-        
+
         self.token_manager = TokenManager(
             model=self.config.model,
             config=self.config,
@@ -113,7 +113,7 @@ class AIService:
         """
         start_time = time.time()
         print_phase_header("Documentation Generation")
-        
+
         try:
             if not context.source_code or not context.source_code.strip():
                 self.logger.error(
@@ -165,17 +165,27 @@ class AIService:
             # Get the function schema
             function_schema = self.prompt_manager.get_function_schema(schema)
 
+            # Validate and prepare request
+            request_params = await self.token_manager.validate_and_prepare_request(
+                prompt,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature,
+            )
+
+            if request_params["max_tokens"] < 100:
+                print_info("Warning: Token availability is low. Consider reducing prompt size.")
+
             print_info("Making API call to generate documentation")
             async with self.semaphore:
                 response = await self._make_api_call_with_retry(
                     str(prompt),
-                    function_schema if isinstance(function_schema, dict) else {}
+                    function_schema
                 )
 
             # Parse response into DocstringData
             print_info("Parsing and validating response")
             parsed_response = await self.response_parser.parse_response(
-                response, 
+                response,
                 expected_format="docstring",
                 validate_schema=True
             )

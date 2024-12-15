@@ -2,7 +2,7 @@
 Metrics collection and storage module.
 """
 
-from typing import Any
+from typing import Any, Union
 from datetime import datetime
 import json
 import os
@@ -218,3 +218,36 @@ class MetricsCollector:
     def get_metrics_history(self, module_name: str) -> list[dict[str, Any]]:
         """Get metrics history for a specific module."""
         return self.metrics_history.get(module_name, [])
+
+    def collect_token_usage(self, prompt_tokens: int, completion_tokens: int, cost: float, model: str) -> None:
+        """Collect metrics specifically for token usage."""
+        try:
+            self.operations.append({
+                "timestamp": datetime.now().isoformat(),
+                "operation_type": "token_usage",
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
+                "total_cost": cost,
+                "model": model,
+                "correlation_id": self.correlation_id,
+            })
+            self.logger.info(
+                f"Token usage collected: {prompt_tokens + completion_tokens} tokens, ${cost:.4f}.",
+                extra={"model": model, "correlation_id": self.correlation_id}
+            )
+        except Exception as e:
+            self.logger.error(f"Error collecting token usage: {e}", exc_info=True)
+
+    def get_aggregated_token_usage(self) -> dict[str, Union[int, float]]:
+        """Aggregate token usage statistics across operations."""
+        total_prompt_tokens = sum(op.get("prompt_tokens", 0) for op in self.operations if op["operation_type"] == "token_usage")
+        total_completion_tokens = sum(op.get("completion_tokens", 0) for op in self.operations if op["operation_type"] == "token_usage")
+        total_cost = sum(op.get("total_cost", 0) for op in self.operations if op["operation_type"] == "token_usage")
+
+        return {
+            "total_prompt_tokens": total_prompt_tokens,
+            "total_completion_tokens": total_completion_tokens,
+            "total_tokens": total_prompt_tokens + total_completion_tokens,
+            "total_cost": total_cost,
+        }
