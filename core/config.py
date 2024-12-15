@@ -2,12 +2,19 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Any
 from dotenv import load_dotenv
 import uuid
+from pathlib import Path
+
 
 # Load environment variables
 load_dotenv()
+
+# Define base paths
+ROOT_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPOS_DIR = ROOT_DIR / "repos"
+DOCS_OUTPUT_DIR = ROOT_DIR / "docs_output"
 
 
 def get_env_var(
@@ -64,28 +71,22 @@ class AIConfig:
     max_tokens: int = 8192
     temperature: float = 0.7
     timeout: int = 30
-    model_limits: Dict[str, ModelConfig] = field(
-        default_factory=lambda: {
-            "gpt-4": ModelConfig(
-                max_tokens=8192, chunk_size=4096, cost_per_token=0.00003
-            ),
-            "gpt-3.5-turbo": ModelConfig(
-                max_tokens=4096, chunk_size=2048, cost_per_token=0.000002
-            ),
-        }
-    )
+    model_limits: dict[str, ModelConfig] = field(default_factory=lambda: {
+        "gpt-4": ModelConfig(max_tokens=8192, chunk_size=4096, cost_per_token=0.00003),
+        "gpt-3.5-turbo": ModelConfig(max_tokens=4096, chunk_size=2048, cost_per_token=0.000002),
+    })
 
-    @classmethod
-    def from_env(cls) -> "AIConfig":
+    @staticmethod
+    def from_env() -> "AIConfig":
         """Create configuration from environment variables."""
-        return cls(
+        return AIConfig(
             api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
             endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
             deployment=get_env_var("AZURE_OPENAI_DEPLOYMENT", required=True),
             model=get_env_var("MODEL_NAME", "gpt-4"),
             max_tokens=get_env_var("MAX_TOKENS", 8192, int),
             temperature=get_env_var("TEMPERATURE", 0.7, float),
-            timeout=get_env_var("TIMEOUT", 30, int),
+            timeout=get_env_var("TIMEOUT", 30, int)
         )
 
 
@@ -95,22 +96,30 @@ class AppConfig:
 
     debug: bool = False
     log_level: str = "INFO"
-    output_dir: str = "docs"
-    log_dir: str = "logs"
+    repos_dir: Path = REPOS_DIR
+    docs_output_dir: Path = DOCS_OUTPUT_DIR
+    log_dir: Path = ROOT_DIR / "logs"
     use_cache: bool = False
     cache_ttl: int = 3600
 
-    @classmethod
-    def from_env(cls) -> "AppConfig":
+    @staticmethod
+    def from_env() -> "AppConfig":
         """Create configuration from environment variables."""
-        return cls(
+        return AppConfig(
             debug=get_env_var("DEBUG", False, bool),
             log_level=get_env_var("LOG_LEVEL", "INFO"),
-            output_dir=get_env_var("OUTPUT_DIR", "docs"),
-            log_dir=get_env_var("LOG_DIR", "logs"),
+            repos_dir=Path(get_env_var("REPOS_DIR", str(REPOS_DIR))),
+            docs_output_dir=Path(get_env_var("DOCS_OUTPUT_DIR", str(DOCS_OUTPUT_DIR))),
+            log_dir=Path(get_env_var("LOG_DIR", "logs")),
             use_cache=get_env_var("USE_CACHE", False, bool),
-            cache_ttl=get_env_var("CACHE_TTL", 3600, int),
+            cache_ttl=get_env_var("CACHE_TTL", 3600, int)
         )
+
+    def ensure_directories(self):
+        """Ensure all required directories exist."""
+        self.repos_dir.mkdir(exist_ok=True)
+        self.docs_output_dir.mkdir(exist_ok=True)
+        self.log_dir.mkdir(exist_ok=True)
 
 
 class Config:
@@ -121,8 +130,9 @@ class Config:
         self.ai = AIConfig.from_env()
         self.app = AppConfig.from_env()
         self.correlation_id = str(uuid.uuid4())
+        self.app.ensure_directories()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary.
 
         Returns:
@@ -149,8 +159,9 @@ class Config:
             "app": {
                 "debug": self.app.debug,
                 "log_level": self.app.log_level,
-                "output_dir": self.app.output_dir,
-                "log_dir": self.app.log_dir,
+                "repos_dir": str(self.app.repos_dir),
+                "docs_output_dir": str(self.app.docs_output_dir),
+                "log_dir": str(self.app.log_dir),
                 "use_cache": self.app.use_cache,
                 "cache_ttl": self.app.cache_ttl,
             },

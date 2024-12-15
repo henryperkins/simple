@@ -1,7 +1,7 @@
 """
 Service for interacting with the AI model to generate documentation.
 """
-from typing import Any, Dict, Optional
+from typing import Any
 import asyncio
 from urllib.parse import urljoin
 import json
@@ -14,8 +14,23 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.prompt_manager import PromptManager
 from core.dependency_injection import Injector
 from api.token_management import TokenManager
-from core.exceptions import APICallError, DataValidationError
-from core.types.base import ProcessingResult, DocumentationContext, DocstringData, DocstringSchema
+from core.exceptions import APICallError, DataValidationError, DocumentationError
+from core.types.base import (
+    ProcessingResult,
+    DocumentationContext,
+    DocstringData,
+    ExtractedClass,
+    ExtractedFunction,
+)
+from core.metrics_collector import MetricsCollector
+from core.console import (
+    print_info,
+    print_phase_header,
+    display_processing_phase,
+    display_metrics,
+    display_api_metrics,
+    create_status_table,
+)
 
 
 class AIService:
@@ -24,7 +39,7 @@ class AIService:
     """
 
     def __init__(
-        self, config: Optional[AIConfig] = None, correlation_id: Optional[str] = None
+        self, config: AIConfig | None = None, correlation_id: str | None = None
     ) -> None:
         """
         Initialize AI service.
@@ -41,27 +56,36 @@ class AIService:
         )
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")
+        self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
+        
         try:
             self.docstring_processor = Injector.get("docstring_processor")
         except KeyError:
             self.logger.warning(
                 "Docstring processor not registered, using default",
-                extra={"correlation_id": self.correlation_id},
+                extra={
+                    "correlation_id": self.correlation_id,
+                    "sanitized_info": {"status": "warning", "type": "fallback_processor"}
+                }
             )
             self.docstring_processor = DocstringProcessor()
             Injector.register("docstring_processor", self.docstring_processor)
+        
         self.token_manager = TokenManager(
             model=self.config.model,
             config=self.config,
             correlation_id=correlation_id,
         )
         self.semaphore = asyncio.Semaphore(10)  # Default semaphore value
-        self._client: Optional[aiohttp.ClientSession] = None
+        self._client: aiohttp.ClientSession | None = None
 
-        self.logger.info(
-            "AIService instance created",
-            extra={"correlation_id": self.correlation_id},
-        )
+        print_phase_header("AI Service Initialization")
+        create_status_table("Configuration", {
+            "Model": self.config.model,
+            "Max Tokens": self.config.max_tokens,
+            "Temperature": self.config.temperature,
+            "Timeout": f"{self.config.timeout}s"
+        })
 
     async def start(self) -> None:
         """
@@ -69,10 +93,11 @@ class AIService:
         """
         if self._client is None:
             self._client = aiohttp.ClientSession()
+            print_info("AI Service client session initialized")
 
     async def generate_documentation(
-        self, context: "DocumentationContext", schema: Optional[Dict[str, Any]] = None
-    ) -> "ProcessingResult":
+        self, context: DocumentationContext, schema: dict[str, Any] | None = None
+    ) -> ProcessingResult:
         """
         Generates documentation using the AI model.
 
@@ -86,11 +111,25 @@ class AIService:
         Raises:
             DocumentationGenerationError: If there's an issue generating documentation.
         """
-        self.logger.info(
-            "generate_documentation called",
-            extra={"correlation_id": self.correlation_id},
-        )
+        start_time = time.time()
+        print_phase_header("Documentation Generation")
+        
         try:
+            if not context.source_code or not context.source_code.strip():
+                self.logger.error(
+                    "Source code is missing or empty",
+                    extra={
+                        "correlation_id": self.correlation_id,
+                        "sanitized_info": {
+                            "status": "error",
+                            "type": "missing_source",
+                            "module": context.metadata.get("module_name", "unknown"),
+                            "file": context.metadata.get("file_path", "unknown")
+                        }
+                    }
+                )
+                raise DocumentationError("Source code is missing or empty")
+
             module_name = (
                 context.metadata.get("module_name", "") if context.metadata else ""
             )
@@ -98,13 +137,25 @@ class AIService:
                 context.metadata.get("file_path", "") if context.metadata else ""
             )
 
+            display_processing_phase("Context Information", {
+                "Module": module_name or "Unknown",
+                "File": file_path or "Unknown",
+                "Code Length": len(context.source_code),
+                "Classes": len(context.classes),
+                "Functions": len(context.functions)
+            })
+
+            # Convert classes and functions to proper types
+            classes = [ExtractedClass(**cls) for cls in context.classes] if context.classes else None
+            functions = [ExtractedFunction(**func) for func in context.functions] if context.functions else None
+
             # Create documentation prompt
             prompt = await self.prompt_manager.create_documentation_prompt(
                 module_name=module_name,
                 file_path=file_path,
                 source_code=context.source_code,
-                classes=context.classes,
-                functions=context.functions,
+                classes=classes,
+                functions=functions,
             )
 
             # Add function calling instructions to the prompt
@@ -114,10 +165,15 @@ class AIService:
             # Get the function schema
             function_schema = self.prompt_manager.get_function_schema(schema)
 
+            print_info("Making API call to generate documentation")
             async with self.semaphore:
-                response = await self._make_api_call_with_retry(prompt, function_schema)
+                response = await self._make_api_call_with_retry(
+                    str(prompt),
+                    function_schema if isinstance(function_schema, dict) else {}
+                )
 
             # Parse response into DocstringData
+            print_info("Parsing and validating response")
             parsed_response = await self.response_parser.parse_response(
                 response, 
                 expected_format="docstring",
@@ -126,8 +182,15 @@ class AIService:
 
             if not parsed_response.validation_success:
                 self.logger.error(
-                    f"Response validation failed: {parsed_response.errors}",
-                    extra={"correlation_id": self.correlation_id}
+                    "Response validation failed",
+                    extra={
+                        "correlation_id": self.correlation_id,
+                        "sanitized_info": {
+                            "status": "error",
+                            "type": "validation",
+                            "errors": parsed_response.errors
+                        }
+                    }
                 )
                 raise DataValidationError(
                     f"Response validation failed: {parsed_response.errors}"
@@ -139,16 +202,48 @@ class AIService:
 
             if not is_valid:
                 self.logger.error(
-                    f"Docstring validation failed: {validation_errors}",
-                    extra={"correlation_id": self.correlation_id}
+                    "Docstring validation failed",
+                    extra={
+                        "correlation_id": self.correlation_id,
+                        "sanitized_info": {
+                            "status": "error",
+                            "type": "docstring_validation",
+                            "errors": validation_errors
+                        }
+                    }
                 )
                 raise DataValidationError(f"Docstring validation failed: {validation_errors}")
+
+            # Track metrics
+            processing_time = time.time() - start_time
+            await self.metrics_collector.track_operation(
+                operation_type="documentation_generation",
+                success=True,
+                duration=processing_time,
+                metadata={
+                    "module": module_name,
+                    "file": file_path,
+                    "code_length": len(context.source_code),
+                    "classes": len(context.classes),
+                    "functions": len(context.functions)
+                },
+                usage=response.get("usage", {})
+            )
+
+            # Display metrics
+            api_metrics: dict[str, Any] = {
+                "Processing Time": f"{processing_time:.2f}s",
+                "Prompt Tokens": response.get("usage", {}).get("prompt_tokens", 0),
+                "Completion Tokens": response.get("usage", {}).get("completion_tokens", 0),
+                "Total Tokens": response.get("usage", {}).get("total_tokens", 0)
+            }
+            display_api_metrics(api_metrics)
 
             return ProcessingResult(
                 content=docstring_data.to_dict(),
                 usage=response.get("usage", {}),
                 metrics={
-                    "processing_time": parsed_response.parsing_time,
+                    "processing_time": processing_time,
                     "validation_success": True
                 },
                 validation_status=True,
@@ -157,17 +252,31 @@ class AIService:
             )
 
         except DataValidationError as e:
-            self.logger.error(f"Validation error: {e}", extra={"correlation_id": self.correlation_id})
+            await self.metrics_collector.track_operation(
+                operation_type="documentation_generation",
+                success=False,
+                duration=time.time() - start_time,
+                metadata={"error_type": "validation_error", "error_message": str(e)}
+            )
+            raise
+        except DocumentationError as e:
+            await self.metrics_collector.track_operation(
+                operation_type="documentation_generation",
+                success=False,
+                duration=time.time() - start_time,
+                metadata={"error_type": "documentation_error", "error_message": str(e)}
+            )
             raise
         except Exception as e:
-            self.logger.error(
-                f"Error generating documentation: {e}",
-                exc_info=True,
-                extra={"correlation_id": self.correlation_id},
+            await self.metrics_collector.track_operation(
+                operation_type="documentation_generation",
+                success=False,
+                duration=time.time() - start_time,
+                metadata={"error_type": "generation_error", "error_message": str(e)}
             )
             raise APICallError(str(e)) from e
 
-    def _format_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_response(self, response: dict[str, Any]) -> dict[str, Any]:
         """Format the response to ensure it has the expected structure.
 
         Args:
@@ -203,8 +312,8 @@ class AIService:
         }
 
     async def _make_api_call_with_retry(
-        self, prompt: str, function_schema: Dict[str, Any], max_retries: int = 3
-    ) -> Dict[str, Any]:
+        self, prompt: str, function_schema: dict[str, Any], max_retries: int = 3
+    ) -> dict[str, Any]:
         """
         Makes an API call to the AI model with retry logic.
 
@@ -214,7 +323,7 @@ class AIService:
             max_retries: Maximum number of retries for the API call.
 
         Returns:
-            Dict[str, Any]: The raw response from the AI model.
+            dict[str, Any]: The raw response from the AI model.
 
         Raises:
             APICallError: If all retries fail.
@@ -233,6 +342,13 @@ class AIService:
         request_params["functions"] = [function_schema]
         request_params["function_call"] = {"name": "generate_docstring"}
 
+        request_metrics: dict[str, Any] = {
+            "Prompt Tokens": request_params.get("max_tokens", 0),
+            "Temperature": request_params.get("temperature", 0),
+            "Retries": max_retries
+        }
+        display_metrics(request_metrics, title="API Request Parameters")
+
         for attempt in range(max_retries):
             try:
                 endpoint = self.config.endpoint.rstrip("/") + "/"
@@ -242,6 +358,10 @@ class AIService:
                 if self._client is None:
                     await self.start()
 
+                if self._client is None:
+                    raise APICallError("Failed to initialize client session")
+
+                print_info(f"Making API call (attempt {attempt + 1}/{max_retries})")
                 async with self._client.post(
                     url,
                     headers=headers,
@@ -250,19 +370,22 @@ class AIService:
                 ) as response:
                     if response.status == 200:
                         return await response.json()
-                    else:
-                        error_text = await response.text()
-                        if attempt == max_retries - 1:
-                            raise APICallError(
-                                f"API call failed after {max_retries} retries: {error_text}"
-                            )
-                        await asyncio.sleep(2**attempt)  # Exponential backoff
+                    
+                    error_text = await response.text()
+                    if attempt == max_retries - 1:
+                        raise APICallError(
+                            f"API call failed after {max_retries} retries: {error_text}"
+                        )
+                    print_info(f"API call failed (attempt {attempt + 1}): {error_text}")
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 if attempt == max_retries - 1:
                     raise APICallError(
                         f"API call failed after {max_retries} retries due to client error: {e}"
                     ) from e
+                print_info(f"Client error (attempt {attempt + 1}): {e}")
+                await asyncio.sleep(2**attempt)
 
         raise APICallError(f"API call failed after {max_retries} retries.")
 
@@ -271,6 +394,7 @@ class AIService:
         if self._client:
             await self._client.close()
             self._client = None
+            print_info("AI Service client session closed")
 
     async def __aenter__(self) -> "AIService":
         """Enter method for async context manager."""
@@ -279,8 +403,8 @@ class AIService:
 
     async def __aexit__(
         self,
-        exc_type: Optional[type],
-        exc_val: Optional[BaseException],
+        exc_type: type | None,
+        exc_val: BaseException | None,
         exc_tb: Any,
     ) -> None:
         """Exit method for async context manager."""

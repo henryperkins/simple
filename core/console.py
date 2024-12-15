@@ -1,5 +1,5 @@
 """Console utilities without rich."""
-from typing import Optional, Any
+from typing import Any
 import logging
 from rich.progress import Progress
 
@@ -47,7 +47,7 @@ def print_status(message: str, style: str = "bold blue") -> None:
     """Display status messages."""
     print(f"Status: {message}")
 
-def print_error(message: str, correlation_id: Optional[str] = None) -> None:
+def print_error(message: str, correlation_id: str | None = None) -> None:
     """Display error messages."""
     if correlation_id:
         message = f"{message} (Correlation ID: {correlation_id})"
@@ -72,7 +72,7 @@ def print_debug(message: str) -> None:
     """Print a debug message."""
     print(f"Debug: {message}")
 
-def display_metrics(metrics: dict, title: str = "Metrics") -> None:
+def display_metrics(metrics: dict[str, Any], title: str = "Metrics") -> None:
     """Display metrics in a formatted table."""
     print(f"{title}:")
     for key, value in metrics.items():
@@ -92,7 +92,7 @@ def create_status_table(title: str, data: dict[str, Any]) -> None:
     for key, value in data.items():
         print(f"  {key}: {value}")
 
-def format_validation_status(success: bool, errors: Optional[list[str]] = None) -> None:
+def format_validation_status(success: bool, errors: list[str] | None = None) -> None:
     """Display validation status with optional errors."""
     status = "Passed" if success else "Failed"
     print(f"\nValidation Status: {status}")
@@ -121,7 +121,7 @@ def display_api_metrics(response_data: dict[str, Any]) -> None:
 
 def display_validation_results(
     results: dict[str, bool], 
-    details: Optional[dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 ) -> None:
     """Display validation results with details."""
     print("\nValidation Results")

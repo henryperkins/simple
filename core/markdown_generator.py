@@ -2,16 +2,17 @@
 Markdown documentation generator module.
 """
 
+from collections.abc import Sequence
 from typing import Any, TypedDict, cast
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.types import DocumentationData, ExtractedClass
+from core.types import DocumentationData, ExtractedClass, MetricData
 from core.exceptions import DocumentationError
 
 
 class FunctionDict(TypedDict, total=False):
     name: str
-    metrics: dict[str, Any]
+    metrics: MetricData
     args: list[dict[str, Any]]
     returns: dict[str, str]
 
@@ -38,10 +39,216 @@ class MarkdownGenerator:
             extra={"correlation_id": self.correlation_id},
         )
 
+    def _escape_markdown(self, text: str) -> str:
+        """Escape special markdown characters."""
+        special_chars = ['|', '*', '_', '[', ']', '(', ')', '#', '`', '>', '+', '-', '.', '!', '{', '}']
+        for char in special_chars:
+            text = text.replace(char, '\\' + char)
+        return text
+
+    def _format_code_block(self, code: str, language: str = "") -> str:
+        """Format code block with proper markdown syntax."""
+        return f"```{language}\n{code}\n```"
+
+    def _format_parameter_list(self, params: list[str], max_length: int = 80) -> str:
+        """Format parameter list with proper line breaks."""
+        if not params:
+            return "()"
+        
+        # Single line if short enough
+        single_line = f"({', '.join(params)})"
+        if len(single_line) <= max_length:
+            return single_line
+        
+        # Multi-line format
+        indent = "    "
+        param_lines = [params[0]]
+        current_line = params[0]
+        
+        for param in params[1:]:
+            if len(current_line + ", " + param) <= max_length:
+                current_line += ", " + param
+                param_lines[-1] = current_line
+            else:
+                current_line = param
+                param_lines.append(current_line)
+        
+        return f"(\n{indent}" + f",\n{indent}".join(param_lines) + "\n)"
+
+    def _generate_header(self, module_name: str) -> str:
+        """Generate the module header."""
+        self.logger.debug(f"Generating header for module_name: {module_name}.")
+        return f"# {self._escape_markdown(module_name)}"
+
+    def _generate_toc(self) -> str:
+        """Generate table of contents."""
+        return """## Table of Contents
+- [Overview](#overview)
+- [Classes](#classes)
+- [Functions](#functions)
+- [Constants and Variables](#constants-and-variables)
+- [Recent Changes](#recent-changes)
+- [Source Code](#source-code)"""
+
+    def _generate_overview(self, file_path: str, description: str) -> str:
+        """Generate the overview section."""
+        self.logger.debug(f"Generating overview for file_path: {file_path}")
+
+        if not description or description.isspace():
+            description = "No description available."
+            self.logger.warning(f"No description provided for {file_path}")
+
+        return f"""## Overview
+**File:** `{self._escape_markdown(file_path)}`
+
+**Description:**  
+{self._escape_markdown(description)}"""
+
+    def _get_complexity(self, metrics: MetricData | dict[str, Any]) -> int:
+        """Get cyclomatic complexity from metrics object."""
+        if isinstance(metrics, dict):
+            return 1  # Default complexity for dict metrics
+        return metrics.cyclomatic_complexity
+
+    def _generate_class_tables(self, classes: Sequence[dict[str, Any]]) -> str:
+        """Generate markdown tables for classes."""
+        if not classes:
+            return ""
+
+        # First table: Class overview
+        tables: list[str] = ["## Classes\n\n"]
+        tables.append("| Class | Inherits From | Complexity Score* |\n")
+        tables.append("|-------|---------------|------------------|\n")
+
+        class_methods: list[str] = ["### Class Methods\n\n"]
+        class_methods.append("| Class | Method | Parameters | Returns | Complexity Score* |\n")
+        class_methods.append("|-------|---------|------------|---------|------------------|\n")
+
+        for cls_dict in classes:
+            cls_dict.pop('_logger', None)
+            cls = ExtractedClass(**cls_dict)
+            class_name = self._escape_markdown(cls.name)
+            
+            # Add class to overview table
+            total_complexity = sum(
+                self._get_complexity(method.metrics)
+                for method in cls.methods
+            )
+            warning = " (warning)" if total_complexity > 20 else ""
+            base_class = self._escape_markdown(cls.bases[0] if cls.bases else 'None')
+            tables.append(f"| `{class_name}` | `{base_class}` | {total_complexity}{warning} |\n")
+
+            # Add methods to methods table
+            for method in cls.methods:
+                params: list[str] = []
+                for arg in method.args:
+                    param = f"{arg.name}: {arg.type}" if arg.type else arg.name
+                    if arg.default_value:
+                        param += f" = {arg.default_value}"
+                    params.append(param)
+                
+                params_str = self._format_parameter_list(params)
+                returns_str = method.returns.get('type', 'None') if method.returns else 'None'
+                complexity = self._get_complexity(method.metrics)
+                warning = " (warning)" if complexity > 10 else ""
+                
+                # Escape special characters and wrap in code blocks
+                method_name = self._escape_markdown(method.name)
+                params_str = self._escape_markdown(params_str)
+                returns_str = self._escape_markdown(returns_str)
+                
+                class_methods.append(
+                    f"| `{class_name}` | `{method_name}` | `{params_str}` | `{returns_str}` | {complexity}{warning} |\n"
+                )
+
+        return "\n".join(tables) + "\n\n" + "\n".join(class_methods)
+
+    def _generate_function_tables(self, functions: Sequence[FunctionDict]) -> str:
+        """Generate the functions section."""
+        if not functions:
+            return ""
+
+        table_lines: list[str] = ["## Functions\n\n"]
+        table_lines.append("| Function | Parameters | Returns | Complexity Score* |\n")
+        table_lines.append("|----------|------------|---------|------------------|\n")
+
+        for func in functions:
+            params: list[str] = []
+            for arg in func.get("args", []):
+                param = f"{arg.get('name', '')}: {arg.get('type', 'Any')}"
+                if arg.get("default_value"):
+                    param += f" = {arg.get('default_value')}"
+                params.append(param)
+            
+            params_str = self._format_parameter_list(params)
+            returns = func.get("returns", {})
+            returns_str = returns.get('type', 'None') if returns else 'None'
+
+            metrics = func.get("metrics", MetricData())
+            complexity = self._get_complexity(metrics)
+            warning = " (warning)" if complexity > 10 else ""
+
+            # Escape special characters and wrap in code blocks
+            func_name = self._escape_markdown(func.get('name', 'Unknown'))
+            params_str = self._escape_markdown(params_str)
+            returns_str = self._escape_markdown(returns_str)
+
+            table_lines.append(
+                f"| `{func_name}` | `{params_str}` | `{returns_str}` | {complexity}{warning} |\n"
+            )
+
+        return "\n".join(table_lines)
+
+    def _generate_constants_table(self, constants: Sequence[ConstantDict]) -> str:
+        """Generate the constants section."""
+        if not constants:
+            return ""
+
+        table_lines: list[str] = [
+            "## Constants and Variables\n\n",
+            "| Name | Type | Value |\n",
+            "|------|------|-------|\n",
+        ]
+
+        for const in constants:
+            name = self._escape_markdown(const.get('name', 'Unknown'))
+            type_str = self._escape_markdown(const.get('type', 'Unknown'))
+            value = self._escape_markdown(const.get('value', 'Unknown'))
+            
+            table_lines.append(
+                f"| `{name}` | `{type_str}` | `{value}` |\n"
+            )
+
+        return "\n".join(table_lines)
+
+    def _generate_recent_changes(self, changes: Sequence[dict[str, Any]]) -> str:
+        """Generate the recent changes section."""
+        if not changes:
+            return ""
+
+        change_lines: list[str] = ["## Recent Changes\n\n"]
+
+        for change in changes:
+            date = self._escape_markdown(change.get('date', 'Unknown Date'))
+            description = self._escape_markdown(change.get('description', 'No description'))
+            change_lines.append(
+                f"- **{date}**: {description}\n"
+            )
+
+        return "\n".join(change_lines)
+
+    def _generate_source_code(self, source_code: str | None) -> str:
+        """Generate the source code section."""
+        if not source_code:
+            return ""
+
+        return f"""## Source Code
+
+{self._format_code_block(source_code, "python")}"""
+
     def generate(self, documentation_data: DocumentationData) -> str:
         """Generate markdown documentation."""
         try:
-            # Log detailed information about the documentation_data
             self.logger.debug(
                 f"Generating markdown for module: {documentation_data.module_name}"
             )
@@ -49,30 +256,28 @@ class MarkdownGenerator:
                 f"DocumentationData content: {documentation_data.to_dict()}"
             )
 
-            # Check for complete information
             if not documentation_data.source_code:
                 self.logger.error(
                     "Source code is missing - cannot generate documentation"
                 )
                 return "# Error: Missing Source Code\n\nDocumentation cannot be generated without source code."
 
-            # Create module info from DocumentationData fields
-            module_info = {
+            module_info: dict[str, Any] = {
                 "module_name": documentation_data.module_name,
                 "file_path": str(documentation_data.module_path),
-                "description": documentation_data.module_summary,
-                "file_size": "X KB",  # Placeholder, should be calculated
+                "description": documentation_data.module_summary or "No description available.",
                 "lines_of_code": len(documentation_data.source_code.splitlines()),
-                "dependencies": documentation_data.dependencies or [],
-                "changes": documentation_data.changes or [],
+                "dependencies": getattr(documentation_data, 'dependencies', []) or [],
+                "changes": getattr(documentation_data, 'changes', []) or []
             }
 
-            sections = [
-                self._generate_header(module_info["module_name"]),
+            markdown_sections: list[str] = [
+                self._generate_header(str(module_info["module_name"])),
+                self._generate_toc(),
                 self._generate_overview(
-                    module_info["file_path"], module_info["description"], module_info["file_size"], module_info["lines_of_code"]
+                    str(module_info["file_path"]),
+                    str(module_info["description"])
                 ),
-                self._generate_summary(module_info["description"], module_info["dependencies"]),
                 self._generate_class_tables(
                     cast(list[dict[str, Any]], documentation_data.code_metadata.get("classes", []))
                 ),
@@ -84,10 +289,13 @@ class MarkdownGenerator:
                 ),
                 self._generate_recent_changes(module_info["changes"]),
                 self._generate_source_code(documentation_data.source_code),
+                "*Please note: Complexity scores provide an overview of the logic complexity and performance characteristics. A higher score may indicate a need for optimization. Methods with scores above 10 are marked with (warning).*"
             ]
-            markdown = "\n\n".join(filter(None, sections))
+
+            markdown = "\n\n".join(section for section in markdown_sections if section)
             self.logger.debug("Generated documentation successfully")
             return markdown
+
         except DocumentationError as de:
             error_msg = f"DocumentationError: {de} in markdown generation with correlation ID: {self.correlation_id}"
             self.logger.error(error_msg, extra={"correlation_id": self.correlation_id})
@@ -98,252 +306,3 @@ class MarkdownGenerator:
                 error_msg, exc_info=True, extra={"correlation_id": self.correlation_id}
             )
             return f"# Error Generating Documentation\n\nAn error occurred: {e}"
-
-    def _generate_header(self, module_name: str) -> str:
-        """Generate the module header."""
-        self.logger.debug(f"Generating header for module_name: {module_name}.")
-        return f"# Module: {module_name}\n\n"
-
-    def _generate_overview(self, file_path: str, description: str, file_size: str, lines_of_code: int) -> str:
-        """Generate the overview section."""
-        self.logger.debug(f"Generating overview for file_path: {file_path}")
-
-        # Use a default description if none provided
-        if not description or description.isspace():
-            description = "No description available."
-            self.logger.warning(f"No description provided for {file_path}")
-
-        # Log the description being used
-        self.logger.debug(f"Using description: {description[:100]}...")
-
-        return f"""
-## Overview
-| **Path**       | `{file_path}` |
-|----------------|----------------|
-| **File Size**  | `{file_size}`  |
-| **Lines of Code** | `{lines_of_code}` |
-"""
-
-    def _generate_ai_doc_section(self, ai_documentation: dict[str, Any]) -> str:
-        """
-        Generate the AI documentation section using docstring data and AI enhancements.
-
-        Args:
-            ai_documentation: Dictionary containing AI-enhanced documentation
-
-        Returns:
-            str: Generated markdown documentation
-        """
-        if not ai_documentation:
-            return ""
-
-        sections = [
-            "## AI-Generated Documentation\n\n",
-            "**Summary:** "
-            + (ai_documentation.get("summary", "No summary provided."))
-            + "\n\n",
-            "**Description:** "
-            + (ai_documentation.get("description", "No description provided."))
-            + "\n\n",
-        ]
-
-        # Format arguments section
-        if args := ai_documentation.get("args"):
-            sections.append("**Arguments:**")
-            for arg in args:
-                sections.append(
-                    f"- **{arg.get('name', 'Unknown')}** "
-                    f"({arg.get('type', 'Any')}): "
-                    f"{arg.get('description', 'No description.')}"
-                )
-            sections.append("\n")
-
-        # Format returns section
-        if returns := ai_documentation.get("returns"):
-            sections.append(
-                f"**Returns:** {returns.get('type', 'Unknown Type')} - "
-                f"{returns.get('description', 'No description.')}\n\n"
-            )
-
-        # Format raises section
-        if raises := ai_documentation.get("raises"):
-            sections.append("**Raises:**")
-            for exc in raises:
-                sections.append(
-                    f"- **{exc.get('exception', 'Unknown Exception')}**: "
-                    f"{exc.get('description', 'No description.')}"
-                )
-            sections.append("\n")
-
-        return "\n".join(sections)
-
-    def _generate_class_tables(self, classes: list[dict[str, Any]]) -> str:
-        """Generate markdown tables for classes.
-
-        Args:
-            classes: List of class dictionaries.
-
-        Returns:
-            str: Markdown tables for classes.
-        """
-        tables = []
-        tables.append("## Classes and Methods\n\n")
-        tables.append("| Class       | Inherits From  | Method          | Complexity Score* | Details |\n")
-        tables.append("| ----------- | -------------- | --------------- | ----------------- | ------- |\n")
-
-        for cls_dict in classes:
-            # Exclude '_logger' from cls_dict if present
-            cls_dict.pop('_logger', None)
-            cls = ExtractedClass(**cls_dict)  # Convert dictionary to ExtractedClass instance
-            class_name = cls.name
-
-            # Add class docstring if available
-            docstring_info = cls.get_docstring_info()
-            class_description = ""
-            if docstring_info:
-                if isinstance(docstring_info, dict):
-                    class_description = docstring_info.get('description', 'No description available')
-                elif isinstance(docstring_info, ExtractedClass):
-                    class_description = docstring_info.description
-
-            # Add methods
-            for method in cls.methods:
-                method_complexity = method.metrics.get('complexity', 0)
-                method_warning = " ⚠️" if method_complexity > 10 else ""
-                method_details = f"<details><summary>View</summary><ul>"
-                method_details += f"<li><strong>Description:</strong> {method.description or 'No description'}</li>"
-                if method.args:
-                    method_details += "<li><strong>Parameters:</strong><ul>"
-                    for arg in method.args:
-                        method_details += f"<li>`{arg.name}` ({arg.type or 'Any'}): {arg.description or 'No description'}</li>"
-                    method_details += "</ul></li>"
-                if method.returns:
-                    method_details += f"<li><strong>Returns:</strong> `{method.returns.get('type', 'Any')}`: {method.returns.get('description', 'No description')}</li>"
-                if method.raises:
-                    method_details += "<li><strong>Raises:</strong><ul>"
-                    for exc in method.raises:
-                        method_details += f"<li>`{exc.get('exception', 'Exception')}`: {exc.get('description', 'No description')}</li>"
-                    method_details += "</ul></li>"
-                method_details += "</ul></details>"
-
-                tables.append(f"| `{class_name}` | `{cls.bases[0] if cls.bases else 'None'}` | `{method.name}` | {method_complexity}{method_warning} | {method_details} |\n")
-
-        return "\n".join(tables)
-
-    def _generate_function_tables(self, functions: list[FunctionDict]) -> str:
-        """Generate the functions section."""
-        try:
-            if not functions:
-                return ""
-
-            lines = [
-                "## Functions\n\n",
-                "| Function | Complexity Score* | Details |\n",
-                "|----------|------------------|---------|\n",
-            ]
-
-            for func in functions:
-                # Safely get the complexity
-                metrics = func.get("metrics", {})
-                complexity = metrics.get("complexity", 0) if isinstance(metrics, dict) else 0
-                warning = " ⚠️" if complexity > 10 else ""
-
-                func_details = f"<details><summary>View</summary><ul>"
-                func_details += f"<li><strong>Description:</strong> {func.get('description', 'No description')}</li>"
-                if func.get("args"):
-                    func_details += "<li><strong>Parameters:</strong><ul>"
-                    for arg in func.get("args", []):
-                        func_details += f"<li>`{arg.get('name', 'unknown')}` ({arg.get('type', 'Any')}): {arg.get('description', 'No description')}"
-                        if arg.get("default_value"):
-                            func_details += f". Defaults to {arg.get('default_value')}."
-                        func_details += "</li>"
-                    func_details += "</ul></li>"
-                if func.get("returns"):
-                    func_details += f"<li><strong>Returns:</strong> `{func.get('returns', {}).get('type', 'Any')}`: {func.get('returns', {}).get('description', 'No description')}</li>"
-                if func.get("raises"):
-                    func_details += "<li><strong>Raises:</strong><ul>"
-                    for exc in func.get("raises", []):
-                        func_details += f"<li>`{exc.get('exception', 'Exception')}`: {exc.get('description', 'No description')}</li>"
-                    func_details += "</ul></li>"
-                func_details += "</ul></details>"
-
-                lines.append(
-                    f"| `{func.get('name', 'Unknown')}` | {complexity}{warning} | {func_details} |\n"
-                )
-
-            return "\n".join(lines)
-        except Exception as e:
-            self.logger.error(f"Error generating function tables: {e}", exc_info=True)
-            return "An error occurred while generating function documentation."
-
-    def _generate_constants_table(self, constants: list[ConstantDict]) -> str:
-        """Generate the constants section."""
-        try:
-            if not constants:
-                return ""
-
-            lines = [
-                "## Constants and Variables\n\n",
-                "| Name | Type | Value | Description |\n",
-                "|------|------|-------|-------------|\n",
-            ]
-
-            for const in constants:
-                lines.append(
-                    f"| `{const.get('name', 'Unknown Name')}` | "
-                    f"`{const.get('type', 'Unknown Type')}` | "
-                    f"`{const.get('value', 'Unknown Value')}` | "
-                    f"{const.get('description', 'No description')} |"
-                )
-
-            return "\n".join(lines)
-        except Exception as e:
-            self.logger.error(f"Error generating constants table: {e}", exc_info=True)
-            return "An error occurred while generating constants documentation."
-
-    def _generate_source_code(self, source_code: str | None) -> str:
-        """Generate the source code section."""
-        try:
-            if not source_code:
-                return ""
-
-            return "\n".join(
-                [
-                    "## Source Code",
-                    f"```python",
-                    source_code,
-                    "```",
-                ]
-            )
-        except Exception as e:
-            self.logger.error(
-                f"Error generating source code section: {e}", exc_info=True
-            )
-            return "An error occurred while generating source code documentation."
-    def _generate_summary(self, description: str, dependencies: list[str]) -> str:
-        """Generate the summary section."""
-        self.logger.debug(f"Generating summary for description: {description[:100]}...")
-
-        return f"""
-## Summary
-| **Description** | {description} |
-|-----------------|----------------|
-| **Dependencies** | {', '.join(dependencies)} |
-"""
-    def _generate_recent_changes(self, changes: list[dict[str, Any]]) -> str:
-        """Generate the recent changes section."""
-        if not changes:
-            return ""
-
-        lines = [
-            "## Recent Changes\n\n",
-            "| Date       | Change Description |\n",
-            "|------------|--------------------|\n",
-        ]
-
-        for change in changes:
-            lines.append(
-                f"| {change.get('date', 'Unknown Date')} | {change.get('description', 'No description')} |\n"
-            )
-
-        return "\n".join(lines)
