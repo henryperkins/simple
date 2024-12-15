@@ -61,9 +61,12 @@ def print_warning(message: str) -> None:
     """Print a warning message."""
     print(f"Warning: {message}")
 
-def print_info(message: str) -> None:
-    """Display info messages."""
-    print(f"Info: {message}")
+def print_info(message: str, details: Any = None) -> None:
+    """Display info messages with optional details."""
+    if details is not None:
+        print(f"Info: {message} - {details}")
+    else:
+        print(f"Info: {message}")
 
 def print_debug(message: str) -> None:
     """Print a debug message."""
