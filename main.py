@@ -111,8 +111,8 @@ class DocumentationGenerator:
         try:
             print_info(f"Processing file: {file_path}")
             source_code = await read_file_safe_async(file_path)
-            if not source_code:
-                print_error(f"Source code is missing for file: {file_path}")
+            if not source_code or source_code.isspace():
+                print_error(f"Source code is missing or empty for file: {file_path}")
                 return False
 
             start_time = asyncio.get_event_loop().time()
@@ -206,13 +206,13 @@ class DocumentationGenerator:
             for file_path in python_files:
                 output_file = output_dir / (file_path.stem + ".md")
                 source_code = await read_file_safe_async(file_path)  # Ensure source code is read
-                if source_code:  # Check if source code is not empty
+                if source_code and not source_code.isspace():  # Check if source code is not empty or just whitespace
                     if await self.process_file(file_path, output_file, fix_indentation):
                         processed_files += 1
                     else:
                         skipped_files += 1
                 else:
-                    print_error(f"Source code is missing for file: {file_path}")
+                    print_error(f"Source code is missing or empty for file: {file_path}")
                     skipped_files += 1
 
             success = True
