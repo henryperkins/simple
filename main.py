@@ -201,9 +201,14 @@ class DocumentationGenerator:
             python_files = local_path.rglob("*.py")
             for file_path in python_files:
                 output_file = output_dir / (file_path.stem + ".md")
-                if await self.process_file(file_path, output_file, fix_indentation):
-                    processed_files += 1
+                source_code = await read_file_safe_async(file_path)  # Ensure source code is read
+                if source_code:  # Check if source code is not empty
+                    if await self.process_file(file_path, output_file, fix_indentation):
+                        processed_files += 1
+                    else:
+                        skipped_files += 1
                 else:
+                    print_error(f"Source code is missing for file: {file_path}")
                     skipped_files += 1
 
             success = True
