@@ -15,8 +15,6 @@ except ImportError:
 from core.console import (
     print_info,
     print_error,
-    display_validation_results,
-    display_processing_phase
 )
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.exceptions import DocumentationError, ValidationError
@@ -100,7 +98,7 @@ class DocstringProcessor:
     def _parse_docstring_content(self, docstring: str) -> dict[str, Any]:
         """Parse docstring content into structured format."""
         docstring_str = docstring.strip()
-        display_processing_phase("Docstring Analysis", {
+        print_info("Docstring Analysis", {
             "Format": "String",
             "Length": len(docstring_str),
             "Lines": len(docstring_str.splitlines())
@@ -173,18 +171,6 @@ class DocstringProcessor:
             "raises": raises,
             "complexity": 1,
         }
-
-        # Display validation results
-        display_validation_results({
-            "Summary": bool(result["summary"]),
-            "Description": bool(result["description"]),
-            "Arguments": bool(result["args"]),
-            "Returns": bool(result["returns"]),
-            "Exceptions": bool(result["raises"])
-        }, {
-            "Arguments": f"Count: {len(args)}",
-            "Exceptions": f"Count: {len(raises)}"
-        })
 
         return result
 
