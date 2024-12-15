@@ -111,6 +111,10 @@ class DocumentationGenerator:
         try:
             print_info(f"Processing file: {file_path}")
             source_code = await read_file_safe_async(file_path)
+            if not source_code:
+                print_error(f"Source code is missing for file: {file_path}")
+                return False
+
             start_time = asyncio.get_event_loop().time()
 
             if fix_indentation:
