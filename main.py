@@ -194,11 +194,17 @@ class DocumentationGenerator:
 
             # Process each Python file in the repository
             python_files = local_path.rglob("*.py")
+            total_files = len(list(python_files))
+            processed_files = 0
+            skipped_files = 0
+
+            python_files = local_path.rglob("*.py")
             for file_path in python_files:
                 output_file = output_dir / (file_path.stem + ".md")
-                success = await self.process_file(file_path, output_file, fix_indentation)
-                if not success:
-                    print_error(f"Failed to process file: {file_path}")
+                if await self.process_file(file_path, output_file, fix_indentation):
+                    processed_files += 1
+                else:
+                    skipped_files += 1
 
             success = True
         except (FileNotFoundError, ValueError, IOError) as repo_error:
@@ -209,11 +215,19 @@ class DocumentationGenerator:
                 operation_type="repository_processing",
                 success=success,
                 duration=processing_time,
-                metadata={"repo_path": str(repo_path)},
+                metadata={
+                    "repo_path": str(repo_path),
+                    "total_files": total_files,
+                    "processed_files": processed_files,
+                    "skipped_files": skipped_files,
+                },
             )
 
             print_info(
                 f"Finished repository processing: {repo_path} with correlation ID: {self.correlation_id}"
+            )
+            print_info(
+                f"Processed {processed_files} files, skipped {skipped_files} files out of {total_files} total files."
             )
 
         return success
