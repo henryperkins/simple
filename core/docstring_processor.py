@@ -98,7 +98,7 @@ class DocstringProcessor:
     def _parse_docstring_content(self, docstring: str) -> dict[str, Any]:
         """Parse docstring content into structured format."""
         docstring_str = docstring.strip()
-        print_info("Docstring Analysis", {
+        self.logger.info("Docstring Analysis", {
             "Format": "String",
             "Length": len(docstring_str),
             "Lines": len(docstring_str.splitlines())
@@ -126,14 +126,6 @@ class DocstringProcessor:
                         "complexity": 1
                     }
         
-        # Debug logging
-        self.logger.debug(f"Raw docstring: {docstring_str}")
-        self.logger.debug(f"Parsed docstring: {parsed_docstring}")
-        if parsed_docstring.params:
-            self.logger.debug(f"Found {len(parsed_docstring.params)} parameters")
-            for param in parsed_docstring.params:
-                self.logger.debug(f"Parameter: {param.arg_name} ({param.type_name}): {param.description}")
-
         # Extract data from parsed docstring
         args: list[dict[str, str | list[dict[str, str]]]] = []
         for param in parsed_docstring.params:
@@ -143,7 +135,6 @@ class DocstringProcessor:
                 "description": param.description or "",
                 "nested": []  # Add empty list for nested parameters
             }
-            self.logger.debug(f"Adding argument: {arg}")
             args.append(arg)
 
         returns_dict: ReturnsDict = {
@@ -160,7 +151,6 @@ class DocstringProcessor:
                 "exception": exc.type_name or "Exception",
                 "description": exc.description or "",
             }
-            self.logger.debug(f"Adding exception: {exc_dict}")
             raises.append(exc_dict)
 
         result = {
