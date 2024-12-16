@@ -250,60 +250,29 @@ class MarkdownGenerator:
     def generate(self, documentation_data: DocumentationData) -> str:
         """Generate markdown documentation."""
         try:
-            self.logger.debug(
-                f"Generating markdown for module: {documentation_data.module_name}"
-            )
-            self.logger.debug(
-                f"DocumentationData content: {documentation_data.to_dict()}"
-            )
+            if not documentation_data:
+                raise DocumentationError("Documentation data is None")
+                
+            # Validate source code
+            if not documentation_data.source_code or not documentation_data.source_code.strip():
+                self.logger.error("Source code is missing")
+                raise DocumentationError("source_code is required")
 
-            if not documentation_data.source_code:
-                self.logger.error(
-                    "Source code is missing - cannot generate documentation"
-                )
-                return "# Error: Missing Source Code\n\nDocumentation cannot be generated without source code."
-
-            module_info: dict[str, Any] = {
-                "module_name": documentation_data.module_name,
-                "file_path": str(documentation_data.module_path),
-                "description": documentation_data.module_summary or "No description available.",
-                "lines_of_code": len(documentation_data.source_code.splitlines()),
-                "dependencies": getattr(documentation_data, 'dependencies', []) or [],
-                "changes": getattr(documentation_data, 'changes', []) or []
-            }
-
-            markdown_sections: list[str] = [
-                self._generate_header(str(module_info["module_name"])),
+            # Generate markdown sections
+            markdown_sections = [
+                self._generate_header(documentation_data.module_name),
                 self._generate_toc(),
                 self._generate_overview(
-                    str(module_info["file_path"]),
-                    str(module_info["description"])
+                    str(documentation_data.module_path),
+                    str(documentation_data.module_summary)
                 ),
-                self._generate_class_tables(
-                    cast(list[dict[str, Any]], documentation_data.code_metadata.get("classes", []))
-                ),
-                self._generate_function_tables(
-                    cast(list[FunctionDict], documentation_data.code_metadata.get("functions", []))
-                ),
-                self._generate_constants_table(
-                    cast(list[ConstantDict], documentation_data.code_metadata.get("constants", []))
-                ),
-                self._generate_recent_changes(module_info["changes"]),
-                self._generate_source_code(documentation_data.source_code),
-                "*Please note: Complexity scores provide an overview of the logic complexity and performance characteristics. A higher score may indicate a need for optimization. Methods with scores above 10 are marked with (warning).*"
+                self._generate_class_tables(documentation_data.code_metadata.get("classes", [])),
+                self._generate_function_tables(documentation_data.code_metadata.get("functions", [])),
+                self._generate_source_code(documentation_data.source_code)
             ]
 
-            markdown = "\n\n".join(section for section in markdown_sections if section)
-            self.logger.debug("Generated documentation successfully")
-            return markdown
+            return "\n\n".join(section for section in markdown_sections if section)
 
-        except DocumentationError as de:
-            error_msg = f"DocumentationError: {de} in markdown generation with correlation ID: {self.correlation_id}"
-            self.logger.error(error_msg, extra={"correlation_id": self.correlation_id})
-            return f"# Error Generating Documentation\n\nDocumentationError: {de}"
         except Exception as e:
-            error_msg = f"Unexpected error: {e} in markdown generation with correlation ID: {self.correlation_id}"
-            self.logger.error(
-                error_msg, exc_info=True, extra={"correlation_id": self.correlation_id}
-            )
-            return f"# Error Generating Documentation\n\nAn error occurred: {e}"
+            self.logger.error(f"Error generating markdown: {e}")
+            raise DocumentationError(f"Failed to generate markdown: {e}")

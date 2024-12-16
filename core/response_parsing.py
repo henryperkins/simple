@@ -14,7 +14,7 @@ from core.metrics_collector import MetricsCollector
 from core.types import ParsedResponse, DocumentationData
 from core.types.docstring import DocstringData
 from core.types.base import DocstringSchema
-from core.exceptions import ValidationError as CustomValidationError
+from core.exceptions import ValidationError as CustomValidationError, DocumentationError
 
 # Set up the base logger
 base_logger = LoggerSetup.get_logger(__name__)
@@ -119,6 +119,14 @@ class ResponseParsingService:
                         errors=[str(e)],
                         metadata={"correlation_id": self.correlation_id}
                     )
+            if isinstance(content, dict):
+                source_code = (
+                    response.get("source_code") or
+                    response.get("code_metadata", {}).get("source_code")
+                )
+                if source_code:
+                    content["source_code"] = source_code
+                    content.setdefault("code_metadata", {})["source_code"] = source_code
 
             # Ensure all required fields exist in the content
             content_dict = self._ensure_required_fields(content)
@@ -157,32 +165,44 @@ class ResponseParsingService:
     def _generate_markdown(self, content: dict[str, Any]) -> str:
         """Convert parsed content to markdown format."""
         try:
-            # Create DocstringData first, removing source_code if present
-            content_copy = content.copy()
-            content_copy.pop('source_code', None)
-            docstring_data = DocstringData(
-                summary=str(content_copy.get("summary", "")),
-                description=str(content_copy.get("description", "")),
-                args=content_copy.get("args", []),
-                returns=content_copy.get("returns", {"type": "Any", "description": ""}),
-                raises=content_copy.get("raises", []),
-                complexity=int(content_copy.get("complexity", 1))
+            # Get source code from multiple locations
+            source_code = (
+                content.get("source_code") or 
+                content.get("code_metadata", {}).get("source_code") or
+                content.get("ai_content", {}).get("source_code")
             )
+            
+            if not source_code:
+                self.logger.error("Source code missing from content")
+                raise DocumentationError("source_code is required")
 
-            # Create a minimal DocumentationData object for markdown generation
+            # Create DocumentationData with validated source
             doc_data = DocumentationData(
-                module_name="",
-                module_path=Path("."),
+                module_name=content.get("module_name", ""),
+                module_path=Path(content.get("file_path", ".")),
                 module_summary=content.get("summary", ""),
-                source_code=" ",  # Provide a non-empty placeholder
-                code_metadata={},
+                source_code=source_code,
+                docstring_data=self._create_docstring_data(content),
                 ai_content=content,
-                docstring_data=docstring_data
+                code_metadata=content.get("code_metadata", {})
             )
             return self.markdown_generator.generate(doc_data)
-        except (TypeError, ValueError) as e:
+        except Exception as e:
             self.logger.error(f"Error generating markdown: {e}")
-            return f"Error generating markdown documentation: {str(e)}"
+            raise DocumentationError(f"Failed to generate markdown: {e}")
+
+    def _create_docstring_data(self, content: dict[str, Any]) -> DocstringData:
+        """Create DocstringData from content dict."""
+        content_copy = content.copy()
+        content_copy.pop('source_code', None)
+        return DocstringData(
+            summary=str(content_copy.get("summary", "")),
+            description=str(content_copy.get("description", "")),
+            args=content_copy.get("args", []),
+            returns=content_copy.get("returns", {"type": "Any", "description": ""}),
+            raises=content_copy.get("raises", []),
+            complexity=int(content_copy.get("complexity", 1))
+        )
 
     def _extract_content(self, response: dict[str, Any]) -> dict[str, Any] | str | None:
         """Extract content from various response formats."""

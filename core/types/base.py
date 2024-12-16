@@ -111,6 +111,11 @@ class DocumentationContext:
     classes: list[dict[str, Any]] = field(default_factory=list)
     functions: list[dict[str, Any]] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        """Validate required fields."""
+        if not self.source_code or not self.source_code.strip():
+            raise ValueError("source_code is required and cannot be empty")
+
 
 @dataclass
 class ProcessingResult:

@@ -2,8 +2,8 @@ import uuid
 from pathlib import Path
 from typing import Any, cast, Optional
 from datetime import datetime
-import ast
 import time
+import ast
 
 # Group imports from core package
 from core.docstring_processor import DocstringProcessor
@@ -20,7 +20,7 @@ from core.types.base import (
 )
 from core.exceptions import DocumentationError
 from core.metrics_collector import MetricsCollector
-from core.console import print_info, print_error, print_success
+from core.console import print_info, print_error, print_success, print_warning
 from utils import ensure_directory, read_file_safe_async
 
 
@@ -37,7 +37,7 @@ class DocumentationOrchestrator:
         prompt_manager: PromptManager,
         docstring_processor: DocstringProcessor,
         response_parser: Any,
-        correlation_id: str | None = None,
+        correlation_id: Optional[str] = None,
     ) -> None:
         """
         Initialize DocumentationOrchestrator with necessary services.
@@ -162,9 +162,11 @@ class DocumentationOrchestrator:
                 source_code=original_source,
                 module_path=context.module_path,
                 include_source=True,
-                metadata=context.metadata
+                metadata=context.metadata,
+                classes=classes,
+                functions=functions
             )
-            processing_result = await self.ai_service.generate_documentation(context)
+            processing_result = await self.ai_service.generate_documentation(response_context)
             self.logger.info(f"AI service processing result content length: {len(str(processing_result.content))}")
             self.logger.info(f"First 50 characters of AI service processing result content: {str(processing_result.content)[:50]}...")
 
@@ -241,7 +243,7 @@ class DocumentationOrchestrator:
             raise DocumentationError(f"Failed to generate documentation: {error}") from error
         
     async def generate_module_documentation(
-        self, file_path: Path, output_dir: Path, source_code: str | None = None
+        self, file_path: Path, output_dir: Path, source_code: Optional[str] = None
     ) -> None:
         """
         Generates documentation for a single module file.
@@ -263,18 +265,19 @@ class DocumentationOrchestrator:
                 return  # Early exit
 
             # Read source code if not provided
-            if not source_code:
+            if source_code is None:
                 self.logger.info(f"Attempting to read source code from {file_path}")
                 print_info(f"Attempting to read source code from {file_path}")
                 source_code = await read_file_safe_async(file_path)
-                if source_code:
-                    self.logger.info(f"Source code read from {file_path}. Length: {len(source_code)}")
-                    print_info(f"Source code read from {file_path}. Length: {len(source_code)}")
-                if not source_code or not source_code.strip():
-                    error_msg = f"Source code is missing or empty for {file_path}"
-                    self.logger.warning(error_msg)
-                    print_warning(error_msg)
-                    return  # Early exit for empty files
+            
+            if source_code:
+                self.logger.info(f"Source code read from {file_path}. Length: {len(source_code)}")
+                print_info(f"Source code read from {file_path}. Length: {len(source_code)}")
+            else:
+                error_msg = f"Source code is missing or empty for {file_path}"
+                self.logger.warning(error_msg)
+                print_warning(error_msg)
+                return  # Early exit for empty files
 
             # Prepare context for documentation generation
             context = DocumentationContext(
@@ -328,4 +331,3 @@ class DocumentationOrchestrator:
                 metadata={"module_path": str(file_path), "error": str(gen_error)},
             )
             raise DocumentationError(error_msg) from gen_error
-

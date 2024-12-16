@@ -94,19 +94,6 @@ class AIService:
     async def generate_documentation(
         self, context: DocumentationContext, schema: dict[str, Any] | None = None
     ) -> ProcessingResult:
-        """
-        Generates documentation using the AI model.
-
-        Args:
-            context: Documentation context containing source code and metadata.
-            schema: Optional schema for structured output.
-
-        Returns:
-            ProcessingResult containing enhanced documentation or error information.
-
-        Raises:
-            DocumentationGenerationError: If there's an issue generating documentation.
-        """
         start_time = time.time()
         print_phase_header("Documentation Generation")
 
@@ -145,10 +132,25 @@ class AIService:
             })
 
             # Convert classes and functions to proper types
-            classes = [ExtractedClass(**cls) for cls in context.classes] if context.classes else None
-            functions = [ExtractedFunction(**func) for func in context.functions] if context.functions else None
+            classes = []
+            if context.classes:
+                for cls_data in context.classes:
+                    if isinstance(cls_data, ExtractedClass):
+                        classes.append(cls_data)
+                    else:
+                        classes.append(ExtractedClass(**cls_data))
+
+            functions = []
+            if context.functions:
+                for func_data in context.functions:
+                    if isinstance(func_data, ExtractedFunction):
+                        functions.append(func_data)
+                    else:
+                        functions.append(ExtractedFunction(**func_data))
 
             # Create documentation prompt
+            self.logger.info("Generating documentation prompt.")
+            self.logger.debug(f"Source code before creating prompt: {context.source_code[:50]}...")
             prompt = await self.prompt_manager.create_documentation_prompt(
                 module_name=module_name,
                 file_path=file_path,
@@ -181,8 +183,14 @@ class AIService:
                     function_schema
                 )
 
+            # Add source code to content
+            if isinstance(response, dict):
+                response["source_code"] = context.source_code
+                response.setdefault("code_metadata", {})["source_code"] = context.source_code
+
             # Parse response into DocstringData
             print_info("Parsing and validating response")
+            self.logger.debug(f"Source code before parsing response: {context.source_code[:50]}...")
             parsed_response = await self.response_parser.parse_response(
                 response,
                 expected_format="docstring",
@@ -208,6 +216,7 @@ class AIService:
             # Create validated DocstringData instance
             content_copy = parsed_response.content.copy()
             content_copy.pop('source_code', None)  # Remove source_code if present
+            self.logger.debug(f"Source code after parsing response: {context.source_code[:50]}...")
             docstring_data = DocstringData(
                 summary=str(content_copy.get("summary", "")),
                 description=str(content_copy.get("description", "")),
@@ -234,6 +243,7 @@ class AIService:
 
             # Track metrics
             processing_time = time.time() - start_time
+            self.logger.info(f"Documentation generation completed in {processing_time:.2f} seconds.")
             await self.metrics_collector.track_operation(
                 operation_type="documentation_generation",
                 success=True,
