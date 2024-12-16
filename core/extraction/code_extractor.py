@@ -8,8 +8,9 @@ source files using the ast module.
 import ast
 import uuid
 import time
+import os
 from typing import Any, cast
-
+from pathlib import Path
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics import Metrics
 from core.types.base import (
@@ -56,9 +57,11 @@ class CodeExtractor:
         self.function_extractor: FunctionExtractor = Injector.get("function_extractor")
         self.class_extractor: ClassExtractor = Injector.get("class_extractor")
         self.dependency_analyzer: DependencyAnalyzer = Injector.get("dependency_analyzer")
+        self.logger.info(f"Initialising with dependency_analyzer: {self.context.dependency_analyzer}")
         if self.context.dependency_analyzer is None:
             self.context.dependency_analyzer = DependencyAnalyzer(self.context)
         print_info("CodeExtractor initialized.")
+
 
     async def extract_code(self, source_code: str) -> ExtractionResult:
         """
@@ -76,8 +79,9 @@ class CodeExtractor:
         if not source_code or not source_code.strip():
             raise ExtractionError("Source code is empty or missing")
 
-        # Update the existing context with new source code
-        self.context.source_code = source_code
+         # Update the existing context with new source code and validate
+        self.context.set_source_code(source_code)
+
         
         module_name = self.context.module_name or "unnamed_module"
         module_metrics = MetricData()
@@ -89,7 +93,8 @@ class CodeExtractor:
 
             tree = ast.parse(source_code)
             print_info("Validating source code...")
-            self._validate_source_code(source_code)
+            file_path = str(getattr(self.context, 'base_path', '')) or "" # Use '' as default if base_path is not set
+            self._validate_source_code(source_code, file_path, module_name, project_root=str(getattr(self.context, "base_path", "")))
 
             print_info("Analyzing dependencies...")
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
@@ -171,7 +176,14 @@ class CodeExtractor:
             return extraction_result
 
         except ProcessingError as pe:
-            self.logger.error(f"Processing error during code extraction: {pe}", exc_info=True)
+            self.logger.error(
+                f"Processing error during code extraction: {pe}",
+                extra={
+                    "source_code_snippet": source_code[:50],
+                    "module_name": module_name,
+                    "file_path": str(getattr(self.context, 'base_path', ''))
+                },
+                exc_info=True)
             await self.metrics_collector.track_operation(
                 operation_type="code_extraction",
                 success=False,
@@ -181,40 +193,109 @@ class CodeExtractor:
             print_error(f"Code extraction failed: {pe}")
             raise
         except ExtractionError as ee:
-            self.logger.error(f"Extraction error during code extraction: {ee}", exc_info=True)
-            await self.metrics_collector.track_operation(
+             self.logger.error(
+                f"Extraction error during code extraction: {ee}",
+                extra={
+                     "source_code_snippet": source_code[:50],
+                    "module_name": module_name,
+                    "file_path": str(getattr(self.context, 'base_path', ''))
+                },
+                exc_info=True
+            )
+             await self.metrics_collector.track_operation(
                 operation_type="code_extraction",
                 success=False,
                 duration=time.time() - start_time,
                 metadata={"error": str(ee)},
             )
-            print_error(f"Code extraction failed: {ee}")
-            raise
+             print_error(f"Code extraction failed: {ee}")
+             raise
         except Exception as e:
-            self.logger.error(f"Unexpected error during code extraction: {e}", exc_info=True)
-            await self.metrics_collector.track_operation(
+             self.logger.error(
+                f"Unexpected error during code extraction: {e}",
+                extra={
+                    "source_code_snippet": source_code[:50],
+                    "module_name": module_name,
+                    "file_path": str(getattr(self.context, 'base_path', ''))
+                },
+                exc_info=True
+            )
+             await self.metrics_collector.track_operation(
                 operation_type="code_extraction",
                 success=False,
                 duration=time.time() - start_time,
                 metadata={"error": str(e)},
             )
-            print_error(f"Code extraction failed: {e}")
-            raise ExtractionError(f"Unexpected error during extraction: {e}") from e
+             print_error(f"Code extraction failed: {e}")
+             raise ExtractionError(f"Unexpected error during extraction: {e}") from e
 
-    def _validate_source_code(self, source_code: str) -> None:
+    def _validate_source_code(self, source_code: str, file_path: str, module_name: str, project_root: str) -> None:
         """
-        Validate the provided source code before processing.
+        Validate the provided source code and log issues with its representation in __init__.py.
 
         Args:
             source_code: The source code to validate.
+            file_path: The file path of the source code being validated.
+            module_name: The dotted module name (e.g., "my_project.utils").
+            project_root: The root directory of the project.
 
         Raises:
-            ProcessingError: If the source code contains syntax errors.
+            ProcessingError: If the source code contains syntax errors or the file path is invalid.
         """
+        self.logger.info(f"Validating source code for file: {file_path}")
+
+        # Step 1: Check file extension
+        if not file_path.endswith(".py"):
+            self.logger.error(f"File {file_path} is not a Python file.")
+            raise ProcessingError(f"Invalid file type for {file_path}. Only Python files are supported.")
+
+        # Step 2: Validate file contents
+        try:
+            with open(file_path, "r") as f:
+                content = f.read()
+                self.logger.info(f"First 50 chars of file contents:{content[:50]}...")
+                if not content or not content.strip():
+                    raise ProcessingError(f"File {file_path} is empty")
+        except FileNotFoundError as e:
+            self.logger.error(f"Error accessing file {file_path}: {e}")
+            raise ProcessingError(f"Error accessing file {file_path}: {e}") from e
+        except Exception as e:
+            self.logger.error(f"Error reading file contents {file_path}: {e}")
+            raise ProcessingError(f"Error reading file {file_path}: {e}") from e
+
+        # Step 3: Validate syntax
         try:
             ast.parse(source_code)
+            self.logger.info(f"Syntax validation successful for: {file_path}")
         except SyntaxError as e:
-            raise ProcessingError(f"Syntax error in source code: {e}")
+            error_details = {
+                "error_message": str(e),
+                "line_number": e.lineno,
+                "offset": e.offset,
+                "text": e.text.strip() if e.text else "N/A"
+            }
+            self.logger.error(f"Syntax error during validation for {file_path}: {error_details}")
+            raise ProcessingError(f"Syntax error in source code: {e}") from e
+
+
+        # Step 4: Check for module inclusion in __init__.py
+        try:
+            init_file_path = Path(project_root) / module_name.split('.')[0] / "__init__.py"
+            if not init_file_path.exists():
+                self.logger.warning(f"No __init__.py found at {init_file_path}. Module '{module_name}' may not be importable.")
+            else:
+                with open(init_file_path, "r") as init_file:
+                    init_content = init_file.read()
+                    if module_name not in init_content:
+                        self.logger.warning(
+                            f"Module '{module_name}' is not explicitly referenced in {init_file_path}. "
+                            "It may not be properly importable."
+                        )
+                    else:
+                        self.logger.info(f"Module '{module_name}' is explicitly referenced in {init_file_path}.")
+        except Exception as e:
+            self.logger.error(f"Error reading {init_file_path}: {e}")
+
 
     def extract_variables(self, tree: ast.AST) -> list[dict[str, Any]]:
         """

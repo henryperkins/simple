@@ -3,6 +3,7 @@
 from typing import Any
 from core.config import Config
 from core.logger import LoggerSetup
+from pathlib  import Path
 
 
 class Injector:
@@ -125,12 +126,14 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None):
     Injector.register("prompt_manager", prompt_manager)
 
     # Create extraction context
-    extraction_context = ExtractionContext("# Placeholder source code\n")
-    extraction_context.module_name = None
-    extraction_context.base_path = None
-    extraction_context.include_private = False
-    extraction_context.include_nested = False
-    extraction_context.include_magic = True
+    extraction_context = ExtractionContext(
+        module_name="default_module",
+        base_path=Path(config.project_root),
+        include_private=False,
+        include_nested=False,
+        include_magic=True
+    )
+    extraction_context.set_source_code("# Placeholder source code\n")
     Injector.register("extraction_context", extraction_context)
 
     function_extractor = FunctionExtractor(context=extraction_context, correlation_id=correlation_id)

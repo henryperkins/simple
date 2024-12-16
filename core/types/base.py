@@ -14,6 +14,7 @@ from typing import (
     Union,
 )
 
+from core.dependency_injection import Injector
 
 T = TypeVar('T')
 
@@ -85,8 +86,10 @@ class DocstringData:
 
 @dataclass
 class ExtractionContext:
-    """Context for code extraction operations."""
-    source_code: str  # Required positional argument
+    """
+    Context for code extraction operations.
+    """
+    _source_code: str | None = None # Default value for when setting
     module_name: str | None = None
     base_path: Path | None = None
     include_private: bool = False
@@ -95,24 +98,24 @@ class ExtractionContext:
     tree: ast.AST | None = None  # AST tree if already parsed
     _dependency_analyzer: DependencyAnalyzer | None = None  # Internal storage for lazy initialization
 
-    @property
-    def dependency_analyzer(self) -> DependencyAnalyzer | None:
-        """Get the dependency analyzer, initializing it if needed."""
-        if self._dependency_analyzer is None and self.module_name:
-            from core.extraction.dependency_analyzer import DependencyAnalyzer as RealDependencyAnalyzer
-            self._dependency_analyzer = RealDependencyAnalyzer(context=self, correlation_id=None)
-        return self._dependency_analyzer
 
-    @dependency_analyzer.setter
-    def dependency_analyzer(self, value: DependencyAnalyzer | None) -> None:
-        """Set the dependency analyzer."""
-        self._dependency_analyzer = value
+    def get_source_code(self) -> str | None:
+       """Get the source code of this instance"""
+       return self._source_code
+
+    def set_source_code(self, value: str, source = None) -> None:
+        """Set the source code with logging and validation"""
+        if not value or not value.strip():
+          raise ValueError(f"Source code cannot be empty or null for {source}")
+        self._source_code = value
+        self.logger.debug(f"Updated source code in context {type(self)}: {value[:50]}...")
+
 
 
 @dataclass
 class ExtractionResult:
     """Holds the results of the code extraction process."""
-    source_code: str  # Required positional argument
+    source_code: str
     module_docstring: dict[str, Any] = field(default_factory=dict)
     classes: list[dict[str, Any]] = field(default_factory=list)
     functions: list[dict[str, Any]] = field(default_factory=list)
@@ -127,7 +130,7 @@ class ExtractionResult:
 @dataclass
 class DocumentationContext:
     """Context for documentation generation operations."""
-    source_code: str  # Required positional argument
+    source_code: str
     module_path: Path | None = None
     include_source: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -278,9 +281,8 @@ class DocumentationData:
 
     def __post_init__(self) -> None:
         """Initialize dependencies."""
-        # Import here to avoid circular imports
-        from core.dependency_injection import Injector
-        
+        from core.dependency_injection import Injector # Import here to avoid circular imports
+
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get("docstring_processor")
         if self.metric_calculator is None:
@@ -324,3 +326,4 @@ class DocumentationData:
             "validation_status": self.validation_status,
             "validation_errors": self.validation_errors,
         }
+

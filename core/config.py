@@ -131,6 +131,7 @@ class Config:
         self.app = AppConfig.from_env()
         self.correlation_id = str(uuid.uuid4())
         self.app.ensure_directories()
+        self.project_root = Path.cwd()  # Set project_root to the current working directory
 
     def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary.
@@ -166,6 +167,7 @@ class Config:
                 "cache_ttl": self.app.cache_ttl,
             },
             "correlation_id": self.correlation_id,
+            "project_root": str(self.project_root),  # Add project_root to the dictionary
         }
 
 

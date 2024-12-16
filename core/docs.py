@@ -24,6 +24,7 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.markdown_generator import MarkdownGenerator
 from core.ai_service import AIService
 from core.prompt_manager import PromptManager
+from core.extraction.code_extractor import CodeExtractor
 from core.types.base import (
     DocumentationContext,
     DocumentationData,
@@ -97,34 +98,31 @@ class DocumentationOrchestrator:
             tuple[str, str]: The updated source code and generated markdown documentation.
 
         Raises:
-            DocumentationError: If there's an issue generating documentation. 
+            DocumentationError: If there's an issue generating documentation.
         """
         start_time = time.time()
         module_name = ""
         try:
-            # Validate source code
+            # Step 1: Validate source code
             if not context.source_code or not context.source_code.strip():
                 self.logger.warning(f"Empty source code for {context.module_path}")
                 return context.source_code, ""
 
-            # Store original source code
             original_source = context.source_code
             module_name = context.metadata.get("module_name", "") if context.metadata else ""
 
-            # Extract code elements  
+            self.logger.info(f"Starting documentation generation for module: {module_name}")
+            self.logger.info("Starting code extraction.")
+
+            # Step 2: Extract code elements
             extraction_result = await self.code_extractor.extract_code(original_source)
+            if not extraction_result or not extraction_result.source_code:
+                raise DocumentationError("Extraction failed - no valid code elements found.")
             
-            if not extraction_result:
-                raise DocumentationError("Extraction failed - no result returned")
-            
-            if not extraction_result.source_code:
-                raise DocumentationError("Extraction failed - no source code in result")
-                
-            # Convert classes and functions
-            classes: list[ExtractedClass] = []
-            functions: list[ExtractedFunction] = []
-            
+            classes, functions = [], []
+
             if extraction_result.classes:
+                self.logger.debug(f"Extracted classes: {[cls.get('name', 'Unknown') for cls in extraction_result.classes]}")
                 for cls_data in extraction_result.classes:
                     if isinstance(cls_data, ExtractedClass):
                         classes.append(cls_data)
@@ -138,6 +136,7 @@ class DocumentationOrchestrator:
                         ))
 
             if extraction_result.functions:
+                self.logger.debug(f"Extracted functions: {[func.get('name', 'Unknown') for func in extraction_result.functions]}")
                 for func_data in extraction_result.functions:
                     if isinstance(func_data, ExtractedFunction):
                         functions.append(func_data)
@@ -150,39 +149,44 @@ class DocumentationOrchestrator:
                             returns=func_dict.get("returns", {})
                         ))
 
-            # Generate documentation prompt and process with AI
+
+            # Step 3: Create AI documentation prompt
+            self.logger.info("Generating documentation prompt.")
             await self.prompt_manager.create_documentation_prompt(
                 module_name=module_name,
                 file_path=str(context.module_path),
                 source_code=original_source,
                 classes=classes,
-                functions=functions,
+                functions=functions
             )
 
-            # Process with AI service - make a copy of context to avoid modifying original
+            # Step 4: Process with AI service
+            self.logger.info("Processing documentation with AI service.")
             response_context = DocumentationContext(
                 source_code=original_source,
                 module_path=context.module_path,
                 include_source=True,
                 metadata=context.metadata
             )
-
             processing_result = await self.ai_service.generate_documentation(response_context)
-
             if not processing_result or not processing_result.content:
-                raise DocumentationError("No content received from AI service")
+                raise DocumentationError("AI service did not return any content.")
 
-            # Parse response
+            self.logger.info("AI service processing completed successfully.")
+
+            # Step 5: Parse AI response
+            self.logger.info("Parsing AI response.")
             parsed_response = await self.response_parser.parse_response(
                 processing_result.content,
                 expected_format="docstring",
                 validate_schema=False
             )
-
             if not parsed_response or not parsed_response.content:
-                raise DocumentationError("Failed to parse AI response")
+                raise DocumentationError("Failed to parse AI response.")
 
-            # Create documentation data with original source
+            self.logger.debug(f"Parsed response content: {parsed_response.content}")
+
+            # Step 6: Create documentation data
             documentation_data = DocumentationData(
                 module_name=module_name,
                 module_path=context.module_path or Path(),
@@ -199,14 +203,14 @@ class DocumentationOrchestrator:
                 }
             )
 
-            # Generate markdown with explicit source code check
-            if not documentation_data.source_code:
-                raise DocumentationError("Source code missing in documentation data")
-                
+            # Step 7: Generate markdown documentation
+            self.logger.info("Generating markdown documentation.")
             markdown_doc = self.markdown_generator.generate(documentation_data)
+            self.logger.info("Markdown documentation generated successfully.")
 
-            # Track metrics
+            # Step 8: Track success metrics
             processing_time = time.time() - start_time
+            self.logger.info(f"Documentation generation completed in {processing_time:.2f} seconds.")
             await self.metrics_collector.track_operation(
                 operation_type="documentation_generation",
                 success=True,
@@ -216,32 +220,17 @@ class DocumentationOrchestrator:
 
             return original_source, markdown_doc
 
-        except Exception as gen_error:
-            self.logger.error(f"Documentation generation failed: {gen_error}", 
-                            extra={"correlation_id": self.correlation_id})
+        except Exception as error:
             processing_time = time.time() - start_time
+            self.logger.error(f"Error during documentation generation: {error}", exc_info=True)
             await self.metrics_collector.track_operation(
                 operation_type="documentation_generation",
                 success=False,
                 duration=processing_time,
-                metadata={"module_name": module_name, "error": str(gen_error)}
+                metadata={"module_name": module_name, "error": str(error)}
             )
-            raise DocumentationError(f"Failed to generate documentation: {gen_error}") from gen_error
+            raise DocumentationError(f"Failed to generate documentation: {error}") from error
 
-    def _validate_source_code(self, source_code: str) -> None:
-        """
-        Validates the source code for any issues before processing.
-
-        Args:
-            source_code (str): The source code to validate.
-
-        Raises:
-            DocumentationError: If the source code is invalid or contains errors.
-        """
-        try:
-            ast.parse(source_code)
-        except SyntaxError as syntax_error:
-            raise DocumentationError(f"Syntax error in source code: {syntax_error}") from syntax_error
 
     async def generate_module_documentation(
         self, file_path: Path, output_dir: Path, source_code: str | None = None
