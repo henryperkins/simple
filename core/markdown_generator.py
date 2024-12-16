@@ -240,6 +240,7 @@ class MarkdownGenerator:
     def _generate_source_code(self, source_code: str | None) -> str:
         """Generate the source code section."""
         if not source_code:
+            self.logger.warning("Source code missing, skipping source code section")
             return ""
 
         return f"""## Source Code

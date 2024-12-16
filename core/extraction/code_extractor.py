@@ -8,8 +8,7 @@ source files using the ast module.
 import ast
 import uuid
 import time
-import os
-from typing import Any, cast
+from typing import Any
 from pathlib import Path
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics import Metrics
@@ -17,8 +16,6 @@ from core.types.base import (
     ExtractionContext,
     ExtractionResult,
     MetricData,
-    ExtractedClass,
-    ExtractedFunction,
 )
 from core.docstring_processor import DocstringProcessor
 from core.extraction.function_extractor import FunctionExtractor
@@ -62,67 +59,58 @@ class CodeExtractor:
             self.context.dependency_analyzer = DependencyAnalyzer(self.context)
         print_info("CodeExtractor initialized.")
 
-
     async def extract_code(self, source_code: str) -> ExtractionResult:
-        """
-        Extract code elements and metadata from source code.
-
-        Args:
-            source_code: The source code to extract elements from.
-
-        Returns:
-            Result of the extraction process.
-
-        Raises:
-            ExtractionError: If there's an issue during the extraction process.
-        """
         if not source_code or not source_code.strip():
+            self.logger.error("Source code is empty or missing")
             raise ExtractionError("Source code is empty or missing")
 
-         # Update the existing context with new source code and validate
-        self.context.set_source_code(source_code)
+        # Update the existing context with new source code and validate
+        self.logger.debug(f"Before setting source code, context source code: {self.context.get_source_code()[:50]}...")
+        self.context.set_source_code(source_code, source="code_extractor.extract_code")
+        self.logger.debug(f"After setting source code, context source code: {self.context.get_source_code()[:50]}...")
 
-        
         module_name = self.context.module_name or "unnamed_module"
         module_metrics = MetricData()
         module_metrics.module_name = module_name
         start_time = time.time()
 
         try:
-            print_info(f"Extracting code elements from {module_name}")
+            self.logger.info(f"Extracting code elements from {module_name}")
+            self.logger.info(f"Source code length: {len(source_code)}")
+            self.logger.info(f"First 50 characters of source code: {source_code[:50]}...")
 
             tree = ast.parse(source_code)
-            print_info("Validating source code...")
-            file_path = str(getattr(self.context, 'base_path', '')) or "" # Use '' as default if base_path is not set
+            self.logger.info("Validating source code...")
+            file_path = str(getattr(self.context, 'base_path', '')) or ""  # Use '' as default if base_path is not set
             self._validate_source_code(source_code, file_path, module_name, project_root=str(getattr(self.context, "base_path", "")))
 
-            print_info("Analyzing dependencies...")
+            self.logger.info("Analyzing dependencies...")
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
             
-            print_info("Extracting classes...")
+            self.logger.info("Extracting classes...")
             classes = await self.class_extractor.extract_classes(tree)
             module_metrics.total_classes = len(classes)
             module_metrics.scanned_classes = len(
                 [cls for cls in classes if hasattr(cls, 'docstring_info')]
             )
 
-            print_info("Extracting functions...")
+            self.logger.info("Extracting functions...")
             functions = await self.function_extractor.extract_functions(tree)
             module_metrics.total_functions = len(functions)
             module_metrics.scanned_functions = len(
                 [func for func in functions if hasattr(func, 'docstring_info')]
             )
 
-            print_info("Extracting variables...")
+            self.logger.info("Extracting variables...")
             variables = self.extract_variables(tree)
 
-            print_info("Extracting constants...")
+            self.logger.info("Extracting constants...")
             constants = self.extract_constants(tree)
 
-            print_info("Extracting module docstring...")
+            self.logger.info("Extracting module docstring...")
             module_docstring = self.extract_module_docstring(tree)
 
-            print_info("Calculating metrics...")
+            self.logger.info("Calculating metrics...")
             module_metrics = self.metrics.calculate_metrics(source_code, module_name)
 
             # Display extraction metrics
@@ -153,7 +141,7 @@ class CodeExtractor:
                     "constants_extracted": len(constants),
                 },
             )
-            print_success(f"Code extraction completed in {processing_time:.2f}s.")
+            self.logger.info(f"Code extraction completed in {processing_time:.2f}s.")
 
             # Convert classes and functions to dicts for ExtractionResult
             class_dicts = [cls.__dict__ for cls in classes]
@@ -167,7 +155,7 @@ class CodeExtractor:
                 variables=variables,
                 constants=constants,
                 dependencies=dependencies,
-                metrics=module_metrics,
+                metrics=module_metrics.__dict__,
                 module_name=module_name,
                 file_path=(
                     str(self.context.base_path) if self.context.base_path else ""
@@ -190,28 +178,26 @@ class CodeExtractor:
                 duration=time.time() - start_time,
                 metadata={"error": str(pe)},
             )
-            print_error(f"Code extraction failed: {pe}")
             raise
         except ExtractionError as ee:
-             self.logger.error(
+            self.logger.error(
                 f"Extraction error during code extraction: {ee}",
                 extra={
-                     "source_code_snippet": source_code[:50],
+                    "source_code_snippet": source_code[:50],
                     "module_name": module_name,
                     "file_path": str(getattr(self.context, 'base_path', ''))
                 },
                 exc_info=True
             )
-             await self.metrics_collector.track_operation(
+            await self.metrics_collector.track_operation(
                 operation_type="code_extraction",
                 success=False,
                 duration=time.time() - start_time,
                 metadata={"error": str(ee)},
             )
-             print_error(f"Code extraction failed: {ee}")
-             raise
+            raise
         except Exception as e:
-             self.logger.error(
+            self.logger.error(
                 f"Unexpected error during code extraction: {e}",
                 extra={
                     "source_code_snippet": source_code[:50],
@@ -220,14 +206,14 @@ class CodeExtractor:
                 },
                 exc_info=True
             )
-             await self.metrics_collector.track_operation(
+            await self.metrics_collector.track_operation(
                 operation_type="code_extraction",
                 success=False,
                 duration=time.time() - start_time,
                 metadata={"error": str(e)},
             )
-             print_error(f"Code extraction failed: {e}")
-             raise ExtractionError(f"Unexpected error during extraction: {e}") from e
+            raise ExtractionError(f"Unexpected error during extraction: {e}") from e
+
 
     def _validate_source_code(self, source_code: str, file_path: str, module_name: str, project_root: str) -> None:
         """
@@ -244,26 +230,7 @@ class CodeExtractor:
         """
         self.logger.info(f"Validating source code for file: {file_path}")
 
-        # Step 1: Check file extension
-        if not file_path.endswith(".py"):
-            self.logger.error(f"File {file_path} is not a Python file.")
-            raise ProcessingError(f"Invalid file type for {file_path}. Only Python files are supported.")
-
-        # Step 2: Validate file contents
-        try:
-            with open(file_path, "r") as f:
-                content = f.read()
-                self.logger.info(f"First 50 chars of file contents:{content[:50]}...")
-                if not content or not content.strip():
-                    raise ProcessingError(f"File {file_path} is empty")
-        except FileNotFoundError as e:
-            self.logger.error(f"Error accessing file {file_path}: {e}")
-            raise ProcessingError(f"Error accessing file {file_path}: {e}") from e
-        except Exception as e:
-            self.logger.error(f"Error reading file contents {file_path}: {e}")
-            raise ProcessingError(f"Error reading file {file_path}: {e}") from e
-
-        # Step 3: Validate syntax
+        # Step 1: Check syntax validity
         try:
             ast.parse(source_code)
             self.logger.info(f"Syntax validation successful for: {file_path}")
@@ -277,8 +244,7 @@ class CodeExtractor:
             self.logger.error(f"Syntax error during validation for {file_path}: {error_details}")
             raise ProcessingError(f"Syntax error in source code: {e}") from e
 
-
-        # Step 4: Check for module inclusion in __init__.py
+        # Step 2: Check for module inclusion in __init__.py
         try:
             init_file_path = Path(project_root) / module_name.split('.')[0] / "__init__.py"
             if not init_file_path.exists():
@@ -295,7 +261,6 @@ class CodeExtractor:
                         self.logger.info(f"Module '{module_name}' is explicitly referenced in {init_file_path}.")
         except Exception as e:
             self.logger.error(f"Error reading {init_file_path}: {e}")
-
 
     def extract_variables(self, tree: ast.AST) -> list[dict[str, Any]]:
         """

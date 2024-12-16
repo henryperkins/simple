@@ -19,19 +19,15 @@ from core.console import print_error, print_info, print_success, setup_live_layo
 from core.dependency_injection import Injector, setup_dependencies
 from core.logger import LoggerSetup
 from core.monitoring import SystemMonitor
+from core.docs import DocumentationOrchestrator
+from core.exceptions import ConfigurationError
+from utils import RepositoryManager, get_logger, read_file_safe_async
 
 # Configure logging
 logger = LoggerSetup.get_logger(__name__)
 
 # Register global exception handler
 sys.excepthook = LoggerSetup.handle_exception
-
-# Import dependency injection after logging is configured
-# Import additional components
-from core.docs import DocumentationOrchestrator
-# Local application imports
-from core.exceptions import ConfigurationError, DocumentationError
-from utils import RepositoryManager, get_logger, read_file_safe_async
 
 
 class DocumentationGenerator:
@@ -91,48 +87,49 @@ class DocumentationGenerator:
             raise ConfigurationError(error_msg) from init_error
 
     async def process_file(self, file_path: Path, output_path: Path, fix_indentation: bool = False) -> bool:
-        """Process a single file and generate documentation."""
+        """
+        Process a single file and generate documentation.
+        
+        Args:
+            file_path: Path to the source file.
+            output_path: Path to store the generated documentation.
+            fix_indentation: Whether to auto-fix indentation before processing.
+        
+        Returns:
+            True if the file was successfully processed, False otherwise.
+        """
         try:
-            print_info(f"Processing file: {file_path}")
-            source_code = await read_file_safe_async(file_path)
-            if not source_code or source_code.isspace():
-                print_error(f"Source code is missing or empty for file: {file_path}")
+            # Validate file type
+            if file_path.suffix != ".py":
+                self.logger.warning(f"Skipping non-Python file: {file_path}")
+                print_info(f"Skipping non-Python file: {file_path}")
                 return False
 
-            start_time = asyncio.get_event_loop().time()
+            # Read source code
+            source_code = await read_file_safe_async(file_path)
+            if not source_code or not source_code.strip():
+                self.logger.warning(f"Skipping empty or invalid source file: {file_path}")
+                print_info(f"Skipping empty or invalid source file: {file_path}")
+                return False
 
+            # Optionally fix indentation
             if fix_indentation:
                 source_code = self._fix_indentation(source_code)
 
+            # Validate syntax
             if not self.analyze_syntax(source_code, file_path):
-                print_info(
-                    f"Skipping file due to syntax errors: {file_path} with correlation ID: {self.correlation_id}"
-                )
+                self.logger.warning(f"Skipping file with syntax errors: {file_path}")
+                print_info(f"Skipping file with syntax errors: {file_path}")
                 return False
 
-            await self.doc_orchestrator.generate_module_documentation(
-                file_path, output_path.parent, source_code=source_code
-            )
-            success = True
-        except DocumentationError as e:
-            print_error(f"Failed to generate documentation for {file_path}: {e}")
-            raise DocumentationError(f"Error processing file {file_path}") from e
-        except (FileNotFoundError, ValueError, IOError) as process_error:
-            print_error(f"Error processing file: {process_error}")
+            # Generate documentation
+            await self.doc_orchestrator.generate_module_documentation(file_path, output_path.parent, source_code)
+            print_success(f"Successfully processed file: {file_path}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error processing file {file_path}: {e}", exc_info=True)
+            print_error(f"Error processing file: {file_path}. Reason: {e}")
             return False
-
-        processing_time = asyncio.get_event_loop().time() - start_time
-        await self.metrics_collector.track_operation(
-            operation_type="file_processing",
-            success=success,
-            duration=processing_time,
-            metadata={"file_path": str(file_path)},
-        )
-
-        print_info(
-            f"Finished processing file: {file_path} with correlation ID: {self.correlation_id}"
-        )
-        return success
 
     def _fix_indentation(self, source_code: str) -> str:
         """Fix inconsistent indentation using autopep8."""
@@ -180,11 +177,14 @@ class DocumentationGenerator:
             self.doc_orchestrator.code_extractor.context.base_path = local_path
             self.repo_manager = RepositoryManager(local_path)
 
-            # Process each Python file in the repository
-            python_files = list(local_path.rglob("*.py"))
-            total_files = len(python_files)
+            # Initialize variables
+            total_files = 0
             processed_files = 0
             skipped_files = 0
+
+            # Process each Python file in the repository
+            python_files = [file for file in local_path.rglob("*.py") if file.suffix == ".py"]
+            total_files = len(python_files)
 
             for file_path in python_files:
                 output_file = output_dir / (file_path.stem + ".md")

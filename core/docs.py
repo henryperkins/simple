@@ -1,19 +1,6 @@
-# -*- coding: utf-8 -*-
-"""This module contains the DocumentationOrchestrator class for generating documentation.
-
-The DocumentationOrchestrator is responsible for:
-- Extracting code elements from source code
-- Generating documentation using AI services
-- Creating markdown documentation
-- Validating the generated documentation
-
-Note:
-    This file has been configured to ignore line too long errors (E501) for readability.
-"""
-
 import uuid
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, Optional
 from datetime import datetime
 import ast
 import time
@@ -103,12 +90,19 @@ class DocumentationOrchestrator:
         start_time = time.time()
         module_name = ""
         try:
-            # Step 1: Validate source code
-            if not context.source_code or not context.source_code.strip():
-                self.logger.warning(f"Empty source code for {context.module_path}")
-                return context.source_code, ""
+            self.logger.info(f"Source code length: {len(context.source_code)}")
+            self.logger.info(f"First 50 characters of source code: {context.source_code[:50]}...")
 
-            original_source = context.source_code
+            # Step 1: Validate source code
+            if not context or not context.source_code:
+                self.logger.error(f"Source code is missing or context is invalid for {context.module_path}")
+                raise DocumentationError(f"Source code is missing or context is invalid for {context.module_path}")
+
+            original_source = context.source_code.strip()
+            if not original_source:
+                self.logger.error(f"Source code is empty after stripping whitespace for {context.module_path}")
+                raise DocumentationError(f"Source code is empty after stripping whitespace for {context.module_path}")
+            
             module_name = context.metadata.get("module_name", "") if context.metadata else ""
 
             self.logger.info(f"Starting documentation generation for module: {module_name}")
@@ -116,6 +110,9 @@ class DocumentationOrchestrator:
 
             # Step 2: Extract code elements
             extraction_result = await self.code_extractor.extract_code(original_source)
+            self.logger.info(f"Extraction result source code length: {len(extraction_result.source_code)}")
+            self.logger.info(f"First 50 characters of extraction result source code: {extraction_result.source_code[:50]}...")
+
             if not extraction_result or not extraction_result.source_code:
                 raise DocumentationError("Extraction failed - no valid code elements found.")
             
@@ -149,7 +146,6 @@ class DocumentationOrchestrator:
                             returns=func_dict.get("returns", {})
                         ))
 
-
             # Step 3: Create AI documentation prompt
             self.logger.info("Generating documentation prompt.")
             await self.prompt_manager.create_documentation_prompt(
@@ -168,11 +164,18 @@ class DocumentationOrchestrator:
                 include_source=True,
                 metadata=context.metadata
             )
-            processing_result = await self.ai_service.generate_documentation(response_context)
+            processing_result = await self.ai_service.generate_documentation(context)
+            self.logger.info(f"AI service processing result content length: {len(str(processing_result.content))}")
+            self.logger.info(f"First 50 characters of AI service processing result content: {str(processing_result.content)[:50]}...")
+
             if not processing_result or not processing_result.content:
                 raise DocumentationError("AI service did not return any content.")
 
             self.logger.info("AI service processing completed successfully.")
+
+            # Ensure source code is in response
+            if isinstance(processing_result.content, dict):
+                processing_result.content["source_code"] = original_source
 
             # Step 5: Parse AI response
             self.logger.info("Parsing AI response.")
@@ -181,17 +184,21 @@ class DocumentationOrchestrator:
                 expected_format="docstring",
                 validate_schema=False
             )
+            self.logger.info(f"Parsed response content length: {len(str(parsed_response.content))}")
+            self.logger.info(f"First 50 characters of parsed response content: {str(parsed_response.content)[:50]}...")
+
             if not parsed_response or not parsed_response.content:
                 raise DocumentationError("Failed to parse AI response.")
 
             self.logger.debug(f"Parsed response content: {parsed_response.content}")
 
             # Step 6: Create documentation data
+            self.logger.debug(f"Original source before DocumentationData: {original_source[:50]}...")
             documentation_data = DocumentationData(
                 module_name=module_name,
                 module_path=context.module_path or Path(),
                 module_summary=str(parsed_response.content.get("summary", "")),
-                source_code=original_source,
+                source_code=original_source,  # Use original source
                 docstring_data=parsed_response.content,
                 ai_content=processing_result.content,
                 code_metadata={
@@ -199,9 +206,11 @@ class DocumentationOrchestrator:
                     "functions": [func.__dict__ for func in functions],
                     "variables": extraction_result.variables or [],
                     "constants": extraction_result.constants or [],
-                    "module_docstring": extraction_result.module_docstring
+                    "module_docstring": extraction_result.module_docstring,
+                    "source_code": original_source  # Ensure it's in metadata
                 }
             )
+            self.logger.debug(f"Source code in DocumentationData: {documentation_data.source_code[:50]}...")
 
             # Step 7: Generate markdown documentation
             self.logger.info("Generating markdown documentation.")
@@ -230,8 +239,7 @@ class DocumentationOrchestrator:
                 metadata={"module_name": module_name, "error": str(error)}
             )
             raise DocumentationError(f"Failed to generate documentation: {error}") from error
-
-
+        
     async def generate_module_documentation(
         self, file_path: Path, output_dir: Path, source_code: str | None = None
     ) -> None:
@@ -248,7 +256,13 @@ class DocumentationOrchestrator:
         """
         start_time = time.time()
         try:
-            # Ensure source_code is not None or empty
+            # Validate file type
+            if not file_path.suffix == ".py":
+                self.logger.warning(f"Skipping non-Python file: {file_path}")
+                print_warning(f"Skipping non-Python file: {file_path}")
+                return  # Early exit
+
+            # Read source code if not provided
             if not source_code:
                 self.logger.info(f"Attempting to read source code from {file_path}")
                 print_info(f"Attempting to read source code from {file_path}")
@@ -258,10 +272,11 @@ class DocumentationOrchestrator:
                     print_info(f"Source code read from {file_path}. Length: {len(source_code)}")
                 if not source_code or not source_code.strip():
                     error_msg = f"Source code is missing or empty for {file_path}"
-                    self.logger.error(error_msg)
-                    print_error(error_msg)
-                    raise DocumentationError(error_msg)
+                    self.logger.warning(error_msg)
+                    print_warning(error_msg)
+                    return  # Early exit for empty files
 
+            # Prepare context for documentation generation
             context = DocumentationContext(
                 source_code=source_code,
                 module_path=file_path,
@@ -273,15 +288,15 @@ class DocumentationOrchestrator:
                 },
             )
 
-            self.logger.info(
-                f"Generating documentation for {file_path}"
-            )
+            self.logger.info(f"Generating documentation for {file_path}")
             print_info(f"Generating documentation for {file_path}")
             output_dir = ensure_directory(output_dir)
             output_path = output_dir / file_path.with_suffix(".md").name
 
+            # Generate documentation
             updated_code, markdown_doc = await self.generate_documentation(context)
 
+            # Write outputs
             output_path.write_text(markdown_doc, encoding="utf-8")
             if updated_code:
                 file_path.write_text(updated_code, encoding="utf-8")
@@ -293,9 +308,7 @@ class DocumentationOrchestrator:
                 duration=processing_time,
                 metadata={"module_path": str(file_path)},
             )
-            self.logger.info(
-                f"Documentation written to {output_path}"
-            )
+            self.logger.info(f"Documentation written to {output_path}")
             print_success(f"Documentation written to {output_path} in {processing_time:.2f}s")
 
         except DocumentationError as doc_error:
@@ -315,3 +328,4 @@ class DocumentationOrchestrator:
                 metadata={"module_path": str(file_path), "error": str(gen_error)},
             )
             raise DocumentationError(error_msg) from gen_error
+

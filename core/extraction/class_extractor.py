@@ -7,10 +7,11 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 
 import ast
 import uuid
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from core.logger import CorrelationLoggerAdapter
-from core.types import ExtractionContext, ExtractedClass, ExtractedFunction, MetricData
+from core.types import ExtractionContext, ExtractedClass, ExtractedFunction
+from core.types.docstring import DocstringData
 from utils import (
     get_source_segment,
     handle_extraction_error,
@@ -102,7 +103,7 @@ class ClassExtractor:
 
         # Skip nested classes if not included in settings
         if not self.context.include_nested and hasattr(self.context, "tree") and self.context.tree is not None:
-            tree_node = cast(ast.AST, self.context.tree)
+            tree_node = self.context.tree
             for parent in ast.walk(tree_node):
                 if isinstance(parent, ast.ClassDef) and node in ast.walk(parent):
                     if parent != node:  # Don't count the node itself
@@ -280,7 +281,7 @@ class ClassExtractor:
                 analyzer = self.context.dependency_analyzer
                 if hasattr(analyzer, "analyze_dependencies"):
                     deps = analyzer.analyze_dependencies(node)
-                    if isinstance(deps, dict):
+                    if deps:
                         dependencies = deps
 
             # Create the extracted class
@@ -303,17 +304,27 @@ class ClassExtractor:
             )
 
             # Ensure docstring_info is set correctly
-            if isinstance(docstring, str):
+            if docstring:
                 extracted_class.docstring_info = self.docstring_parser.parse(docstring)
             elif isinstance(docstring, dict):
-                extracted_class.docstring_info = DocstringData(**docstring)
+                # Remove source_code if present before creating DocstringData
+                docstring_copy = docstring.copy()
+                docstring_copy.pop('source_code', None)
+                extracted_class.docstring_info = DocstringData(
+                    summary=docstring_copy.get("summary", ""),
+                    description=docstring_copy.get("description", ""),
+                    args=docstring_copy.get("args", []),
+                    returns=docstring_copy.get("returns", {"type": "Any", "description": ""}),
+                    raises=docstring_copy.get("raises", []),
+                    complexity=docstring_copy.get("complexity", 1)
+                )
 
             # Calculate metrics using the metrics calculator
             if self.metrics_calculator:
                 metrics = self.metrics_calculator.calculate_metrics(
                     source, self.context.module_name
                 )
-                if isinstance(metrics, dict):
+                if metrics:
                     extracted_class.metrics = metrics
 
             return extracted_class

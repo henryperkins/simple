@@ -2,19 +2,19 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable, Mapping, Set
 import ast
 from typing import (
     Protocol,
     runtime_checkable,
     Any,
     TypeVar,
-    cast,
     TypedDict,
     Union,
+    Callable,
 )
 
-from core.dependency_injection import Injector
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.types.docstring import DocstringData
 
 T = TypeVar('T')
 
@@ -49,47 +49,9 @@ class DocstringSchema(BaseModel):
 
 
 @dataclass
-class DocstringData:
-    """Unified data model for docstring information."""
-    summary: str = "No summary available"
-    description: str = "No description available"
-    args: list[dict[str, Any]] = field(default_factory=list)
-    returns: dict[str, str] = field(default_factory=lambda: {"type": "Any", "description": ""})
-    raises: list[dict[str, str]] = field(default_factory=list)
-    complexity: int = 1
-
-    def validate(self) -> tuple[bool, list[str]]:
-        """Validate the docstring data against schema."""
-        try:
-            DocstringSchema(
-                summary=self.summary,
-                description=self.description,
-                args=self.args,
-                returns=self.returns,
-                raises=self.raises
-            )
-            return True, []
-        except ValueError as e:
-            return False, [str(e)]
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary format."""
-        return {
-            "summary": self.summary,
-            "description": self.description,
-            "args": self.args,
-            "returns": self.returns,
-            "raises": self.raises,
-            "complexity": self.complexity
-        }
-
-
-@dataclass
 class ExtractionContext:
-    """
-    Context for code extraction operations.
-    """
-    _source_code: str | None = None # Default value for when setting
+    """Context for code extraction operations."""
+    _source_code: str | None = None  # Default value for when setting
     module_name: str | None = None
     base_path: Path | None = None
     include_private: bool = False
@@ -97,19 +59,31 @@ class ExtractionContext:
     include_magic: bool = True  # Controls whether magic methods are included
     tree: ast.AST | None = None  # AST tree if already parsed
     _dependency_analyzer: DependencyAnalyzer | None = None  # Internal storage for lazy initialization
-
+    logger: CorrelationLoggerAdapter = field(default_factory=lambda: CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__)))
 
     def get_source_code(self) -> str | None:
-       """Get the source code of this instance"""
-       return self._source_code
+        """Get the source code of this instance"""
+        return self._source_code
 
-    def set_source_code(self, value: str, source = None) -> None:
+    def set_source_code(self, value: str, source: str | None = None) -> None:
         """Set the source code with logging and validation"""
         if not value or not value.strip():
-          raise ValueError(f"Source code cannot be empty or null for {source}")
+            raise ValueError(f"Source code cannot be empty or null for {source}")
         self._source_code = value
         self.logger.debug(f"Updated source code in context {type(self)}: {value[:50]}...")
 
+    @property
+    def dependency_analyzer(self) -> DependencyAnalyzer | None:
+        """Get the dependency analyzer, initializing it if needed."""
+        if self._dependency_analyzer is None and self.module_name:
+            from core.extraction.dependency_analyzer import DependencyAnalyzer as RealDependencyAnalyzer
+            self._dependency_analyzer = RealDependencyAnalyzer(context=self, correlation_id=None)
+        return self._dependency_analyzer
+
+    @dependency_analyzer.setter
+    def dependency_analyzer(self, value: DependencyAnalyzer | None) -> None:
+        """Set the dependency analyzer."""
+        self._dependency_analyzer = value
 
 
 @dataclass
@@ -281,7 +255,7 @@ class DocumentationData:
 
     def __post_init__(self) -> None:
         """Initialize dependencies."""
-        from core.dependency_injection import Injector # Import here to avoid circular imports
+        from core.dependency_injection import Injector  # Import here to avoid circular imports
 
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get("docstring_processor")
@@ -290,7 +264,8 @@ class DocumentationData:
 
         # Convert dict to DocstringData if needed
         if isinstance(self.docstring_data, dict):
-            docstring_dict = self.docstring_data
+            docstring_dict = self.docstring_data.copy()
+            docstring_dict.pop('source_code', None)  # Remove source_code if present
             self.docstring_data = DocstringData(
                 summary=str(docstring_dict.get("summary", "")),
                 description=str(docstring_dict.get("description", "")),
@@ -308,6 +283,12 @@ class DocumentationData:
                 else self.docstring_data.summary if isinstance(self.docstring_data, DocstringData)
                 else "No module summary available."
             )
+        
+        if not self.source_code or not self.source_code.strip():
+            raise ValueError("source_code is required and cannot be empty")
+        
+        if not isinstance(self.code_metadata, dict):
+            self.code_metadata = {}
 
     def to_dict(self) -> dict[str, Any]:
         """Convert DocumentationData to a dictionary."""
@@ -326,4 +307,3 @@ class DocumentationData:
             "validation_status": self.validation_status,
             "validation_errors": self.validation_errors,
         }
-

@@ -1,7 +1,8 @@
+"""Response parsing service for handling AI model outputs."""
+
 import json
-import os
 import time
-from typing import Any, TypeVar, TypedDict, cast
+from typing import Any, TypeVar, TypedDict
 from pathlib import Path
 
 from jsonschema import validate, ValidationError
@@ -11,7 +12,8 @@ from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from core.metrics_collector import MetricsCollector
 from core.types import ParsedResponse, DocumentationData
-from core.types.base import DocstringData, DocstringSchema
+from core.types.docstring import DocstringData
+from core.types.base import DocstringSchema
 from core.exceptions import ValidationError as CustomValidationError
 
 # Set up the base logger
@@ -20,17 +22,21 @@ base_logger = LoggerSetup.get_logger(__name__)
 # Type variables for better type hinting
 T = TypeVar('T')
 
+
 class MessageDict(TypedDict, total=False):
     tool_calls: list[dict[str, Any]]
     function_call: dict[str, Any]
     content: str
 
+
 class ChoiceDict(TypedDict):
     message: MessageDict
+
 
 class ResponseDict(TypedDict, total=False):
     choices: list[ChoiceDict]
     usage: dict[str, int]
+
 
 class ContentType(TypedDict, total=False):
     summary: str
@@ -73,7 +79,7 @@ class ResponseParsingService:
         except json.JSONDecodeError as e:
             self.logger.error(f"Error decoding JSON schema: {e}")
             return {}
-    
+
     async def parse_response(
         self,
         response: dict[str, Any],
@@ -84,7 +90,7 @@ class ResponseParsingService:
         start_time = time.time()
         try:
             print_info(f"Parsing response with expected format: {expected_format}")
-            print_info(f"Raw AI Response: {response}")  # Added this line
+            print_info(f"Raw AI Response: {response}")
             content = self._extract_content(response)
             if not content:
                 raise CustomValidationError("Failed to extract content from response")
@@ -96,17 +102,12 @@ class ResponseParsingService:
                     if isinstance(content_dict, dict):
                         content = content_dict
                 except json.JSONDecodeError:
-                    # Keep content as string if it's not valid JSON
                     pass
 
             # Validate content structure
-            if validate_schema:
+            if validate_schema and isinstance(content, dict):
                 try:
-                    if isinstance(content, dict):
-                        DocstringSchema(**content)
-                    else:
-                        # For string content, we'll validate after parsing
-                        pass
+                    DocstringSchema(**content)
                 except ValueError as e:
                     fallback = self._create_fallback_response()
                     return ParsedResponse(
@@ -120,8 +121,7 @@ class ResponseParsingService:
                     )
 
             # Ensure all required fields exist in the content
-            if isinstance(content, dict) or isinstance(content, str):
-                content = self._ensure_required_fields(content)
+            content_dict = self._ensure_required_fields(content)
 
             # Return the parsed response with the appropriate content
             processing_time = time.time() - start_time
@@ -133,8 +133,8 @@ class ResponseParsingService:
             )
             print_success(f"Response parsing completed in {processing_time:.2f}s")
             return ParsedResponse(
-                content=content,
-                markdown=self._generate_markdown(content if isinstance(content, dict) else {"summary": content}),
+                content=content_dict,
+                markdown=self._generate_markdown(content_dict),
                 format_type=expected_format,
                 parsing_time=processing_time,
                 validation_success=True,
@@ -142,9 +142,9 @@ class ResponseParsingService:
                 metadata={"correlation_id": self.correlation_id}
             )
         except Exception as e:
-             self.logger.error(f"An unexpected error occurred: {e}", exc_info=True)  # Log the full exception
-             fallback = self._create_fallback_response()
-             return ParsedResponse(
+            self.logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+            fallback = self._create_fallback_response()
+            return ParsedResponse(
                 content=fallback,
                 markdown=self._generate_markdown(fallback),
                 format_type=expected_format,
@@ -154,19 +154,30 @@ class ResponseParsingService:
                 metadata={"correlation_id": self.correlation_id}
             )
 
-
     def _generate_markdown(self, content: dict[str, Any]) -> str:
         """Convert parsed content to markdown format."""
         try:
+            # Create DocstringData first, removing source_code if present
+            content_copy = content.copy()
+            content_copy.pop('source_code', None)
+            docstring_data = DocstringData(
+                summary=str(content_copy.get("summary", "")),
+                description=str(content_copy.get("description", "")),
+                args=content_copy.get("args", []),
+                returns=content_copy.get("returns", {"type": "Any", "description": ""}),
+                raises=content_copy.get("raises", []),
+                complexity=int(content_copy.get("complexity", 1))
+            )
+
             # Create a minimal DocumentationData object for markdown generation
             doc_data = DocumentationData(
                 module_name="",
-                module_path=Path("."),  # Use current directory as default
+                module_path=Path("."),
                 module_summary=content.get("summary", ""),
-                source_code="",
+                source_code=" ",  # Provide a non-empty placeholder
                 code_metadata={},
-                ai_content=content,  # The AI-generated content we want to format
-                docstring_data=DocstringData(**content)
+                ai_content=content,
+                docstring_data=docstring_data
             )
             return self.markdown_generator.generate(doc_data)
         except (TypeError, ValueError) as e:
@@ -176,7 +187,6 @@ class ResponseParsingService:
     def _extract_content(self, response: dict[str, Any]) -> dict[str, Any] | str | None:
         """Extract content from various response formats."""
         try:
-            # Handle choices format
             if "choices" in response and response["choices"]:
                 message = response["choices"][0].get("message", {})
 
@@ -185,53 +195,37 @@ class ResponseParsingService:
                     try:
                         args_str = message["function_call"].get("arguments", "{}")
                         args_dict = json.loads(args_str)
-                        # Return the parsed arguments directly if they match our expected format
                         if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
-                            return cast(dict[str, Any], args_dict)
-                        # Otherwise return the JSON string representation of args_dict
+                            return args_dict
                         return json.dumps(args_dict)
                     except json.JSONDecodeError:
-                        self.logger.warning("Failed to parse function call arguments")
-                        #If parsing failed, return the original json string
                         return message["function_call"].get("arguments", "{}")
 
-                    
                 if "tool_calls" in message and message["tool_calls"]:
                     tool_call = message["tool_calls"][0]
                     if "function" in tool_call:
                         try:
                             args_str = tool_call["function"].get("arguments", "{}")
                             args_dict = json.loads(args_str)
-                            # Return the parsed arguments directly if they match our expected format
                             if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
-                                return cast(dict[str, Any], args_dict)
-                            # Otherwise wrap it in a summary field
+                                return args_dict
                             return json.dumps(args_dict)
                         except json.JSONDecodeError:
-                            self.logger.warning("Failed to parse tool call arguments")
                             return tool_call["function"].get("arguments", "{}")
-                        
 
                 # Try direct content
                 if "content" in message:
                     try:
-                        # Try to parse content as JSON first
                         content_dict = json.loads(message["content"])
                         if isinstance(content_dict, dict) and ("summary" in content_dict or "description" in content_dict):
-                            return cast(dict[str, Any], content_dict)
+                            return content_dict
                     except json.JSONDecodeError:
-                        # If not JSON, use as plain text summary
-                        if isinstance(message["content"], str):
-                            return message["content"]
-                        else:
-                            self.logger.warning("Content is not a string")
-                            return None
+                        return message["content"] if isinstance(message["content"], str) else None
 
             # Try direct response format
             if isinstance(response, dict) and ("summary" in response or "description" in response):
-                 return cast(dict[str, Any], response)
-        except (KeyError, TypeError, ValueError) as e:
-            self.logger.error(f"Error extracting content: {e}")
+                return response
+
             return None
         except Exception as e:
             self.logger.error(f"Error extracting content: {e}")
@@ -239,13 +233,8 @@ class ResponseParsingService:
 
     def _ensure_required_fields(self, content: dict[str, Any] | str) -> dict[str, Any]:
         """Ensure all required fields exist in the content."""
-        # Create a new dictionary with the content
-        if isinstance(content, str):
-            result = {"summary": content}
-        else:
-            result = dict(content)
+        result = {"summary": content} if isinstance(content, str) else dict(content)
 
-        # Ensure required fields exist
         defaults: dict[str, Any] = {
             "summary": "",
             "description": "",
@@ -255,13 +244,12 @@ class ResponseParsingService:
             "complexity": 1
         }
 
-        # Update with defaults for missing fields
         for key, default in defaults.items():
             if key not in result:
                 result[key] = default
 
         return result
-    
+
     def _create_fallback_response(self) -> dict[str, Any]:
         """Create a fallback response when parsing fails."""
         self.logger.info("Creating fallback response due to parsing failure", extra={"correlation_id": self.correlation_id})
@@ -274,9 +262,7 @@ class ResponseParsingService:
             "complexity": 1,
         }
 
-    def _validate_content(
-        self, content: dict[str, Any], format_type: str
-    ) -> tuple[bool, list[str]]:
+    def _validate_content(self, content: dict[str, Any], format_type: str) -> tuple[bool, list[str]]:
         """Validate the content against the appropriate schema."""
         validation_errors: list[str] = []
         try:
@@ -284,25 +270,25 @@ class ResponseParsingService:
                 if not self.docstring_schema:
                     validation_errors.append("Docstring schema not loaded")
                     return False, validation_errors
-                
+
                 schema = self.docstring_schema.get("schema", {})
                 if not schema:
                     validation_errors.append("Invalid docstring schema structure")
                     return False, validation_errors
-                
+
                 validate(instance=content, schema=schema)
             elif format_type == "function":
                 if not self.function_schema:
                     validation_errors.append("Function schema not loaded")
                     return False, validation_errors
-                
+
                 schema = self.function_schema.get("function", {}).get("parameters", {})
                 if not schema:
                     validation_errors.append("Invalid function schema structure")
                     return False, validation_errors
-                
+
                 validate(instance=content, schema=schema)
-            
+
             return True, validation_errors
         except ValidationError as e:
             validation_errors.append(str(e))

@@ -5,8 +5,6 @@ import json
 import os
 from collections.abc import Sequence
 from typing import Any, cast, TypedDict, Union
-from datetime import datetime
-
 
 try:
     from docstring_parser import parse, DocstringStyle, Docstring
@@ -17,7 +15,6 @@ except ImportError:
 
 from core.console import (
     print_info,
-    print_error,
     print_phase_header,
     display_processing_phase,
     display_metrics,
@@ -26,7 +23,7 @@ from core.console import (
 )
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.exceptions import DocumentationError
-from core.types.base import DocstringData
+from core.types.docstring import DocstringData
 from core.metrics_collector import MetricsCollector
 from jsonschema import validate, ValidationError
 
@@ -77,7 +74,7 @@ class DocstringProcessor:
                 }
             )
             raise
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             self.logger.error(
                 "Failed to parse JSON schema",
                 extra={
@@ -86,7 +83,7 @@ class DocstringProcessor:
                 }
             )
             raise
-        except Exception as e:
+        except Exception:
             self.logger.error(
                 "Error loading schema",
                 extra={
@@ -118,10 +115,8 @@ class DocstringProcessor:
                     docstring.get("description", "") or 
                     str(docstring)
                 )
-            elif isinstance(docstring, str):
-                docstring_str = docstring
             else:
-                raise ValidationError(f"Expected string or dict, got {type(docstring)}")
+                docstring_str = docstring
 
             result = self._parse_docstring_content(docstring_str)
             return DocstringData(**result)
@@ -290,7 +285,7 @@ class DocstringProcessor:
                 summary=cleaned_dict["summary"],
                 description=cleaned_dict["description"],
                 args=cleaned_dict["args"],
-                returns=cast(ReturnsDict, cleaned_dict["returns"]),
+                returns=cast(dict[str, str], cleaned_dict["returns"]),
                 raises=cleaned_dict["raises"],
                 complexity=cleaned_dict["complexity"]
             )

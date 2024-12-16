@@ -181,7 +181,7 @@ class FunctionExtractor:
     async def _process_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> Optional[ExtractedFunction]:
         try:
             docstring = ast.get_docstring(node) or ""
-            source = get_source_segment(self.context.source_code or "", node) or ""
+            source = get_source_segment(self.context._source_code or "", node) or ""  # Changed here
 
             # Extract function components
             decorators = self._extract_decorators(node)
@@ -210,3 +210,4 @@ class FunctionExtractor:
                 function_name=node.name,
             )
             return None
+

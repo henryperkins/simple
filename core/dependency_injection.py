@@ -3,8 +3,7 @@
 from typing import Any
 from core.config import Config
 from core.logger import LoggerSetup
-from pathlib  import Path
-
+from pathlib import Path
 
 class Injector:
     """Manages dependency injection for classes."""

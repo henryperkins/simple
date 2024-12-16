@@ -18,10 +18,10 @@ from core.exceptions import APICallError, DataValidationError, DocumentationErro
 from core.types.base import (
     ProcessingResult,
     DocumentationContext,
-    DocstringData,
     ExtractedClass,
     ExtractedFunction,
 )
+from core.types.docstring import DocstringData
 from core.metrics_collector import MetricsCollector
 from core.console import (
     print_info,
@@ -34,9 +34,7 @@ from core.console import (
 
 
 class AIService:
-    """
-    Service for interacting with the AI model to generate documentation.
-    """
+    """Service for interacting with the AI model to generate documentation."""
 
     def __init__(
         self, config: AIConfig | None = None, correlation_id: str | None = None
@@ -88,9 +86,7 @@ class AIService:
         })
 
     async def start(self) -> None:
-        """
-        Start the AI service by initializing the client session.
-        """
+        """Start the AI service by initializing the client session."""
         if self._client is None:
             self._client = aiohttp.ClientSession()
             print_info("AI Service client session initialized")
@@ -115,6 +111,9 @@ class AIService:
         print_phase_header("Documentation Generation")
 
         try:
+            self.logger.info(f"Source code length: {len(context.source_code)}")
+            self.logger.info(f"First 50 characters of source code: {context.source_code[:50]}...")
+
             if not context.source_code or not context.source_code.strip():
                 self.logger.error(
                     "Source code is missing or empty",
@@ -207,7 +206,16 @@ class AIService:
                 )
 
             # Create validated DocstringData instance
-            docstring_data = DocstringData(**parsed_response.content)
+            content_copy = parsed_response.content.copy()
+            content_copy.pop('source_code', None)  # Remove source_code if present
+            docstring_data = DocstringData(
+                summary=str(content_copy.get("summary", "")),
+                description=str(content_copy.get("description", "")),
+                args=content_copy.get("args", []),
+                returns=content_copy.get("returns", {"type": "Any", "description": ""}),
+                raises=content_copy.get("raises", []),
+                complexity=int(content_copy.get("complexity", 1))
+            )
             is_valid, validation_errors = docstring_data.validate()
 
             if not is_valid:

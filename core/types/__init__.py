@@ -4,9 +4,9 @@ Handles all data structures needed for code extraction, analysis, metrics,
 and documentation generation throughout the application.
 """
 
+from core.types.docstring import DocstringData
 from core.types.base import (
     DocumentationData,
-    DocstringData,
     MetricData,
     ExtractedArgument,
     ExtractedElement,
