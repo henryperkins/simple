@@ -56,7 +56,7 @@ class Metrics:
 
     def _register_with_injector(self) -> None:
         """Registers the metrics calculator with the Injector."""
-        from core.types.base import Injector
+        from core.dependency_injection import Injector
 
         if "metrics_calculator" not in Injector._dependencies:
             Injector.register("metrics_calculator", self)

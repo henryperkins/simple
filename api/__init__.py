@@ -15,6 +15,7 @@ from core.types import TokenUsage
 
 logger = LoggerSetup.get_logger(__name__)
 
+
 def initialize_api(api_key: Optional[str] = None) -> None:
     """Initialize API with optional configuration."""
     try:

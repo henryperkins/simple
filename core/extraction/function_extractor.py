@@ -15,7 +15,7 @@ from core.types import (
     MetricData,
 )
 from utils import get_source_segment, get_node_name, NodeNameVisitor, handle_extraction_error
-from core.types.base import Injector
+from core.dependency_injection import Injector
 
 
 class FunctionExtractor:

@@ -12,7 +12,7 @@ import sysconfig
 from typing import Dict, Set, Optional, List, Tuple, Any
 from pathlib import Path
 
-from core.types.base import Injector
+from core.dependency_injection import Injector
 from core.logger import CorrelationLoggerAdapter
 from core.types import ExtractionContext
 from utils import (

@@ -75,41 +75,6 @@ class MarkdownGenerator:
         
         return f"(\n{indent}" + f",\n{indent}".join(param_lines) + "\n)"
 
-    def _generate_header(self, module_name: str) -> str:
-        """Generate the module header."""
-        self.logger.debug(f"Generating header for module_name: {module_name}.")
-        return f"# {self._escape_markdown(module_name)}"
-
-    def _generate_toc(self) -> str:
-        """Generate table of contents."""
-        return """## Table of Contents
-- [Overview](#overview)
-- [Classes](#classes)
-- [Functions](#functions)
-- [Constants and Variables](#constants-and-variables)
-- [Recent Changes](#recent-changes)
-- [Source Code](#source-code)"""
-
-    def _generate_overview(self, file_path: str, description: str) -> str:
-        """Generate the overview section."""
-        self.logger.debug(f"Generating overview for file_path: {file_path}")
-
-        if not description or description.isspace():
-            description = "No description available."
-            self.logger.warning(f"No description provided for {file_path}")
-
-        return f"""## Overview
-**File:** `{self._escape_markdown(file_path)}`
-
-**Description:**  
-{self._escape_markdown(description)}"""
-
-    def _get_complexity(self, metrics: MetricData | dict[str, Any]) -> int:
-        """Get cyclomatic complexity from metrics object."""
-        if isinstance(metrics, dict):
-            return 1  # Default complexity for dict metrics
-        return metrics.cyclomatic_complexity
-
     def _generate_class_tables(self, classes: Sequence[dict[str, Any]]) -> str:
         """Generate markdown tables for classes."""
         if not classes:
@@ -198,6 +163,41 @@ class MarkdownGenerator:
             )
 
         return "\n".join(table_lines)
+
+    def _generate_header(self, module_name: str) -> str:
+        """Generate the module header."""
+        self.logger.debug(f"Generating header for module_name: {module_name}.")
+        return f"# {self._escape_markdown(module_name)}"
+
+    def _generate_toc(self) -> str:
+        """Generate table of contents."""
+        return """## Table of Contents
+- [Overview](#overview)
+- [Classes](#classes)
+- [Functions](#functions)
+- [Constants and Variables](#constants-and-variables)
+- [Recent Changes](#recent-changes)
+- [Source Code](#source-code)"""
+
+    def _generate_overview(self, file_path: str, description: str) -> str:
+        """Generate the overview section."""
+        self.logger.debug(f"Generating overview for file_path: {file_path}")
+
+        if not description or description.isspace():
+            description = "No description available."
+            self.logger.warning(f"No description provided for {file_path}")
+
+        return f"""## Overview
+**File:** `{self._escape_markdown(file_path)}`
+
+**Description:**  
+{self._escape_markdown(description)}"""
+
+    def _get_complexity(self, metrics: MetricData | dict[str, Any]) -> int:
+        """Get cyclomatic complexity from metrics object."""
+        if isinstance(metrics, dict):
+            return 1  # Default complexity for dict metrics
+        return metrics.cyclomatic_complexity
 
     def _generate_constants_table(self, constants: Sequence[ConstantDict]) -> str:
         """Generate the constants section."""

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jsonschema import validate, ValidationError
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.console import print_info, print_error, print_success
+from core.console import print_info, print_success
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from core.metrics_collector import MetricsCollector
@@ -64,15 +64,16 @@ class ResponseParsingService:
     def _load_schema(self, schema_name: str) -> dict[str, Any]:
         """Load a JSON schema for validation."""
         try:
-            schema_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "schemas", schema_name
-            )
-            with open(schema_path, "r") as f:
+            schema_path = Path(__file__).resolve().parent.parent / "schemas" / schema_name
+            with schema_path.open("r") as f:
                 return json.load(f)
-        except Exception as e:
-            self.logger.error(f"Error loading schema {schema_name}: {e}")
+        except FileNotFoundError as e:
+            self.logger.error(f"Schema file not found: {e}")
             return {}
-
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error decoding JSON schema: {e}")
+            return {}
+    
     async def parse_response(
         self,
         response: dict[str, Any],
@@ -83,6 +84,7 @@ class ResponseParsingService:
         start_time = time.time()
         try:
             print_info(f"Parsing response with expected format: {expected_format}")
+            print_info(f"Raw AI Response: {response}")  # Added this line
             content = self._extract_content(response)
             if not content:
                 raise CustomValidationError("Failed to extract content from response")
@@ -109,7 +111,7 @@ class ResponseParsingService:
                     fallback = self._create_fallback_response()
                     return ParsedResponse(
                         content=fallback,
-                        markdown=await self._generate_markdown(fallback),
+                        markdown=self._generate_markdown(fallback),
                         format_type=expected_format,
                         parsing_time=time.time() - start_time,
                         validation_success=False,
@@ -117,9 +119,13 @@ class ResponseParsingService:
                         metadata={"correlation_id": self.correlation_id}
                     )
 
+            # Ensure all required fields exist in the content
+            if isinstance(content, dict) or isinstance(content, str):
+                content = self._ensure_required_fields(content)
+
             # Return the parsed response with the appropriate content
             processing_time = time.time() - start_time
-            self.metrics_collector.track_operation(
+            await self.metrics_collector.track_operation(
                 operation_type="response_parsing",
                 success=True,
                 duration=processing_time,
@@ -128,27 +134,28 @@ class ResponseParsingService:
             print_success(f"Response parsing completed in {processing_time:.2f}s")
             return ParsedResponse(
                 content=content,
-                markdown=await self._generate_markdown(content if isinstance(content, dict) else {"summary": content}),
+                markdown=self._generate_markdown(content if isinstance(content, dict) else {"summary": content}),
                 format_type=expected_format,
                 parsing_time=processing_time,
                 validation_success=True,
                 errors=[],
                 metadata={"correlation_id": self.correlation_id}
             )
-
         except Exception as e:
-            processing_time = time.time() - start_time
-            self.logger.error(f"Error parsing response: {e}", exc_info=True)
-            self.metrics_collector.track_operation(
-                operation_type="response_parsing",
-                success=False,
-                duration=processing_time,
-                metadata={"response_format": expected_format, "error": str(e), "correlation_id": self.correlation_id},
+             self.logger.error(f"An unexpected error occurred: {e}", exc_info=True)  # Log the full exception
+             fallback = self._create_fallback_response()
+             return ParsedResponse(
+                content=fallback,
+                markdown=self._generate_markdown(fallback),
+                format_type=expected_format,
+                parsing_time=time.time() - start_time,
+                validation_success=False,
+                errors=[str(e)],
+                metadata={"correlation_id": self.correlation_id}
             )
-            print_error(f"Response parsing failed: {e}")
-            raise CustomValidationError(f"Failed to parse response: {e}")
 
-    async def _generate_markdown(self, content: dict[str, Any]) -> str:
+
+    def _generate_markdown(self, content: dict[str, Any]) -> str:
         """Convert parsed content to markdown format."""
         try:
             # Create a minimal DocumentationData object for markdown generation
@@ -161,8 +168,8 @@ class ResponseParsingService:
                 ai_content=content,  # The AI-generated content we want to format
                 docstring_data=DocstringData(**content)
             )
-            return await self.markdown_generator.generate(doc_data)
-        except Exception as e:
+            return self.markdown_generator.generate(doc_data)
+        except (TypeError, ValueError) as e:
             self.logger.error(f"Error generating markdown: {e}")
             return f"Error generating markdown documentation: {str(e)}"
 
@@ -172,7 +179,7 @@ class ResponseParsingService:
             # Handle choices format
             if "choices" in response and response["choices"]:
                 message = response["choices"][0].get("message", {})
-                
+
                 # Try function call
                 if "function_call" in message:
                     try:
@@ -181,12 +188,14 @@ class ResponseParsingService:
                         # Return the parsed arguments directly if they match our expected format
                         if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
                             return cast(dict[str, Any], args_dict)
-                        # Otherwise wrap it in a summary field
+                        # Otherwise return the JSON string representation of args_dict
                         return json.dumps(args_dict)
                     except json.JSONDecodeError:
                         self.logger.warning("Failed to parse function call arguments")
-                
-                # Try tool calls
+                        #If parsing failed, return the original json string
+                        return message["function_call"].get("arguments", "{}")
+
+                    
                 if "tool_calls" in message and message["tool_calls"]:
                     tool_call = message["tool_calls"][0]
                     if "function" in tool_call:
@@ -200,7 +209,9 @@ class ResponseParsingService:
                             return json.dumps(args_dict)
                         except json.JSONDecodeError:
                             self.logger.warning("Failed to parse tool call arguments")
-                
+                            return tool_call["function"].get("arguments", "{}")
+                        
+
                 # Try direct content
                 if "content" in message:
                     try:
@@ -210,12 +221,17 @@ class ResponseParsingService:
                             return cast(dict[str, Any], content_dict)
                     except json.JSONDecodeError:
                         # If not JSON, use as plain text summary
-                        return message["content"]
-            
+                        if isinstance(message["content"], str):
+                            return message["content"]
+                        else:
+                            self.logger.warning("Content is not a string")
+                            return None
+
             # Try direct response format
-            if "summary" in response or "description" in response:
-                return dict(response)
-            
+            if isinstance(response, dict) and ("summary" in response or "description" in response):
+                 return cast(dict[str, Any], response)
+        except (KeyError, TypeError, ValueError) as e:
+            self.logger.error(f"Error extracting content: {e}")
             return None
         except Exception as e:
             self.logger.error(f"Error extracting content: {e}")
@@ -245,10 +261,10 @@ class ResponseParsingService:
                 result[key] = default
 
         return result
-
+    
     def _create_fallback_response(self) -> dict[str, Any]:
         """Create a fallback response when parsing fails."""
-        self.logger.info("Creating fallback response due to parsing failure")
+        self.logger.info("Creating fallback response due to parsing failure", extra={"correlation_id": self.correlation_id})
         return {
             "summary": "Documentation generation failed",
             "description": "Unable to generate documentation due to parsing error",

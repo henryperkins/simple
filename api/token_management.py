@@ -10,6 +10,7 @@ from core.exceptions import ProcessingError
 from core.console import print_info, print_success, print_error
 from core.metrics_collector import MetricsCollector
 
+
 class TokenManager:
     """Manages token usage and cost estimation for OpenAI API interactions."""
 

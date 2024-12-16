@@ -54,7 +54,9 @@ from core.exceptions import (
     WorkflowError,
     TokenLimitError,
     DocumentationGenerationError,
-    APICallError
+    APICallError,
+    DataValidationError
+
 )
 from core.types import (
     DocstringData,
@@ -62,7 +64,13 @@ from core.types import (
     ExtractedClass,
     ExtractionResult,
     TokenUsage,
-    ProcessingResult
+    ProcessingResult,
+    DocumentationContext,
+    MetricData,
+    ParsedResponse,
+    ExtractedElement,
+    ExtractedArgument
+
 )
 
 # Initialize logging first
@@ -114,5 +122,14 @@ __all__ = [
     "ExtractedClass", 
     "ExtractionResult",
     "TokenUsage",
-    "ProcessingResult"
+    "ProcessingResult",
+    "DocumentationContext",
+    "MetricData",
+    "ParsedResponse",
+    "ExtractedElement",
+    "ExtractedArgument",
+    "DataValidationError",
+    "ProcessingError",
+    "LoggerSetup"
+
 ]

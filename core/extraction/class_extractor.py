@@ -16,7 +16,7 @@ from utils import (
     handle_extraction_error,
     get_node_name,
 )
-from core.types.base import Injector
+from core.dependency_injection import Injector
 
 
 T = TypeVar('T')

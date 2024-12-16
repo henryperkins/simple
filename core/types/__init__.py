@@ -26,7 +26,7 @@ __all__ = [
     "DocstringData",
     "ExtractedArgument",
     "ExtractedElement",
-    "ExtractedContext",
+    "ExtractionContext",
     "ExtractedFunction",
     "MetricData",
     "ExtractionResult",

@@ -2,23 +2,23 @@
 Code extraction package for analyzing Python source code.
 """
 
-from typing import Dict, Any, Optional
-
 from core.logger import LoggerSetup
 from core.metrics import Metrics
 from core.docstring_processor import DocstringProcessor
-from core.extraction.code_extractor import CodeExtractor
-from core.extraction.class_extractor import ClassExtractor
-from core.extraction.function_extractor import FunctionExtractor
+from core.dependency_injection import Injector
+
+# Import extractors
 from core.extraction.dependency_analyzer import DependencyAnalyzer
-from core.types.base import Injector
+from core.extraction.function_extractor import FunctionExtractor
+from core.extraction.class_extractor import ClassExtractor
+from core.extraction.code_extractor import CodeExtractor
 
 logger = LoggerSetup.get_logger(__name__)
 
 
 def setup_extractors(
-    metrics: Optional[Metrics] = None,
-    docstring_processor: Optional[DocstringProcessor] = None,
+    metrics: Metrics | None = None,
+    docstring_processor: DocstringProcessor | None = None,
 ) -> None:
     """Setup extraction dependencies."""
     try:
@@ -41,5 +41,5 @@ __all__ = [
     "ClassExtractor",
     "FunctionExtractor",
     "DependencyAnalyzer",
-    "setup_extractors",
+    "setup_extractors"
 ]

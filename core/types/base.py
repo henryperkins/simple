@@ -14,8 +14,6 @@ from typing import (
     Union,
 )
 
-from core.dependency_injection import Injector
-
 
 T = TypeVar('T')
 
@@ -88,9 +86,9 @@ class DocstringData:
 @dataclass
 class ExtractionContext:
     """Context for code extraction operations."""
+    source_code: str  # Required positional argument
     module_name: str | None = None
     base_path: Path | None = None
-    source_code: str | None = None  # Source code being processed
     include_private: bool = False
     include_nested: bool = False
     include_magic: bool = True  # Controls whether magic methods are included
@@ -114,6 +112,7 @@ class ExtractionContext:
 @dataclass
 class ExtractionResult:
     """Holds the results of the code extraction process."""
+    source_code: str  # Required positional argument
     module_docstring: dict[str, Any] = field(default_factory=dict)
     classes: list[dict[str, Any]] = field(default_factory=list)
     functions: list[dict[str, Any]] = field(default_factory=list)
@@ -121,7 +120,6 @@ class ExtractionResult:
     constants: list[dict[str, Any]] = field(default_factory=list)
     dependencies: dict[str, set[str]] = field(default_factory=dict)
     metrics: dict[str, Any] = field(default_factory=dict)
-    source_code: str = ""
     module_name: str = ""
     file_path: str = ""
 
@@ -129,7 +127,7 @@ class ExtractionResult:
 @dataclass
 class DocumentationContext:
     """Context for documentation generation operations."""
-    source_code: str
+    source_code: str  # Required positional argument
     module_path: Path | None = None
     include_source: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -280,6 +278,9 @@ class DocumentationData:
 
     def __post_init__(self) -> None:
         """Initialize dependencies."""
+        # Import here to avoid circular imports
+        from core.dependency_injection import Injector
+        
         if self.docstring_parser is None:
             self.docstring_parser = Injector.get("docstring_processor")
         if self.metric_calculator is None:

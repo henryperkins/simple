@@ -1,5 +1,5 @@
 """Console utilities without rich."""
-from typing import Any
+from typing import Any, Optional, Union
 import logging
 from rich.progress import Progress
 
@@ -121,7 +121,7 @@ def display_api_metrics(response_data: dict[str, Any]) -> None:
 
 def display_validation_results(
     results: dict[str, bool], 
-    details: dict[str, Any] | None = None
+    details: Optional[dict[str, Any]] = None
 ) -> None:
     """Display validation results with details."""
     print("\nValidation Results")

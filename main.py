@@ -8,7 +8,7 @@ import asyncio
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Third party imports
 import autopep8
@@ -50,22 +50,6 @@ class DocumentationGenerator:
         repo_manager (Optional[RepositoryManager]): Manager for repository operations.
         doc_orchestrator (DocumentationOrchestrator): Orchestrator for documentation generation.
         ai_service (Any): Service for AI-related operations.
-
-    Example:
-        ```python
-        config = Config()
-        doc_gen = DocumentationGenerator(config)
-        await doc_gen.initialize()
-        success = await doc_gen.process_repository("https://github.com/user/repo")
-        await doc_gen.cleanup()
-        ```
-
-    Raises:
-        ConfigurationError: If initialization fails.
-        DocumentationError: If documentation generation fails.
-        RuntimeError: If system operations fail.
-        ValueError: If invalid input is provided.
-        IOError: If file operations fail.
     """
 
     def __init__(self, config: Config) -> None:
@@ -84,7 +68,7 @@ class DocumentationGenerator:
             metrics_collector=self.metrics_collector,
             correlation_id=self.correlation_id,
         )
-        self.repo_manager: Optional[RepositoryManager] = None
+        self.repo_manager: RepositoryManager | None = None
         self.doc_orchestrator: DocumentationOrchestrator = Injector.get(
             "doc_orchestrator"
         )
@@ -326,7 +310,8 @@ async def main(args: argparse.Namespace) -> int:
     doc_generator: DocumentationGenerator | None = None
     try:
         correlation_id = str(uuid.uuid4())
-        setup_dependencies(Config(), correlation_id)
+        config = Config()
+        await setup_dependencies(config, correlation_id)
 
         if args.live_layout:
             setup_live_layout()
@@ -340,7 +325,8 @@ async def main(args: argparse.Namespace) -> int:
                 args.repository, Path(args.output), args.fix_indentation
             )
             metrics = doc_generator.metrics_collector.get_metrics()
-            processed_files = metrics.get('operations', []).count(lambda op: op.get('operation_type') == 'file_processing' and op.get('success'))
+            processed_files = len([op for op in metrics.get('operations', []) 
+                                if op.get('operation_type') == 'file_processing' and op.get('success')])
             print_success(f"Repository documentation generated successfully: {success}")
             print_info(f"Processed {processed_files} files.")
 

@@ -72,6 +72,20 @@ class PromptManager:
         classes: Optional[list[ExtractedClass]] = None,
         functions: Optional[list[ExtractedFunction]] = None,
     ) -> str:
+        """
+        Create a comprehensive prompt for documentation generation.
+        Args:
+            module_name (str): The name of the module for which documentation is being generated.
+            file_path (str): The file path of the module.
+            source_code (str): The source code of the module.
+            classes (Optional[list[ExtractedClass]]): A list of extracted classes from the module.
+            functions (Optional[list[ExtractedFunction]]): A list of extracted functions from the module.
+        Returns:
+            str: The generated documentation prompt.
+        Raises:
+            ValueError: If module_name, file_path, or source_code are not provided.
+            Exception: If an error occurs during prompt generation.
+        """
         """Create a comprehensive prompt for documentation generation."""
         start_time = time.time()
         try:
@@ -91,11 +105,11 @@ class PromptManager:
             )
 
             # Estimate tokens
-            prompt_tokens = self.token_manager.estimate_tokens(prompt)
+            prompt_tokens = self.token_manager._estimate_tokens(prompt)
             print_info(f"Generated prompt with {prompt_tokens} tokens.")
 
             # Track prompt generation
-            self.metrics_collector.track_operation(
+            await self.metrics_collector.track_operation(
                 operation_type="prompt_generation",
                 success=True,
                 duration=time.time() - start_time,
@@ -108,7 +122,7 @@ class PromptManager:
         except Exception as e:
             processing_time = time.time() - start_time
             self.logger.error(f"Error generating prompt: {e}", exc_info=True)
-            self.metrics_collector.track_operation(
+            await self.metrics_collector.track_operation(
                 operation_type="prompt_generation",
                 success=False,
                 duration=processing_time,

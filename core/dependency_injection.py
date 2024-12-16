@@ -63,7 +63,7 @@ class Injector:
         cls._initialized = value
 
 
-def setup_dependencies(config: Config, correlation_id: str | None = None):
+async def setup_dependencies(config: Config, correlation_id: str | None = None):
     """Sets up the dependency injection framework."""
     if Injector.is_initialized():
         return
@@ -124,7 +124,13 @@ def setup_dependencies(config: Config, correlation_id: str | None = None):
     prompt_manager = PromptManager(correlation_id=correlation_id)
     Injector.register("prompt_manager", prompt_manager)
 
-    extraction_context = ExtractionContext()
+    # Create extraction context
+    extraction_context = ExtractionContext("# Placeholder source code\n")
+    extraction_context.module_name = None
+    extraction_context.base_path = None
+    extraction_context.include_private = False
+    extraction_context.include_nested = False
+    extraction_context.include_magic = True
     Injector.register("extraction_context", extraction_context)
 
     function_extractor = FunctionExtractor(context=extraction_context, correlation_id=correlation_id)
