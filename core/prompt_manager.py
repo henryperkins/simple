@@ -15,16 +15,19 @@ from core.dependency_injection import Injector
 
 class MetricsDict(TypedDict, total=False):
     """Type definition for metrics dictionary."""
+
     cyclomatic_complexity: int | Literal["Unknown"]
 
 
 class AttributeDict(TypedDict, total=False):
     """Type definition for attribute dictionary."""
+
     name: str
 
 
 class DocstringDict(TypedDict, total=False):
     """Type definition for docstring dictionary."""
+
     summary: str
     description: str
 
@@ -45,7 +48,7 @@ class PromptManager:
         template_dir = Path(__file__).parent
         self.env = Environment(loader=FileSystemLoader(template_dir))
         print_info("PromptManager initialized.")
-        
+
         # Load the function schema from a file
         schema_path = Path(__file__).parent / "function_tools_schema.json"
         try:
@@ -60,76 +63,108 @@ class PromptManager:
         except json.JSONDecodeError as e:
             self.logger.error(
                 f"Failed to parse JSON in function schema file {schema_path}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             raise
 
     async def create_documentation_prompt(
         self,
-        module_name: str = "",
-        file_path: str = "",
-        source_code: str = "",
-        classes: Optional[list[ExtractedClass]] = None,
-        functions: Optional[list[ExtractedFunction]] = None,
+        module_name: str,
+        file_path: str,
+        source_code: str,
+        classes: list[ExtractedClass] | None = None,
+        functions: list[ExtractedFunction] | None = None,
     ) -> str:
-        """
-        Create a comprehensive prompt for documentation generation.
-        Args:
-            module_name (str): The name of the module for which documentation is being generated.
-            file_path (str): The file path of the module.
-            source_code (str): The source code of the module.
-            classes (Optional[list[ExtractedClass]]): A list of extracted classes from the module.
-            functions (Optional[list[ExtractedFunction]]): A list of extracted functions from the module.
-        Returns:
-            str: The generated documentation prompt.
-        Raises:
-            ValueError: If module_name, file_path, or source_code are not provided.
-            Exception: If an error occurs during prompt generation.
-        """
         """Create a comprehensive prompt for documentation generation."""
-        start_time = time.time()
-        try:
-            if not module_name or not file_path or not source_code:
-                raise ValueError("Module name, file path, and source code are required for prompt generation.")
+        print_info("Generating documentation prompt.")
+        start_time = time.time()  # Add start_time here
 
-            print_info("Generating documentation prompt.")
-            template = self.env.get_template("documentation_prompt.txt")
-            prompt = template.render(
-                module_name=module_name,
-                file_path=file_path,
-                source_code=source_code,
-                classes=classes or [],
-                functions=functions or [],
-                _format_class_info=self._format_class_info,
-                _format_function_info=self._format_function_info,
+        # Enhanced system context with more specific instructions
+        system_context = """You are a technical documentation expert. Analyze the provided Python source code and generate 
+comprehensive documentation that includes:
+1. A clear and concise module summary that describes the module's primary purpose
+2. Detailed descriptions of all components focusing on their roles and relationships
+3. Accurate type information and parameter descriptions
+4. Clear examples where appropriate
+5. Implementation notes for complex components
+6. Architecture and design pattern explanations where relevant
+
+When describing components:
+- Focus on explaining the "why" and "how" beyond just the "what"
+- Highlight key design decisions and architectural patterns
+- Note relationships between different components
+- Identify potential usage patterns and best practices
+- Document any important implementation details or constraints
+"""
+
+        # Enhanced code context with metadata
+        code_context = f"""Module: {module_name}
+Path: {file_path}
+Language: Python
+
+Please analyze the following code focusing on:
+- Core functionality and purpose
+- Key components and their relationships
+- Implementation patterns and design choices
+- Usage patterns and constraints
+- Performance considerations where relevant
+"""
+
+        # Format the components list for better context
+        components_list = []
+        if classes:
+            components_list.extend(
+                [
+                    "\nClasses:",
+                    *[
+                        f"- {cls.name}: {cls.docstring_info.summary if cls.docstring_info else 'No description'}"
+                        for cls in classes
+                    ],
+                ]
+            )
+        if functions:
+            components_list.extend(
+                [
+                    "\nFunctions:",
+                    *[
+                        f"- {func.name}: {func.get_docstring_info().summary if func.get_docstring_info() else 'No description'}"
+                        for func in functions
+                    ],
+                ]
             )
 
-            # Estimate tokens
-            prompt_tokens = self.token_manager._estimate_tokens(prompt)
-            print_info(f"Generated prompt with {prompt_tokens} tokens.")
+        # Build the complete prompt
+        prompt = f"""{system_context}
 
-            # Track prompt generation
-            await self.metrics_collector.track_operation(
-                operation_type="prompt_generation",
-                success=True,
-                duration=time.time() - start_time,
-                metadata={"prompt_tokens": prompt_tokens, "template": "documentation_prompt.txt"},
-            )
+{code_context}
 
-            processing_time = time.time() - start_time
-            print_success(f"Prompt generation completed in {processing_time:.2f}s.")
-            return prompt
-        except Exception as e:
-            processing_time = time.time() - start_time
-            self.logger.error(f"Error generating prompt: {e}", exc_info=True)
-            await self.metrics_collector.track_operation(
-                operation_type="prompt_generation",
-                success=False,
-                duration=processing_time,
-                metadata={"error": str(e)},
-            )
-            print_error(f"Prompt generation failed: {e}")
-            raise
+Component Overview:
+{chr(10).join(components_list)}
+
+Source Code:
+```
+{source_code}
+```
+"""
+
+        # Estimate tokens
+        prompt_tokens = self.token_manager._estimate_tokens(prompt)
+        print_info(f"Generated prompt with {prompt_tokens} tokens.")
+
+        # Track prompt generation
+        await self.metrics_collector.track_operation(
+            operation_type="prompt_generation",
+            success=True,
+            duration=time.time() - start_time,
+            metadata={
+                "prompt_tokens": prompt_tokens,
+                "template": "documentation_prompt.txt",
+            },
+        )
+
+        processing_time = time.time() - start_time
+        print_success(f"Prompt generation completed in {processing_time:.2f}s.")
+        return prompt
 
     def _format_function_info(self, func: ExtractedFunction) -> str:
         """Format function information for prompt.
@@ -158,7 +193,10 @@ class PromptManager:
         docstring_info = (
             func.docstring
             if func.docstring
-            else {"summary": "No summary available", "description": "No description available"}
+            else {
+                "summary": "No summary available",
+                "description": "No description available",
+            }
         )
         returns_info = func.returns or {"type": "Any", "description": ""}
 
@@ -208,7 +246,10 @@ class PromptManager:
         docstring_info = (
             cls.docstring
             if cls.docstring
-            else {"summary": "No summary available", "description": "No description available"}
+            else {
+                "summary": "No summary available",
+                "description": "No description available",
+            }
         )
 
         # Get summary with proper type handling
@@ -238,7 +279,9 @@ class PromptManager:
 
         return formatted_info
 
-    def get_function_schema(self, schema: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    def get_function_schema(
+        self, schema: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
         """Get the function schema for structured output.
 
         Returns:
@@ -253,7 +296,7 @@ class PromptManager:
             return {
                 "name": "generate_docstring",
                 "description": "Generates structured documentation from source code.",
-                "parameters": schema
+                "parameters": schema,
             }
 
         if not hasattr(self, "_function_schema") or not self._function_schema:
@@ -262,7 +305,7 @@ class PromptManager:
         return {
             "name": "generate_docstring",
             "description": "Generates structured documentation from source code.",
-            "parameters": self._function_schema["function"]["parameters"]
+            "parameters": self._function_schema["function"]["parameters"],
         }
 
     def get_prompt_with_schema(self, prompt: str, schema: dict[str, Any]) -> str:

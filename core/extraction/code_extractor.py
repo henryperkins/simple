@@ -23,7 +23,7 @@ from core.extraction.class_extractor import ClassExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.metrics_collector import MetricsCollector
 from core.dependency_injection import Injector
-from core.console import print_info, print_error, print_success
+from core.console import print_info
 from core.exceptions import ProcessingError, ExtractionError
 
 
@@ -48,13 +48,21 @@ class CodeExtractor:
             extra={"correlation_id": self.correlation_id},
         )
         self.context = context
-        self.metrics_collector: MetricsCollector = MetricsCollector(correlation_id=self.correlation_id)
+        self.metrics_collector: MetricsCollector = MetricsCollector(
+            correlation_id=self.correlation_id
+        )
         self.metrics: Metrics = Injector.get("metrics_calculator")
-        self.docstring_processor: DocstringProcessor = Injector.get("docstring_processor")
+        self.docstring_processor: DocstringProcessor = Injector.get(
+            "docstring_processor"
+        )
         self.function_extractor: FunctionExtractor = Injector.get("function_extractor")
         self.class_extractor: ClassExtractor = Injector.get("class_extractor")
-        self.dependency_analyzer: DependencyAnalyzer = Injector.get("dependency_analyzer")
-        self.logger.info(f"Initialising with dependency_analyzer: {self.context.dependency_analyzer}")
+        self.dependency_analyzer: DependencyAnalyzer = Injector.get(
+            "dependency_analyzer"
+        )
+        self.logger.info(
+            f"Initialising with dependency_analyzer: {self.context.dependency_analyzer}"
+        )
         if self.context.dependency_analyzer is None:
             self.context.dependency_analyzer = DependencyAnalyzer(self.context)
         print_info("CodeExtractor initialized.")
@@ -65,9 +73,13 @@ class CodeExtractor:
             raise ExtractionError("Source code is empty or missing")
 
         # Update the existing context with new source code and validate
-        self.logger.debug(f"Before setting source code, context source code: {self.context.get_source_code()[:50]}...")
+        self.logger.debug(
+            f"Before setting source code, context source code: {self.context.get_source_code()[:50]}..."
+        )
         self.context.set_source_code(source_code, source="code_extractor.extract_code")
-        self.logger.debug(f"After setting source code, context source code: {self.context.get_source_code()[:50]}...")
+        self.logger.debug(
+            f"After setting source code, context source code: {self.context.get_source_code()[:50]}..."
+        )
 
         module_name = self.context.module_name or "unnamed_module"
         module_metrics = MetricData()
@@ -77,28 +89,37 @@ class CodeExtractor:
         try:
             self.logger.info(f"Extracting code elements from {module_name}")
             self.logger.info(f"Source code length: {len(source_code)}")
-            self.logger.info(f"First 50 characters of source code: {source_code[:50]}...")
+            self.logger.info(
+                f"First 50 characters of source code: {source_code[:50]}..."
+            )
 
             tree = ast.parse(source_code)
             self.logger.info("Validating source code...")
-            file_path = str(getattr(self.context, 'base_path', '')) or ""  # Use '' as default if base_path is not set
-            self._validate_source_code(source_code, file_path, module_name, project_root=str(getattr(self.context, "base_path", "")))
+            file_path = (
+                str(getattr(self.context, "base_path", "")) or ""
+            )  # Use '' as default if base_path is not set
+            self._validate_source_code(
+                source_code,
+                file_path,
+                module_name,
+                project_root=str(getattr(self.context, "base_path", "")),
+            )
 
             self.logger.info("Analyzing dependencies...")
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
-            
+
             self.logger.info("Extracting classes...")
             classes = await self.class_extractor.extract_classes(tree)
             module_metrics.total_classes = len(classes)
             module_metrics.scanned_classes = len(
-                [cls for cls in classes if hasattr(cls, 'docstring_info')]
+                [cls for cls in classes if hasattr(cls, "docstring_info")]
             )
 
             self.logger.info("Extracting functions...")
             functions = await self.function_extractor.extract_functions(tree)
             module_metrics.total_functions = len(functions)
             module_metrics.scanned_functions = len(
-                [func for func in functions if hasattr(func, 'docstring_info')]
+                [func for func in functions if hasattr(func, "docstring_info")]
             )
 
             self.logger.info("Extracting variables...")
@@ -143,6 +164,21 @@ class CodeExtractor:
             )
             self.logger.info(f"Code extraction completed in {processing_time:.2f}s.")
 
+            # Convert docstrings to DocstringData objects
+            for cls in classes:
+                if hasattr(cls, "docstring") and cls.docstring:
+                    try:
+                        cls.docstring_info = self.docstring_processor.parse(cls.docstring)
+                    except Exception as e:
+                        self.logger.error(f"Error parsing docstring for class {cls.name}: {e}")
+
+            for func in functions:
+                if hasattr(func, "docstring") and func.docstring:
+                    try:
+                        func.docstring_info = self.docstring_processor.parse(func.docstring)
+                    except Exception as e:
+                        self.logger.error(f"Error parsing docstring for function {func.name}: {e}")
+
             # Convert classes and functions to dicts for ExtractionResult
             class_dicts = [cls.__dict__ for cls in classes]
             function_dicts = [func.__dict__ for func in functions]
@@ -169,9 +205,10 @@ class CodeExtractor:
                 extra={
                     "source_code_snippet": source_code[:50],
                     "module_name": module_name,
-                    "file_path": str(getattr(self.context, 'base_path', ''))
+                    "file_path": str(getattr(self.context, "base_path", "")),
                 },
-                exc_info=True)
+                exc_info=True,
+            )
             await self.metrics_collector.track_operation(
                 operation_type="code_extraction",
                 success=False,
@@ -185,9 +222,9 @@ class CodeExtractor:
                 extra={
                     "source_code_snippet": source_code[:50],
                     "module_name": module_name,
-                    "file_path": str(getattr(self.context, 'base_path', ''))
+                    "file_path": str(getattr(self.context, "base_path", "")),
                 },
-                exc_info=True
+                exc_info=True,
             )
             await self.metrics_collector.track_operation(
                 operation_type="code_extraction",
@@ -202,9 +239,9 @@ class CodeExtractor:
                 extra={
                     "source_code_snippet": source_code[:50],
                     "module_name": module_name,
-                    "file_path": str(getattr(self.context, 'base_path', ''))
+                    "file_path": str(getattr(self.context, "base_path", "")),
                 },
-                exc_info=True
+                exc_info=True,
             )
             await self.metrics_collector.track_operation(
                 operation_type="code_extraction",
@@ -214,8 +251,9 @@ class CodeExtractor:
             )
             raise ExtractionError(f"Unexpected error during extraction: {e}") from e
 
-
-    def _validate_source_code(self, source_code: str, file_path: str, module_name: str, project_root: str) -> None:
+    def _validate_source_code(
+        self, source_code: str, file_path: str, module_name: str, project_root: str
+    ) -> None:
         """
         Validate the provided source code and log issues with its representation in __init__.py.
 
@@ -229,6 +267,7 @@ class CodeExtractor:
             ProcessingError: If the source code contains syntax errors or the file path is invalid.
         """
         self.logger.info(f"Validating source code for file: {file_path}")
+        init_file_path = None
 
         # Step 1: Check syntax validity
         try:
@@ -239,16 +278,22 @@ class CodeExtractor:
                 "error_message": str(e),
                 "line_number": e.lineno,
                 "offset": e.offset,
-                "text": e.text.strip() if e.text else "N/A"
+                "text": e.text.strip() if e.text else "N/A",
             }
-            self.logger.error(f"Syntax error during validation for {file_path}: {error_details}")
+            self.logger.error(
+                f"Syntax error during validation for {file_path}: {error_details}"
+            )
             raise ProcessingError(f"Syntax error in source code: {e}") from e
 
         # Step 2: Check for module inclusion in __init__.py
         try:
-            init_file_path = Path(project_root) / module_name.split('.')[0] / "__init__.py"
+            init_file_path = (
+                Path(project_root) / module_name.split(".")[0] / "__init__.py"
+            )
             if not init_file_path.exists():
-                self.logger.warning(f"No __init__.py found at {init_file_path}. Module '{module_name}' may not be importable.")
+                self.logger.warning(
+                    f"No __init__.py found at {init_file_path}. Module '{module_name}' may not be importable."
+                )
             else:
                 with open(init_file_path, "r") as init_file:
                     init_content = init_file.read()
@@ -258,7 +303,9 @@ class CodeExtractor:
                             "It may not be properly importable."
                         )
                     else:
-                        self.logger.info(f"Module '{module_name}' is explicitly referenced in {init_file_path}.")
+                        self.logger.info(
+                            f"Module '{module_name}' is explicitly referenced in {init_file_path}."
+                        )
         except Exception as e:
             self.logger.error(f"Error reading {init_file_path}: {e}")
 
@@ -277,11 +324,13 @@ class CodeExtractor:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name):
-                        variables.append({
-                            "name": target.id,
-                            "type": "variable",
-                            "value": self._get_value(node.value),
-                        })
+                        variables.append(
+                            {
+                                "name": target.id,
+                                "type": "variable",
+                                "value": self._get_value(node.value),
+                            }
+                        )
         return variables
 
     def extract_constants(self, tree: ast.AST) -> list[dict[str, Any]]:
@@ -299,11 +348,13 @@ class CodeExtractor:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id.isupper():
-                        constants.append({
-                            "name": target.id,
-                            "type": "constant",
-                            "value": self._get_value(node.value),
-                        })
+                        constants.append(
+                            {
+                                "name": target.id,
+                                "type": "constant",
+                                "value": self._get_value(node.value),
+                            }
+                        )
         return constants
 
     def _get_value(self, node: Any) -> str:

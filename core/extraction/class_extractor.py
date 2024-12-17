@@ -7,7 +7,7 @@ metadata from Python source code using the Abstract Syntax Tree (AST).
 
 import ast
 import uuid
-from typing import Any, TypeVar
+from typing import Any, TypeVar, Optional
 
 from core.logger import CorrelationLoggerAdapter
 from core.types import ExtractionContext, ExtractedClass, ExtractedFunction
@@ -268,7 +268,7 @@ class ClassExtractor:
                     )
         return instance_attributes
 
-    async def _process_class(self, node: ast.ClassDef) -> ExtractedClass | None:
+    async def _process_class(self, node: ast.ClassDef) -> Optional[ExtractedClass]:
         """Process a class node to extract information."""
         try:
             source_code = getattr(self.context, "source_code", "") or ""
@@ -284,6 +284,13 @@ class ClassExtractor:
                     if deps:
                         dependencies = deps
 
+           
+                        # Add new extractions
+                        abstract_methods = self._extract_abstract_methods(node)
+                        property_methods = self._extract_properties(node)
+                        class_variables = self._extract_class_variables(node)
+                        method_groups = self._group_methods_by_access(node)
+                        inheritance_chain = self._get_inheritance_chain(node)
             # Create the extracted class
             extracted_class = ExtractedClass(
                 name=node.name,
@@ -301,6 +308,15 @@ class ClassExtractor:
                 bases=self._extract_bases(node),
                 metaclass=self._extract_metaclass(node),
                 is_exception=self._is_exception_class(node),
+                abstract_methods=abstract_methods,
+                property_methods=property_methods,
+                class_variables=class_variables,
+                method_groups=method_groups,
+                inheritance_chain=inheritance_chain,
+                is_dataclass=any(isinstance(d, ast.Name) and d.id == 'dataclass' 
+                                for d in node.decorator_list),
+                is_abstract=any(base.id == 'ABC' for base in node.bases 
+                              if isinstance(base, ast.Name))
             )
 
             # Ensure docstring_info is set correctly
@@ -337,3 +353,101 @@ class ClassExtractor:
                 extra={"class_name": node.name},
             )
             return None
+
+    def _extract_interfaces(self, node: ast.ClassDef) -> list[str]:
+        """Extract implemented interfaces/abstract base classes."""
+        interfaces = []
+        for base in node.bases:
+            if isinstance(base, ast.Name) and base.id.endswith(('Interface', 'Protocol')):
+                interfaces.append(base.id)
+        return interfaces
+
+    def _extract_properties(self, node: ast.ClassDef) -> list[dict[str, Any]]:
+        """Extract property methods with their getter/setter pairs."""
+        properties = []
+        for method in node.body:
+            if isinstance(method, ast.FunctionDef):
+                if any(isinstance(d, ast.Name) and d.id == 'property' 
+                      for d in method.decorator_list):
+                    properties.append({
+                        'name': method.name,
+                        'type': ast.unparse(method.returns) if method.returns else 'Any',
+                        'has_setter': any(m.name == f'{method.name}.setter' 
+                                        for m in node.body 
+                                        if isinstance(m, ast.FunctionDef))
+                    })
+        return properties
+
+    def _extract_abstract_methods(self, node: ast.ClassDef) -> list[str]:
+        """Extract abstract method names from a class node."""
+        abstract_methods: list[str] = []
+        for child in node.body:
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if any(isinstance(d, ast.Name) and d.id == 'abstractmethod' for d in child.decorator_list):
+                    abstract_methods.append(child.name)
+        return abstract_methods
+
+    def _extract_class_variables(self, node: ast.ClassDef) -> list[dict[str, Any]]:
+        """Extract class-level variables from a class node."""
+        class_variables: list[dict[str, Any]] = []
+        source_code = getattr(self.context, "source_code", "") or ""
+
+        for child in node.body:
+            try:
+                if isinstance(child, ast.AnnAssign) and isinstance(
+                    child.target, ast.Name
+                ):
+                    attr_value = None
+                    if child.value:
+                        attr_value = get_source_segment(source_code, child.value)
+
+                    class_variables.append(
+                        {
+                            "name": child.target.id,
+                            "type": get_node_name(child.annotation),
+                            "value": attr_value,
+                        }
+                    )
+                elif isinstance(child, ast.Assign):
+                    for target in child.targets:
+                        if isinstance(target, ast.Name):
+                            attr_value = get_source_segment(source_code, child.value)
+                            class_variables.append(
+                                {
+                                    "name": target.id,
+                                    "type": "Any",
+                                    "value": attr_value,
+                                }
+                            )
+            except Exception as e:
+                handle_extraction_error(
+                    self.logger,
+                    self.errors,
+                    f"Class {node.name}",
+                    e,
+                    extra={"attribute_name": getattr(child, "name", "unknown")},
+                )
+                continue
+
+        return class_variables
+
+    def _group_methods_by_access(self, node: ast.ClassDef) -> dict[str, list[str]]:
+        """Group methods by their access modifiers."""
+        method_groups: dict[str, list[str]] = {
+            "public": [],
+            "private": [],
+            "protected": [],
+        }
+        for child in node.body:
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if child.name.startswith("__"):
+                    method_groups["private"].append(child.name)
+                elif child.name.startswith("_"):
+                    method_groups["protected"].append(child.name)
+                else:
+                    method_groups["public"].append(child.name)
+        return method_groups
+
+    def _get_inheritance_chain(self, node: ast.ClassDef) -> str:
+        """Get the inheritance chain of a class."""
+        return ""

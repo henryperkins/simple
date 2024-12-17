@@ -188,6 +188,13 @@ class FunctionExtractor:
             args = self._extract_arguments(node)
             return_type = get_node_name(node.returns) or "Any"
 
+            # Add new extractions
+            type_hints = self._extract_type_hints(node)
+            complexity_warnings = self._analyze_complexity_warnings(node)
+            usage_examples = self._extract_examples_from_docstring(docstring)
+            dependencies = self._extract_dependencies(node)
+            module_imports = self._extract_imports(node)
+
             extracted_function = ExtractedFunction(
                 name=node.name,
                 lineno=node.lineno,
@@ -199,6 +206,16 @@ class FunctionExtractor:
                 args=args,
                 returns={"type": return_type, "description": ""},
                 is_async=isinstance(node, ast.AsyncFunctionDef),
+                type_hints=type_hints,
+                complexity_warnings=complexity_warnings,
+                usage_examples=usage_examples,
+                module_imports=module_imports,
+                is_property=any(isinstance(d, ast.Name) and d.id == 'property' 
+                              for d in node.decorator_list),
+                is_staticmethod=any(isinstance(d, ast.Name) and d.id == 'staticmethod' 
+                                  for d in node.decorator_list),
+                is_classmethod=any(isinstance(d, ast.Name) and d.id == 'classmethod' 
+                                 for d in node.decorator_list),
             )
             return extracted_function
         except Exception as e:
@@ -211,3 +228,41 @@ class FunctionExtractor:
             )
             return None
 
+    def _extract_type_hints(self, node: ast.FunctionDef) -> dict[str, str]:
+        """Extract type hints from function parameters and return value."""
+        type_hints = {}
+        for arg in node.args.args:
+            if arg.annotation:
+                type_hints[arg.arg] = ast.unparse(arg.annotation)
+        if node.returns:
+            type_hints['return'] = ast.unparse(node.returns)
+        return type_hints
+
+    def _analyze_complexity_warnings(self, node: ast.FunctionDef) -> list[str]:
+        """Analyze and return specific complexity warnings."""
+        warnings = []
+        # Check nesting depth
+        max_depth = 0
+        current_depth = 0
+        for child in ast.walk(node):
+            if isinstance(child, (ast.For, ast.While, ast.If, ast.With)):
+                current_depth += 1
+                max_depth = max(max_depth, current_depth)
+            elif isinstance(child, ast.FunctionDef):
+                current_depth = 0
+        
+        if max_depth > 3:
+            warnings.append(f"High nesting depth ({max_depth} levels)")
+        
+        # Count number of branches
+        branch_count = sum(1 for _ in ast.walk(node) 
+                         if isinstance(_, (ast.If, ast.For, ast.While)))
+        if branch_count > 10:
+            warnings.append(f"High number of branches ({branch_count})")
+        
+        
+        return warnings
+
+    def _extract_examples_from_docstring(self, docstring: str) -> list[str]:
+        """Extract usage examples from a docstring."""
+        return []

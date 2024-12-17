@@ -1,6 +1,7 @@
 """
 Main module for running the AI documentation generation process.
 """
+
 # Standard library imports
 import argparse
 import ast
@@ -15,7 +16,13 @@ import autopep8
 
 # Initialize core console and logging first
 from core.config import Config
-from core.console import print_error, print_info, print_success, setup_live_layout, stop_live_layout
+from core.console import (
+    print_error,
+    print_info,
+    print_success,
+    setup_live_layout,
+    stop_live_layout,
+)
 from core.dependency_injection import Injector, setup_dependencies
 from core.logger import LoggerSetup
 from core.monitoring import SystemMonitor
@@ -86,15 +93,17 @@ class DocumentationGenerator:
             error_msg = f"Initialization failed: {init_error}"
             raise ConfigurationError(error_msg) from init_error
 
-    async def process_file(self, file_path: Path, output_path: Path, fix_indentation: bool = False) -> bool:
+    async def process_file(
+        self, file_path: Path, output_path: Path, fix_indentation: bool = False
+    ) -> bool:
         """
         Process a single file and generate documentation.
-        
+
         Args:
             file_path: Path to the source file.
             output_path: Path to store the generated documentation.
             fix_indentation: Whether to auto-fix indentation before processing.
-        
+
         Returns:
             True if the file was successfully processed, False otherwise.
         """
@@ -108,7 +117,9 @@ class DocumentationGenerator:
             # Read source code
             source_code = await read_file_safe_async(file_path)
             if not source_code or not source_code.strip():
-                self.logger.warning(f"Skipping empty or invalid source file: {file_path}")
+                self.logger.warning(
+                    f"Skipping empty or invalid source file: {file_path}"
+                )
                 print_info(f"Skipping empty or invalid source file: {file_path}")
                 return False
 
@@ -123,7 +134,9 @@ class DocumentationGenerator:
                 return False
 
             # Generate documentation
-            await self.doc_orchestrator.generate_module_documentation(file_path, output_path.parent, source_code)
+            await self.doc_orchestrator.generate_module_documentation(
+                file_path, output_path.parent, source_code
+            )
             print_success(f"Successfully processed file: {file_path}")
             return True
         except Exception as e:
@@ -151,7 +164,12 @@ class DocumentationGenerator:
             )
             return False
 
-    async def process_repository(self, repo_path: str, output_dir: Path = Path("docs"), fix_indentation: bool = False) -> bool:
+    async def process_repository(
+        self,
+        repo_path: str,
+        output_dir: Path = Path("docs"),
+        fix_indentation: bool = False,
+    ) -> bool:
         """Process a repository for documentation."""
         start_time = asyncio.get_event_loop().time()
         success = False
@@ -169,9 +187,7 @@ class DocumentationGenerator:
                 local_path = Path(repo_path)
 
             if not local_path or not local_path.exists():
-                print_error(
-                    f"Repository path not found: {local_path or repo_path}"
-                )
+                print_error(f"Repository path not found: {local_path or repo_path}")
                 return False
 
             self.doc_orchestrator.code_extractor.context.base_path = local_path
@@ -183,19 +199,27 @@ class DocumentationGenerator:
             skipped_files = 0
 
             # Process each Python file in the repository
-            python_files = [file for file in local_path.rglob("*.py") if file.suffix == ".py"]
+            python_files = [
+                file for file in local_path.rglob("*.py") if file.suffix == ".py"
+            ]
             total_files = len(python_files)
 
             for file_path in python_files:
                 output_file = output_dir / (file_path.stem + ".md")
-                source_code = await read_file_safe_async(file_path)  # Ensure source code is read
-                if source_code and not source_code.isspace():  # Check if source code is not empty or just whitespace
+                source_code = await read_file_safe_async(
+                    file_path
+                )  # Ensure source code is read
+                if (
+                    source_code and not source_code.isspace()
+                ):  # Check if source code is not empty or just whitespace
                     if await self.process_file(file_path, output_file, fix_indentation):
                         processed_files += 1
                     else:
                         skipped_files += 1
                 else:
-                    print_error(f"Source code is missing or empty for file: {file_path}")
+                    print_error(
+                        f"Source code is missing or empty for file: {file_path}"
+                    )
                     skipped_files += 1
 
             success = True
@@ -243,14 +267,19 @@ class DocumentationGenerator:
                 return local_path
 
             process = await asyncio.create_subprocess_exec(
-                "git", "clone", repo_url, str(local_path),
+                "git",
+                "clone",
+                repo_url,
+                str(local_path),
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             _, stderr = await process.communicate()
 
             if process.returncode != 0:
-                print_error(f"Error cloning repository {repo_url}: {stderr.decode().strip()}")
+                print_error(
+                    f"Error cloning repository {repo_url}: {stderr.decode().strip()}"
+                )
                 return None
 
             return local_path
@@ -261,7 +290,9 @@ class DocumentationGenerator:
     async def cleanup(self) -> None:
         """Cleanup resources used by the DocumentationGenerator."""
         try:
-            print_info(f"Starting cleanup process with correlation ID: {self.correlation_id}")
+            print_info(
+                f"Starting cleanup process with correlation ID: {self.correlation_id}"
+            )
             if hasattr(self, "ai_service") and self.ai_service:
                 await self.ai_service.close()
             if hasattr(self, "metrics_collector") and self.metrics_collector:
@@ -325,15 +356,23 @@ async def main(args: argparse.Namespace) -> int:
                 args.repository, Path(args.output), args.fix_indentation
             )
             metrics = doc_generator.metrics_collector.get_metrics()
-            processed_files = len([op for op in metrics.get('operations', []) 
-                                if op.get('operation_type') == 'file_processing' and op.get('success')])
+            processed_files = len(
+                [
+                    op
+                    for op in metrics.get("operations", [])
+                    if op.get("operation_type") == "file_processing"
+                    and op.get("success")
+                ]
+            )
             print_success(f"Repository documentation generated successfully: {success}")
             print_info(f"Processed {processed_files} files.")
 
         if args.files:
             for file_path in args.files:
                 output_path = Path(args.output) / (Path(file_path).stem + ".md")
-                success = await doc_generator.process_file(Path(file_path), output_path, args.fix_indentation)
+                success = await doc_generator.process_file(
+                    Path(file_path), output_path, args.fix_indentation
+                )
                 print_success(
                     f"Documentation generated successfully for {file_path}: {success}"
                 )

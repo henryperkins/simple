@@ -1,6 +1,7 @@
 """
 Service for interacting with the AI model to generate documentation.
 """
+
 from typing import Any
 import time
 import asyncio
@@ -50,7 +51,7 @@ class AIService:
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
-            extra={"correlation_id": self.correlation_id}
+            extra={"correlation_id": self.correlation_id},
         )
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")
@@ -63,8 +64,11 @@ class AIService:
                 "Docstring processor not registered, using default",
                 extra={
                     "correlation_id": self.correlation_id,
-                    "sanitized_info": {"status": "warning", "type": "fallback_processor"}
-                }
+                    "sanitized_info": {
+                        "status": "warning",
+                        "type": "fallback_processor",
+                    },
+                },
             )
             self.docstring_processor = DocstringProcessor()
             Injector.register("docstring_processor", self.docstring_processor)
@@ -78,12 +82,15 @@ class AIService:
         self._client: aiohttp.ClientSession | None = None
 
         print_phase_header("AI Service Initialization")
-        create_status_table("Configuration", {
-            "Model": self.config.model,
-            "Max Tokens": self.config.max_tokens,
-            "Temperature": self.config.temperature,
-            "Timeout": f"{self.config.timeout}s"
-        })
+        create_status_table(
+            "Configuration",
+            {
+                "Model": self.config.model,
+                "Max Tokens": self.config.max_tokens,
+                "Temperature": self.config.temperature,
+                "Timeout": f"{self.config.timeout}s",
+            },
+        )
 
     async def start(self) -> None:
         """Start the AI service by initializing the client session."""
@@ -99,7 +106,9 @@ class AIService:
 
         try:
             self.logger.info(f"Source code length: {len(context.source_code)}")
-            self.logger.info(f"First 50 characters of source code: {context.source_code[:50]}...")
+            self.logger.info(
+                f"First 50 characters of source code: {context.source_code[:50]}..."
+            )
 
             if not context.source_code or not context.source_code.strip():
                 self.logger.error(
@@ -110,9 +119,9 @@ class AIService:
                             "status": "error",
                             "type": "missing_source",
                             "module": context.metadata.get("module_name", "unknown"),
-                            "file": context.metadata.get("file_path", "unknown")
-                        }
-                    }
+                            "file": context.metadata.get("file_path", "unknown"),
+                        },
+                    },
                 )
                 raise DocumentationError("Source code is missing or empty")
 
@@ -123,13 +132,16 @@ class AIService:
                 context.metadata.get("file_path", "") if context.metadata else ""
             )
 
-            display_processing_phase("Context Information", {
-                "Module": module_name or "Unknown",
-                "File": file_path or "Unknown",
-                "Code Length": len(context.source_code),
-                "Classes": len(context.classes),
-                "Functions": len(context.functions)
-            })
+            display_processing_phase(
+                "Context Information",
+                {
+                    "Module": module_name or "Unknown",
+                    "File": file_path or "Unknown",
+                    "Code Length": len(context.source_code),
+                    "Classes": len(context.classes),
+                    "Functions": len(context.functions),
+                },
+            )
 
             # Convert classes and functions to proper types
             classes = []
@@ -150,7 +162,9 @@ class AIService:
 
             # Create documentation prompt
             self.logger.info("Generating documentation prompt.")
-            self.logger.debug(f"Source code before creating prompt: {context.source_code[:50]}...")
+            self.logger.debug(
+                f"Source code before creating prompt: {context.source_code[:50]}..."
+            )
             prompt = await self.prompt_manager.create_documentation_prompt(
                 module_name=module_name,
                 file_path=file_path,
@@ -174,27 +188,30 @@ class AIService:
             )
 
             if request_params["max_tokens"] < 100:
-                print_info("Warning: Token availability is low. Consider reducing prompt size.")
+                print_info(
+                    "Warning: Token availability is low. Consider reducing prompt size."
+                )
 
             print_info("Making API call to generate documentation")
             async with self.semaphore:
                 response = await self._make_api_call_with_retry(
-                    str(prompt),
-                    function_schema
+                    str(prompt), function_schema
                 )
 
             # Add source code to content
             if isinstance(response, dict):
                 response["source_code"] = context.source_code
-                response.setdefault("code_metadata", {})["source_code"] = context.source_code
+                response.setdefault("code_metadata", {})[
+                    "source_code"
+                ] = context.source_code
 
             # Parse response into DocstringData
             print_info("Parsing and validating response")
-            self.logger.debug(f"Source code before parsing response: {context.source_code[:50]}...")
+            self.logger.debug(
+                f"Source code before parsing response: {context.source_code[:50]}..."
+            )
             parsed_response = await self.response_parser.parse_response(
-                response,
-                expected_format="docstring",
-                validate_schema=True
+                response, expected_format="docstring", validate_schema=True
             )
 
             if not parsed_response.validation_success:
@@ -205,9 +222,9 @@ class AIService:
                         "sanitized_info": {
                             "status": "error",
                             "type": "validation",
-                            "errors": parsed_response.errors
-                        }
-                    }
+                            "errors": parsed_response.errors,
+                        },
+                    },
                 )
                 raise DataValidationError(
                     f"Response validation failed: {parsed_response.errors}"
@@ -215,15 +232,17 @@ class AIService:
 
             # Create validated DocstringData instance
             content_copy = parsed_response.content.copy()
-            content_copy.pop('source_code', None)  # Remove source_code if present
-            self.logger.debug(f"Source code after parsing response: {context.source_code[:50]}...")
+            content_copy.pop("source_code", None)  # Remove source_code if present
+            self.logger.debug(
+                f"Source code after parsing response: {context.source_code[:50]}..."
+            )
             docstring_data = DocstringData(
                 summary=str(content_copy.get("summary", "")),
                 description=str(content_copy.get("description", "")),
                 args=content_copy.get("args", []),
                 returns=content_copy.get("returns", {"type": "Any", "description": ""}),
                 raises=content_copy.get("raises", []),
-                complexity=int(content_copy.get("complexity", 1))
+                complexity=int(content_copy.get("complexity", 1)),
             )
             is_valid, validation_errors = docstring_data.validate()
 
@@ -235,15 +254,19 @@ class AIService:
                         "sanitized_info": {
                             "status": "error",
                             "type": "docstring_validation",
-                            "errors": validation_errors
-                        }
-                    }
+                            "errors": validation_errors,
+                        },
+                    },
                 )
-                raise DataValidationError(f"Docstring validation failed: {validation_errors}")
+                raise DataValidationError(
+                    f"Docstring validation failed: {validation_errors}"
+                )
 
             # Track metrics
             processing_time = time.time() - start_time
-            self.logger.info(f"Documentation generation completed in {processing_time:.2f} seconds.")
+            self.logger.info(
+                f"Documentation generation completed in {processing_time:.2f} seconds."
+            )
             await self.metrics_collector.track_operation(
                 operation_type="documentation_generation",
                 success=True,
@@ -253,17 +276,19 @@ class AIService:
                     "file": file_path,
                     "code_length": len(context.source_code),
                     "classes": len(context.classes),
-                    "functions": len(context.functions)
+                    "functions": len(context.functions),
                 },
-                usage=response.get("usage", {})
+                usage=response.get("usage", {}),
             )
 
             # Display metrics
             api_metrics: dict[str, Any] = {
                 "Processing Time": f"{processing_time:.2f}s",
                 "Prompt Tokens": response.get("usage", {}).get("prompt_tokens", 0),
-                "Completion Tokens": response.get("usage", {}).get("completion_tokens", 0),
-                "Total Tokens": response.get("usage", {}).get("total_tokens", 0)
+                "Completion Tokens": response.get("usage", {}).get(
+                    "completion_tokens", 0
+                ),
+                "Total Tokens": response.get("usage", {}).get("total_tokens", 0),
             }
             display_api_metrics(api_metrics)
 
@@ -272,11 +297,11 @@ class AIService:
                 usage=response.get("usage", {}),
                 metrics={
                     "processing_time": processing_time,
-                    "validation_success": True
+                    "validation_success": True,
                 },
                 validation_status=True,
                 validation_errors=[],
-                schema_errors=[]
+                schema_errors=[],
             )
 
         except DataValidationError as e:
@@ -284,7 +309,7 @@ class AIService:
                 operation_type="documentation_generation",
                 success=False,
                 duration=time.time() - start_time,
-                metadata={"error_type": "validation_error", "error_message": str(e)}
+                metadata={"error_type": "validation_error", "error_message": str(e)},
             )
             raise
         except DocumentationError as e:
@@ -292,7 +317,7 @@ class AIService:
                 operation_type="documentation_generation",
                 success=False,
                 duration=time.time() - start_time,
-                metadata={"error_type": "documentation_error", "error_message": str(e)}
+                metadata={"error_type": "documentation_error", "error_message": str(e)},
             )
             raise
         except Exception as e:
@@ -300,7 +325,7 @@ class AIService:
                 operation_type="documentation_generation",
                 success=False,
                 duration=time.time() - start_time,
-                metadata={"error_type": "generation_error", "error_message": str(e)}
+                metadata={"error_type": "generation_error", "error_message": str(e)},
             )
             raise APICallError(str(e)) from e
 
@@ -373,7 +398,7 @@ class AIService:
         request_metrics: dict[str, Any] = {
             "Prompt Tokens": request_params.get("max_tokens", 0),
             "Temperature": request_params.get("temperature", 0),
-            "Retries": max_retries
+            "Retries": max_retries,
         }
         display_metrics(request_metrics, title="API Request Parameters")
 
@@ -398,7 +423,7 @@ class AIService:
                 ) as response:
                     if response.status == 200:
                         return await response.json()
-                    
+
                     error_text = await response.text()
                     if attempt == max_retries - 1:
                         raise APICallError(
