@@ -300,13 +300,13 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     def _generate_constants_table(self, constants: Sequence[ConstantDict]) -> str:
         """Generate the constants section with proper formatting."""
         if not constants:
-            return "" # pylint: disable=undefined-variable
+            return ""  # pylint: disable=undefined-variable
 
         sections = [
             "## Constants & Variables\n",
             "| Name | Type | Value |",
             "|------|------|--------|"
-        ] # pylint: disable=undefined-variable
+        ]  # pylint: disable=undefined-variable
 
         for const in constants:
             name = const.get('name', 'Unknown')
@@ -379,5 +379,6 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             return "\n\n".join(section for section in markdown_sections if section)
 
         except Exception as e:
+            self.logger.error(f"Error generating markdown: {e}")
             self.logger.error(f"Error generating markdown: {e}")
             raise DocumentationError(f"Failed to generate markdown: {e}")

@@ -10,7 +10,6 @@ from core.types.base import ExtractedClass, ExtractedFunction
 from core.logger import CorrelationLoggerAdapter, LoggerSetup
 from core.metrics_collector import MetricsCollector
 from core.console import print_info, print_success, print_error
-from core.dependency_injection import Injector
 
 
 class MetricsDict(TypedDict, total=False):
@@ -37,6 +36,9 @@ class PromptManager:
 
     def __init__(self, correlation_id: Optional[str] = None) -> None:
         """Initialize the PromptManager."""
+        # Delayed import to avoid circular dependency
+        from core.dependency_injection import Injector
+
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__), extra={"correlation_id": correlation_id}

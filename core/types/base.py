@@ -11,6 +11,7 @@ from typing import (
     TypedDict,
     Union,
     Callable,
+    Dict,
 )
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
@@ -59,7 +60,12 @@ class ExtractionContext:
     include_magic: bool = True  # Controls whether magic methods are included
     tree: ast.AST | None = None  # AST tree if already parsed
     _dependency_analyzer: DependencyAnalyzer | None = None  # Internal storage for lazy initialization
+    function_extractor: Any | None = None  # Add this line
+    docstring_processor: Any | None = None  # Add this line
     logger: CorrelationLoggerAdapter = field(default_factory=lambda: CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__)))
+    metrics_collector: Any | None = None  # Add this line
+    strict_mode: bool = False  # Add this line
+    config: Dict[str, Any] = field(default_factory=dict)  # Add this line
 
     def get_source_code(self) -> str | None:
         """Get the source code of this instance"""
@@ -109,7 +115,7 @@ class DocumentationContext:
     include_source: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
     classes: list[dict[str, Any]] = field(default_factory=list)
-    functions: list[dict[str, Any]] = field(default_factory=list)
+    functions: list[dict[str, Any]] = field(default_factory.list)
 
     def __post_init__(self) -> None:
         """Validate required fields."""
@@ -227,6 +233,13 @@ class ExtractedClass(ExtractedElement):
     metaclass: str | None = None
     is_exception: bool = False
     docstring_info: DocstringData | None = None
+    is_dataclass: bool = False
+    is_abstract: bool = False
+    abstract_methods: list[str] = field(default_factory=list)
+    property_methods: list[dict[str, Any]] = field(default_factory=list)
+    class_variables: list[dict[str, Any]] = field(default_factory=list)
+    method_groups: dict[str, list[str]] = field(default_factory=dict)
+    inheritance_chain: list[str] = field(default_factory=list)
 
 
 class DocstringDict(TypedDict, total=False):

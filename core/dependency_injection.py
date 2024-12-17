@@ -1,9 +1,26 @@
 """Manages dependency injection for classes."""
 
-from typing import Any
-from core.config import Config
-from core.logger import LoggerSetup
+import asyncio
 from pathlib import Path
+from typing import Any
+
+from core.metrics_collector import MetricsCollector
+from core.metrics import Metrics
+from api.token_management import TokenManager
+from core.docstring_processor import DocstringProcessor
+from core.markdown_generator import MarkdownGenerator
+from core.response_parsing import ResponseParsingService
+from core.prompt_manager import PromptManager
+from core.config import Config
+from core.ai_service import AIService
+from core.extraction.function_extractor import FunctionExtractor
+from core.extraction.class_extractor import ClassExtractor
+from core.extraction.dependency_analyzer import DependencyAnalyzer
+from core.extraction.code_extractor import CodeExtractor
+from core.logger import LoggerSetup
+from core.types.base import ExtractionContext
+from core.docs import DocumentationOrchestrator
+
 
 class Injector:
     """Manages dependency injection for classes."""
@@ -59,116 +76,128 @@ class Injector:
 
     @classmethod
     def set_initialized(cls, value: bool) -> None:
-        """Set the initialization status."""
+        """Set the initialization status.""" 
         cls._initialized = value
 
 
-async def setup_dependencies(config: Config, correlation_id: str | None = None):
-    """Sets up the dependency injection framework."""
+async def setup_dependencies(config: Config, correlation_id: str | None = None) -> None:
+    """
+    Sets up the dependency injection framework by registering all components in the proper order.
+
+    Args:
+        config: Configuration object containing app and AI settings.
+        correlation_id: Unique identifier for logging and correlation.
+    """
+    # Avoid reinitialization
     if Injector.is_initialized():
         return
 
-    # Clear existing dependencies first
     Injector.clear()
-
-    # Register core dependencies
-    Injector.register("config", config)
-    Injector.register("correlation_id", correlation_id)
-
-    # Import dependencies
-    from core.logger import LoggerSetup
-    from core.metrics_collector import MetricsCollector
-    from core.metrics import Metrics
-    from core.docstring_processor import DocstringProcessor
-    from core.response_parsing import ResponseParsingService
-    from core.prompt_manager import PromptManager
-    from core.markdown_generator import MarkdownGenerator
-    from core.cache import Cache
-    from core.ai_service import AIService
-    from api.token_management import TokenManager
-    from core.extraction.function_extractor import FunctionExtractor
-    from core.extraction.class_extractor import ClassExtractor
-    from core.extraction.code_extractor import CodeExtractor
-    from core.extraction.dependency_analyzer import DependencyAnalyzer
-    from core.types.base import ExtractionContext
-    import asyncio
-
-    # Create instances instead of registering factory functions
     logger = LoggerSetup.get_logger(__name__)
-    Injector.register("logger", logger)
+    logger.info("Starting dependency injection setup.")
 
-    # Create and register MetricsCollector instance
-    metrics_collector = MetricsCollector(correlation_id=correlation_id)
-    Injector.register("metrics_collector", metrics_collector)
+    try:
+        # 1. Register core configuration and correlation ID
+        Injector.register("config", config)
+        Injector.register("correlation_id", correlation_id)
+        logger.debug("Registered 'config' and 'correlation_id'.")
 
-    # Create and register Metrics instance
-    metrics = Metrics(metrics_collector=metrics_collector, correlation_id=correlation_id)
-    Injector.register("metrics_calculator", metrics, force=True)  # Force overwrite if needed
+        # 2. Register core utilities and services
+        metrics_collector = MetricsCollector(correlation_id=correlation_id)
+        Injector.register("metrics_collector", metrics_collector)
+        logger.debug("Registered 'metrics_collector'.")
 
-    # Create and register TokenManager instance
-    token_manager = TokenManager(
-        model=config.ai.model,
-        config=config.ai,
-        correlation_id=correlation_id,
-        metrics_collector=metrics_collector
-    )
-    Injector.register("token_manager", token_manager)
+        metrics = Metrics(
+            metrics_collector=metrics_collector, correlation_id=correlation_id
+        )
+        Injector.register("metrics_calculator", metrics, force=True)
+        logger.debug("Registered 'metrics_calculator'.")
 
-    # Create and register other instances
-    docstring_processor = DocstringProcessor()
-    Injector.register("docstring_processor", docstring_processor)
+        token_manager = TokenManager(
+            model=config.ai.model,
+            config=config.ai,
+            correlation_id=correlation_id,
+            metrics_collector=metrics_collector,
+        )
+        Injector.register("token_manager", token_manager)
+        logger.debug("Registered 'token_manager'.")
 
-    response_parser = ResponseParsingService(correlation_id=correlation_id)
-    Injector.register("response_parser", response_parser)
+        # 3. Register processors and generators
+        docstring_processor = DocstringProcessor(correlation_id=correlation_id)
+        Injector.register("docstring_processor", docstring_processor)
+        logger.debug("Registered 'docstring_processor'.")
 
-    prompt_manager = PromptManager(correlation_id=correlation_id)
-    Injector.register("prompt_manager", prompt_manager)
+        markdown_generator = MarkdownGenerator(correlation_id=correlation_id)
+        Injector.register("markdown_generator", markdown_generator)
+        logger.debug("Registered 'markdown_generator'.")
 
-    # Create extraction context
-    extraction_context = ExtractionContext(
-        module_name="default_module",
-        base_path=Path(config.project_root),
-        include_private=False,
-        include_nested=False,
-        include_magic=True
-    )
-    extraction_context.set_source_code("# Placeholder source code\n")
-    Injector.register("extraction_context", extraction_context)
+        response_parser = ResponseParsingService(correlation_id=correlation_id)
+        Injector.register("response_parser", response_parser)
+        logger.debug("Registered 'response_parser'.")
 
-    function_extractor = FunctionExtractor(context=extraction_context, correlation_id=correlation_id)
-    Injector.register("function_extractor", function_extractor)
+        prompt_manager = PromptManager(correlation_id=correlation_id)
+        Injector.register("prompt_manager", prompt_manager)
+        logger.debug("Registered 'prompt_manager'.")
 
-    class_extractor = ClassExtractor(context=extraction_context, correlation_id=correlation_id)
-    Injector.register("class_extractor", class_extractor)
+        # 4. Initialize AI service
+        ai_service = AIService(config=config.ai, correlation_id=correlation_id)
+        Injector.register("ai_service", ai_service)
+        logger.debug("Registered 'ai_service'.")
 
-    dependency_analyzer = DependencyAnalyzer(context=extraction_context, correlation_id=correlation_id)
-    Injector.register("dependency_analyzer", dependency_analyzer)
+        # 5. Initialize code extraction components
+        extraction_context = ExtractionContext(
+            module_name="default_module",
+            base_path=config.project_root,
+            include_private=False,
+            include_nested=False,
+            include_magic=True,
+            docstring_processor=docstring_processor,
+            metrics_collector=metrics_collector,
+        )
 
-    code_extractor = CodeExtractor(context=extraction_context, correlation_id=correlation_id)
-    Injector.register("code_extractor", code_extractor)
+        function_extractor = FunctionExtractor(
+            context=extraction_context, correlation_id=correlation_id
+        )
+        class_extractor = ClassExtractor(
+            context=extraction_context, correlation_id=correlation_id
+        )
+        dependency_analyzer = DependencyAnalyzer(
+            context=extraction_context, correlation_id=correlation_id
+        )
+        code_extractor = CodeExtractor(
+            context=extraction_context, correlation_id=correlation_id
+        )
 
-    markdown_generator = MarkdownGenerator()
-    Injector.register("markdown_generator", markdown_generator)
+        # Update extraction context
+        extraction_context.function_extractor = function_extractor
+        extraction_context.dependency_analyzer = dependency_analyzer
 
-    cache = Cache()
-    Injector.register("cache", cache)
+        # Register extraction components
+        Injector.register("extraction_context", extraction_context)
+        Injector.register("function_extractor", function_extractor)
+        Injector.register("class_extractor", class_extractor)
+        Injector.register("dependency_analyzer", dependency_analyzer)
+        Injector.register("code_extractor", code_extractor)
+        logger.debug("Registered code extraction components.")
 
-    semaphore = asyncio.Semaphore(5)
-    Injector.register("semaphore", semaphore)
+        # 6. Register orchestrator
+        doc_orchestrator = DocumentationOrchestrator(
+            ai_service=ai_service,
+            code_extractor=code_extractor,
+            markdown_generator=markdown_generator,
+            prompt_manager=prompt_manager,
+            docstring_processor=docstring_processor,
+            response_parser=response_parser,
+            correlation_id=correlation_id,
+        )
+        Injector.register("doc_orchestrator", doc_orchestrator)
+        logger.debug("Registered 'doc_orchestrator'.")
 
-    ai_service = AIService(config=config.ai, correlation_id=correlation_id)
-    Injector.register("ai_service", ai_service)
+        # Finalize initialization
+        Injector.set_initialized(True)
+        logger.info("Dependency injection setup complete.")
+        logger.debug(f"Registered dependencies: {list(Injector._dependencies.keys())}")
 
-    from core.docs import DocumentationOrchestrator
-    doc_orchestrator = DocumentationOrchestrator(
-        ai_service=ai_service,
-        code_extractor=code_extractor,
-        markdown_generator=markdown_generator,
-        prompt_manager=prompt_manager,
-        docstring_processor=docstring_processor,
-        response_parser=response_parser,
-        correlation_id=correlation_id
-    )
-    Injector.register("doc_orchestrator", doc_orchestrator)
-
-    Injector.set_initialized(True)
+    except Exception as e:
+        logger.error(f"Error during dependency injection setup: {e}", exc_info=True)
+        raise

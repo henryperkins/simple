@@ -1,7 +1,7 @@
 """Token management module for interacting with the OpenAI API."""
 
 import tiktoken
-from typing import Any, Tuple, Union
+from typing import Any, Tuple, Union, Optional
 
 from core.config import AIConfig
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
@@ -17,9 +17,9 @@ class TokenManager:
     def __init__(
         self,
         model: str,
-        config: AIConfig | None = None,
-        correlation_id: str | None = None,
-        metrics_collector: MetricsCollector | None = None
+        config: Optional[AIConfig] = None,
+        correlation_id: Optional[str] = None,
+        metrics_collector: Optional['MetricsCollector'] = None  # Forward reference
     ) -> None:
         """Initialize TokenManager with model and configuration.
 
@@ -124,8 +124,8 @@ class TokenManager:
     async def validate_and_prepare_request(
         self,
         prompt: str,
-        max_tokens: int | None = None,
-        temperature: float | None = None
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None
     ) -> dict[str, Any]:
         """
         Validate and prepare a request with token management.

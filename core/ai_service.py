@@ -13,7 +13,6 @@ from core.config import AIConfig
 from core.docstring_processor import DocstringProcessor
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.prompt_manager import PromptManager
-from core.dependency_injection import Injector
 from api.token_management import TokenManager
 from core.exceptions import APICallError, DataValidationError, DocumentationError
 from core.types.base import (
@@ -47,6 +46,9 @@ class AIService:
             config: AI service configuration.
             correlation_id: Optional correlation ID for tracking related operations.
         """
+        # Delayed import to avoid circular dependency
+        from core.dependency_injection import Injector
+
         self.config = config or Injector.get("config")().ai
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(

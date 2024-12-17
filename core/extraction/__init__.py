@@ -1,7 +1,7 @@
 """
 Code extraction package for analyzing Python source code.
 """
-
+from typing import Any, Optional
 from core.logger import LoggerSetup
 from core.metrics import Metrics
 from core.docstring_processor import DocstringProcessor
@@ -12,34 +12,47 @@ from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.class_extractor import ClassExtractor
 from core.extraction.code_extractor import CodeExtractor
+from core.extraction.extraction_utils import (
+    extract_decorators,
+    extract_attributes,
+    extract_instance_attributes,
+    extract_bases,
+    get_node_name
+)
 
 logger = LoggerSetup.get_logger(__name__)
 
-
-def setup_extractors(
-    metrics: Metrics | None = None,
-    docstring_processor: DocstringProcessor | None = None,
+async def initialize_extractors(
+    config: Any = None,
+    correlation_id: Optional[str] = None
 ) -> None:
-    """Setup extraction dependencies."""
+    """Initialize extraction system with dependencies."""
     try:
-        if not Injector.is_registered("metrics_calculator"):
-            Injector.register("metrics_calculator", metrics or Metrics())
+        metrics = Metrics(correlation_id=correlation_id)
+        docstring_processor = DocstringProcessor()
 
-        if not Injector.is_registered("docstring_parser"):
-            Injector.register(
-                "docstring_parser", docstring_processor or DocstringProcessor()
-            )
+        # Register core dependencies if not already registered
+        if not Injector.is_registered("metrics_calculator"):
+            Injector.register("metrics_calculator", metrics)
+
+        if not Injector.is_registered("docstring_processor"):
+            Injector.register("docstring_processor", docstring_processor)
 
         logger.info("Extraction dependencies initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to setup extractors: {e}", exc_info=True)
-        raise
 
+    except Exception as e:
+        logger.error(f"Failed to initialize extractors: {e}", exc_info=True)
+        raise
 
 __all__ = [
     "CodeExtractor",
     "ClassExtractor",
-    "FunctionExtractor",
+    "FunctionExtractor", 
     "DependencyAnalyzer",
-    "setup_extractors"
+    "initialize_extractors",
+    "extract_decorators",
+    "extract_attributes",
+    "extract_instance_attributes",
+    "extract_bases",
+    "get_node_name"
 ]

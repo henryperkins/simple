@@ -2,13 +2,14 @@
 Metrics collection and storage module.
 """
 
-from typing import Any, Union
+import time
+from typing import Any, Union, Dict, List, Optional
 from datetime import datetime
 import json
 import os
 import uuid
 
-from core.dependency_injection import Injector
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types.base import MetricData
 
 
@@ -31,7 +32,10 @@ class MetricsCollector:
             correlation_id: Optional correlation ID for tracking metrics
         """
         if not self._initialized:
-            self.logger = Injector.get("logger")
+            self.logger = CorrelationLoggerAdapter(
+                LoggerSetup.get_logger(__name__),
+                extra={"correlation_id": correlation_id}
+            )
             self.correlation_id = correlation_id or str(uuid.uuid4())
             self.metrics_history: dict[str, list[dict[str, Any]]] = {}
             self.operations: list[dict[str, Any]] = []

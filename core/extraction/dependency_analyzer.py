@@ -1,28 +1,18 @@
 """
 Dependency analysis module for Python source code.
-
-This module provides functionality to analyze and categorize dependencies
-within Python source code using the Abstract Syntax Tree (AST).
 """
 
 import ast
 import sys
-import importlib.util
+import pkgutil
 import sysconfig
 from typing import Dict, Set, Optional, List, Tuple, Any
 from pathlib import Path
 
-from core.dependency_injection import Injector
 from core.logger import CorrelationLoggerAdapter
 from core.types import ExtractionContext
-from utils import (
-    NodeNameVisitor,
-    handle_extraction_error,
-    check_module_exists,
-    get_module_path,
-    get_node_name,
-    get_correlation_id,
-)
+from utils import handle_extraction_error, get_node_name, get_correlation_id
+from core.exceptions import ExtractionError
 
 
 class DependencyAnalyzer:
@@ -32,13 +22,13 @@ class DependencyAnalyzer:
         self, context: ExtractionContext, correlation_id: Optional[str] = None
     ) -> None:
         """Initialize the dependency analyzer."""
-        self._logger = CorrelationLoggerAdapter(
-            Injector.get("logger"),
+        self.logger = CorrelationLoggerAdapter(
+            context.logger,
             extra={"correlation_id": correlation_id or get_correlation_id()},
         )
         self.context = context
-        self.module_name = context.module_name if context else None
-        self._function_errors: List[str] = []
+        self.module_name = context.module_name
+        self.errors: List[str] = []
         self._stdlib_modules: Optional[Set[str]] = None
 
     def analyze_dependencies(
@@ -49,77 +39,86 @@ class DependencyAnalyzer:
             if module_name:
                 self.module_name = module_name
 
-            # Extract raw dependencies
-            raw_deps = self.extract_dependencies(node)
-
-            # Categorize dependencies
+            raw_deps = self._extract_dependencies(node)
             categorized_deps = self._categorize_dependencies(raw_deps)
 
-            # Detect circular dependencies
             circular_deps = self._detect_circular_dependencies(categorized_deps)
             if circular_deps:
-                self._logger.warning(
-                    f"Circular dependencies detected: {circular_deps}",
-                    extra={"dependencies": circular_deps},
-                )
+                self.logger.warning(f"Circular dependencies detected: {circular_deps}")
 
-            # Calculate maintainability impact
             impact = self._calculate_maintainability_impact(categorized_deps)
             categorized_deps["maintainability_impact"] = impact
 
             return categorized_deps
 
         except Exception as e:
-            self._logger.error(f"Dependency analysis failed: {e}", exc_info=True)
-            return {"stdlib": set(), "third_party": set(), "local": set()}
+            handle_extraction_error(self.logger, self.errors, "dependency_analysis", e)
+            return {
+                "stdlib": set(),
+                "third_party": set(),
+                "local": set(),
+            }  # Return empty if error
 
-    def extract_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:
-        """Extract dependencies from an AST node."""
-        dependencies = {
+    def _extract_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:
+        """Extract raw dependencies from AST node."""
+        dependencies: Dict[str, Set[str]] = {
             "imports": set(),
             "calls": set(),
             "attributes": set(),
         }
+
         for child in ast.walk(node):
             try:
                 if isinstance(child, (ast.Import, ast.ImportFrom)):
-                    if isinstance(child, ast.Import):
-                        for name in child.names:
-                            dependencies["imports"].add(name.name)
-                    elif child.module:
-                        dependencies["imports"].add(child.module)
+                    for alias in getattr(
+                        child, "names", []
+                    ):  # Use getattr to prevent AttributeError
+                        dependencies["imports"].add(alias.name)
+                    module = getattr(
+                        child, "module", None
+                    )  # Prevent AttributeError if child.module doesn't exist
+                    if module:
+                        dependencies["imports"].add(module)
                 elif isinstance(child, ast.Call):
-                    visitor = NodeNameVisitor()
-                    visitor.visit(child.func)
-                    dependencies["calls"].add(visitor.name)
+                    dependencies["calls"].add(get_node_name(child.func))
                 elif isinstance(child, ast.Attribute):
-                    visitor = NodeNameVisitor()
-                    visitor.visit(child)
-                    dependencies["attributes"].add(visitor.name)
-            except Exception as e:
-                self._logger.debug(f"Error extracting dependency: {e}")
+                    dependencies["attributes"].add(get_node_name(child))
+
+            except Exception as e:  # Handle individual errors during extraction
+                handle_extraction_error(
+                    self.logger, self.errors, "dependency_item_extraction", e
+                )
+                if self.context.strict_mode:
+                    raise
+
         return dependencies
 
     def _categorize_dependencies(
         self, raw_deps: Dict[str, Set[str]]
     ) -> Dict[str, Set[str]]:
-        """Categorize dependencies into stdlib, third-party, and local."""
-        categorized = {"stdlib": set(), "third_party": set(), "local": set()}
+        """Categorize dependencies."""
+        categorized: Dict[str, Set[str]] = {
+            "stdlib": set(),
+            "third_party": set(),
+            "local": set(),
+        }
 
-        for module_name in raw_deps.get("imports", set()):
-            if self._is_stdlib_module(module_name):
-                categorized["stdlib"].add(module_name)
-            elif self._is_local_module(module_name):
-                categorized["local"].add(module_name)
+        for module in raw_deps["imports"]:
+            if self._is_stdlib_module(module):
+                categorized["stdlib"].add(module)
+            elif self._is_local_module(module):
+                categorized["local"].add(module)
             else:
-                categorized["third_party"].add(module_name)
+                categorized["third_party"].add(module)
 
         return categorized
 
     def _is_stdlib_module(self, module_name: str) -> bool:
-        """Check if a module is part of the standard library."""
-        if self._stdlib_modules is None:
-            self._stdlib_modules = self._get_stdlib_modules()
+        """Check if module is in standard library."""
+        if self._stdlib_modules is None:  # compute this once
+            self._stdlib_modules = {
+                name for _, name, ispkg in pkgutil.iter_modules(sys.modules) if ispkg
+            }
 
         return (
             module_name in sys.builtin_module_names
@@ -127,121 +126,102 @@ class DependencyAnalyzer:
         )
 
     def _is_local_module(self, module_name: str) -> bool:
-        """Check if a module is local to the project."""
+        """Check if module is local."""
+        # Handle cases where module_name is not set
         if not self.module_name:
             return False
 
-        # Check if it's a relative import
-        if module_name.startswith("."):
+        if module_name.startswith("."):  # Relative import
             return True
 
-        # Check if it's a submodule of the current package
-        if module_name.startswith(self.module_name.split(".")[0]):
+        if module_name.startswith(
+            self.module_name.split(".")[0]
+        ):  # Submodule of current package
             return True
 
-        # Check if the module exists in the project directory
         if self.context.base_path:
             module_path = self.context.base_path / f"{module_name.replace('.', '/')}.py"
             return module_path.exists()
 
         return False
 
-    def _get_stdlib_modules(self) -> Set[str]:
-        """Get a set of standard library module names."""
-        stdlib_modules = set()
-
-        # For Python 3.10+, use built-in stdlib_module_names
-        if hasattr(sys, "stdlib_module_names"):
-            return set(sys.stdlib_module_names)
-
-        try:
-            # Get standard library path
-            paths = sysconfig.get_paths()
-            stdlib_dir = paths.get("stdlib")
-
-            if not stdlib_dir:
-                self._logger.warning("Could not find stdlib directory")
-                return stdlib_modules
-
-            # Walk through stdlib directory
-            stdlib_path = Path(stdlib_dir)
-            for path in stdlib_path.rglob("*.py"):
-                module_name = path.stem
-                if module_name != "__init__":
-                    stdlib_modules.add(module_name)
-
-            return stdlib_modules
-
-        except Exception as e:
-            self._logger.error(f"Error getting stdlib modules: {e}", exc_info=True)
-            return set()
-
     def _detect_circular_dependencies(
         self, dependencies: Dict[str, Set[str]]
     ) -> List[Tuple[str, str]]:
-        """Detect circular dependencies in the module."""
+        """Detect circular dependencies."""
+
         circular_deps: List[Tuple[str, str]] = []
         visited: Set[str] = set()
         path: Set[str] = set()
 
         def visit(module: str) -> None:
+            """Inner function to perform depth-first search."""
             if module in path:
-                if self.module_name:
-                    circular_deps.append((module, self.module_name))
+                circular_deps.append(
+                    (module, self.module_name)
+                )  # Found circular dependency
                 return
+
             if module in visited:
                 return
 
             visited.add(module)
             path.add(module)
 
-            # Check dependencies of the current module
-            for dep_type in ["local", "third_party"]:
-                for dep in dependencies.get(dep_type, set()):
-                    # Skip self-references and known circular deps
-                    if dep != module and (module, dep) not in circular_deps:
+            local_deps = dependencies.get("local", set())
+            if local_deps:
+                for dep in local_deps:
+                    if (
+                        dep != module and (module, dep) not in circular_deps
+                    ):  # Skip self and already found
                         visit(dep)
 
             path.remove(module)
 
-        try:
-            if self.module_name:
-                visit(self.module_name)
-        except Exception as e:
-            self._logger.error(
-                f"Error detecting circular dependencies: {e}", exc_info=True
-            )
+        if self.module_name:
+            visit(self.module_name)
 
         return circular_deps
 
     def _calculate_maintainability_impact(
         self, dependencies: Dict[str, Set[str]]
     ) -> float:
-        """Calculate the impact of dependencies on maintainability."""
+        """Calculate maintainability impact of dependencies."""
         try:
-            # Count dependencies by type
             stdlib_count = len(dependencies.get("stdlib", set()))
             third_party_count = len(dependencies.get("third_party", set()))
             local_count = len(dependencies.get("local", set()))
 
             total_deps = stdlib_count + third_party_count + local_count
             if total_deps == 0:
-                return 100.0
+                return 100.0  # No dependencies, maximum maintainability
 
-            # Calculate impact score
-            # - Third-party dependencies have highest impact (weight: 2.0)
-            # - Local dependencies have medium impact (weight: 1.5)
-            # - Stdlib dependencies have lowest impact (weight: 1.0)
-            impact_score = 100.0 - (
-                (third_party_count * 2.0) + (local_count * 1.5) + (stdlib_count * 1.0)
+            # Use configuration for weights
+            stdlib_weight = self.context.config.get("maintainability_weights", {}).get(
+                "stdlib", 1.0
+            )
+            third_party_weight = self.context.config.get(
+                "maintainability_weights", {}
+            ).get("third_party", 2.0)
+            local_weight = self.context.config.get("maintainability_weights", {}).get(
+                "local", 1.5
             )
 
-            # Normalize score between 0 and 100
-            return max(0.0, min(impact_score, 100.0))
+            impact = (
+                100.0
+                - (
+                    (third_party_count * third_party_weight)
+                    + (local_count * local_weight)
+                    + (stdlib_count * stdlib_weight)
+                )
+                / total_deps
+                * 100
+            )
+            return max(0.0, min(100.0, impact))  # Normalize between 0 and 100
 
         except Exception as e:
-            self._logger.error(
-                f"Error calculating maintainability impact: {e}", exc_info=True
+            handle_extraction_error(
+                self.logger, self.errors, "maintainability_calculation", e
             )
             return 0.0
 
@@ -285,12 +265,10 @@ class DependencyAnalyzer:
             return dot.source
 
         except ImportError:
-            self._logger.warning(
-                "graphviz package not installed, cannot generate graph"
-            )
+            self.logger.warning("graphviz package not installed, cannot generate graph")
             return None
         except Exception as e:
-            self._logger.error(f"Error generating dependency graph: {e}", exc_info=True)
+            handle_extraction_error(self.logger, self.errors, "graph_generation", e)
             return None
 
     def get_dependency_metrics(self) -> Dict[str, Any]:
@@ -315,7 +293,7 @@ class DependencyAnalyzer:
             }
 
         except Exception as e:
-            self._logger.error(f"Error getting dependency metrics: {e}", exc_info=True)
+            handle_extraction_error(self.logger, self.errors, "dependency_metrics", e)
             return {}
 
     async def analyze_project_dependencies(self, project_root: Path) -> Dict[str, Any]:
@@ -356,7 +334,13 @@ class DependencyAnalyzer:
                     ]
 
                 except Exception as e:
-                    self._logger.error(f"Error analyzing {py_file}: {e}")
+                    handle_extraction_error(
+                        self.logger,
+                        self.errors,
+                        "project_dependency_analysis",
+                        e,
+                        file_path=str(py_file),
+                    )
 
             # Calculate average maintainability
             if project_deps["global_metrics"]["total_modules"] > 0:
@@ -369,10 +353,47 @@ class DependencyAnalyzer:
                     / project_deps["global_metrics"]["total_modules"]
                 )
 
+            # Detect circular dependencies across the project
+            all_local_deps = set()
+            for module, data in project_deps["modules"].items():
+                all_local_deps.update(data["dependencies"].get("local", set()))
+
+            circular_deps = []
+            for module in all_local_deps:
+                if module in project_deps["modules"]:
+                    visited = set()
+                    path = set()
+
+                    def visit(mod: str) -> None:
+                        if mod in path:
+                            circular_deps.append((mod, module))
+                            return
+                        if mod in visited:
+                            return
+
+                        visited.add(mod)
+                        path.add(mod)
+
+                        local_deps = (
+                            project_deps["modules"]
+                            .get(mod, {})
+                            .get("dependencies", {})
+                            .get("local", set())
+                        )
+                        for dep in local_deps:
+                            if dep != mod and (mod, dep) not in circular_deps:
+                                visit(dep)
+
+                        path.remove(mod)
+
+                    visit(module)
+
+            project_deps["global_metrics"]["circular_dependencies"] = circular_deps
+
             return project_deps
 
         except Exception as e:
-            self._logger.error(
-                f"Error analyzing project dependencies: {e}", exc_info=True
+            handle_extraction_error(
+                self.logger, self.errors, "project_dependency_analysis", e
             )
             return {}
