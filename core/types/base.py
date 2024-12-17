@@ -115,7 +115,7 @@ class DocumentationContext:
     include_source: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
     classes: list[dict[str, Any]] = field(default_factory=list)
-    functions: list[dict[str, Any]] = field(default_factory.list)
+    functions: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Validate required fields."""

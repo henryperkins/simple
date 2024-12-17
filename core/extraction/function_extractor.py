@@ -194,7 +194,7 @@ class FunctionExtractor:
                     imports.append(child.module)
         return imports
 
-    
+
     async def _process_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], module_metrics: Any
     ) -> Optional[ExtractedFunction]:
@@ -233,7 +233,7 @@ class FunctionExtractor:
             extracted_fn.metrics = module_metrics.__dict__.copy()
             extracted_fn.metrics["total_functions"] = 1
             extracted_fn.metrics["scanned_functions"] = (
-                1 if extracted_fn.docstring_info else 0
+                1 if extracted_fn.get_docstring_info() else 0
             )
 
             return extracted_fn

@@ -3,7 +3,7 @@ Markdown documentation generator module.
 """
 
 from collections.abc import Sequence
-from typing import Any, TypedDict, cast
+from typing import Any, TypedDict
 from datetime import datetime
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
@@ -43,9 +43,9 @@ class MarkdownGenerator:
     def _escape_markdown(self, text: str) -> str:
         """Escape special markdown characters while preserving intended formatting."""
         # Only escape specific characters that would affect table formatting
-        table_special_chars = ['|', '\\']
+        table_special_chars = ["|", "\\"]
         for char in table_special_chars:
-            text = text.replace(char, '\\' + char)
+            text = text.replace(char, "\\" + char)
         return text
 
     def _format_code_block(self, code: str, language: str = "") -> str:
@@ -56,7 +56,7 @@ class MarkdownGenerator:
         """Format parameter list with proper line breaks."""
         if not params:
             return "()"
-        
+
         # Always return single line for table cells
         return f"({', '.join(params)})"
 
@@ -72,12 +72,12 @@ class MarkdownGenerator:
         formatted_cols = []
         for col in columns:
             # Clean whitespace and newlines
-            cleaned = str(col).replace('\n', ' ').strip()
+            cleaned = str(col).replace("\n", " ").strip()
             escaped = self._escape_markdown(cleaned)
             if wrap_code and escaped != "N/A":
                 escaped = f"`{escaped}`"
             formatted_cols.append(escaped)
-            
+
         return f"| {' | '.join(formatted_cols)} |"
 
     def _generate_metadata_section(self, file_path: str, module_name: str) -> str:
@@ -96,57 +96,63 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             return ""
 
         tables = ["## Classes\n"]
-        
+
         # Add class hierarchy information
         for cls_dict in classes:
             cls = ExtractedClass(**cls_dict)
             if cls.inheritance_chain:
                 tables.append(f"\n### Class Hierarchy for {cls.name}\n")
-                tables.append("```\n" + cls.inheritance_chain + "\n```\n")
+                tables.append("```\n" + " -> ".join(cls.inheritance_chain) + "\n```\n")
 
         # Add interface information
-        if any(cls.interfaces for cls in classes):
+        if any(cls.get("interfaces") for cls in classes):
             tables.append("\n### Implemented Interfaces\n")
             for cls in classes:
                 if cls.interfaces:
                     tables.append(f"- `{cls.name}`: {', '.join(cls.interfaces)}\n")
 
         # Add properties table
-        if any(cls.property_methods for cls in classes):
-            tables.extend([
-                "\n### Properties\n",
-                "| Class | Property | Type | Access |",
-                "|-------|----------|------|--------|"
-            ])
-            for cls in classes:
-                for prop in cls.property_methods:
-                    access = "Read/Write" if prop['has_setter'] else "Read-only"
-                    tables.append(
-                        f"| `{cls.name}` | `{prop['name']}` | `{prop['type']}` | {access} |"
-                    )
-
-        # Overview table
-        tables.extend([
-            "## Classes\n",
-            "| Class | Description | Complexity |",
-            "|-------|-------------|------------|"
-        ])
-        
-        for cls_dict in classes:
-            cls_dict.pop('_logger', None)
-            cls = ExtractedClass(**cls_dict)
-            description = (cls.docstring_info.summary if cls.docstring_info else "No description")
-            complexity = self._get_complexity(cls.metrics)
-            tables.append(
-                f"| `{cls.name}` | {description} | {complexity} |"
+        if any(cls.get("property_methods") for cls in classes):
+            tables.extend(
+                [
+                    "\n### Properties\n",
+                    "| Class | Property | Type | Access |",
+                    "|-------|----------|------|--------|",
+                ]
             )
+            for cls in classes:
+                for cls_dict in classes:
+                    for prop in cls_dict.get("property_methods", []):
+                        access = "Read/Write" if prop.get("has_setter") else "Read-only"
+                        tables.append(
+                            f"| `{cls_dict.get('name', 'Unknown')}` | `{prop.get('name', 'Unknown')}` | `{prop.get('type', 'Unknown')}` | {access} |"
+                        )
+        # Overview table
+        tables.extend(
+            [
+                "## Classes\n",
+                "| Class | Description | Complexity |",
+                "|-------|-------------|------------|",
+            ]
+        )
+
+        for cls_dict in classes:
+            cls_dict.pop("_logger", None)
+            cls = ExtractedClass(**cls_dict)
+            description = (
+                cls.docstring_info.summary if cls.docstring_info else "No description"
+            )
+            complexity = self._get_complexity(cls.metrics)
+            tables.append(f"| `{cls.name}` | {description} | {complexity} |")
 
         # Methods table with improved formatting
-        tables.extend([
-            "\n### Methods\n",
-            "| Class | Method | Parameters | Returns | Description |",
-            "|-------|--------|------------|---------|-------------|"
-        ])
+        tables.extend(
+            [
+                "\n### Methods\n",
+                "| Class | Method | Parameters | Returns | Description |",
+                "|-------|--------|------------|---------|-------------|",
+            ]
+        )
 
         for cls_dict in classes:
             cls = ExtractedClass(**cls_dict)
@@ -155,12 +161,16 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                 desc = docstring_info.summary if docstring_info else "No description"
                 desc = desc.replace("\n", " ").strip()
 
-                params_str = self._format_parameter_list([
-                    f"{arg.name}: {arg.type}" if arg.type else arg.name
-                    for arg in method.args
-                ])
-                returns_str = method.returns.get('type', 'Any') if method.returns else 'Any'
-                
+                params_str = self._format_parameter_list(
+                    [
+                        f"{arg.name}: {arg.type}" if arg.type else arg.name
+                        for arg in method.args
+                    ]
+                )
+                returns_str = (
+                    method.returns.get("type", "Any") if method.returns else "Any"
+                )
+
                 tables.append(
                     f"| `{cls.name}` | `{method.name}` | `{params_str}` | `{returns_str}` | {desc} |"
                 )
@@ -176,7 +186,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         table_lines = [
             "## Functions\n",
             "| Function | Parameters | Returns | Complexity Score* |",
-            "|----------|------------|---------|------------------|"
+            "|----------|------------|---------|------------------|",
         ]
 
         for func in functions:
@@ -186,33 +196,33 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                 if arg.get("default_value"):
                     param += f" = {arg.get('default_value')}"
                 params.append(param)
-            
+
             params_str = self._format_parameter_list(params)
             returns = func.get("returns", {})
-            returns_str = returns.get('type', 'None') if returns else 'None'
+            returns_str = returns.get("type", "None") if returns else "None"
 
             metrics = func.get("metrics", MetricData())
             complexity = self._get_complexity(metrics)
             warning = " (warning)" if complexity > 10 else ""
 
             # Escape special characters and wrap in code blocks
-            func_name = self._escape_markdown(func.get('name', 'Unknown'))
+            func_name = self._escape_markdown(func.get("name", "Unknown"))
             params_str = self._escape_markdown(params_str)
             returns_str = self._escape_markdown(returns_str)
 
             table_lines.append(
-                f"| `{func_name}` | `{params_str}` | `{returns_str}` | {complexity}{warning} |\n"
+                f"| `{func_name}` | `{params_str}` | `{returns_str}` | {complexity}{warning} |"
             )
 
         return "\n".join(table_lines)
 
     def _generate_header(self, module_name: str) -> str:
-        """Generate the module header.""" 
+        """Generate the module header."""
         self.logger.debug(f"Generating header for module_name: {module_name}.")
         return f"# {self._escape_markdown(module_name)}"
 
     def _generate_toc(self) -> str:
-        """Generate enhanced table of contents.""" 
+        """Generate enhanced table of contents."""
         return """## Table of Contents
 
 - [Overview](#overview)
@@ -227,7 +237,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - [Source Code](#source-code)"""
 
     def _generate_overview(self, file_path: str, description: str) -> str:
-        """Generate the overview section with enhanced module summary.""" 
+        """Generate the overview section with enhanced module summary."""
         self.logger.debug(f"Generating overview for file_path: {file_path}")
 
         if not description or description.isspace():
@@ -240,8 +250,8 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
         # Clean up and format description
         description = description.strip()
-        if not description.endswith('.'):
-            description += '.'
+        if not description.endswith("."):
+            description += "."
 
         # Format the description to start with the summary prefix if it doesn't already
         if not description.lower().startswith(summary_prefix.lower()):
@@ -256,46 +266,43 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 {self._escape_markdown(description)}"""
 
     def _infer_module_type(self, file_path: str) -> str:
-        """Infer the type of module from its name and location.""" 
+        """Infer the type of module from its name and location."""
         path = file_path.lower()
-        if 'test' in path:
-            return 'testing'
-        elif 'api' in path:
-            return 'API'
-        elif 'utils' in path or 'helpers' in path:
-            return 'utility'
-        elif 'models' in path:
-            return 'data model'
-        elif 'views' in path: # pylint: disable=undefined-variable
-            return 'view'
-        elif 'controllers' in path:
-            return 'controller'
-        elif 'services' in path:
-            return 'service'
-        return ''
+        if "test" in path:
+            return "testing"
+        elif "api" in path:
+            return "API"
+        elif "utils" in path or "helpers" in path:
+            return "utility"
+        elif "models" in path:
+            return "data model"
+        elif "views" in path:  # pylint: disable=undefined-variable
+            return "view"
+        elif "controllers" in path:
+            return "controller"
+        elif "services" in path:
+            return "service"
+        return ""
 
     def _format_table_value(self, value: str) -> str:
         """Format a value for display in markdown tables."""
         if not value or value == "N/A":
             return "N/A"
-        
+
         # Clean up value first
         value = value.strip()
-        if value.startswith('constant'):
-            value = value.replace('constant', '').strip()
+        if value.startswith("constant"):
+            value = value.replace("constant", "").strip()
 
         # Handle dictionary and list values
-        if value.startswith('{') or value.startswith('['):
+        if value.startswith("{") or value.startswith("["):
             # For long complex values, format as Python code block
             if len(value) > 60:
-                return f"""```python
-{value}
-```
-"""
-            return f"`{value}`"
-        
+                return f"```python\n{value}\n```"
+            return f"`{self._escape_markdown(value)}`"
+
         # Format other values
-        return f"`{value}`"
+        return f"`{self._escape_markdown(value)}`"
 
     def _generate_constants_table(self, constants: Sequence[ConstantDict]) -> str:
         """Generate the constants section with proper formatting."""
@@ -305,36 +312,36 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         sections = [
             "## Constants & Variables\n",
             "| Name | Type | Value |",
-            "|------|------|--------|"
+            "|------|------|--------|",
         ]  # pylint: disable=undefined-variable
 
         for const in constants:
-            name = const.get('name', 'Unknown')
-            type_str = const.get('type', 'Unknown')
-            value = self._format_table_value(str(const.get('value', 'N/A')))
-            
+            name = const.get("name", "Unknown")
+            type_str = const.get("type", "Unknown")
+            value = self._format_table_value(str(const.get("value", "N/A")))
+
             sections.append(f"| {name} | {type_str} | {value} |")
 
         return "\n".join(sections) + "\n"
 
     def _generate_recent_changes(self, changes: Sequence[dict[str, Any]]) -> str:
-        """Generate the recent changes section.""" 
+        """Generate the recent changes section."""
         if not changes:
             return ""
 
         change_lines: list[str] = ["## Recent Changes\n\n"]
 
         for change in changes:
-            date = self._escape_markdown(change.get('date', 'Unknown Date'))
-            description = self._escape_markdown(change.get('description', 'No description'))
-            change_lines.append(
-                f"- **{date}**: {description}\n"
+            date = self._escape_markdown(change.get("date", "Unknown Date"))
+            description = self._escape_markdown(
+                change.get("description", "No description")
             )
+            change_lines.append(f"- **{date}**: {description}\n")
 
         return "\n".join(change_lines)
 
     def _generate_source_code(self, source_code: str | None) -> str:
-        """Generate the source code section.""" 
+        """Generate the source code section."""
         if not source_code:
             self.logger.warning("Source code missing, skipping source code section")
             return ""
@@ -344,36 +351,49 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 {self._format_code_block(source_code, "python")}"""
 
     def _get_complexity(self, metrics: MetricData | dict[str, Any]) -> int:
-        """Get cyclomatic complexity from metrics object.""" 
+        """Get cyclomatic complexity from metrics object."""
         if isinstance(metrics, dict):
-            return metrics.get('cyclomatic_complexity', 1)
-        return getattr(metrics, 'cyclomatic_complexity', 1)
+            return metrics.get("cyclomatic_complexity", 1)
+        return getattr(metrics, "cyclomatic_complexity", 1)
 
     def generate(self, documentation_data: DocumentationData) -> str:
-        """Generate markdown documentation.""" 
+        """Generate markdown documentation."""
         try:
             if not documentation_data:
                 raise DocumentationError("Documentation data is None")
-                
+
             # Validate source code
-            if not documentation_data.source_code or not documentation_data.source_code.strip():
+            if (
+                not documentation_data.source_code
+                or not documentation_data.source_code.strip()
+            ):
                 self.logger.error("Source code is missing")
                 raise DocumentationError("source_code is required")
 
             # Generate markdown sections
             markdown_sections = [
-                self._generate_metadata_section(str(documentation_data.module_path), documentation_data.module_name),
+                self._generate_metadata_section(
+                    str(documentation_data.module_path), documentation_data.module_name
+                ),
                 self._generate_header(documentation_data.module_name),
                 self._generate_toc(),
                 self._generate_overview(
                     str(documentation_data.module_path),
-                    str(documentation_data.module_summary)
+                    str(documentation_data.module_summary),
                 ),
-                self._generate_class_tables(documentation_data.code_metadata.get("classes", [])),
-                self._generate_function_tables(documentation_data.code_metadata.get("functions", [])),
-                self._generate_constants_table(documentation_data.code_metadata.get("constants", [])),
-                self._generate_recent_changes(documentation_data.code_metadata.get("recent_changes", [])),
-                self._generate_source_code(documentation_data.source_code)
+                self._generate_class_tables(
+                    documentation_data.code_metadata.get("classes", [])
+                ),
+                self._generate_function_tables(
+                    documentation_data.code_metadata.get("functions", [])
+                ),
+                self._generate_constants_table(
+                    documentation_data.code_metadata.get("constants", [])
+                ),
+                self._generate_recent_changes(
+                    documentation_data.code_metadata.get("recent_changes", [])
+                ),
+                self._generate_source_code(documentation_data.source_code),
             ]
 
             return "\n\n".join(section for section in markdown_sections if section)

@@ -1,13 +1,7 @@
-"""
-Code Extractor Module.
-
-This module provides functionality to extract various code elements from Python
-source files using the ast module.
-"""
-
 import ast
 import uuid
 import time
+import re
 from typing import Any, Dict, List
 from pathlib import Path
 
@@ -27,7 +21,11 @@ from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.metrics_collector import MetricsCollector
 from core.console import print_info
 from core.exceptions import ProcessingError, ExtractionError
-from core.extraction.extraction_utils import extract_attributes, extract_instance_attributes
+from core.extraction.extraction_utils import (
+    extract_attributes,
+    extract_instance_attributes,
+)
+from utils import read_file_safe_async
 
 
 class CodeExtractor:
@@ -57,8 +55,7 @@ class CodeExtractor:
         self.context.function_extractor = self.function_extractor
         # Initialize ClassExtractor with the updated context
         self.class_extractor = ClassExtractor(
-            context=self.context,
-            correlation_id=correlation_id
+            context=self.context, correlation_id=correlation_id
         )
         self.dependency_analyzer = DependencyAnalyzer(context, correlation_id)
 
@@ -86,12 +83,19 @@ class CodeExtractor:
                 source_code, source="code_extractor.extract_code"
             )
 
-            tree = ast.parse(source_code)
+            # Preprocess the source code to remove leading zeros
+            modified_source_code = re.sub(r"\b0+(\d+)\b", r"\1", source_code)
+
+            tree = ast.parse(modified_source_code)
+            # Set the tree in the context
+            self.context.tree = tree
 
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
 
             # Calculate metrics only once at the module level
-            module_metrics = self.metrics.calculate_metrics(source_code, module_name)
+            module_metrics = self.metrics.calculate_metrics(
+                modified_source_code, module_name
+            )
 
             # Extract classes and functions, passing the metrics
             classes: List[ExtractedClass] = await self.class_extractor.extract_classes(
@@ -121,7 +125,7 @@ class CodeExtractor:
                     functions,
                     variables,
                     constants,
-                    source_code,
+                    modified_source_code,
                     dependencies,
                     module_metrics,
                 ),
@@ -217,7 +221,8 @@ class CodeExtractor:
         """Validate source code."""
         self.logger.info(f"Validating source code for file: {file_path}")
         try:
-            ast.parse(source_code)
+            # No need to parse here, it's done in extract_code
+            # ast.parse(source_code)
             self.logger.info(f"Syntax validation successful for: {file_path}")
         except SyntaxError as e:
             error_details = {

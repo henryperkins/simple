@@ -76,7 +76,7 @@ class Injector:
 
     @classmethod
     def set_initialized(cls, value: bool) -> None:
-        """Set the initialization status.""" 
+        """Set the initialization status."""
         cls._initialized = value
 
 

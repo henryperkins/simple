@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Any, cast, Optional
 from datetime import datetime
 import time
-import ast
 
 # Group imports from core package
 from core.docstring_processor import DocstringProcessor
@@ -11,7 +10,6 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.markdown_generator import MarkdownGenerator
 from core.ai_service import AIService
 from core.prompt_manager import PromptManager
-from core.extraction.code_extractor import CodeExtractor
 from core.types.base import (
     DocumentationContext,
     DocumentationData,
@@ -119,7 +117,7 @@ class DocumentationOrchestrator:
             classes, functions = [], []
 
             if extraction_result.classes:
-                self.logger.debug(f"Extracted classes: {[cls.get('name', 'Unknown') for cls in extraction_result.classes]}")
+                self.logger.debug(f"Extracted classes: {[cls.name for cls in extraction_result.classes]}")
                 for cls_data in extraction_result.classes:
                     if isinstance(cls_data, ExtractedClass):
                         classes.append(cls_data)

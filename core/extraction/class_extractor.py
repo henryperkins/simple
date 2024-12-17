@@ -207,17 +207,21 @@ class ClassExtractor:
         chain = []
         current = node
         while current:
-            chain.append(current.name)
-            if current.bases:
+            if current.name:
+                chain.append(current.name)
+            if isinstance(current, ast.ClassDef) and current.bases:
                 for base in current.bases:
                     base_name = get_node_name(base)
                     if base_name in chain:
                         break  # Avoid infinite loop in case of circular inheritance
                     try:
+                        if self.context.tree is None:
+                            current = None
+                            break  # Exit if no tree
                         base_node = next(
                             n
                             for n in ast.walk(self.context.tree)
-                            if isinstance(n, ast.ClassDef) and n.name == base_name
+                            if self.context.tree and isinstance(n, ast.AST) and n is not None and hasattr(n, '_fields') and hasattr(n, 'name') and n.name == base_name
                         )
                         current = base_node
                         break
@@ -268,7 +272,7 @@ class ClassExtractor:
                 ),
                 complexity_warnings=[],
                 is_dataclass=any(
-                    d.id == "dataclass" for d in decorators if isinstance(d, str)
+                    d.id == "dataclass" if isinstance(d, ast.Name) else d == "dataclass" for d in decorators
                 ),
                 is_abstract=any(
                     base == "ABC" for base in bases if isinstance(base, str)
