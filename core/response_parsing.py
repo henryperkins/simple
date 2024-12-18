@@ -212,7 +212,10 @@ class ResponseParsingService:
                 content = self._extract_content_from_message(message)
 
             if not content:
-                content = response
+                if "summary" in response and "description" in response:
+                    content = response
+                else:
+                    content = self._create_fallback_response(response)
 
             content = self._ensure_required_fields(content)
 
@@ -291,8 +294,11 @@ class ResponseParsingService:
 
             self.logger.debug(f"Raw AI response: {response}")
             if not isinstance(response, dict) or "choices" not in response:
-                self.logger.error(f"Invalid response format: {response}. Expected a dictionary with a 'choices' key.", extra={"correlation_id": self.correlation_id})
-                content = self._create_fallback_response(response)
+                self.logger.error(f"Invalid response format: {response}. Expected a dictionary with a 'choices' key or valid summary/description.", extra={"correlation_id": self.correlation_id})
+                if "summary" in response and "description" in response:
+                    content = response
+                else:
+                    content = self._create_fallback_response(response)
                 errors.append("Response is not a dict or missing 'choices'")
                 return ParsedResponse(
                     content=content,
