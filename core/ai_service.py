@@ -76,7 +76,6 @@ class AIService:
         self.semaphore = asyncio.Semaphore(10)  # Default semaphore value
         self._client: Optional[aiohttp.ClientSession] = None
 
-        self.logger.debug(f"API call parameters: {request_params}", extra=log_extra)
         self.logger.info(
             "AI Service initialized",
             extra={
