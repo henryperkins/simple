@@ -450,6 +450,10 @@ def read_file_safe(
             exc_info=True,
             extra={"correlation_id": correlation_id or get_correlation_id()},
         )
+        logger.debug(
+            f"Invalid response format or content: {file_path}",
+            extra={"correlation_id": get_correlation_id()},
+        )
         return ""
 
 
