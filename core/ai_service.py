@@ -329,6 +329,10 @@ class AIService:
                                 f"Empty or invalid JSON response: {raw_response_text}",
                                 extra={"status_code": response.status, "url": url},
                             )
+                            self.logger.debug(
+                                f"Raw response content: {raw_response_text}",
+                                extra={"correlation_id": self.correlation_id},
+                            )
                             return {
                                 "choices": [{"message": {"content": "Empty or invalid JSON response"}}]
                             }  # Return a fallback response

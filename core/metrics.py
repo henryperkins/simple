@@ -133,6 +133,10 @@ class Metrics:
                 exc_info=True,
             )
             self.logger.debug(
+                f"Invalid response or metrics content: {metrics}",
+                extra={"correlation_id": self.correlation_id},
+            )
+            self.logger.debug(
                 f"Raw response content: {metrics}",
                 extra={"correlation_id": self.correlation_id},
             )
