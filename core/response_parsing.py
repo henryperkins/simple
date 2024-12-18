@@ -159,6 +159,10 @@ class ResponseParsingService:
                     self.logger.error(f"Validation error: {e}", extra={"correlation_id": self.correlation_id})
                     return False, validation_errors
 
+            if not validation_errors:
+                self.metrics_collector.collect_validation_metrics(success=True)
+            else:
+                self.metrics_collector.collect_validation_metrics(success=False)
             return True, validation_errors
         except ValidationError as e:
             validation_errors.append(str(e))

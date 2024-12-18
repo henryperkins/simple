@@ -199,7 +199,8 @@ class MetricsCollector:
                 json.dump(self.metrics_history, f, indent=2, default=str)
         except Exception as e:
             self.logger.error(
-                f"Error saving metrics history: {str(e)} with correlation ID: {self.correlation_id}"
+                f"Error saving metrics history: {str(e)} with correlation ID: {self.correlation_id}",
+                exc_info=True
             )
 
     def clear_history(self) -> None:
@@ -237,6 +238,22 @@ class MetricsCollector:
                 f"Token usage collected: {prompt_tokens + completion_tokens} tokens, ${cost:.4f}.",
                 extra={"model": model, "correlation_id": self.correlation_id}
             )
+
+    def collect_validation_metrics(self, success: bool) -> None:
+        """Collect metrics for schema validation results."""
+        try:
+            if success:
+                self._increment_metric("validation_success")
+            else:
+                self._increment_metric("validation_failure")
+        except Exception as e:
+            self.logger.error(f"Error collecting validation metrics: {e}", exc_info=True)
+
+    def _increment_metric(self, metric_name: str) -> None:
+        """Increment a specific metric."""
+        if metric_name not in self.metrics_history:
+            self.metrics_history[metric_name] = 0
+        self.metrics_history[metric_name] += 1
         except Exception as e:
             self.logger.error(f"Error collecting token usage: {e}", exc_info=True)
 
