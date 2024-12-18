@@ -382,6 +382,7 @@ class AIService:
                 )
 
             self.logger.info("Making API call to generate documentation.", extra=log_extra)
+            self.logger.debug(f"Generated prompt: {prompt}", extra=log_extra)
             async with self.semaphore:
                 response = await self._make_api_call_with_retry(
                     str(prompt), function_schema, log_extra=log_extra

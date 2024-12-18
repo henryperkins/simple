@@ -135,7 +135,7 @@ Please analyze the following code focusing on:
                 ]
             )
 
-        # Build the complete prompt
+        # Build the complete prompt with explicit instructions
         prompt = f"""{system_context}
 
 {code_context}
@@ -151,8 +151,8 @@ Source Code:
 Expected Response Format:
 Please respond with a JSON object in the following format:
 {{
-    "summary": "A brief summary of the module.",
-    "description": "A detailed description of the module.",
+    "summary": "A brief summary of the module's purpose.",
+    "description": "A detailed explanation of the module's functionality and design.",
     "args": [
         {{
             "name": "argument_name",
@@ -172,6 +172,11 @@ Please respond with a JSON object in the following format:
     ],
     "complexity": 1
 }}
+
+Important Notes:
+- Ensure the response strictly adheres to the JSON format above.
+- Include all relevant details about the module, classes, and functions.
+- Avoid adding any extraneous information outside the JSON structure.
 """
 
         # Estimate tokens
