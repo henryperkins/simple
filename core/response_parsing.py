@@ -218,10 +218,10 @@ class ResponseParsingService:
 
             if "choices" in response and response["choices"]:
                 message = response["choices"][0].get("message", {})
-                if "tool_calls" in message:
-                    content = self._extract_content_from_tool_calls(message["tool_calls"])
-                else:
-                    content = self._extract_content_from_message(message)
+                if "function_call" in message:
+                    content = self._extract_content_from_function_call(message["function_call"], "function_call")
+                elif "content" in message:
+                    content = self._extract_content_from_direct_content(message["content"])
 
             if not content:
                 if "summary" in response and "description" in response:
@@ -264,7 +264,12 @@ class ResponseParsingService:
             if not args_str:
                 return {}
             args_dict = json.loads(args_str)
-            if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
+            if isinstance(args_dict, dict):
+                # Validate against the function schema
+                is_valid, errors = self._validate_content(args_dict, "function")
+                if not is_valid:
+                    self.logger.error(f"Function call arguments validation failed: {errors}")
+                    raise CustomValidationError(f"Invalid function call arguments: {errors}")
                 return args_dict
             return args_dict
         except json.JSONDecodeError as e:

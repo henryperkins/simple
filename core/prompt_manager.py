@@ -56,7 +56,7 @@ class PromptManager:
         try:
             with open(schema_path, "r") as f:
                 self._function_schema = json.load(f)
-                self.logger.info(f"Custom tool schema loaded from {schema_path}")
+                self.logger.info(f"Function schema loaded successfully from {schema_path}")
         except FileNotFoundError:
             self.logger.error(
                 "Function schema file not found", extra={"path": str(schema_path)}
@@ -334,11 +334,7 @@ Important Notes:
         if not hasattr(self, "_function_schema") or not self._function_schema:
             raise ValueError("Function schema is not properly defined.")
 
-        return {
-            "name": "generate_docstring",
-            "description": "Generates structured documentation from source code.",
-            "parameters": self._function_schema["function"]["parameters"],
-        }
+        return self._function_schema["function"]
 
     def get_prompt_with_schema(self, prompt: str, schema: dict[str, Any]) -> str:
         """

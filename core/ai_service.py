@@ -166,6 +166,12 @@ class AIService:
                 "choices": [{"message": {"function_call": response["function_call"]}}],
                 "usage": response.get("usage", {}),
             }
+            # Validate the function call arguments
+            args = json.loads(response["function_call"].get("arguments", "{}"))
+            is_valid, errors = self.response_parser._validate_content(args, "function")
+            if not is_valid:
+                self.logger.error(f"Function call arguments validation failed: {errors}")
+                raise DataValidationError(f"Invalid function call arguments: {errors}")
             self.logger.debug(f"Formatted function call response to: {formatted_response}", extra=log_extra)
             return formatted_response
 
@@ -228,8 +234,8 @@ class AIService:
         )
 
         if function_schema:
-            request_params["tools"] = [function_schema]
-            request_params["tool_choice"] = {"name": "generate_docstring"}
+            request_params["functions"] = [function_schema]
+            request_params["function_call"] = "auto"  # Automatically select the function
 
         self.logger.info(
             "Making API call with retry",
