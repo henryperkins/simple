@@ -116,16 +116,16 @@ When describing components:
 
         # Enhanced code context with metadata
         code_context = f"""Module: {module_name}
-Path: {file_path}
-Language: Python
+        Path: {file_path}
+        Language: Python
 
-Please analyze the following code focusing on:
-- Core functionality and purpose
-- Key components and their relationships
-- Implementation patterns and design choices
-- Usage patterns and constraints
-- Performance considerations where relevant.
-"""
+        Please analyze the following code focusing on:
+        - Core functionality and purpose
+        - Key components and their relationships
+        - Implementation patterns and design choices
+        - Usage patterns and constraints
+        - Performance considerations where relevant.
+        """
 """
 
         # Format the components list for better context
