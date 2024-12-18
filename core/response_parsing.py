@@ -246,7 +246,7 @@ class ResponseParsingService:
 
         except Exception as e:
             self.logger.error(f"Error extracting content: {e}", exc_info=True)
-            return {}
+            return self._create_fallback_response()
 
     def _extract_content_from_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Extract content from tool calls."""
