@@ -100,6 +100,7 @@ When describing components:
 - Note relationships between different components
 - Identify potential usage patterns and best practices
 - Document any important implementation details or constraints
+"""
 
 Expected Response Format:
 Please respond with a JSON object in the following format:
@@ -237,6 +238,7 @@ Please analyze the following code focusing on:
 - Usage patterns and constraints
 - Performance considerations where relevant.
 """
+"""
 
         # Format the components list for better context
         components_list = []
@@ -303,6 +305,7 @@ Important Notes:
 - Ensure the response strictly adheres to the JSON format above.
 - Include all relevant details about the module, classes, and functions.
 - Avoid adding any extraneous information outside the JSON structure.
+"""
 """
 
         # Estimate tokens
