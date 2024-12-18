@@ -302,7 +302,7 @@ class AIService:
                     url,
                     headers=headers,
                     json=request_params,
-                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+                    timeout=aiohttp.ClientTimeout(total=self.config.timeout)
                 ) as response:
                     self.logger.debug(
                         f"Raw response text: {await response.text()}",
