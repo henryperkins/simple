@@ -156,12 +156,12 @@ class ResponseParsingService:
 
             return True, validation_errors
 
-                schema = self.function_schema.get("function", {}).get("parameters", {})
-                if not schema:
-                    validation_errors.append("Invalid function schema structure")
-                    return False, validation_errors
+            schema = self.function_schema.get("function", {}).get("parameters", {})
+            if not schema:
+                validation_errors.append("Invalid function schema structure")
+                return False, validation_errors
 
-                validate(instance=content, schema=schema)
+            validate(instance=content, schema=schema)
 
             return True, validation_errors
         except ValidationError as e:
