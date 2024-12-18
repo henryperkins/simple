@@ -140,6 +140,12 @@ class Metrics:
                 f"Raw response content: {metrics}",
                 extra={"correlation_id": self.correlation_id},
             )
+            if not isinstance(metrics, dict):
+                self.logger.error(
+                    "Metrics data is not a dictionary. Formatting it as an empty dictionary.",
+                    extra={"correlation_id": self.correlation_id},
+                )
+                metrics = {}
             # Return default metrics on error
             from core.types import MetricData
 

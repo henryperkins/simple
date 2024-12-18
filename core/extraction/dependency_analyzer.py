@@ -50,6 +50,12 @@ class DependencyAnalyzer:
                 f"Formatted dependencies for AI service: {categorized_deps}",
                 extra={"correlation_id": get_correlation_id()},
             )
+            if not isinstance(categorized_deps, dict):
+                self.logger.error(
+                    "Categorized dependencies are not a dictionary. Formatting it as an empty dictionary.",
+                    extra={"correlation_id": get_correlation_id()},
+                )
+                categorized_deps = {"stdlib": set(), "third_party": set(), "local": set()}
             return categorized_deps
 
         except Exception as e:
