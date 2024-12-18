@@ -246,9 +246,6 @@ class ResponseParsingService:
                 content.setdefault("code_metadata", {})["source_code"] = source_code
 
             return content
-            else:
-                self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
-                content = self._create_fallback_response(response)
 
             if not content:
                 if "summary" in response and "description" in response:

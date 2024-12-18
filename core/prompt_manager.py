@@ -100,22 +100,6 @@ When describing components:
 - Note relationships between different components
 - Identify potential usage patterns and best practices
 - Document any important implementation details or constraints
-"""
-comprehensive documentation that includes:
-1. A clear and concise module summary that describes the module's primary purpose
-2. Detailed descriptions of all components focusing on their roles and relationships
-3. Accurate type information and parameter descriptions
-4. Clear examples where appropriate
-5. Implementation notes for complex components
-6. Architecture and design pattern explanations where relevant
-
-When describing components:
-- Focus on explaining the "why" and "how" beyond just the "what"
-- Highlight key design decisions and architectural patterns
-- Note relationships between different components
-- Identify potential usage patterns and best practices
-- Document any important implementation details or constraints
-"""
 
         # Enhanced code context with metadata
         code_context = f"""Module: {module_name}
