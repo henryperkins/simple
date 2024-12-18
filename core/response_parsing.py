@@ -155,9 +155,6 @@ class ResponseParsingService:
                 validate(instance=content, schema=schema)
 
             return True, validation_errors
-                if not self.function_schema:
-                    validation_errors.append("Function schema not loaded")
-                    return False, validation_errors
 
                 schema = self.function_schema.get("function", {}).get("parameters", {})
                 if not schema:
