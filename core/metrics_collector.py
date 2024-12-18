@@ -238,6 +238,8 @@ class MetricsCollector:
                 f"Token usage collected: {prompt_tokens + completion_tokens} tokens, ${cost:.4f}.",
                 extra={"model": model, "correlation_id": self.correlation_id}
             )
+        except Exception as e:
+            self.logger.error(f"Error collecting token usage: {e}", exc_info=True)
 
     def collect_validation_metrics(self, success: bool) -> None:
         """Collect metrics for schema validation results."""
