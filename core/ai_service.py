@@ -258,7 +258,13 @@ class AIService:
                 ) as response:
                     if response.status == 200:
                         api_response = await response.json()
-                        self.logger.debug(f"API response: {api_response}", extra=log_extra)
+                        self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
+
+                        # Validate response format
+                        if not isinstance(api_response, dict) or "choices" not in api_response:
+                            self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
+                            return {"choices": []}  # Return a default empty response
+
                         return api_response  # Return successful response immediately
 
                     error_text = await response.text()
