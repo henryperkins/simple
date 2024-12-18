@@ -152,7 +152,12 @@ class ResponseParsingService:
                     validation_errors.append("Invalid function schema structure")
                     return False, validation_errors
 
-                validate(instance=content, schema=schema)
+                try:
+                    validate(instance=content, schema=schema)
+                except ValidationError as e:
+                    validation_errors.append(str(e))
+                    self.logger.error(f"Validation error: {e}", extra={"correlation_id": self.correlation_id})
+                    return False, validation_errors
 
             return True, validation_errors
         except ValidationError as e:
@@ -229,8 +234,23 @@ class ResponseParsingService:
                     self.logger.warning("Message content is missing, creating fallback.", extra={"response": response})
                     content = self._create_fallback_response(response)
             else:
-                self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
+                self.logger.error("Response format is invalid, creating fallback.", extra={"response": response})
                 content = self._create_fallback_response(response)
+
+            if not content:
+                if "summary" in response and "description" in response:
+                    content = response
+                else:
+                    self.logger.error("Response format is invalid, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response(response)
+
+            content = self._ensure_required_fields(content)
+
+            if source_code:
+                content["source_code"] = source_code
+                content.setdefault("code_metadata", {})["source_code"] = source_code
+
+            return content
 
             if not content:
                 if "summary" in response and "description" in response:
