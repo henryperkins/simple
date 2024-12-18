@@ -1,23 +1,24 @@
 from typing import Any, Optional
-import time
 import asyncio
-from urllib.parse import urljoin
 import json
+import time
+from urllib.parse import urljoin
+
 import aiohttp
 
+from api.token_management import TokenManager
 from core.config import AIConfig
 from core.docstring_processor import DocstringProcessor
-from core.logger import LoggerSetup
-from core.prompt_manager import PromptManager
-from api.token_management import TokenManager
 from core.exceptions import APICallError, DataValidationError, DocumentationError
+from core.logger import LoggerSetup
+from core.metrics_collector import MetricsCollector
+from core.prompt_manager import PromptManager
 from core.types.base import (
-    ProcessingResult,
     DocumentationContext,
     ExtractedClass,
     ExtractedFunction,
+    ProcessingResult,
 )
-from core.metrics_collector import MetricsCollector
 
 class AIService:
     """Service for interacting with the AI model to generate documentation.
@@ -49,11 +50,14 @@ class AIService:
         self.config = config or Injector.get("config")().ai
         self.correlation_id = correlation_id
         self.logger = LoggerSetup.get_logger(
-            f"{__name__}.{self.__class__.__name__}", correlation_id=self.correlation_id
+            f"{__name__}.{self.__class__.__name__}",
+            correlation_id=self.correlation_id,
         )
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")
-        self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
+        self.metrics_collector = MetricsCollector(
+            correlation_id=correlation_id
+        )
 
         try:
             self.docstring_processor = Injector.get("docstring_processor")
@@ -98,11 +102,11 @@ class AIService:
 
     def _add_source_code_to_response(self, response: dict[str, Any], source_code: str) -> dict[str, Any]:
         """Recursively adds source code to the response content and function call arguments.
-        
+
         Args:
             response (dict[str, Any]): The API response to modify.
             source_code (str): The source code to add.
-        
+
         Returns:
             dict[str, Any]: The modified response with source code added.
         """
