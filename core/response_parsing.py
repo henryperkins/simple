@@ -218,7 +218,10 @@ class ResponseParsingService:
 
             if "choices" in response and response["choices"]:
                 message = response["choices"][0].get("message", {})
-                content = self._extract_content_from_message(message)
+                if "tool_calls" in message:
+                    content = self._extract_content_from_tool_calls(message["tool_calls"])
+                else:
+                    content = self._extract_content_from_message(message)
 
             if not content:
                 if "summary" in response and "description" in response:
@@ -239,11 +242,12 @@ class ResponseParsingService:
             self.logger.error(f"Error extracting content: {e}", exc_info=True)
             return {}
 
-    def _extract_content_from_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract content from a message."""
+    def _extract_content_from_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract content from tool calls."""
         try:
-            if "function_call" in message:
-                return self._extract_content_from_function_call(message["function_call"], "function_call")
+            for tool_call in tool_calls:
+                if tool_call.get("function", {}).get("name") == "generate_docstring":
+                    return json.loads(tool_call["function"]["arguments"])
             if "tool_calls" in message and message["tool_calls"]:
                 tool_call = message["tool_calls"][0]
                 if "function" in tool_call:

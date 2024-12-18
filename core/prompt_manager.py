@@ -52,11 +52,11 @@ class PromptManager:
         print_info("PromptManager initialized.")
 
         # Load the function schema from a file
-        schema_path = Path(__file__).parent / "function_tools_schema.json"
+        schema_path = Path(__file__).parent / "schemas/function_tools_schema.json"
         try:
             with open(schema_path, "r") as f:
                 self._function_schema = json.load(f)
-                self.logger.info(f"Function schema loaded from {schema_path}")
+                self.logger.info(f"Custom tool schema loaded from {schema_path}")
         except FileNotFoundError:
             self.logger.error(
                 "Function schema file not found", extra={"path": str(schema_path)}

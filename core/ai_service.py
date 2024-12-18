@@ -228,8 +228,8 @@ class AIService:
         )
 
         if function_schema:
-            request_params["functions"] = [function_schema]
-            request_params["function_call"] = {"name": "generate_docstring"}
+            request_params["tools"] = [function_schema]
+            request_params["tool_choice"] = {"name": "generate_docstring"}
 
         self.logger.info(
             "Making API call with retry",
