@@ -147,6 +147,31 @@ Source Code:
 ```
 {source_code}
 ```
+
+Expected Response Format:
+Please respond with a JSON object in the following format:
+{{
+    "summary": "A brief summary of the module.",
+    "description": "A detailed description of the module.",
+    "args": [
+        {{
+            "name": "argument_name",
+            "type": "argument_type",
+            "description": "A brief description of the argument."
+        }}
+    ],
+    "returns": {{
+        "type": "return_type",
+        "description": "A brief description of the return value."
+    }},
+    "raises": [
+        {{
+            "exception": "exception_name",
+            "description": "A brief description of the exception."
+        }}
+    ],
+    "complexity": 1
+}}
 """
 
         # Estimate tokens

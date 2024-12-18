@@ -254,6 +254,7 @@ class AIService:
                     raise APICallError("Failed to initialize client session")
 
                 self.logger.info(f"Making API call (attempt {attempt + 1}/{max_retries}) to url: '{url}'", extra=log_extra)
+                self.logger.debug(f"Generated prompt: {request_params.get('prompt', 'No prompt found')}", extra=log_extra)
                 async with self._client.post(
                     url,
                     headers=headers,
