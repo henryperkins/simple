@@ -52,9 +52,12 @@ class PromptManager:
         print_info("PromptManager initialized.")
 
         # Load the function schema from a file
-        schema_path = Path(__file__).parent / "schemas/function_tools_schema.json"
+        schema_path = Path(__file__).resolve().parent.parent / "schemas" / "function_tools_schema.json"
+        if not schema_path.exists():
+            self.logger.error(f"Function schema file not found at {schema_path}")
+            raise FileNotFoundError(f"Function schema file is missing. Expected at: {schema_path}")
         try:
-            with open(schema_path, "r") as f:
+            with schema_path.open("r", encoding="utf-8") as f:
                 self._function_schema = json.load(f)
                 self.logger.info(f"Function schema loaded successfully from {schema_path}")
         except FileNotFoundError:
