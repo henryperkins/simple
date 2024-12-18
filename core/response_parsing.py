@@ -270,6 +270,9 @@ class ResponseParsingService:
                 content.setdefault("code_metadata", {})["source_code"] = source_code
 
             return content
+        except Exception as e:
+            self.logger.error(f"Error extracting content: {e}", exc_info=True)
+            return self._create_fallback_response()
 
             if not content:
                 if "summary" in response and "description" in response:
