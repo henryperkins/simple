@@ -2,14 +2,13 @@
 Metrics collection and storage module.
 """
 
-import time
-from typing import Any, Union, Dict, List, Optional
+from typing import Any, Union
 from datetime import datetime
 import json
 import os
 import uuid
 
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.logger import LoggerSetup
 from core.types.base import MetricData
 
 
