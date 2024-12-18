@@ -443,12 +443,23 @@ def read_file_safe(
     """Safely read a file and return its contents."""
     try:
         with open(file_path, "r", encoding="utf-8") as file:
-            return file.read()
+            content = file.read()
+            if not content.strip():
+                logger.warning(
+                    f"File {file_path} is empty or contains only whitespace.",
+                    extra={"correlation_id": correlation_id or get_correlation_id()},
+                )
+                return ""
+            return content.strip()
     except (FileNotFoundError, IOError) as e:
         logger.error(
             f"Error reading file {file_path}: {e}",
             exc_info=True,
             extra={"correlation_id": correlation_id or get_correlation_id()},
+        )
+        logger.debug(
+            f"Invalid response format or content: {file_path}",
+            extra={"correlation_id": get_correlation_id()},
         )
         return ""
 

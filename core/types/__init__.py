@@ -33,5 +33,6 @@ __all__ = [
     "ExtractedClass",
     "ParsedResponse",
     "TokenUsage",
-    "ProcessingResult"
+    "ProcessingResult",
+    "DocstringData"
 ]

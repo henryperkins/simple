@@ -2,14 +2,13 @@
 Metrics collection and storage module.
 """
 
-import time
-from typing import Any, Union, Dict, List, Optional
+from typing import Any, Union
 from datetime import datetime
 import json
 import os
 import uuid
 
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.logger import LoggerSetup
 from core.types.base import MetricData
 
 
@@ -199,7 +198,8 @@ class MetricsCollector:
                 json.dump(self.metrics_history, f, indent=2, default=str)
         except Exception as e:
             self.logger.error(
-                f"Error saving metrics history: {str(e)} with correlation ID: {self.correlation_id}"
+                f"Error saving metrics history: {str(e)} with correlation ID: {self.correlation_id}",
+                exc_info=True
             )
 
     def clear_history(self) -> None:
@@ -239,6 +239,22 @@ class MetricsCollector:
             )
         except Exception as e:
             self.logger.error(f"Error collecting token usage: {e}", exc_info=True)
+
+    def collect_validation_metrics(self, success: bool) -> None:
+        """Collect metrics for schema validation results."""
+        try:
+            if success:
+                self._increment_metric("validation_success")
+            else:
+                self._increment_metric("validation_failure")
+        except Exception as e:
+            self.logger.error(f"Error collecting validation metrics: {e}", exc_info=True)
+
+    def _increment_metric(self, metric_name: str) -> None:
+        """Increment a specific metric."""
+        if metric_name not in self.metrics_history:
+            self.metrics_history[metric_name] = 0
+        self.metrics_history[metric_name] += 1
 
     def get_aggregated_token_usage(self) -> dict[str, Union[int, float]]:
         """Aggregate token usage statistics across operations."""

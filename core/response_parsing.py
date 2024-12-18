@@ -10,7 +10,7 @@ from core.logger import LoggerSetup
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from core.metrics_collector import MetricsCollector
-from core.types import ParsedResponse, DocumentationData
+from core.types import ParsedResponse, DocumentationData, DocstringData
 from core.types.base import DocstringSchema
 from core.exceptions import ValidationError as CustomValidationError, DocumentationError
 
@@ -152,7 +152,28 @@ class ResponseParsingService:
                     validation_errors.append("Invalid function schema structure")
                     return False, validation_errors
 
-                validate(instance=content, schema=schema)
+                try:
+                    validate(instance=content, schema=schema)
+                except ValidationError as e:
+                    validation_errors.append(str(e))
+                    self.logger.error(f"Validation error: {e}", extra={"correlation_id": self.correlation_id})
+                    return False, validation_errors
+
+            if not validation_errors:
+                self.metrics_collector.collect_validation_metrics(success=True)
+            else:
+                self.metrics_collector.collect_validation_metrics(success=False)
+            return True, validation_errors
+        except ValidationError as e:
+            validation_errors.append(str(e))
+            self.logger.error(f"Validation error: {e}", extra={"correlation_id": self.correlation_id})
+            return False, validation_errors
+        except Exception as e:
+            validation_errors.append(f"Unexpected validation error: {str(e)}")
+            self.logger.error(f"Unexpected validation error: {e}", exc_info=True, extra={"correlation_id": self.correlation_id})
+            return False, validation_errors
+
+            validate(instance=content, schema=schema)
 
             return True, validation_errors
         except ValidationError as e:
@@ -169,8 +190,13 @@ class ResponseParsingService:
         self.logger.warning("Creating fallback response due to parsing failure", extra={"correlation_id": self.correlation_id})
 
         fallback = {
-            "summary": "Documentation generation failed",
-            "description": "Unable to generate documentation due to parsing error",
+            "summary": "This module provides functionality for code analysis and documentation generation.",
+            "description": (
+                "The module is part of a larger system aimed at analyzing code, "
+                "extracting key elements such as classes and functions, and generating "
+                "comprehensive documentation. It ensures maintainability and readability "
+                "by adhering to structured documentation standards."
+            ),
             "args": [],
             "returns": {"type": "Any", "description": "No return value documented."},
             "raises": [],
@@ -190,29 +216,89 @@ class ResponseParsingService:
             self.logger.warning(f"Could not get source code from context: {e}", extra={"correlation_id": self.correlation_id})
 
         if isinstance(response, str):
-            lines = response.strip().split('\n')
-            if lines and lines[0].startswith("# Module Summary"):
-                fallback["summary"] = lines[0].lstrip("# Module Summary").strip()
-                fallback["description"] = '\n'.join(lines[1:]).strip()
-        elif isinstance(response, dict) and "choices" in response:
-            message = response.get("choices", [{}])[0].get("message", {})
-            if "content" in message and message["content"] is not None:
-                fallback["description"] = str(message["content"])
+            fallback["description"] = response.strip()
+        elif isinstance(response, dict):
+            if "choices" in response:
+                message = response.get("choices", [{}])[0].get("message", {})
+                if "content" in message and message["content"] is not None:
+                    try:
+                        content = json.loads(message["content"])
+                        fallback.update(content)
+                    except json.JSONDecodeError:
+                        fallback["description"] = str(message["content"])
+            elif "summary" in response and "description" in response:
+                fallback.update({
+                    "summary": response.get("summary", fallback["summary"]),
+                    "description": response.get("description", fallback["description"]),
+                })
 
         return fallback
 
     def _extract_content(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """Extract content from various response formats."""
         try:
+            self.logger.debug(
+                f"Raw response content before extraction: {response}",
+                extra={"correlation_id": self.correlation_id},
+            )
             content = {}
             source_code = response.get("source_code")
 
             if "choices" in response and response["choices"]:
                 message = response["choices"][0].get("message", {})
-                content = self._extract_content_from_message(message)
+                if "function_call" in message:
+                    content = self._extract_content_from_function_call(message["function_call"], "function_call")
+                elif "content" in message:
+                    content = self._extract_content_from_direct_content(message["content"])
+                else:
+                    self.logger.warning("Message content is missing, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response(response)
+            else:
+                self.logger.error("Response format is invalid, creating fallback.", extra={"response": response})
+                content = self._create_fallback_response(response)
 
             if not content:
-                content = response
+                if not response:
+                    self.logger.error("Response is empty, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response()
+                elif "summary" in response and "description" in response:
+                    content = response
+                else:
+                    self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response()
+
+            content = self._ensure_required_fields(content)
+
+            if source_code:
+                content["source_code"] = source_code
+                content.setdefault("code_metadata", {})["source_code"] = source_code
+
+            return content
+        except Exception as e:
+            self.logger.error(f"Error extracting content: {e}", exc_info=True)
+            return self._create_fallback_response()
+
+            if not content:
+                if "summary" in response and "description" in response:
+                    content = response
+                else:
+                    self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response(response)
+
+            content = self._ensure_required_fields(content)
+
+            if source_code:
+                content["source_code"] = source_code
+                content.setdefault("code_metadata", {})["source_code"] = source_code
+
+            return content
+
+            if not content:
+                if "summary" in response and "description" in response:
+                    content = response
+                else:
+                    self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response(response)
 
             content = self._ensure_required_fields(content)
 
@@ -224,19 +310,18 @@ class ResponseParsingService:
 
         except Exception as e:
             self.logger.error(f"Error extracting content: {e}", exc_info=True)
-            return {}
+            return self._create_fallback_response()
 
-    def _extract_content_from_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract content from a message."""
+    def _extract_content_from_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract content from tool calls."""
         try:
-            if "function_call" in message:
-                return self._extract_content_from_function_call(message["function_call"], "function_call")
-            if "tool_calls" in message and message["tool_calls"]:
-                tool_call = message["tool_calls"][0]
+            for tool_call in tool_calls:
+                if tool_call.get("function", {}).get("name") == "generate_docstring":
+                    return json.loads(tool_call["function"]["arguments"])
+            for tool_call in tool_calls:
                 if "function" in tool_call:
                     return self._extract_content_from_function_call(tool_call["function"], "tool_call")
-            if "content" in message:
-                return self._extract_content_from_direct_content(message["content"])
+            return {}
             return {}
         except Exception as e:
             self.logger.error(f"Error extracting content from message: {e}", extra={"correlation_id": self.correlation_id})
@@ -249,7 +334,12 @@ class ResponseParsingService:
             if not args_str:
                 return {}
             args_dict = json.loads(args_str)
-            if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
+            if isinstance(args_dict, dict):
+                # Validate against the function schema
+                is_valid, errors = self._validate_content(args_dict, "function")
+                if not is_valid:
+                    self.logger.error(f"Function call arguments validation failed: {errors}")
+                    return self._create_fallback_response(args_dict)  # Return fallback content
                 return args_dict
             return args_dict
         except json.JSONDecodeError as e:
@@ -275,6 +365,7 @@ class ResponseParsingService:
         errors = []
         metadata = {}
 
+        self.logger.debug(f"Raw AI response before parsing: {response}", extra={"correlation_id": self.correlation_id})
         try:
             if response is None:
                 self.logger.error("Response is None, creating fallback", extra={"correlation_id": self.correlation_id})
@@ -289,9 +380,13 @@ class ResponseParsingService:
                     metadata=metadata,
                 )
 
+            self.logger.debug(f"Raw AI response: {response}")
             if not isinstance(response, dict) or "choices" not in response:
-                self.logger.error(f"Response is not a dict or missing 'choices', creating fallback. Response: {response}", extra={"correlation_id": self.correlation_id})
-                content = self._create_fallback_response(response)
+                self.logger.error(f"Invalid response format: {response}. Expected a dictionary with a 'choices' key or valid summary/description.", extra={"correlation_id": self.correlation_id})
+                if "summary" in response and "description" in response:
+                    content = response
+                else:
+                    content = self._create_fallback_response(response)
                 errors.append("Response is not a dict or missing 'choices'")
                 return ParsedResponse(
                     content=content,

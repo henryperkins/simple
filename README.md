@@ -33,6 +33,52 @@ data = extractor.extract_code()
 print(data)
 ```
 
+### Structured Outputs
+Simple Extract uses structured outputs to validate AI responses against predefined JSON schemas. This ensures reliable and predictable outputs for documentation generation.
+
+#### Example JSON Schema
+```json
+{
+    "summary": "A brief summary of what the code does",
+    "description": "A detailed description of the functionality",
+    "args": [
+        {
+            "name": "argument_name",
+            "type": "argument_type",
+            "description": "argument description"
+        }
+    ],
+    "returns": {
+        "type": "return_type",
+        "description": "description of the return value"
+    },
+    "raises": [
+        {
+            "exception": "exception_type",
+            "description": "when this exception is raised"
+        }
+    ],
+    "complexity": 1
+}
+```
+
+#### Example Usage with Structured Outputs
+```python
+from simple_extract import Extractor
+
+# Initialize the extractor
+extractor = Extractor(source='data_source')
+
+# Perform extraction with structured outputs
+data = extractor.extract_code()
+
+# Validate the response against the schema
+if extractor.validate(data):
+    print("Valid response:", data)
+else:
+    print("Invalid response:", data)
+```
+
 ## Contributing
 We welcome contributions to enhance the functionality of Simple Extract. To contribute, please follow these steps:
 

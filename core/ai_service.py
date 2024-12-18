@@ -20,7 +20,6 @@ from core.types.base import (
     ProcessingResult,
 )
 
-
 class AIService:
     """Service for interacting with the AI model to generate documentation.
 
@@ -56,7 +55,9 @@ class AIService:
         )
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")
-        self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
+        self.metrics_collector = MetricsCollector(
+            correlation_id=correlation_id
+        )
 
         try:
             self.docstring_processor = Injector.get("docstring_processor")
@@ -181,14 +182,9 @@ class AIService:
             args = json.loads(response["function_call"].get("arguments", "{}"))
             is_valid, errors = self.response_parser._validate_content(args, "function")
             if not is_valid:
-                self.logger.error(
-                    f"Function call arguments validation failed: {errors}"
-                )
+                self.logger.error(f"Function call arguments validation failed: {errors}")
                 raise DataValidationError(f"Invalid function call arguments: {errors}")
-            self.logger.debug(
-                f"Formatted function call response to: {formatted_response}",
-                extra=log_extra,
-            )
+            self.logger.debug(f"Formatted function call response to: {formatted_response}", extra=log_extra)
             return formatted_response
 
         if "tool_calls" in response:
@@ -196,43 +192,23 @@ class AIService:
                 "choices": [{"message": {"tool_calls": response["tool_calls"]}}],
                 "usage": response.get("usage", {}),
             }
-            self.logger.debug(
-                f"Formatted tool calls response to: {formatted_response}",
-                extra=log_extra,
-            )
+            self.logger.debug(f"Formatted tool calls response to: {formatted_response}", extra=log_extra)
             return formatted_response
 
-        self.logger.warning(
-            "Response format is invalid, creating fallback.",
-            extra={"response": response},
-        )
+        self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
         fallback_response = {
-            "choices": [
-                {
-                    "message": {
-                        "content": json.dumps(
-                            {
-                                "summary": "Invalid response format",
-                                "description": "The response did not match the expected structure.",
-                            }
-                        )
-                    }
-                }
-            ],
+            "choices": [{"message": {"content": json.dumps({"summary": "Invalid response format", "description": "The response did not match the expected structure."})}}],
             "usage": {},
         }
-        self.logger.debug(
-            f"Fallback response created: {fallback_response}",
-            extra={"correlation_id": self.correlation_id},
-        )
+        self.logger.debug(f"Fallback response created: {fallback_response}", extra={"correlation_id": self.correlation_id})
         return fallback_response
-
+        
         if "summary" in response or "description" in response:
             return {
                 "choices": [{"message": {"content": json.dumps(response)}}],
                 "usage": response.get("usage", {}),
             }
-
+        
         if "function_call" in response:
             formatted_response = {
                 "choices": [{"message": {"function_call": response["function_call"]}}],
@@ -242,14 +218,9 @@ class AIService:
             args = json.loads(response["function_call"].get("arguments", "{}"))
             is_valid, errors = self.response_parser._validate_content(args, "function")
             if not is_valid:
-                self.logger.error(
-                    f"Function call arguments validation failed: {errors}"
-                )
+                self.logger.error(f"Function call arguments validation failed: {errors}")
                 raise DataValidationError(f"Invalid function call arguments: {errors}")
-            self.logger.debug(
-                f"Formatted function call response to: {formatted_response}",
-                extra=log_extra,
-            )
+            self.logger.debug(f"Formatted function call response to: {formatted_response}", extra=log_extra)
             return formatted_response
 
         if "tool_calls" in response:
@@ -326,18 +297,13 @@ class AIService:
 
         if request_params["max_tokens"] < 100:
             self.logger.warning(
-                "Token availability is low. Consider reducing prompt size.",
-                extra=log_extra,
+                "Token availability is low. Consider reducing prompt size.", extra=log_extra
             )
 
         if function_schema:
             request_params["functions"] = [function_schema]
-            request_params["function_call"] = (
-                "auto"  # Automatically select the function
-            )
-            request_params["function_call"] = (
-                "auto"  # Automatically select the function
-            )
+            request_params["function_call"] = "auto"  # Automatically select the function
+            request_params["function_call"] = "auto"  # Automatically select the function
 
         self.logger.info(
             "Making API call with retry",
@@ -361,10 +327,7 @@ class AIService:
                 if self._client is None:
                     raise APICallError("Failed to initialize client session")
 
-                self.logger.info(
-                    f"Making API call (attempt {attempt + 1}/{max_retries}) to url: '{url}'",
-                    extra=log_extra,
-                )
+                self.logger.info(f"Making API call (attempt {attempt + 1}/{max_retries}) to url: '{url}'", extra=log_extra)
                 self.logger.debug(
                     f"Generated prompt: {request_params.get('prompt', 'No prompt found')}",
                     extra=log_extra,
@@ -373,11 +336,9 @@ class AIService:
                     url,
                     headers=headers,
                     json=request_params,
-                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+                    timeout=aiohttp.ClientTimeout(total=self.config.timeout)
                 ) as response:
-                    raw_response_text = (
-                        await response.text()
-                    )  # Capture raw response text
+                    raw_response_text = await response.text()  # Capture raw response text
                     self.logger.debug(
                         f"Raw response text: {raw_response_text}",
                         extra={"status_code": response.status, "url": url},
@@ -403,74 +364,36 @@ class AIService:
                                 extra={"correlation_id": self.correlation_id},
                             )
                             fallback_response = {
-                                "choices": [
-                                    {
-                                        "message": {
-                                            "content": "Empty or invalid JSON response"
-                                        }
-                                    }
-                                ]
+                                "choices": [{"message": {"content": "Empty or invalid JSON response"}}]
                             }
-                            self.logger.debug(
-                                f"Fallback response created for invalid JSON: {fallback_response}",
-                                extra={"correlation_id": self.correlation_id},
-                            )
+                            self.logger.debug(f"Fallback response created for invalid JSON: {fallback_response}", extra={"correlation_id": self.correlation_id})
                             return fallback_response
                         return api_response
 
                         # Validate response format
-                        if (
-                            not isinstance(api_response, dict)
-                            or "choices" not in api_response
-                        ):
-                            self.logger.error(
-                                f"Invalid response format: {api_response}",
-                                extra=log_extra,
-                            )
+                        if not isinstance(api_response, dict) or "choices" not in api_response:
+                            self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
                             fallback_response = {
-                                "choices": [
-                                    {"message": {"content": "Invalid response format"}}
-                                ]
+                                "choices": [{"message": {"content": "Invalid response format"}}]
                             }
-                            self.logger.debug(
-                                f"Fallback response created for invalid format: {fallback_response}",
-                                extra={"correlation_id": self.correlation_id},
-                            )
+                            self.logger.debug(f"Fallback response created for invalid format: {fallback_response}", extra={"correlation_id": self.correlation_id})
                             return fallback_response
 
                         return api_response  # Return successful response immediately
-                        self.logger.debug(
-                            f"Raw API response: {api_response}", extra=log_extra
-                        )
+                        self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
                         if not isinstance(api_response, dict):
-                            self.logger.error(
-                                f"Invalid response format: {api_response}",
-                                extra=log_extra,
-                            )
+                            self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
                             return {
-                                "choices": [
-                                    {"message": {"content": "Invalid response format"}}
-                                ]
+                                "choices": [{"message": {"content": "Invalid response format"}}]
                             }  # Return a fallback response
                         if not isinstance(api_response, dict):
-                            self.logger.error(
-                                f"Invalid response format: {api_response}",
-                                extra=log_extra,
-                            )
+                            self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
 
                         # Validate response format
-                        if (
-                            not isinstance(api_response, dict)
-                            or "choices" not in api_response
-                        ):
-                            self.logger.error(
-                                f"Invalid response format: {api_response}",
-                                extra=log_extra,
-                            )
+                        if not isinstance(api_response, dict) or "choices" not in api_response:
+                            self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
                             return {
-                                "choices": [
-                                    {"message": {"content": "Invalid response format"}}
-                                ]
+                                "choices": [{"message": {"content": "Invalid response format"}}]
                             }  # Return a fallback response
 
                         return api_response  # Return successful response immediately
@@ -595,9 +518,7 @@ class AIService:
                     extra=log_extra,
                 )
 
-            self.logger.info(
-                "Making API call to generate documentation.", extra=log_extra
-            )
+            self.logger.info("Making API call to generate documentation.", extra=log_extra)
             self.logger.debug(f"Generated prompt: {prompt}", extra=log_extra)
             async with self.semaphore:
                 response = await self._make_api_call_with_retry(
