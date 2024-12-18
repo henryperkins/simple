@@ -76,6 +76,7 @@ class AIService:
         self.semaphore = asyncio.Semaphore(10)  # Default semaphore value
         self._client: Optional[aiohttp.ClientSession] = None
 
+        self.logger.debug(f"API call parameters: {request_params}", extra=log_extra)
         self.logger.info(
             "AI Service initialized",
             extra={
@@ -148,6 +149,12 @@ class AIService:
         """
         if "choices" in response and isinstance(response["choices"], list):
             return response
+
+        if "summary" in response or "description" in response:
+            return {
+                "choices": [{"message": {"content": json.dumps(response)}}],
+                "usage": response.get("usage", {}),
+            }
         
         if "summary" in response or "description" in response:
             return {
@@ -257,6 +264,8 @@ class AIService:
                     if response.status == 200:
                         api_response = await response.json()
                         self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
+                        if not isinstance(api_response, dict):
+                            self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
                         if not isinstance(api_response, dict):
                             self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
 

@@ -142,6 +142,7 @@ class ResponseParsingService:
                     return False, validation_errors
 
                 validate(instance=content, schema=schema)
+            return True, []
             elif format_type == "function":
                 if not self.function_schema:
                     validation_errors.append("Function schema not loaded")
@@ -215,6 +216,7 @@ class ResponseParsingService:
                 if "summary" in response and "description" in response:
                     content = response
                 else:
+                    self.logger.warning("Response format is invalid, creating fallback.")
                     content = self._create_fallback_response(response)
 
             content = self._ensure_required_fields(content)
