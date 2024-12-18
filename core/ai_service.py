@@ -298,11 +298,16 @@ class AIService:
                     f"Generated prompt: {request_params.get('prompt', 'No prompt found')}",
                     extra=log_extra,
                 )
-                self.logger.debug(
-                    f"Raw response text: {await response.text()}",
-                    extra={"status_code": response.status, "url": url},
-                )
                 async with self._client.post(
+                    url,
+                    headers=headers,
+                    json=request_params,
+                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+                ) as response:
+                    self.logger.debug(
+                        f"Raw response text: {await response.text()}",
+                        extra={"status_code": response.status, "url": url},
+                    )
                     url,
                     headers=headers,
                     json=request_params,
