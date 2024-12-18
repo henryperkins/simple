@@ -10,7 +10,7 @@ from core.logger import LoggerSetup
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from core.metrics_collector import MetricsCollector
-from core.types import ParsedResponse, DocumentationData
+from core.types import ParsedResponse, DocumentationData, DocstringData
 from core.types.base import DocstringSchema
 from core.exceptions import ValidationError as CustomValidationError, DocumentationError
 
