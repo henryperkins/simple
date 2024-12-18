@@ -254,8 +254,6 @@ class MetricsCollector:
         if metric_name not in self.metrics_history:
             self.metrics_history[metric_name] = 0
         self.metrics_history[metric_name] += 1
-        except Exception as e:
-            self.logger.error(f"Error collecting token usage: {e}", exc_info=True)
 
     def get_aggregated_token_usage(self) -> dict[str, Union[int, float]]:
         """Aggregate token usage statistics across operations."""
