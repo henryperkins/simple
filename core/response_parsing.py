@@ -289,8 +289,9 @@ class ResponseParsingService:
                     metadata=metadata,
                 )
 
+            self.logger.debug(f"Raw AI response: {response}")
             if not isinstance(response, dict) or "choices" not in response:
-                self.logger.error(f"Response is not a dict or missing 'choices', creating fallback. Response: {response}", extra={"correlation_id": self.correlation_id})
+                self.logger.error(f"Invalid response format: {response}. Expected a dictionary with a 'choices' key.", extra={"correlation_id": self.correlation_id})
                 content = self._create_fallback_response(response)
                 errors.append("Response is not a dict or missing 'choices'")
                 return ParsedResponse(
