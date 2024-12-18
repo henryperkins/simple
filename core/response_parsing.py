@@ -224,7 +224,7 @@ class ResponseParsingService:
                 if "summary" in response and "description" in response:
                     content = response
                 else:
-                    self.logger.warning("Response format is invalid, creating fallback.")
+                    self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
                     content = self._create_fallback_response(response)
 
             content = self._ensure_required_fields(content)
