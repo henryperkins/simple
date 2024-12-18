@@ -182,10 +182,12 @@ class AIService:
             return formatted_response
 
         self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
-        return {
+        fallback_response = {
             "choices": [{"message": {"content": json.dumps({"summary": "Invalid response format", "description": "The response did not match the expected structure."})}}],
             "usage": {},
         }
+        self.logger.debug(f"Fallback response created: {fallback_response}", extra={"correlation_id": self.correlation_id})
+        return fallback_response
         
         if "summary" in response or "description" in response:
             return {
@@ -333,17 +335,21 @@ class AIService:
                                 f"Raw response content: {raw_response_text}",
                                 extra={"correlation_id": self.correlation_id},
                             )
-                            return {
+                            fallback_response = {
                                 "choices": [{"message": {"content": "Empty or invalid JSON response"}}]
-                            }  # Return a fallback response
+                            }
+                            self.logger.debug(f"Fallback response created for invalid JSON: {fallback_response}", extra={"correlation_id": self.correlation_id})
+                            return fallback_response
                         return api_response
 
                         # Validate response format
                         if not isinstance(api_response, dict) or "choices" not in api_response:
                             self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
-                            return {
+                            fallback_response = {
                                 "choices": [{"message": {"content": "Invalid response format"}}]
-                            }  # Return a fallback response
+                            }
+                            self.logger.debug(f"Fallback response created for invalid format: {fallback_response}", extra={"correlation_id": self.correlation_id})
+                            return fallback_response
 
                         return api_response  # Return successful response immediately
                         self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
