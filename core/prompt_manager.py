@@ -111,7 +111,7 @@ Please analyze the following code focusing on:
 - Key components and their relationships
 - Implementation patterns and design choices
 - Usage patterns and constraints
-- Performance considerations where relevant
+- Performance considerations where relevant.
 """
 
         # Format the components list for better context
