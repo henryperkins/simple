@@ -1,6 +1,6 @@
 import uuid
 from pathlib import Path
-from typing import Any, cast, Optional
+from typing import Any, cast, Optional, Dict
 from datetime import datetime
 
 # Group imports from core package
@@ -14,7 +14,12 @@ from core.types.base import (
     DocumentationData,
     ExtractedClass,
     ExtractedFunction,
+    ProcessingResult,
+    MetricData,
+    ExtractionResult,
+    ParsedResponse
 )
+from core.types.docstring import DocstringData
 from core.exceptions import DocumentationError
 from core.metrics_collector import MetricsCollector
 from core.extraction.code_extractor import CodeExtractor
@@ -25,36 +30,32 @@ from utils import ensure_directory, read_file_safe_async
 class DocumentationOrchestrator:
     """
     Orchestrates the entire documentation generation process.
+    
+    This class coordinates the interaction between various components to generate
+    documentation, ensuring proper type usage and data flow throughout the process.
     """
 
     def __init__(
         self,
         ai_service: AIService,
-        code_extractor: CodeExtractor,  # Using CodeExtractor to avoid circular import
+        code_extractor: CodeExtractor,
         markdown_generator: MarkdownGenerator,
         prompt_manager: PromptManager,
         docstring_processor: DocstringProcessor,
-        response_parser: ResponseParsingService,  # Correct type hint for ResponseParser
-        correlation_id: str | None = None,  # Updated to use | None instead of Optional[str]
+        response_parser: ResponseParsingService,
+        correlation_id: str | None = None,
     ) -> None:
-        """
-        Initialize DocumentationOrchestrator with necessary services.
-        ...
-        """
+        """Initialize DocumentationOrchestrator with typed dependencies."""
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.logger = LoggerSetup.get_logger(
             f"{__name__}.{self.__class__.__name__}",
             correlation_id=self.correlation_id,
         )
-        self.metrics_collector = MetricsCollector(correlation_id=self.correlation_id)
-        self.logger.info(
-            "DocumentationOrchestrator initialized.",
-            extra={
-                "ai_service": str(ai_service),
-            },
-        )
 
-        # Use constructor injection for dependencies
+        # Initialize metrics collection
+        self.metrics_collector = MetricsCollector(correlation_id=self.correlation_id)
+
+        # Store typed dependencies
         self.ai_service = ai_service
         self.code_extractor = code_extractor
         self.markdown_generator = markdown_generator
@@ -62,218 +63,215 @@ class DocumentationOrchestrator:
         self.docstring_processor = docstring_processor
         self.response_parser = response_parser
 
-    async def generate_documentation(self, context: DocumentationContext) -> tuple[str, str]:
+    async def generate_documentation(
+        self, 
+        context: DocumentationContext
+    ) -> tuple[str, str]:
         """
         Generates documentation for the given context.
-        ...
+
+        Args:
+            context: Structured documentation context containing all necessary information
+
+        Returns:
+            Tuple of (original_source, markdown_documentation)
+
+        Raises:
+            DocumentationError: If documentation generation fails
         """
         start_time = datetime.now()
         module_name = ""
         log_extra = {"correlation_id": self.correlation_id}
-        try:
-            self.logger.debug(
-                f"Source code length: {len(context.source_code)}", extra=log_extra
-            )
-            self.logger.debug(
-                f"First 50 characters of source code: {context.source_code[:50]}...",
-                extra=log_extra,
-            )
 
+        try:
             # Step 1: Validate source code
             if not context or not context.source_code:
-                self.logger.error(
-                    f"Source code is missing or context is invalid for {context.module_path}",
-                    extra=log_extra,
-                )
                 raise DocumentationError(
                     f"Source code is missing or context is invalid for {context.module_path}"
                 )
 
             original_source = context.source_code.strip()
             if not original_source:
-                self.logger.error(
-                    f"Source code is empty after stripping whitespace for {context.module_path}",
-                    extra=log_extra,
-                )
                 raise DocumentationError(
                     f"Source code is empty after stripping whitespace for {context.module_path}"
                 )
 
             module_name = context.metadata.get("module_name", "") if context.metadata else ""
 
-            self.logger.info(
-                f"Starting documentation generation for module: '{module_name}'",
-                extra=log_extra,
-            )
-            self.logger.info("Starting code extraction.", extra=log_extra)
-
             # Step 2: Extract code elements
-            extraction_result = await self.code_extractor.extract_code(original_source)
-            self.logger.debug(
-                f"Extraction result source code length: {len(extraction_result.source_code)}",
-                extra=log_extra,
-            )
-            self.logger.debug(
-                f"First 50 characters of extraction result source code: {extraction_result.source_code[:50]}...",
-                extra=log_extra,
+            extraction_result: ExtractionResult = await self.code_extractor.extract_code(
+                original_source
             )
 
-            if not extraction_result or not extraction_result.source_code:
+            if not extraction_result.source_code:
                 raise DocumentationError("Extraction failed - no valid code elements found.")
 
-            classes: list[ExtractedClass] = []
-            functions: list[ExtractedFunction] = []
+            # Convert extracted elements to proper types
+            classes = self._convert_to_extracted_classes(extraction_result.classes)
+            functions = self._convert_to_extracted_functions(extraction_result.functions)
 
-            if extraction_result.classes:
-                self.logger.debug(
-                    f"Extracted classes: {[cls.name for cls in extraction_result.classes]}",
-                    extra=log_extra,
+            # Step 3: Create AI prompt
+            prompt_result = await self.prompt_manager.create_documentation_prompt(
+                DocumentationContext(
+                    source_code=original_source,
+                    module_path=context.module_path,
+                    include_source=True,
+                    metadata=context.metadata,
+                    classes=classes,
+                    functions=functions
                 )
-                for cls_data in extraction_result.classes:
-                    if isinstance(cls_data, ExtractedClass):
-                        classes.append(cls_data)
-                    else:
-                        cls_dict = cast(dict[str, Any], cls_data)
-                        classes.append(
-                            ExtractedClass(
-                                name=cls_dict.get("name", "Unknown"),
-                                lineno=cls_dict.get("lineno", 0),
-                                methods=cls_dict.get("methods", []),
-                                bases=cls_dict.get("bases", []),
-                            )
-                        )
-
-            if extraction_result.functions:
-                self.logger.debug(
-                    f"Extracted functions: {[func.get('name', 'Unknown') for func in extraction_result.functions]}",
-                    extra=log_extra,
-                )
-                for func_data in extraction_result.functions:
-                    if isinstance(func_data, ExtractedFunction):
-                        functions.append(func_data)
-                    else:
-                        func_dict = cast(dict[str, Any], func_data)
-                        functions.append(
-                            ExtractedFunction(
-                                name=func_dict.get("name", "Unknown"),
-                                lineno=func_dict.get("lineno", 0),
-                                args=func_dict.get("args", []),
-                                returns=func_dict.get("returns", {}),
-                            )
-                        )
-
-            # Step 3: Create AI documentation prompt
-            self.logger.info("Generating documentation prompt.", extra=log_extra)
-            await self.prompt_manager.create_documentation_prompt(
-                module_name=module_name,
-                file_path=str(context.module_path),
-                source_code=original_source,
-                classes=classes,
-                functions=functions,
             )
 
-            # Step 4: Process with AI service
-            self.logger.info("Processing documentation with AI service.", extra=log_extra)
-            response_context = DocumentationContext(
-                source_code=original_source,
-                module_path=context.module_path,
-                include_source=True,
-                metadata=context.metadata,
-                classes=classes,
-                functions=functions,
+            # Step 4: Generate documentation with AI service
+            processing_result: ProcessingResult = await self.ai_service.generate_documentation(
+                context,
+                schema=None  # Add schema if needed
             )
-            processing_result = await self.ai_service.generate_documentation(response_context)
-            self.logger.debug(
-                f"AI service processing result content length: {len(str(processing_result.content))}",
-                extra=log_extra,
-            )
-            self.logger.debug(
-                f"First 50 characters of AI service processing result content: {str(processing_result.content)[:50]}...",
-                extra=log_extra,
-            )
-
-            if not processing_result or not processing_result.content:
-                raise DocumentationError("AI service did not return any content.")
-
-            self.logger.info("AI service processing completed successfully.", extra=log_extra)
-
-            # Ensure source code is in response
-            if isinstance(processing_result.content, dict):
-                processing_result.content["source_code"] = original_source
 
             # Step 5: Parse AI response
-            self.logger.info("Parsing AI response.", extra=log_extra)
-            parsed_response = await self.response_parser.parse_response(
-                processing_result.content, expected_format="docstring", validate_schema=False
+            parsed_response: ParsedResponse = await self.response_parser.parse_response(
+                processing_result.content,
+                expected_format="docstring",
+                validate_schema=True
             )
-            self.logger.debug(
-                f"Parsed response content length: {len(str(parsed_response.content))}",
-                extra=log_extra,
-            )
-            self.logger.debug(
-                f"First 50 characters of parsed response content: {str(parsed_response.content)[:50]}...",
-                extra=log_extra,
-            )
-
-            if not parsed_response or not parsed_response.content:
-                raise DocumentationError("Failed to parse AI response.")
-
-            self.logger.debug(f"Parsed response content: {parsed_response.content}", extra=log_extra)
 
             # Step 6: Create documentation data
-            self.logger.debug(f"Original source before DocumentationData: {original_source[:50]}...", extra=log_extra)
             documentation_data = DocumentationData(
                 module_name=module_name,
                 module_path=context.module_path or Path(),
                 module_summary=str(parsed_response.content.get("summary", "")),
                 source_code=original_source,
-                docstring_data=parsed_response.content,
+                docstring_data=self._create_docstring_data(parsed_response.content),
                 ai_content=processing_result.content,
                 code_metadata={
-                    "classes": [cls.__dict__ for cls in classes],
-                    "functions": [func.__dict__ for func in functions],
+                    "classes": [
+                        cls.to_dict() for cls in classes
+                    ],  # Convert to dictionaries
+                    "functions": [
+                        func.to_dict() for func in functions
+                    ],  # Convert to dictionaries
                     "variables": extraction_result.variables or [],
                     "constants": extraction_result.constants or [],
                     "module_docstring": extraction_result.module_docstring,
-                    "source_code": original_source,  # Ensure it's in metadata
+                    "source_code": original_source,
                 },
             )
-            self.logger.debug(f"Source code in DocumentationData: {documentation_data.source_code[:50]}...", extra=log_extra)
 
-            # Step 7: Generate markdown documentation
-            self.logger.info("Generating markdown documentation.", extra=log_extra)
+            # Step 7: Generate markdown
             markdown_doc = self.markdown_generator.generate(documentation_data)
-            self.logger.info("Markdown documentation generated successfully.", extra=log_extra)
 
-            # Step 8: Track success metrics
-            processing_time = (datetime.now() - start_time).total_seconds()
-            self.logger.info(
-                f"Documentation generation completed in {processing_time:.2f} seconds.",
-                extra=log_extra,
-            )
-            await self.metrics_collector.track_operation(
-                operation_type="documentation_generation",
-                success=True,
-                duration=processing_time,
-                metadata={"module_name": module_name},
+            # Step 8: Track metrics
+            await self._track_generation_metrics(
+                start_time=start_time,
+                module_name=module_name,
+                processing_result=processing_result
             )
 
             return original_source, markdown_doc
 
         except Exception as error:
-            processing_time = (datetime.now() - start_time).total_seconds()
-            self.logger.error(
-                f"Error during documentation generation: {error}",
-                exc_info=True,
-                extra=log_extra,
+            await self._handle_generation_error(
+                error=error,
+                start_time=start_time,
+                module_name=module_name
             )
-            await self.metrics_collector.track_operation(
-                operation_type="documentation_generation",
-                success=False,
-                duration=processing_time,
-                metadata={"module_name": module_name, "error": str(error)},
-            )
-            raise DocumentationError(f"Failed to generate documentation: {error}") from error
+            raise
+
+    def _convert_to_extracted_classes(
+        self, 
+        classes: list[dict[str, Any]]
+    ) -> list[ExtractedClass]:
+        """Convert raw class data to ExtractedClass instances."""
+        converted_classes = []
+        for cls_data in classes:
+            if isinstance(cls_data, ExtractedClass):
+                converted_classes.append(cls_data)
+            else:
+                converted_classes.append(ExtractedClass(
+                    name=cls_data.get("name", "Unknown"),
+                    lineno=cls_data.get("lineno", 0),
+                    source=cls_data.get("source"),
+                    docstring=cls_data.get("docstring"),
+                    methods=self._convert_to_extracted_functions(
+                        cls_data.get("methods", [])
+                    ),
+                    bases=cls_data.get("bases", []),
+                    metrics=cls_data.get("metrics", {}),
+                    inheritance_chain=cls_data.get("inheritance_chain", [])
+                ))
+        return converted_classes
+
+    def _convert_to_extracted_functions(
+        self, 
+        functions: list[dict[str, Any]]
+    ) -> list[ExtractedFunction]:
+        """Convert raw function data to ExtractedFunction instances."""
+        converted_functions = []
+        for func_data in functions:
+            if isinstance(func_data, ExtractedFunction):
+                converted_functions.append(func_data)
+            else:
+                converted_functions.append(ExtractedFunction(
+                    name=func_data.get("name", "Unknown"),
+                    lineno=func_data.get("lineno", 0),
+                    source=func_data.get("source"),
+                    docstring=func_data.get("docstring"),
+                    args=func_data.get("args", []),
+                    returns=func_data.get("returns", {}),
+                    metrics=func_data.get("metrics", {}),
+                ))
+        return converted_functions
+
+    def _create_docstring_data(self, content: Dict[str, Any]) -> DocstringData:
+        """Create DocstringData from content dict."""
+        return DocstringData(
+            summary=str(content.get("summary", "")),
+            description=str(content.get("description", "")),
+            args=content.get("args", []),
+            returns=content.get("returns", {"type": "Any", "description": ""}),
+            raises=content.get("raises", []),
+            complexity=int(content.get("complexity", 1)),
+        )
+
+
+    async def _track_generation_metrics(
+        self,
+        start_time: datetime,
+        module_name: str,
+        processing_result: ProcessingResult
+    ) -> None:
+        """Track metrics for documentation generation."""
+        processing_time = (datetime.now() - start_time).total_seconds()
+        await self.metrics_collector.track_operation(
+            operation_type="documentation_generation",
+            success=True,
+            duration=processing_time,
+            metadata={
+                "module_name": module_name,
+                "processing_time": processing_time,
+                "token_usage": processing_result.usage
+            }
+        )
+
+    async def _handle_generation_error(
+        self,
+        error: Exception,
+        start_time: datetime,
+        module_name: str
+    ) -> None:
+        """Handle errors during documentation generation."""
+        processing_time = (datetime.now() - start_time).total_seconds()
+        self.logger.error(
+            f"Error during documentation generation: {error}",
+            exc_info=True,
+            extra={"correlation_id": self.correlation_id},
+        )
+        await self.metrics_collector.track_operation(
+            operation_type="documentation_generation",
+            success=False,
+            duration=processing_time,
+            metadata={"module_name": module_name, "error": str(error)},
+        )
 
     async def generate_module_documentation(
         self, file_path: Path, output_dir: Path, source_code: str | None = None

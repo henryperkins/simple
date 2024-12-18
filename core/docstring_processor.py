@@ -2,28 +2,24 @@
 
 import json
 import os
-from typing import Any, Union, cast, TypedDict
+from typing import Any, Dict, List, Optional, Union, cast
+from pathlib import Path
+import time
 
-try:
-    from docstring_parser import parse, DocstringStyle, Docstring
-except ImportError:
-    print(
-        "Warning: docstring_parser not found. Install with: pip install docstring-parser"
-    )
-    raise
+from docstring_parser import parse, DocstringStyle, Docstring
+from jsonschema import validate, ValidationError
 
 from core.console import display_metrics
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types.docstring import DocstringData
+from core.types.base import (
+    ProcessingResult,
+    MetricData,
+    DocumentationData,
+    ParsedResponse
+)
 from core.metrics_collector import MetricsCollector
-from jsonschema import validate, ValidationError
-
-
-class ReturnsDict(TypedDict):
-    """Return type dict."""
-
-    type: str
-    description: str
+from core.exceptions import DocumentationError, DataValidationError
 
 
 class DocstringProcessor:
@@ -45,21 +41,14 @@ class DocstringProcessor:
             "total_lines": 0,
             "avg_length": 0,
         }
+        self.correlation_id = correlation_id
 
     def _load_schema(self, schema_name: str) -> dict[str, Any]:
         """Loads a JSON schema for validation."""
-
-        schema_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "schemas", schema_name
-        )
+        schema_path = Path(__file__).resolve().parent.parent / "schemas" / schema_name
         try:
-            with open(schema_path, "r", encoding="utf-8") as f:
-                schema = json.load(f)
-            self.logger.info(
-                "Schema loaded successfully",
-                extra={"schema_name": schema_name, "status": "success"},
-            )
-            return schema
+            with schema_path.open("r", encoding="utf-8") as f:
+                return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             self.logger.error(
                 f"Error loading schema: {e}",
@@ -69,13 +58,29 @@ class DocstringProcessor:
 
     def parse(self, docstring: str) -> DocstringData:
         """Parses a docstring string into structured data."""
-
-        result = self._parse_docstring_content(docstring)
-        return DocstringData(**result)
+        try:
+            result = self._parse_docstring_content(docstring)
+            return DocstringData(
+                summary=result["summary"],
+                description=result["description"],
+                args=result["args"],
+                returns=result["returns"],
+                raises=result["raises"],
+                complexity=result["complexity"]
+            )
+        except Exception as e:
+            self.logger.error(f"Error parsing docstring: {e}", exc_info=True)
+            return DocstringData(
+                summary="Failed to parse docstring",
+                description=str(e),
+                args=[],
+                returns={"type": "Any", "description": ""},
+                raises=[],
+                complexity=1
+            )
 
     def _parse_docstring_content(self, docstring: str) -> dict[str, Any]:
         """Parses docstring content into a structured dictionary."""
-
         docstring_str = docstring.strip()
         lines = len(docstring_str.splitlines())
         length = len(docstring_str)
@@ -96,19 +101,19 @@ class DocstringProcessor:
                 try:
                     parsed_docstring = parse(docstring_str, style=style)
                     self.docstring_stats["successful"] += 1
-                    break  # Exit loop if parsing successful
+                    break
                 except Exception as e:
                     self.logger.debug(
                         f"Failed to parse with style {style}: {e}",
                         extra={"style": style},
                     )
-            else:  # No break, all styles failed
+            else:
                 self.docstring_stats["failed"] += 1
                 self.logger.warning(
                     "Failed to parse docstring with any style",
                     extra={"docstring": docstring_str[:50]},
                 )
-                return {  # Return a default DocstringData dictionary
+                return {
                     "summary": docstring_str,
                     "description": "",
                     "args": [],
@@ -120,42 +125,45 @@ class DocstringProcessor:
         if self.docstring_stats["total_processed"] % 10 == 0:
             self._display_docstring_stats()
 
-        args = [
-            {
-                "name": param.arg_name or "",
-                "type": param.type_name or "Any",
-                "description": param.description or "",
-                "nested": [],  # Placeholder for nested arguments
-            }
-            for param in parsed_docstring.params
-        ]
-
-        returns_dict: ReturnsDict = {"type": "Any", "description": ""}
-        if parsed_docstring.returns:
-            returns_dict["type"] = parsed_docstring.returns.type_name or "Any"
-            returns_dict["description"] = parsed_docstring.returns.description or ""
-
-        raises = [
-            {
-                "exception": exc.type_name or "Exception",
-                "description": exc.description or "",
-            }
-            for exc in parsed_docstring.raises
-        ]
-
         return {
             "summary": parsed_docstring.short_description or "No summary available.",
             "description": parsed_docstring.long_description
             or "No description provided.",
-            "args": args,
-            "returns": returns_dict,
-            "raises": raises,
-            "complexity": 1,  # Placeholder for complexity calculation
+            "args": [
+                {
+                    "name": param.arg_name or "",
+                    "type": param.type_name or "Any",
+                    "description": param.description or "",
+                    "nested": [],
+                }
+                for param in parsed_docstring.params
+            ],
+            "returns": {
+                "type": parsed_docstring.returns.type_name if parsed_docstring.returns else "Any",
+                "description": parsed_docstring.returns.description if parsed_docstring.returns else ""
+            },
+            "raises": [
+                {
+                    "exception": exc.type_name or "Exception",
+                    "description": exc.description or "",
+                }
+                for exc in parsed_docstring.raises
+            ],
+            "complexity": 1,
         }
+
+    def validate(self, docstring_data: dict[str, Any]) -> tuple[bool, list[str]]:
+        """Validates a docstring dictionary against the schema."""
+        try:
+            validate(instance=docstring_data, schema=self.docstring_schema)
+            self.metrics_collector.collect_validation_metrics(success=True)
+            return True, []
+        except ValidationError as e:
+            self.metrics_collector.collect_validation_metrics(success=False)
+            return False, [str(e)]
 
     def _display_docstring_stats(self) -> None:
         """Displays current docstring processing statistics."""
-
         display_metrics(
             {
                 "Total Processed": self.docstring_stats["total_processed"],
@@ -168,11 +176,61 @@ class DocstringProcessor:
             title="Docstring Processing Statistics",
         )
 
-    def validate(self, docstring_data: dict[str, Any]) -> tuple[bool, list[str]]:
-        """Validates a docstring dictionary against the schema."""
-
+    async def process_docstring(
+        self, 
+        docstring: str
+    ) -> ProcessingResult:
+        """Process a docstring and return structured results."""
+        start_time = time.time()
         try:
-            validate(instance=docstring_data, schema=self.docstring_schema)
-            return True, []
-        except ValidationError as e:
-            return False, [str(e)]
+            parsed_data = self.parse(docstring)
+            is_valid, errors = self.validate(parsed_data.to_dict())
+            
+            if not is_valid:
+                raise DataValidationError(f"Docstring validation failed: {errors}")
+
+            processing_time = time.time() - start_time
+            await self.metrics_collector.track_operation(
+                operation_type="docstring_processing",
+                success=True,
+                duration=processing_time,
+                metadata={
+                    "lines": len(docstring.splitlines()),
+                    "length": len(docstring),
+                    "has_args": bool(parsed_data.args),
+                    "has_returns": bool(parsed_data.returns.get("description")),
+                    "has_raises": bool(parsed_data.raises)
+                },
+            )
+            
+            return ProcessingResult(
+                content=parsed_data.to_dict(),
+                usage={},  # No token usage for docstring processing
+                metrics={
+                    "processing_time": processing_time,
+                    "validation_success": True,
+                },
+                validation_status=True,
+                validation_errors=[],
+                schema_errors=[]
+            )
+        except Exception as e:
+            processing_time = time.time() - start_time
+            self.logger.error(f"Error processing docstring: {e}", exc_info=True)
+            await self.metrics_collector.track_operation(
+                operation_type="docstring_processing",
+                success=False,
+                duration=processing_time,
+                metadata={"error": str(e)},
+            )
+            return ProcessingResult(
+                content={},
+                usage={},
+                metrics={
+                    "processing_time": processing_time,
+                    "validation_success": False,
+                },
+                validation_status=False,
+                validation_errors=[str(e)],
+                schema_errors=[]
+            )

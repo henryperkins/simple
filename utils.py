@@ -45,7 +45,6 @@ from git.exc import GitCommandError
 import tiktoken
 
 from core.exceptions import LiveError, DocumentationError
-from exceptions import DocumentationError
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import TokenUsage
 

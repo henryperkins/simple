@@ -8,8 +8,8 @@ from datetime import datetime
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import DocumentationData, ExtractedClass, MetricData
+from core.types.docstring import DocstringData
 from core.exceptions import DocumentationError
-
 
 class FunctionDict(TypedDict, total=False):
     name: str
@@ -17,12 +17,10 @@ class FunctionDict(TypedDict, total=False):
     args: list[dict[str, Any]]
     returns: dict[str, str]
 
-
 class ConstantDict(TypedDict, total=False):
     name: str
     type: str
     value: str
-
 
 class MarkdownGenerator:
     """Generates formatted markdown documentation."""
@@ -99,20 +97,21 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
         # Add class hierarchy information
         for cls_dict in classes:
-            cls = ExtractedClass(**cls_dict)
+            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
             if cls.inheritance_chain:
                 tables.append(f"\n### Class Hierarchy for {cls.name}\n")
                 tables.append("```\n" + " -> ".join(cls.inheritance_chain) + "\n```\n")
 
         # Add interface information
-        if any(cls.get("interfaces") for cls in classes):
+        if any(cls_dict.get("interfaces") for cls_dict in classes):
             tables.append("\n### Implemented Interfaces\n")
-            for cls in classes:
-                if cls.interfaces:
+            for cls_dict in classes:
+                cls = ExtractedClass.from_dict(cls_dict)
+                if hasattr(cls, "interfaces") and cls.interfaces:
                     tables.append(f"- `{cls.name}`: {', '.join(cls.interfaces)}\n")
 
         # Add properties table
-        if any(cls.get("property_methods") for cls in classes):
+        if any(cls_dict.get("property_methods") for cls_dict in classes):
             tables.extend(
                 [
                     "\n### Properties\n",
@@ -120,13 +119,14 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                     "|-------|----------|------|--------|",
                 ]
             )
-            for cls in classes:
-                for cls_dict in classes:
-                    for prop in cls_dict.get("property_methods", []):
-                        access = "Read/Write" if prop.get("has_setter") else "Read-only"
-                        tables.append(
-                            f"| `{cls_dict.get('name', 'Unknown')}` | `{prop.get('name', 'Unknown')}` | `{prop.get('type', 'Unknown')}` | {access} |"
-                        )
+            for cls_dict in classes:
+                cls = ExtractedClass.from_dict(cls_dict)
+                for prop in cls.property_methods:
+                    access = "Read/Write" if prop.get("has_setter") else "Read-only"
+                    tables.append(
+                        f"| `{cls.name}` | `{prop.get('name', 'Unknown')}` | `{prop.get('type', 'Unknown')}` | {access} |"
+                    )
+
         # Overview table
         tables.extend(
             [
@@ -137,8 +137,12 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         )
 
         for cls_dict in classes:
-            cls_dict.pop("_logger", None)
-            cls = ExtractedClass(**cls_dict)
+            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
+
+            # Ensure docstring_info is a DocstringData object
+            if isinstance(cls.docstring_info, dict):
+                cls.docstring_info = DocstringData(**cls.docstring_info)
+
             description = (
                 cls.docstring_info.summary if cls.docstring_info else "No description"
             )
@@ -155,7 +159,14 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         )
 
         for cls_dict in classes:
-            cls = ExtractedClass(**cls_dict)
+            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
+
+            # Ensure methods are ExtractedFunction objects
+            cls.methods = [
+                ExtractedFunction.from_dict(method) if isinstance(method, dict) else method
+                for method in cls.methods
+            ]
+
             for method in cls.methods:
                 docstring_info = method.get_docstring_info()
                 desc = docstring_info.summary if docstring_info else "No description"
@@ -176,6 +187,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                 )
 
         return "\n".join(tables)
+
 
     def _generate_function_tables(self, functions: Sequence[FunctionDict]) -> str:
         """Generate the functions section."""

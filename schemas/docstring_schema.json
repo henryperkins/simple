@@ -72,9 +72,9 @@
                 "default": []
             },
             "complexity": {
-                "type": "integer",
+                "type": ["integer", "string"],
                 "description": "McCabe complexity score",
-                 "default": 1
+                "default": 1
             }
         },
         "required": ["summary", "description", "returns"],

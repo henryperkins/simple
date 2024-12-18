@@ -12,7 +12,7 @@ from logging.handlers import RotatingFileHandler
 from contextvars import ContextVar
 from types import TracebackType
 
-T = TypeVar('T', bound=Logger)
+T = TypeVar("T", bound=Logger)
 
 # Context variable for the correlation ID
 correlation_id_var: ContextVar[str | None] = ContextVar("correlation_id", default=None)
@@ -31,15 +31,49 @@ def get_correlation_id() -> str | None:
 class CorrelationLoggerAdapter(logging.LoggerAdapter[T], Generic[T]):
     """Logger adapter that includes correlation ID in log messages."""
 
+    RESERVED_KEYS = {
+        "name",
+        "msg",
+        "args",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "process",
+        "processName",
+    }
+
     def __init__(self, logger: T, extra: Mapping[str, Any] | None = None) -> None:
         super().__init__(logger, extra or {})
         self.correlation_id_var = correlation_id_var
 
-    def process(self, msg: Any, kwargs: MutableMapping[str, Any]) -> tuple[Any, MutableMapping[str, Any]]:
+    def process(
+        self, msg: Any, kwargs: MutableMapping[str, Any]
+    ) -> tuple[Any, MutableMapping[str, Any]]:
         extra = kwargs.get("extra", {})
-        kwargs["extra"] = extra
+
+        # Rename reserved keys in the extra dictionary
+        sanitized_extra = {
+            (f"{key}_extra" if key in self.RESERVED_KEYS else key): value
+            for key, value in extra.items()
+        }
+
+        # Add the correlation ID to the sanitized extra dictionary
         correlation_id = self.correlation_id_var.get()
-        kwargs["extra"]["correlation_id"] = correlation_id or "N/A"
+        sanitized_extra["correlation_id"] = correlation_id or "N/A"
+
+        kwargs["extra"] = sanitized_extra
         return msg, kwargs
 
 
@@ -48,10 +82,12 @@ class SanitizedLogFormatter(logging.Formatter):
 
     def format(self, record: LogRecord) -> str:
         # Ensure correlation_id and sanitized_info fields exist
-        setattr(record, 'correlation_id', get_correlation_id() or "N/A")
-        setattr(record, 'sanitized_info', getattr(
-            record, "sanitized_info", {"info": "[Sanitized]"}
-        ))
+        setattr(record, "correlation_id", get_correlation_id() or "N/A")
+        setattr(
+            record,
+            "sanitized_info",
+            getattr(record, "sanitized_info", {"info": "[Sanitized]"}),
+        )
 
         # Sanitize the message and arguments
         record.msg = self._sanitize(record.msg)
@@ -143,32 +179,34 @@ class LoggerSetup:
                 sys.stderr.write(f"Failed to set up file handler: {e}\n")
 
     @classmethod
-    def get_logger(cls, name: str | None = None, correlation_id: str | None = None) -> Logger:
-         """Get a configured logger instance with optional correlation ID."""
-         if not cls._configured:
+    def get_logger(
+        cls, name: str | None = None, correlation_id: str | None = None
+    ) -> Logger:
+        """Get a configured logger instance with optional correlation ID."""
+        if not cls._configured:
             cls.configure()
 
-         if name is None:
+        if name is None:
             name = __name__
 
-         if name in cls._loggers:
+        if name in cls._loggers:
             return cls._loggers[name]
 
-         logger = logging.getLogger(name)
-         if not hasattr(logger, "isEnabledFor"):
+        logger = logging.getLogger(name)
+        if not hasattr(logger, "isEnabledFor"):
             logger.isEnabledFor = lambda level: True
 
-         cls._loggers[name] = logger
+        cls._loggers[name] = logger
 
-         if correlation_id:
-             set_correlation_id(correlation_id)
-         
-         return cast(Logger, cls._get_correlation_logger_adapter(logger))
+        if correlation_id:
+            set_correlation_id(correlation_id)
 
-
+        return cast(Logger, cls._get_correlation_logger_adapter(logger))
 
     @classmethod
-    def _get_correlation_logger_adapter(cls, logger: Logger) -> CorrelationLoggerAdapter[Logger]:
+    def _get_correlation_logger_adapter(
+        cls, logger: Logger
+    ) -> CorrelationLoggerAdapter[Logger]:
         return CorrelationLoggerAdapter(logger)
 
     @classmethod
@@ -200,4 +238,3 @@ class LoggerSetup:
                 },
             )
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
-

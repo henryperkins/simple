@@ -1,17 +1,21 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, TypedDict
+from typing import Any, Dict, List
+
 
 @dataclass
 class DocstringData:
     """Docstring data structure."""
+
     summary: str
     description: str
-    args: list[dict[str, Any]] = field(default_factory=list)
-    returns: dict[str, str] = field(default_factory=lambda: {"type": "Any", "description": ""})
-    raises: list[dict[str, str]] = field(default_factory=list)
+    args: List[Dict[str, Any]] = field(default_factory=list)
+    returns: Dict[str, str] = field(
+        default_factory=lambda: {"type": "Any", "description": ""}
+    )
+    raises: List[Dict[str, str]] = field(default_factory=list)
     complexity: int = 1
 
-    def validate(self) -> tuple[bool, list[str]]:
+    def validate(self) -> tuple[bool, List[str]]:
         """Validate docstring data."""
         errors = []
         if not self.summary:
@@ -20,7 +24,7 @@ class DocstringData:
             errors.append("Description is required")
         return not errors, errors
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
             "summary": self.summary,
@@ -30,3 +34,15 @@ class DocstringData:
             "raises": self.raises,
             "complexity": self.complexity,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DocstringData":
+        """Create a DocstringData instance from a dictionary."""
+        return cls(
+            summary=data.get("summary", ""),
+            description=data.get("description", ""),
+            args=data.get("args", []),
+            returns=data.get("returns", {"type": "Any", "description": ""}),
+            raises=data.get("raises", []),
+            complexity=data.get("complexity", 1),
+        )
