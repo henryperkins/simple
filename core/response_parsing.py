@@ -222,6 +222,12 @@ class ResponseParsingService:
                     content = self._extract_content_from_function_call(message["function_call"], "function_call")
                 elif "content" in message:
                     content = self._extract_content_from_direct_content(message["content"])
+                else:
+                    self.logger.warning("Message content is missing, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response(response)
+            else:
+                self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
+                content = self._create_fallback_response(response)
 
             if not content:
                 if "summary" in response and "description" in response:
@@ -269,7 +275,7 @@ class ResponseParsingService:
                 is_valid, errors = self._validate_content(args_dict, "function")
                 if not is_valid:
                     self.logger.error(f"Function call arguments validation failed: {errors}")
-                    raise CustomValidationError(f"Invalid function call arguments: {errors}")
+                    return self._create_fallback_response(args_dict)  # Return fallback content
                 return args_dict
             return args_dict
         except json.JSONDecodeError as e:

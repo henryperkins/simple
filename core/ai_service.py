@@ -154,6 +154,34 @@ class AIService:
                 "choices": [{"message": {"content": json.dumps(response)}}],
                 "usage": response.get("usage", {}),
             }
+
+        if "function_call" in response:
+            formatted_response = {
+                "choices": [{"message": {"function_call": response["function_call"]}}],
+                "usage": response.get("usage", {}),
+            }
+            # Validate the function call arguments
+            args = json.loads(response["function_call"].get("arguments", "{}"))
+            is_valid, errors = self.response_parser._validate_content(args, "function")
+            if not is_valid:
+                self.logger.error(f"Function call arguments validation failed: {errors}")
+                raise DataValidationError(f"Invalid function call arguments: {errors}")
+            self.logger.debug(f"Formatted function call response to: {formatted_response}", extra=log_extra)
+            return formatted_response
+
+        if "tool_calls" in response:
+            formatted_response = {
+                "choices": [{"message": {"tool_calls": response["tool_calls"]}}],
+                "usage": response.get("usage", {}),
+            }
+            self.logger.debug(f"Formatted tool calls response to: {formatted_response}", extra=log_extra)
+            return formatted_response
+
+        self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
+        return {
+            "choices": [{"message": {"content": json.dumps({"summary": "Invalid response format", "description": "The response did not match the expected structure."})}}],
+            "usage": {},
+        }
         
         if "summary" in response or "description" in response:
             return {
@@ -272,6 +300,9 @@ class AIService:
                         self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
                         if not isinstance(api_response, dict):
                             self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
+                            return {
+                                "choices": [{"message": {"content": "Invalid response format"}}]
+                            }  # Return a fallback response
                         if not isinstance(api_response, dict):
                             self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
 
