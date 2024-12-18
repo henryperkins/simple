@@ -100,6 +100,37 @@ When describing components:
 - Note relationships between different components
 - Identify potential usage patterns and best practices
 - Document any important implementation details or constraints
+
+Expected Response Format:
+Please respond with a JSON object in the following format:
+{
+    "summary": "A brief summary of the module's purpose.",
+    "description": "A detailed explanation of the module's functionality and design.",
+    "args": [
+        {
+            "name": "argument_name",
+            "type": "argument_type",
+            "description": "A brief description of the argument."
+        }
+    ],
+    "returns": {
+        "type": "return_type",
+        "description": "A brief description of the return value."
+    },
+    "raises": [
+        {
+            "exception": "exception_name",
+            "description": "A brief description of the exception."
+        }
+    ],
+    "complexity": 1
+}
+
+Important Notes:
+- Ensure the response strictly adheres to the JSON format above.
+- Include all relevant details about the module, classes, and functions.
+- Avoid adding any extraneous information outside the JSON structure.
+"""
 """
 
 Expected Response Format:
