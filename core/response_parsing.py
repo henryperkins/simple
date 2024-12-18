@@ -155,11 +155,14 @@ class ResponseParsingService:
                 validate(instance=content, schema=schema)
 
             return True, validation_errors
-
-            schema = self.function_schema.get("function", {}).get("parameters", {})
-            if not schema:
-                validation_errors.append("Invalid function schema structure")
-                return False, validation_errors
+        except ValidationError as e:
+            validation_errors.append(str(e))
+            self.logger.error(f"Validation error: {e}", extra={"correlation_id": self.correlation_id})
+            return False, validation_errors
+        except Exception as e:
+            validation_errors.append(f"Unexpected validation error: {str(e)}")
+            self.logger.error(f"Unexpected validation error: {e}", exc_info=True, extra={"correlation_id": self.correlation_id})
+            return False, validation_errors
 
             validate(instance=content, schema=schema)
 
