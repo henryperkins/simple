@@ -100,6 +100,7 @@ When describing components:
 - Note relationships between different components
 - Identify potential usage patterns and best practices
 - Document any important implementation details or constraints
+"""
 
 Expected Response Format:
 Please respond with a JSON object in the following format:
