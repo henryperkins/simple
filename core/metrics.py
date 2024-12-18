@@ -132,6 +132,10 @@ class Metrics:
                 f"Error calculating metrics: {e} with correlation ID: {self.correlation_id}",
                 exc_info=True,
             )
+            self.logger.debug(
+                f"Raw response content: {metrics}",
+                extra={"correlation_id": self.correlation_id},
+            )
             # Return default metrics on error
             from core.types import MetricData
 

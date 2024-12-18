@@ -46,6 +46,10 @@ class DependencyAnalyzer:
             impact = self._calculate_maintainability_impact(categorized_deps)
             categorized_deps["maintainability_impact"] = impact
 
+            self.logger.debug(
+                f"Formatted dependencies for AI service: {categorized_deps}",
+                extra={"correlation_id": get_correlation_id()},
+            )
             return categorized_deps
 
         except Exception as e:
