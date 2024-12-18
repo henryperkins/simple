@@ -311,7 +311,7 @@ class AIService:
                     url,
                     headers=headers,
                     json=request_params,
-                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+                    timeout=aiohttp.ClientTimeout(total=self.config.timeout)
                 ) as response:
                     if response.status == 200:
                         try:
