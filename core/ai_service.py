@@ -294,7 +294,14 @@ class AIService:
                     raise APICallError("Failed to initialize client session")
 
                 self.logger.info(f"Making API call (attempt {attempt + 1}/{max_retries}) to url: '{url}'", extra=log_extra)
-                self.logger.debug(f"Generated prompt: {request_params.get('prompt', 'No prompt found')}", extra=log_extra)
+                self.logger.debug(
+                    f"Generated prompt: {request_params.get('prompt', 'No prompt found')}",
+                    extra=log_extra,
+                )
+                self.logger.debug(
+                    f"Raw response text: {await response.text()}",
+                    extra={"status_code": response.status, "url": url},
+                )
                 async with self._client.post(
                     url,
                     headers=headers,
@@ -302,12 +309,26 @@ class AIService:
                     timeout=aiohttp.ClientTimeout(total=self.config.timeout),
                 ) as response:
                     if response.status == 200:
-                        api_response = await response.json()
+                        try:
+                            api_response = await response.json()
+                        except aiohttp.ContentTypeError as e:
+                            error_text = await response.text()
+                            self.logger.error(
+                                f"Invalid response content type or empty response: {error_text}",
+                                extra={"status_code": response.status, "url": url},
+                            )
+                            raise APICallError(
+                                f"Invalid response content type or empty response: {error_text}"
+                            ) from e
                         self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
-                        if not isinstance(api_response, dict):
-                            self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
+                        if not api_response or not isinstance(api_response, dict):
+                            error_text = await response.text()
+                            self.logger.error(
+                                f"Empty or invalid JSON response: {error_text}",
+                                extra={"status_code": response.status, "url": url},
+                            )
                             return {
-                                "choices": [{"message": {"content": "Invalid response format"}}]
+                                "choices": [{"message": {"content": "Empty or invalid JSON response"}}]
                             }  # Return a fallback response
 
                         # Validate response format

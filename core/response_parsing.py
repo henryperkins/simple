@@ -233,6 +233,10 @@ class ResponseParsingService:
     def _extract_content(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """Extract content from various response formats."""
         try:
+            self.logger.debug(
+                f"Raw response content before extraction: {response}",
+                extra={"correlation_id": self.correlation_id},
+            )
             content = {}
             source_code = response.get("source_code")
 
@@ -250,7 +254,10 @@ class ResponseParsingService:
                 content = self._create_fallback_response(response)
 
             if not content:
-                if "summary" in response and "description" in response:
+                if not response:
+                    self.logger.error("Response is empty, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response()
+                elif "summary" in response and "description" in response:
                     content = response
                 else:
                     self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
