@@ -212,14 +212,21 @@ class ResponseParsingService:
             self.logger.warning(f"Could not get source code from context: {e}", extra={"correlation_id": self.correlation_id})
 
         if isinstance(response, str):
-            lines = response.strip().split('\n')
-            if lines and lines[0].startswith("# Module Summary"):
-                fallback["summary"] = lines[0].lstrip("# Module Summary").strip()
-                fallback["description"] = '\n'.join(lines[1:]).strip()
-        elif isinstance(response, dict) and "choices" in response:
-            message = response.get("choices", [{}])[0].get("message", {})
-            if "content" in message and message["content"] is not None:
-                fallback["description"] = str(message["content"])
+            fallback["description"] = response.strip()
+        elif isinstance(response, dict):
+            if "choices" in response:
+                message = response.get("choices", [{}])[0].get("message", {})
+                if "content" in message and message["content"] is not None:
+                    try:
+                        content = json.loads(message["content"])
+                        fallback.update(content)
+                    except json.JSONDecodeError:
+                        fallback["description"] = str(message["content"])
+            elif "summary" in response and "description" in response:
+                fallback.update({
+                    "summary": response.get("summary", fallback["summary"]),
+                    "description": response.get("description", fallback["description"]),
+                })
 
         return fallback
 
@@ -246,8 +253,8 @@ class ResponseParsingService:
                 if "summary" in response and "description" in response:
                     content = response
                 else:
-                    self.logger.error("Response format is invalid, creating fallback.", extra={"response": response})
-                    content = self._create_fallback_response(response)
+                    self.logger.warning("Response format is invalid, creating fallback.", extra={"response": response})
+                    content = self._create_fallback_response()
 
             content = self._ensure_required_fields(content)
 
