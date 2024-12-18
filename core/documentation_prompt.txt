@@ -52,7 +52,11 @@ Analyze the code and generate comprehensive Google-style documentation. Your res
 Required fields:
 - summary: A concise summary of what the code does
 - description: A detailed description of the functionality
-- returns: Must include both type and description
+- returns: Must include both type and description. For example:
+    "returns": {
+        "type": "str",
+        "description": "The string representation of the object."
+    }
 
 Optional fields with defaults:
 - args: [] (empty array if no arguments)
@@ -60,3 +64,4 @@ Optional fields with defaults:
 - complexity: 1 (default complexity score)
 
 Ensure all descriptions are clear and technically accurate. If any information is missing or cannot be determined, explicitly state that it is not available. Format your response exactly according to this schema.
+Please respond with a JSON object that matches the schema defined above.

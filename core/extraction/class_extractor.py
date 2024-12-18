@@ -6,7 +6,7 @@ import ast
 import uuid
 from typing import Any, Optional, List, Dict
 
-from core.logger import CorrelationLoggerAdapter
+from core.logger import CorrelationLoggerAdapter, LoggerSetup, get_correlation_id
 from core.types import ExtractionContext, ExtractedClass, ExtractedFunction
 from core.types.docstring import DocstringData
 from utils import handle_extraction_error
@@ -30,10 +30,7 @@ class ClassExtractor:
     ) -> None:
         """Initialize the ClassExtractor."""
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        self.logger = CorrelationLoggerAdapter(
-            context.logger,
-            extra={"correlation_id": self.correlation_id},
-        )
+        self.logger = LoggerSetup.get_logger(__name__, self.correlation_id)
         self.context = context
         self.function_extractor = self.context.function_extractor
         self.docstring_parser = context.docstring_processor

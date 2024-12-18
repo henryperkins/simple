@@ -1,8 +1,4 @@
-"""
-Service for interacting with the AI model to generate documentation.
-"""
-
-from typing import Any
+from typing import Any, Optional
 import time
 import asyncio
 from urllib.parse import urljoin
@@ -11,7 +7,7 @@ import aiohttp
 
 from core.config import AIConfig
 from core.docstring_processor import DocstringProcessor
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.logger import LoggerSetup
 from core.prompt_manager import PromptManager
 from api.token_management import TokenManager
 from core.exceptions import APICallError, DataValidationError, DocumentationError
@@ -21,39 +17,39 @@ from core.types.base import (
     ExtractedClass,
     ExtractedFunction,
 )
-from core.types.docstring import DocstringData
 from core.metrics_collector import MetricsCollector
-from core.console import (
-    print_info,
-    print_phase_header,
-    display_processing_phase,
-    display_metrics,
-    display_api_metrics,
-    create_status_table,
-)
-
 
 class AIService:
-    """Service for interacting with the AI model to generate documentation."""
+    """Service for interacting with the AI model to generate documentation.
+
+    This class manages the entire process of generating documentation from source code,
+    including preparing prompts, making API calls, and handling responses. It is designed
+    to be used asynchronously and supports retry logic for robust API interactions.
+
+    Attributes:
+        config (AIConfig): Configuration for the AI model and service parameters.
+        correlation_id (str): An optional ID for correlating logs and operations.
+    """
 
     def __init__(
-        self, config: AIConfig | None = None, correlation_id: str | None = None
+        self, config: Optional[AIConfig] = None, correlation_id: Optional[str] = None
     ) -> None:
         """
-        Initialize AI service.
+        Initialize the AIService with optional configuration and correlation ID.
 
         Args:
-            config: AI service configuration.
-            correlation_id: Optional correlation ID for tracking related operations.
+            config (AIConfig, optional): Configuration for the AI model. If not provided,
+                it will be retrieved from the dependency injector.
+            correlation_id (str, optional): An ID used for correlating logs and operations
+                across different parts of the system.
         """
         # Delayed import to avoid circular dependency
         from core.dependency_injection import Injector
 
         self.config = config or Injector.get("config")().ai
         self.correlation_id = correlation_id
-        self.logger = CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__),
-            extra={"correlation_id": self.correlation_id},
+        self.logger = LoggerSetup.get_logger(
+            f"{__name__}.{self.__class__.__name__}", correlation_id=self.correlation_id
         )
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")
@@ -65,11 +61,8 @@ class AIService:
             self.logger.warning(
                 "Docstring processor not registered, using default",
                 extra={
-                    "correlation_id": self.correlation_id,
-                    "sanitized_info": {
-                        "status": "warning",
-                        "type": "fallback_processor",
-                    },
+                    "status": "warning",
+                    "type": "fallback_processor",
                 },
             )
             self.docstring_processor = DocstringProcessor()
@@ -81,91 +74,270 @@ class AIService:
             correlation_id=correlation_id,
         )
         self.semaphore = asyncio.Semaphore(10)  # Default semaphore value
-        self._client: aiohttp.ClientSession | None = None
+        self._client: Optional[aiohttp.ClientSession] = None
 
-        print_phase_header("AI Service Initialization")
-        create_status_table(
-            "Configuration",
-            {
-                "Model": self.config.model,
-                "Max Tokens": self.config.max_tokens,
-                "Temperature": self.config.temperature,
-                "Timeout": f"{self.config.timeout}s",
+        self.logger.info(
+            "AI Service initialized",
+            extra={
+                "model": self.config.model,
+                "max_tokens": self.config.max_tokens,
+                "temperature": self.config.temperature,
+                "timeout": f"{self.config.timeout}s",
             },
         )
 
     async def start(self) -> None:
-        """Start the AI service by initializing the client session."""
+        """Start the AI service by initializing the client session.
+
+        This method should be called before making any API calls to ensure the client
+        session is properly set up.
+        """
         if self._client is None:
             self._client = aiohttp.ClientSession()
-            print_info("AI Service client session initialized")
+            self.logger.info("AI Service client session initialized")
+
+    def _add_source_code_to_response(self, response: dict[str, Any], source_code: str) -> dict[str, Any]:
+        """Recursively adds source code to the response content and function call arguments.
+        
+        Args:
+            response (dict[str, Any]): The API response to modify.
+            source_code (str): The source code to add.
+        
+        Returns:
+            dict[str, Any]: The modified response with source code added.
+        """
+        if isinstance(response, dict):
+            response["source_code"] = source_code  # Add source code at the top level
+            if "choices" in response:
+                for choice in response["choices"]:
+                    if "message" in choice:
+                        message = choice["message"]
+                        if "content" in message and message["content"] is not None:
+                            try:
+                                content = json.loads(message["content"])
+                                if isinstance(content, dict):
+                                    content["source_code"] = source_code
+                                    content.setdefault("code_metadata", {})["source_code"] = source_code
+                                message["content"] = json.dumps(content)
+                            except (json.JSONDecodeError, AttributeError) as e:
+                                self.logger.error(f"Error parsing response content: {e}")
+                                message["content"] = json.dumps({
+                                    "summary": "Error parsing content",
+                                    "description": str(message["content"]),
+                                    "source_code": source_code
+                                })
+                        if "function_call" in message:
+                            try:
+                                args = json.loads(message["function_call"].get("arguments", "{}"))
+                                if isinstance(args, dict):
+                                    args["source_code"] = source_code
+                                message["function_call"]["arguments"] = json.dumps(args)
+                            except json.JSONDecodeError as e:
+                                self.logger.error(f"Error parsing function call arguments: {e}")
+        return response
+    
+    def _format_response(self, response: dict[str, Any], log_extra: Optional[dict[str, str]] = None) -> dict[str, Any]:
+        """Format the API response into a consistent structure.
+
+        Args:
+            response (dict[str, Any]): The raw API response to format.
+            log_extra (dict[str, str], optional): Additional logging information.
+
+        Returns:
+            dict[str, Any]: The formatted response.
+        """
+        if "choices" in response and isinstance(response["choices"], list):
+            return response
+        
+        if "summary" in response or "description" in response:
+            formatted_response = {
+                "choices": [{"message": {"content": json.dumps(response)}}],
+                "usage": response.get("usage", {}),
+            }
+            self.logger.debug(f"Formatted direct content response to: {formatted_response}", extra=log_extra)
+            return formatted_response
+        
+        if "function_call" in response:
+            formatted_response = {
+                "choices": [{"message": {"function_call": response["function_call"]}}],
+                "usage": response.get("usage", {}),
+            }
+            self.logger.debug(f"Formatted function call response to: {formatted_response}", extra=log_extra)
+            return formatted_response
+
+        if "tool_calls" in response:
+            formatted_response = {
+                "choices": [{"message": {"tool_calls": response["tool_calls"]}}],
+                "usage": response.get("usage", {}),
+            }
+            self.logger.debug(f"Formatted tool calls response to: {formatted_response}", extra=log_extra)
+            return formatted_response
+        
+        formatted_response = {
+            "choices": [{"message": {"content": json.dumps(response)}}],
+            "usage": {},
+        }
+        
+        # Ensure 'returns' field exists with a default if missing
+        for choice in formatted_response.get("choices", []):
+            if "message" in choice and "content" in choice["message"]:
+                try:
+                    content = json.loads(choice["message"]["content"])
+                    if isinstance(content, dict) and "returns" not in content:
+                        content["returns"] = {"type": "Any", "description": "No return description provided"}
+                        choice["message"]["content"] = json.dumps(content)
+                except (json.JSONDecodeError, TypeError) as e:
+                    self.logger.error(f"Error adding default returns: {e}", extra=log_extra)
+        
+        self.logger.debug(f"Formatted generic response to: {formatted_response}", extra=log_extra)
+        return formatted_response
+
+    async def _make_api_call_with_retry(
+        self, prompt: str, function_schema: Optional[dict[str, Any]], max_retries: int = 3, log_extra: Optional[dict[str, str]] = None
+    ) -> dict[str, Any]:
+        """Makes an API call to the AI model with retry logic.
+
+        This method attempts to make an API call to the AI model, retrying up to a specified
+        number of times in case of failures. It uses exponential backoff between retries.
+
+        Args:
+            prompt (str): The prompt to send to the AI model.
+            function_schema (Optional[dict[str, Any]]): The schema for the function call.
+            max_retries (int): The maximum number of retry attempts. Default is 3.
+            log_extra (dict[str, str], optional): Additional logging information.
+
+        Returns:
+            dict[str, Any]: The response from the AI model.
+
+        Raises:
+            APICallError: If the API call fails after the maximum number of retries.
+        """
+        headers = {"api-key": self.config.api_key, "Content-Type": "application/json"}
+
+        if self.correlation_id:
+            headers["x-correlation-id"] = self.correlation_id
+
+        request_params = await self.token_manager.validate_and_prepare_request(
+            prompt,
+            max_tokens=self.config.max_tokens,
+            temperature=self.config.temperature,
+        )
+
+        if function_schema:
+            request_params["functions"] = [function_schema]
+            request_params["function_call"] = {"name": "generate_docstring"}
+
+        self.logger.info(
+            "Making API call with retry",
+            extra={
+                "prompt_tokens": request_params.get("max_tokens", 0),
+                "temperature": request_params.get("temperature", 0),
+                "retries": max_retries,
+                **(log_extra or {}),
+            },
+        )
+
+        for attempt in range(max_retries):
+            try:
+                endpoint = self.config.endpoint.rstrip("/") + "/"
+                path = f"openai/deployments/{self.config.deployment}/chat/completions"
+                url = urljoin(endpoint, path) + "?api-version=2024-10-01-preview"
+
+                if self._client is None:
+                    await self.start()
+
+                if self._client is None:
+                    raise APICallError("Failed to initialize client session")
+
+                self.logger.info(f"Making API call (attempt {attempt + 1}/{max_retries}) to url: '{url}'", extra=log_extra)
+                async with self._client.post(
+                    url,
+                    headers=headers,
+                    json=request_params,
+                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+                ) as response:
+                    if response.status == 200:
+                        api_response = await response.json()
+                        self.logger.debug(f"API response: {api_response}", extra=log_extra)
+                        return api_response  # Return successful response immediately
+
+                    error_text = await response.text()
+                    if attempt == max_retries - 1:
+                        raise APICallError(
+                            f"API call failed after {max_retries} retries: {error_text} - url: {url}"
+                        )
+                    self.logger.warning(f"API call failed (attempt {attempt + 1}): {error_text} - url: {url}", extra=log_extra)
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                if attempt == max_retries - 1:
+                    raise APICallError(
+                        f"API call failed after {max_retries} retries due to client error: {e} - url: {url}"
+                    ) from e
+                self.logger.warning(f"Client error (attempt {attempt + 1}): {e} - url: {url}", extra=log_extra)
+                await asyncio.sleep(2**attempt)
+
+        raise APICallError(f"API call failed after {max_retries} retries.")
 
     async def generate_documentation(
-        self, context: DocumentationContext, schema: dict[str, Any] | None = None
+        self, context: DocumentationContext, schema: Optional[dict[str, Any]] = None
     ) -> ProcessingResult:
+        """Generate documentation for the provided source code context."""
         start_time = time.time()
-        print_phase_header("Documentation Generation")
-
+        module_name = (
+            context.metadata.get("module_name", "") if context.metadata else ""
+        )
+        file_path = (
+            context.metadata.get("file_path", "") if context.metadata else ""
+        )
+        log_extra = {"log_module": module_name, "file": file_path}
         try:
-            self.logger.info(f"Source code length: {len(context.source_code)}")
-            self.logger.info(
-                f"First 50 characters of source code: {context.source_code[:50]}..."
+            self.logger.debug(
+                f"Source code length: {len(context.source_code)}", extra=log_extra
+            )
+            self.logger.debug(
+                f"First 50 characters of source code: {context.source_code[:50]}...",
+                extra=log_extra,
             )
 
             if not context.source_code or not context.source_code.strip():
                 self.logger.error(
                     "Source code is missing or empty",
                     extra={
-                        "correlation_id": self.correlation_id,
-                        "sanitized_info": {
-                            "status": "error",
-                            "type": "missing_source",
-                            "module": context.metadata.get("module_name", "unknown"),
-                            "file": context.metadata.get("file_path", "unknown"),
-                        },
+                        "status": "error",
+                        "type": "missing_source",
+                        "log_module": module_name,
+                        "file": file_path,
                     },
                 )
                 raise DocumentationError("Source code is missing or empty")
 
-            module_name = (
-                context.metadata.get("module_name", "") if context.metadata else ""
-            )
-            file_path = (
-                context.metadata.get("file_path", "") if context.metadata else ""
-            )
-
-            display_processing_phase(
-                "Context Information",
-                {
-                    "Module": module_name or "Unknown",
-                    "File": file_path or "Unknown",
-                    "Code Length": len(context.source_code),
-                    "Classes": len(context.classes),
-                    "Functions": len(context.functions),
+            self.logger.info(
+                "Generating documentation",
+                extra={
+                    "log_module": module_name,
+                    "file": file_path,
+                    "code_length": len(context.source_code),
+                    "classes": len(context.classes),
+                    "functions": len(context.functions),
                 },
             )
 
             # Convert classes and functions to proper types
-            classes = []
-            if context.classes:
-                for cls_data in context.classes:
-                    if isinstance(cls_data, ExtractedClass):
-                        classes.append(cls_data)
-                    else:
-                        classes.append(ExtractedClass(**cls_data))
-
-            functions = []
-            if context.functions:
-                for func_data in context.functions:
-                    if isinstance(func_data, ExtractedFunction):
-                        functions.append(func_data)
-                    else:
-                        functions.append(ExtractedFunction(**func_data))
+            classes = [
+                cls_data if isinstance(cls_data, ExtractedClass) else ExtractedClass(**cls_data)
+                for cls_data in context.classes or []
+            ]
+            functions = [
+                func_data if isinstance(func_data, ExtractedFunction) else ExtractedFunction(**func_data)
+                for func_data in context.functions or []
+            ]
 
             # Create documentation prompt
-            self.logger.info("Generating documentation prompt.")
+            self.logger.info("Generating documentation prompt.", extra=log_extra)
             self.logger.debug(
-                f"Source code before creating prompt: {context.source_code[:50]}..."
+                f"Source code before creating prompt: {context.source_code[:50]}...",
+                extra=log_extra
             )
             prompt = await self.prompt_manager.create_documentation_prompt(
                 module_name=module_name,
@@ -175,12 +347,12 @@ class AIService:
                 functions=functions,
             )
 
-            # Add function calling instructions to the prompt
+            # Add function calling instructions to the prompt if schema is provided
             if schema:
                 prompt = self.prompt_manager.get_prompt_with_schema(prompt, schema)
 
             # Get the function schema
-            function_schema = self.prompt_manager.get_function_schema(schema)
+            function_schema = self.prompt_manager.get_function_schema(schema) if schema else None
 
             # Validate and prepare request
             request_params = await self.token_manager.validate_and_prepare_request(
@@ -190,113 +362,79 @@ class AIService:
             )
 
             if request_params["max_tokens"] < 100:
-                print_info(
-                    "Warning: Token availability is low. Consider reducing prompt size."
+                self.logger.warning(
+                    "Token availability is low. Consider reducing prompt size.", extra=log_extra
                 )
 
-            print_info("Making API call to generate documentation")
+            self.logger.info("Making API call to generate documentation.", extra=log_extra)
             async with self.semaphore:
                 response = await self._make_api_call_with_retry(
-                    str(prompt), function_schema
+                    str(prompt), function_schema, log_extra=log_extra
                 )
-
-            # Add source code to content
-            if isinstance(response, dict):
-                response["source_code"] = context.source_code
-                response.setdefault("code_metadata", {})[
-                    "source_code"
-                ] = context.source_code
+            
+            # Add source code to response
+            response = self._add_source_code_to_response(response, context.source_code)
+            
+            # Format the response
+            formatted_response = self._format_response(response, log_extra)
 
             # Parse response into DocstringData
-            print_info("Parsing and validating response")
+            self.logger.info("Parsing and validating response", extra=log_extra)
             self.logger.debug(
-                f"Source code before parsing response: {context.source_code[:50]}..."
+                f"Source code before parsing response: {context.source_code[:50]}...",
+                extra=log_extra
             )
             parsed_response = await self.response_parser.parse_response(
-                response, expected_format="docstring", validate_schema=True
+                formatted_response, expected_format="docstring", validate_schema=True
             )
 
             if not parsed_response.validation_success:
-                self.logger.error(
-                    "Response validation failed",
+                self.logger.error(                    "Response validation failed",
                     extra={
-                        "correlation_id": self.correlation_id,
-                        "sanitized_info": {
-                            "status": "error",
-                            "type": "validation",
-                            "errors": parsed_response.errors,
-                        },
+                        "status": "error",
+                        "type": "validation",
+                        "errors": parsed_response.errors,
+                        "log_module": module_name,
+                        "file": file_path,
                     },
                 )
                 raise DataValidationError(
                     f"Response validation failed: {parsed_response.errors}"
                 )
 
-            # Create validated DocstringData instance
-            content_copy = parsed_response.content.copy()
-            content_copy.pop("source_code", None)  # Remove source_code if present
-            self.logger.debug(
-                f"Source code after parsing response: {context.source_code[:50]}..."
-            )
-            docstring_data = DocstringData(
-                summary=str(content_copy.get("summary", "")),
-                description=str(content_copy.get("description", "")),
-                args=content_copy.get("args", []),
-                returns=content_copy.get("returns", {"type": "Any", "description": ""}),
-                raises=content_copy.get("raises", []),
-                complexity=int(content_copy.get("complexity", 1)),
-            )
-            is_valid, validation_errors = docstring_data.validate()
-
-            if not is_valid:
-                self.logger.error(
-                    "Docstring validation failed",
-                    extra={
-                        "correlation_id": self.correlation_id,
-                        "sanitized_info": {
-                            "status": "error",
-                            "type": "docstring_validation",
-                            "errors": validation_errors,
-                        },
-                    },
-                )
-                raise DataValidationError(
-                    f"Docstring validation failed: {validation_errors}"
-                )
-
             # Track metrics
             processing_time = time.time() - start_time
             self.logger.info(
-                f"Documentation generation completed in {processing_time:.2f} seconds."
+                f"Documentation generation completed in {processing_time:.2f} seconds.",
+                extra=log_extra,
             )
             await self.metrics_collector.track_operation(
                 operation_type="documentation_generation",
                 success=True,
                 duration=processing_time,
                 metadata={
-                    "module": module_name,
+                    "log_module": module_name,
                     "file": file_path,
                     "code_length": len(context.source_code),
-                    "classes": len(context.classes),
-                    "functions": len(context.functions),
+                    "classes": len(classes),
+                    "functions": len(functions),
                 },
-                usage=response.get("usage", {}),
+                usage=formatted_response.get("usage", {}),
             )
 
-            # Display metrics
             api_metrics: dict[str, Any] = {
                 "Processing Time": f"{processing_time:.2f}s",
-                "Prompt Tokens": response.get("usage", {}).get("prompt_tokens", 0),
-                "Completion Tokens": response.get("usage", {}).get(
+                "Prompt Tokens": formatted_response.get("usage", {}).get("prompt_tokens", 0),
+                "Completion Tokens": formatted_response.get("usage", {}).get(
                     "completion_tokens", 0
                 ),
-                "Total Tokens": response.get("usage", {}).get("total_tokens", 0),
+                "Total Tokens": formatted_response.get("usage", {}).get("total_tokens", 0),
             }
-            display_api_metrics(api_metrics)
+            self.logger.info(f"API metrics: {api_metrics}", extra=log_extra)
 
             return ProcessingResult(
-                content=docstring_data.to_dict(),
-                usage=response.get("usage", {}),
+                content=parsed_response.content,
+                usage=formatted_response.get("usage", {}),
                 metrics={
                     "processing_time": processing_time,
                     "validation_success": True,
@@ -313,6 +451,7 @@ class AIService:
                 duration=time.time() - start_time,
                 metadata={"error_type": "validation_error", "error_message": str(e)},
             )
+            self.logger.error(f"Data validation failed: {e}", exc_info=True, extra=log_extra)
             raise
         except DocumentationError as e:
             await self.metrics_collector.track_operation(
@@ -321,135 +460,24 @@ class AIService:
                 duration=time.time() - start_time,
                 metadata={"error_type": "documentation_error", "error_message": str(e)},
             )
+            self.logger.error(f"Documentation error: {e}", exc_info=True, extra=log_extra)
             raise
         except Exception as e:
             await self.metrics_collector.track_operation(
                 operation_type="documentation_generation",
                 success=False,
                 duration=time.time() - start_time,
-                metadata={"error_type": "generation_error", "error_message": str(e)},
+                metadata={"error_type": "unexpected_error", "error_message": str(e)},
             )
-            raise APICallError(str(e)) from e
-
-    def _format_response(self, response: dict[str, Any]) -> dict[str, Any]:
-        """Format the response to ensure it has the expected structure.
-
-        Args:
-            response: Raw response from the API
-
-        Returns:
-            Properly formatted response with choices array
-        """
-        if "choices" in response and isinstance(response["choices"], list):
-            return response
-
-        if "summary" in response or "description" in response:
-            return {
-                "choices": [{"message": {"content": json.dumps(response)}}],
-                "usage": response.get("usage", {}),
-            }
-
-        if "function_call" in response:
-            return {
-                "choices": [{"message": {"function_call": response["function_call"]}}],
-                "usage": response.get("usage", {}),
-            }
-
-        if "tool_calls" in response:
-            return {
-                "choices": [{"message": {"tool_calls": response["tool_calls"]}}],
-                "usage": response.get("usage", {}),
-            }
-
-        return {
-            "choices": [{"message": {"content": json.dumps(response)}}],
-            "usage": {},
-        }
-
-    async def _make_api_call_with_retry(
-        self, prompt: str, function_schema: dict[str, Any], max_retries: int = 3
-    ) -> dict[str, Any]:
-        """
-        Makes an API call to the AI model with retry logic.
-
-        Args:
-            prompt: The prompt to send to the AI model.
-            function_schema: The function schema for function calling.
-            max_retries: Maximum number of retries for the API call.
-
-        Returns:
-            dict[str, Any]: The raw response from the AI model.
-
-        Raises:
-            APICallError: If all retries fail.
-        """
-        headers = {"api-key": self.config.api_key, "Content-Type": "application/json"}
-
-        if self.correlation_id:
-            headers["x-correlation-id"] = self.correlation_id
-
-        request_params = await self.token_manager.validate_and_prepare_request(
-            prompt,
-            max_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
-        )
-
-        request_params["functions"] = [function_schema]
-        request_params["function_call"] = {"name": "generate_docstring"}
-
-        request_metrics: dict[str, Any] = {
-            "Prompt Tokens": request_params.get("max_tokens", 0),
-            "Temperature": request_params.get("temperature", 0),
-            "Retries": max_retries,
-        }
-        display_metrics(request_metrics, title="API Request Parameters")
-
-        for attempt in range(max_retries):
-            try:
-                endpoint = self.config.endpoint.rstrip("/") + "/"
-                path = f"openai/deployments/{self.config.deployment}/chat/completions"
-                url = urljoin(endpoint, path) + "?api-version=2024-10-21"
-
-                if self._client is None:
-                    await self.start()
-
-                if self._client is None:
-                    raise APICallError("Failed to initialize client session")
-
-                print_info(f"Making API call (attempt {attempt + 1}/{max_retries})")
-                async with self._client.post(
-                    url,
-                    headers=headers,
-                    json=request_params,
-                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-                ) as response:
-                    if response.status == 200:
-                        return await response.json()
-
-                    error_text = await response.text()
-                    if attempt == max_retries - 1:
-                        raise APICallError(
-                            f"API call failed after {max_retries} retries: {error_text}"
-                        )
-                    print_info(f"API call failed (attempt {attempt + 1}): {error_text}")
-                    await asyncio.sleep(2**attempt)  # Exponential backoff
-
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                if attempt == max_retries - 1:
-                    raise APICallError(
-                        f"API call failed after {max_retries} retries due to client error: {e}"
-                    ) from e
-                print_info(f"Client error (attempt {attempt + 1}): {e}")
-                await asyncio.sleep(2**attempt)
-
-        raise APICallError(f"API call failed after {max_retries} retries.")
+            self.logger.error(f"Unexpected error: {e}", exc_info=True, extra=log_extra)
+            raise
 
     async def close(self) -> None:
         """Closes the aiohttp client session."""
         if self._client:
             await self._client.close()
             self._client = None
-            print_info("AI Service client session closed")
+            self.logger.info("AI Service client session closed")
 
     async def __aenter__(self) -> "AIService":
         """Enter method for async context manager."""
@@ -458,8 +486,8 @@ class AIService:
 
     async def __aexit__(
         self,
-        exc_type: type | None,
-        exc_val: BaseException | None,
+        exc_type: Optional[type],
+        exc_val: Optional[BaseException],
         exc_tb: Any,
     ) -> None:
         """Exit method for async context manager."""

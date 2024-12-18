@@ -6,7 +6,7 @@ import sys
 import re
 from pathlib import Path
 from datetime import datetime
-from typing import Any, TypeVar, Generic, cast
+from typing import Any, TypeVar, Generic, cast, Optional
 from collections.abc import Mapping, MutableMapping
 from logging.handlers import RotatingFileHandler
 from contextvars import ContextVar
@@ -143,23 +143,29 @@ class LoggerSetup:
                 sys.stderr.write(f"Failed to set up file handler: {e}\n")
 
     @classmethod
-    def get_logger(cls, name: str | None = None) -> Logger:
-        """Get a configured logger instance."""
-        if not cls._configured:
+    def get_logger(cls, name: str | None = None, correlation_id: str | None = None) -> Logger:
+         """Get a configured logger instance with optional correlation ID."""
+         if not cls._configured:
             cls.configure()
 
-        if name is None:
+         if name is None:
             name = __name__
 
-        if name in cls._loggers:
+         if name in cls._loggers:
             return cls._loggers[name]
 
-        logger = logging.getLogger(name)
-        if not hasattr(logger, "isEnabledFor"):
+         logger = logging.getLogger(name)
+         if not hasattr(logger, "isEnabledFor"):
             logger.isEnabledFor = lambda level: True
 
-        cls._loggers[name] = logger
-        return cast(Logger, cls._get_correlation_logger_adapter(logger))
+         cls._loggers[name] = logger
+
+         if correlation_id:
+             set_correlation_id(correlation_id)
+         
+         return cast(Logger, cls._get_correlation_logger_adapter(logger))
+
+
 
     @classmethod
     def _get_correlation_logger_adapter(cls, logger: Logger) -> CorrelationLoggerAdapter[Logger]:
@@ -194,3 +200,4 @@ class LoggerSetup:
                 },
             )
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
+

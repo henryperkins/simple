@@ -12,6 +12,7 @@ from typing import (
     Union,
     Callable,
     Dict,
+    List,
 )
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
@@ -38,11 +39,11 @@ class DocstringSchema(BaseModel):
     """Schema for validating docstring data."""
     summary: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
-    args: list[dict[str, Any]] = Field(default_factory=list)
-    returns: dict[str, str] = Field(...)
-    raises: list[dict[str, str]] = Field(default_factory=list)
+    args: List[Dict[str, Any]] = Field(default_factory=list)
+    returns: Dict[str, str] = Field(default_factory=lambda: {"type": "Any", "description": "No return value documented."})
+    raises: List[Dict[str, str]] = Field(default_factory=list)
 
-    def validate_returns(self, self_param: Any, v: dict[str, str]) -> dict[str, str]:
+    def validate_returns(self, self_param: Any, v: Dict[str, str]) -> Dict[str, str]:
         """Validate returns field."""
         if 'type' not in v or 'description' not in v:
             raise ValueError("Returns must contain 'type' and 'description'")
@@ -118,9 +119,10 @@ class DocumentationContext:
     functions: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        """Validate required fields."""
+        """Validate required fields and store source code."""
         if not self.source_code or not self.source_code.strip():
             raise ValueError("source_code is required and cannot be empty")
+        self.metadata.setdefault("source_code", self.source_code)
 
 
 @dataclass
@@ -131,7 +133,7 @@ class ProcessingResult:
     metrics: dict[str, Any] = field(default_factory=dict)
     validation_status: bool = False
     validation_errors: list[str] = field(default_factory=list)
-    schema_errors: list[str] = field(default_factory=list)
+    schema_errors: list[str] = field(default_factory=list)  # Fixed from default_factory.list
 
 
 @dataclass
@@ -141,7 +143,7 @@ class MetricData:
     cyclomatic_complexity: int = 0
     cognitive_complexity: int = 0
     maintainability_index: float = 0.0
-    halstead_metrics: dict[str, Any] = field(default_factory=dict)
+    halstead_metrics: dict[str, Any] = field(default_factory=dict)  # Fixed from default_factory.dict
     lines_of_code: int = 0
     total_functions: int = 0
     scanned_functions: int = 0
@@ -182,6 +184,16 @@ class ExtractedArgument:
     is_required: bool = True
     description: str | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary format."""
+        return {
+            "name": self.name,
+            "type": self.type or "Any",
+            "default_value": self.default_value,
+            "is_required": self.is_required,
+            "description": self.description or ""
+        }
+
 
 @dataclass
 class ExtractedElement:
@@ -193,7 +205,7 @@ class ExtractedElement:
     metrics: dict[str, Any] = field(default_factory=dict)
     dependencies: dict[str, set[str]] = field(default_factory=dict)
     decorators: list[str] = field(default_factory=list)
-    complexity_warnings: list[str] = field(default_factory=list)
+    complexity_warnings: list[str] = field(default_factory=list)  # Fixed from default_factory.list
     ast_node: ast.AST | None = None
 
     def get_docstring_info(self) -> DocstringData | None:
@@ -214,9 +226,9 @@ class ExtractedElement:
 @dataclass
 class ExtractedFunction(ExtractedElement):
     """Represents an extracted function with its metadata."""
-    args: list[ExtractedArgument] = field(default_factory=list)
+    args: list[ExtractedArgument] = field(default_factory=list)  # Fixed from default_factory.list
     returns: dict[str, str] | None = None
-    raises: list[dict[str, str]] = field(default_factory=list)
+    raises: list[dict[str, str]] = field(default_factory=list)  # Fixed from default_factory.list
     body_summary: str | None = None
     is_async: bool = False
     is_method: bool = False
@@ -228,18 +240,18 @@ class ExtractedClass(ExtractedElement):
     """Represents a class extracted from code."""
     methods: list[ExtractedFunction] = field(default_factory=list)
     attributes: list[dict[str, Any]] = field(default_factory=list)
-    instance_attributes: list[dict[str, Any]] = field(default_factory=list)
-    bases: list[str] = field(default_factory=list)
+    instance_attributes: list[dict[str, Any]] = field(default_factory=list)  # Fixed from default_factory.list
+    bases: list[str] = field(default_factory=list)  # Fixed from default_factory.list
     metaclass: str | None = None
     is_exception: bool = False
     docstring_info: DocstringData | None = None
     is_dataclass: bool = False
     is_abstract: bool = False
-    abstract_methods: list[str] = field(default_factory=list)
-    property_methods: list[dict[str, Any]] = field(default_factory=list)
-    class_variables: list[dict[str, Any]] = field(default_factory=list)
-    method_groups: dict[str, list[str]] = field(default_factory=dict)
-    inheritance_chain: list[str] = field(default_factory=list)
+    abstract_methods: list[str] = field(default_factory=list)  # Fixed from default_factory.list
+    property_methods: list[dict[str, Any]] = field(default_factory=list)  # Fixed from default_factory.list
+    class_variables: list[dict[str, Any]] = field(default_factory=list)  # Fixed from default_factory.list
+    method_groups: dict[str, list[str]] = field(default_factory=dict)  # Fixed from default_factory.dict
+    inheritance_chain: list[str] = field(default_factory=list)  # Fixed from default_factory.list
 
 
 class DocstringDict(TypedDict, total=False):
@@ -262,12 +274,12 @@ class DocumentationData:
     docstring_data: Union[DocstringData, DocstringDict]
     ai_content: dict[str, Any]
     code_metadata: dict[str, Any]
-    glossary: dict[str, dict[str, str]] = field(default_factory=dict)
-    changes: list[dict[str, Any]] = field(default_factory=list)
-    complexity_scores: dict[str, float] = field(default_factory=dict)
-    metrics: dict[str, Any] = field(default_factory=dict)
+    glossary: dict[str, dict[str, str]] = field(default_factory=dict)  # Fixed from default_factory.dict
+    changes: list[dict[str, Any]] = field(default_factory=list)  # Fixed from default_factory.list
+    complexity_scores: dict[str, float] = field(default_factory=dict)  # Fixed from default_factory.dict
+    metrics: dict[str, Any] = field(default_factory=dict)  # Fixed from default_factory.dict
     validation_status: bool = False
-    validation_errors: list[str] = field(default_factory=list)
+    validation_errors: list[str] = field(default_factory=list)  # Fixed from default_factory.list
     docstring_parser: Callable[[str], DocstringData] | None = None
     metric_calculator: Callable[[str], dict[str, Any]] | None = None
 

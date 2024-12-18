@@ -9,9 +9,9 @@ import sysconfig
 from typing import Dict, Set, Optional, List, Tuple, Any
 from pathlib import Path
 
-from core.logger import CorrelationLoggerAdapter
+from core.logger import CorrelationLoggerAdapter, LoggerSetup, get_correlation_id
 from core.types import ExtractionContext
-from utils import handle_extraction_error, get_node_name, get_correlation_id
+from utils import handle_extraction_error, get_node_name
 from core.exceptions import ExtractionError
 
 
@@ -22,10 +22,7 @@ class DependencyAnalyzer:
         self, context: ExtractionContext, correlation_id: Optional[str] = None
     ) -> None:
         """Initialize the dependency analyzer."""
-        self.logger = CorrelationLoggerAdapter(
-            context.logger,
-            extra={"correlation_id": correlation_id or get_correlation_id()},
-        )
+        self.logger = LoggerSetup.get_logger(__name__, correlation_id)
         self.context = context
         self.module_name = context.module_name
         self.errors: List[str] = []

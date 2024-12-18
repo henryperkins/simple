@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from utils import handle_extraction_error
 
-logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
+logger = LoggerSetup.get_logger(__name__)
 
 def extract_decorators(node: ast.AST) -> List[str]:
     """Extract decorator names from a node (class or function).

@@ -192,9 +192,14 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         for func in functions:
             params: list[str] = []
             for arg in func.get("args", []):
-                param = f"{arg.get('name', '')}: {arg.get('type', 'Any')}"
-                if arg.get("default_value"):
-                    param += f" = {arg.get('default_value')}"
+                if isinstance(arg, dict):
+                    param = f"{arg.get('name', '')}: {arg.get('type', 'Any')}"
+                    if arg.get("default_value"):
+                        param += f" = {arg.get('default_value')}"
+                else:  # ExtractedArgument object
+                    param = f"{arg.name}: {arg.type or 'Any'}"
+                    if arg.default_value:
+                        param += f" = {arg.default_value}"
                 params.append(param)
 
             params_str = self._format_parameter_list(params)
@@ -203,7 +208,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
             metrics = func.get("metrics", MetricData())
             complexity = self._get_complexity(metrics)
-            warning = " (warning)" if complexity > 10 else ""
+            warning = " ⚠️" if complexity > 10 else ""
 
             # Escape special characters and wrap in code blocks
             func_name = self._escape_markdown(func.get("name", "Unknown"))
@@ -399,6 +404,5 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             return "\n\n".join(section for section in markdown_sections if section)
 
         except Exception as e:
-            self.logger.error(f"Error generating markdown: {e}")
             self.logger.error(f"Error generating markdown: {e}")
             raise DocumentationError(f"Failed to generate markdown: {e}")

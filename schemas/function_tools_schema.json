@@ -26,7 +26,7 @@
                         "required": ["name", "type", "description"]
                     },
                     "description": "A list of arguments, each with a name, type, and description.",
-                     "default": []
+                    "default": []
                 },
                 "returns": {
                     "type": "object",

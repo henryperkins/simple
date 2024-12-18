@@ -32,10 +32,7 @@ class MetricsCollector:
             correlation_id: Optional correlation ID for tracking metrics
         """
         if not self._initialized:
-            self.logger = CorrelationLoggerAdapter(
-                LoggerSetup.get_logger(__name__),
-                extra={"correlation_id": correlation_id}
-            )
+            self.logger = LoggerSetup.get_logger(__name__, correlation_id)
             self.correlation_id = correlation_id or str(uuid.uuid4())
             self.metrics_history: dict[str, list[dict[str, Any]]] = {}
             self.operations: list[dict[str, Any]] = []

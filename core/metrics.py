@@ -15,6 +15,7 @@ from core.console import (
     print_warning,
 )
 from core.metrics_collector import MetricsCollector
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 
 if TYPE_CHECKING:
     from core.metrics_collector import MetricsCollector
@@ -38,7 +39,7 @@ class Metrics:
     ) -> None:
         """Initialize the Metrics class."""
         self.module_name: Optional[str] = None
-        self.logger = self._get_logger()
+        self.logger = LoggerSetup.get_logger(__name__, correlation_id)
         self.error_counts: Dict[str, int] = {}
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.metrics_collector = metrics_collector or MetricsCollector(

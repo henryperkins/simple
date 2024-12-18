@@ -2,30 +2,22 @@
 
 import json
 import time
-from typing import Any, TypeVar, TypedDict
+from typing import Any, Dict, List, TypedDict
 from pathlib import Path
 
 from jsonschema import validate, ValidationError
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.console import print_info, print_success
+from core.logger import LoggerSetup
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from core.metrics_collector import MetricsCollector
 from core.types import ParsedResponse, DocumentationData
-from core.types.docstring import DocstringData
 from core.types.base import DocstringSchema
 from core.exceptions import ValidationError as CustomValidationError, DocumentationError
 
-# Set up the base logger
-base_logger = LoggerSetup.get_logger(__name__)
-
-# Type variables for better type hinting
-T = TypeVar('T')
-
 
 class MessageDict(TypedDict, total=False):
-    tool_calls: list[dict[str, Any]]
-    function_call: dict[str, Any]
+    tool_calls: List[Dict[str, Any]]
+    function_call: Dict[str, Any]
     content: str
 
 
@@ -34,16 +26,16 @@ class ChoiceDict(TypedDict):
 
 
 class ResponseDict(TypedDict, total=False):
-    choices: list[ChoiceDict]
-    usage: dict[str, int]
+    choices: List[ChoiceDict]
+    usage: Dict[str, int]
 
 
 class ContentType(TypedDict, total=False):
     summary: str
     description: str
-    args: list[dict[str, Any]]
-    returns: dict[str, str]
-    raises: list[dict[str, str]]
+    args: List[Dict[str, Any]]
+    returns: Dict[str, str]
+    raises: List[Dict[str, str]]
     complexity: int
 
 
@@ -52,7 +44,9 @@ class ResponseParsingService:
 
     def __init__(self, correlation_id: str | None = None) -> None:
         """Initialize the response parsing service."""
-        self.logger = CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__), extra={"correlation_id": correlation_id})
+        self.logger = LoggerSetup.get_logger(
+            f"{__name__}.{self.__class__.__name__}", correlation_id
+        )
         self.docstring_processor = DocstringProcessor()
         self.markdown_generator = MarkdownGenerator(correlation_id)
         self.docstring_schema = self._load_schema("docstring_schema.json")
@@ -65,133 +59,39 @@ class ResponseParsingService:
             "failed_parses": 0,
             "validation_failures": 0,
         }
-        print_info("ResponseParsingService initialized.")
+        self.logger.info("ResponseParsingService initialized.")
 
-    def _load_schema(self, schema_name: str) -> dict[str, Any]:
+    def _load_schema(self, schema_name: str) -> Dict[str, Any]:
         """Load a JSON schema for validation."""
+        schema_path = Path(__file__).resolve().parent.parent / "schemas" / schema_name
         try:
-            schema_path = Path(__file__).resolve().parent.parent / "schemas" / schema_name
             with schema_path.open("r") as f:
                 return json.load(f)
         except FileNotFoundError as e:
-            self.logger.error(f"Schema file not found: {e}")
-            return {}
+            self.logger.error(f"Schema file not found: '{schema_name}' - {e}", exc_info=True)
+            raise
         except json.JSONDecodeError as e:
-            self.logger.error(f"Error decoding JSON schema: {e}")
-            return {}
+            self.logger.error(f"Error decoding JSON schema: '{schema_name}' - {e}", exc_info=True)
+            raise
 
-    async def parse_response(
-        self,
-        response: dict[str, Any],
-        expected_format: str = "docstring",
-        validate_schema: bool = True,
-    ) -> ParsedResponse:
-        """Parse the AI model response with strict validation."""
-        start_time = time.time()
-        try:
-            print_info(f"Parsing response with expected format: {expected_format}")
-            print_info(f"Raw AI Response: {response}")
-            content = self._extract_content(response)
-            if not content:
-                raise CustomValidationError("Failed to extract content from response")
-
-            # If content is a string, try to parse it as JSON
-            if isinstance(content, str):
-                try:
-                    content_dict = json.loads(content)
-                    if isinstance(content_dict, dict):
-                        content = content_dict
-                except json.JSONDecodeError:
-                    pass
-
-            # Validate content structure
-            if validate_schema and isinstance(content, dict):
-                try:
-                    DocstringSchema(**content)
-                except ValueError as e:
-                    fallback = self._create_fallback_response()
-                    return ParsedResponse(
-                        content=fallback,
-                        markdown=self._generate_markdown(fallback),
-                        format_type=expected_format,
-                        parsing_time=time.time() - start_time,
-                        validation_success=False,
-                        errors=[str(e)],
-                        metadata={"correlation_id": self.correlation_id}
-                    )
-            if isinstance(content, dict):
-                source_code = (
-                    response.get("source_code") or
-                    response.get("code_metadata", {}).get("source_code")
-                )
-                if source_code:
-                    content["source_code"] = source_code
-                    content.setdefault("code_metadata", {})["source_code"] = source_code
-
-            # Ensure all required fields exist in the content
-            content_dict = self._ensure_required_fields(content)
-
-            # Return the parsed response with the appropriate content
-            processing_time = time.time() - start_time
-            await self.metrics_collector.track_operation(
-                operation_type="response_parsing",
-                success=True,
-                duration=processing_time,
-                metadata={"response_format": expected_format, "correlation_id": self.correlation_id},
-            )
-            print_success(f"Response parsing completed in {processing_time:.2f}s")
-            return ParsedResponse(
-                content=content_dict,
-                markdown=self._generate_markdown(content_dict),
-                format_type=expected_format,
-                parsing_time=processing_time,
-                validation_success=True,
-                errors=[],
-                metadata={"correlation_id": self.correlation_id}
-            )
-        except Exception as e:
-            self.logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-            fallback = self._create_fallback_response()
-            return ParsedResponse(
-                content=fallback,
-                markdown=self._generate_markdown(fallback),
-                format_type=expected_format,
-                parsing_time=time.time() - start_time,
-                validation_success=False,
-                errors=[str(e)],
-                metadata={"correlation_id": self.correlation_id}
-            )
-
-    def _generate_markdown(self, content: dict[str, Any]) -> str:
+    def _generate_markdown(self, content: Dict[str, Any]) -> str:
         """Convert parsed content to markdown format."""
-        try:
-            # Get source code from multiple locations
-            source_code = (
-                content.get("source_code") or 
-                content.get("code_metadata", {}).get("source_code") or
-                content.get("ai_content", {}).get("source_code")
-            )
-            
-            if not source_code:
-                self.logger.error("Source code missing from content")
-                raise DocumentationError("source_code is required")
+        if not content.get("source_code"):
+            self.logger.error("Source code missing from content")
+            raise DocumentationError("source_code is required")
 
-            # Create DocumentationData with validated source
-            doc_data = DocumentationData(
-                module_name=content.get("module_name", ""),
-                module_path=Path(content.get("file_path", ".")),
-                module_summary=content.get("summary", ""),
-                source_code=source_code,
-                docstring_data=self._create_docstring_data(content),
-                ai_content=content,
-                code_metadata=content.get("code_metadata", {})
-            )
-            return self.markdown_generator.generate(doc_data)
-        except Exception as e:
-            self.logger.error(f"Error generating markdown: {e}")
-            raise DocumentationError(f"Failed to generate markdown: {e}")
+        doc_data = DocumentationData(
+            module_name=content.get("module_name", ""),
+            module_path=Path(content.get("file_path", ".")),
+            module_summary=content.get("summary", ""),
+            source_code=content["source_code"],
+            docstring_data=self._create_docstring_data(content),
+            ai_content=content,
+            code_metadata={**content.get("code_metadata", {}), "source_code": content["source_code"]}
+        )
+        return self.markdown_generator.generate(doc_data)
 
-    def _create_docstring_data(self, content: dict[str, Any]) -> DocstringData:
+    def _create_docstring_data(self, content: Dict[str, Any]) -> DocstringData:
         """Create DocstringData from content dict."""
         content_copy = content.copy()
         content_copy.pop('source_code', None)
@@ -204,58 +104,11 @@ class ResponseParsingService:
             complexity=int(content_copy.get("complexity", 1))
         )
 
-    def _extract_content(self, response: dict[str, Any]) -> dict[str, Any] | str | None:
-        """Extract content from various response formats."""
-        try:
-            if "choices" in response and response["choices"]:
-                message = response["choices"][0].get("message", {})
-
-                # Try function call
-                if "function_call" in message:
-                    try:
-                        args_str = message["function_call"].get("arguments", "{}")
-                        args_dict = json.loads(args_str)
-                        if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
-                            return args_dict
-                        return json.dumps(args_dict)
-                    except json.JSONDecodeError:
-                        return message["function_call"].get("arguments", "{}")
-
-                if "tool_calls" in message and message["tool_calls"]:
-                    tool_call = message["tool_calls"][0]
-                    if "function" in tool_call:
-                        try:
-                            args_str = tool_call["function"].get("arguments", "{}")
-                            args_dict = json.loads(args_str)
-                            if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
-                                return args_dict
-                            return json.dumps(args_dict)
-                        except json.JSONDecodeError:
-                            return tool_call["function"].get("arguments", "{}")
-
-                # Try direct content
-                if "content" in message:
-                    try:
-                        content_dict = json.loads(message["content"])
-                        if isinstance(content_dict, dict) and ("summary" in content_dict or "description" in content_dict):
-                            return content_dict
-                    except json.JSONDecodeError:
-                        return message["content"] if isinstance(message["content"], str) else None
-
-            # Try direct response format
-            if isinstance(response, dict) and ("summary" in response or "description" in response):
-                return response
-
-            return None
-        except Exception as e:
-            self.logger.error(f"Error extracting content: {e}")
-            return None
-
-    def _ensure_required_fields(self, content: dict[str, Any] | str) -> dict[str, Any]:
+    def _ensure_required_fields(self, content: Dict[str, Any] | str) -> Dict[str, Any]:
         """Ensure all required fields exist in the content."""
         result = {"summary": content} if isinstance(content, str) else dict(content)
 
-        defaults: dict[str, Any] = {
+        defaults: Dict[str, Any] = {
             "summary": "",
             "description": "",
             "args": [],
@@ -266,25 +119,17 @@ class ResponseParsingService:
 
         for key, default in defaults.items():
             if key not in result:
+                self.logger.debug(
+                    f"Setting default value for field: '{key}', because it was missing from the content",
+                    extra={"correlation_id": self.correlation_id},
+                )
                 result[key] = default
 
         return result
 
-    def _create_fallback_response(self) -> dict[str, Any]:
-        """Create a fallback response when parsing fails."""
-        self.logger.info("Creating fallback response due to parsing failure", extra={"correlation_id": self.correlation_id})
-        return {
-            "summary": "Documentation generation failed",
-            "description": "Unable to generate documentation due to parsing error",
-            "args": [],
-            "returns": {"type": "Any", "description": "Return value not documented"},
-            "raises": [],
-            "complexity": 1,
-        }
-
-    def _validate_content(self, content: dict[str, Any], format_type: str) -> tuple[bool, list[str]]:
+    def _validate_content(self, content: Dict[str, Any], format_type: str) -> tuple[bool, List[str]]:
         """Validate the content against the appropriate schema."""
-        validation_errors: list[str] = []
+        validation_errors: List[str] = []
         try:
             if format_type == "docstring":
                 if not self.docstring_schema:
@@ -312,7 +157,186 @@ class ResponseParsingService:
             return True, validation_errors
         except ValidationError as e:
             validation_errors.append(str(e))
+            self.logger.error(f"Validation error: {e}", extra={"correlation_id": self.correlation_id})
             return False, validation_errors
         except Exception as e:
             validation_errors.append(f"Unexpected validation error: {str(e)}")
+            self.logger.error(f"Unexpected validation error: {e}", exc_info=True, extra={"correlation_id": self.correlation_id})
             return False, validation_errors
+
+    def _create_fallback_response(self, response: Dict[str, Any] | str | None = None) -> Dict[str, Any]:
+        """Create a fallback response when parsing fails."""
+        self.logger.warning("Creating fallback response due to parsing failure", extra={"correlation_id": self.correlation_id})
+
+        fallback = {
+            "summary": "Documentation generation failed",
+            "description": "Unable to generate documentation due to parsing error",
+            "args": [],
+            "returns": {"type": "Any", "description": "No return value documented."},
+            "raises": [],
+            "complexity": 1,
+            "source_code": "",
+            "code_metadata": {"source_code": ""}
+        }
+
+        try:
+            from core.dependency_injection import Injector
+            context = Injector.get("extraction_context")
+            if context and hasattr(context, "get_source_code"):
+                source_code = context.get_source_code() or ""
+                fallback["source_code"] = source_code
+                fallback["code_metadata"]["source_code"] = source_code
+        except Exception as e:
+            self.logger.warning(f"Could not get source code from context: {e}", extra={"correlation_id": self.correlation_id})
+
+        if isinstance(response, str):
+            lines = response.strip().split('\n')
+            if lines and lines[0].startswith("# Module Summary"):
+                fallback["summary"] = lines[0].lstrip("# Module Summary").strip()
+                fallback["description"] = '\n'.join(lines[1:]).strip()
+        elif isinstance(response, dict) and "choices" in response:
+            message = response.get("choices", [{}])[0].get("message", {})
+            if "content" in message and message["content"] is not None:
+                fallback["description"] = str(message["content"])
+
+        return fallback
+
+    def _extract_content(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract content from various response formats."""
+        try:
+            content = {}
+            source_code = response.get("source_code")
+
+            if "choices" in response and response["choices"]:
+                message = response["choices"][0].get("message", {})
+                content = self._extract_content_from_message(message)
+
+            if not content:
+                content = response
+
+            content = self._ensure_required_fields(content)
+
+            if source_code:
+                content["source_code"] = source_code
+                content.setdefault("code_metadata", {})["source_code"] = source_code
+
+            return content
+
+        except Exception as e:
+            self.logger.error(f"Error extracting content: {e}", exc_info=True)
+            return {}
+
+    def _extract_content_from_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract content from a message."""
+        try:
+            if "function_call" in message:
+                return self._extract_content_from_function_call(message["function_call"], "function_call")
+            if "tool_calls" in message and message["tool_calls"]:
+                tool_call = message["tool_calls"][0]
+                if "function" in tool_call:
+                    return self._extract_content_from_function_call(tool_call["function"], "tool_call")
+            if "content" in message:
+                return self._extract_content_from_direct_content(message["content"])
+            return {}
+        except Exception as e:
+            self.logger.error(f"Error extracting content from message: {e}", extra={"correlation_id": self.correlation_id})
+            return {}
+
+    def _extract_content_from_function_call(self, function_data: Dict[str, Any], call_type: str) -> Dict[str, Any]:
+        """Extract content from a function call."""
+        try:
+            args_str = function_data.get("arguments", "{}")
+            if not args_str:
+                return {}
+            args_dict = json.loads(args_str)
+            if isinstance(args_dict, dict) and ("summary" in args_dict or "description" in args_dict):
+                return args_dict
+            return args_dict
+        except json.JSONDecodeError as e:
+            self.logger.error(
+                f"Failed to decode {call_type} arguments: {function_data.get('arguments')} - Error: {e}",
+                extra={"correlation_id": self.correlation_id}
+            )
+            return {}
+
+    def _extract_content_from_direct_content(self, content: str) -> Dict[str, Any] | str:
+        try:
+            content_dict = json.loads(content)
+            if isinstance(content_dict, dict) and ("summary" in content_dict or "description" in content_dict):
+                return content_dict
+            return content
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to decode content from: {content} - Error: {e}", extra={"correlation_id": self.correlation_id})
+            return {"content": content} if isinstance(content, str) else {}
+
+    async def parse_response(self, response: Dict[str, Any], expected_format: str, validate_schema: bool = True) -> ParsedResponse:
+        """Parse the response from the AI model."""
+        start_time = time.time()
+        errors = []
+        metadata = {}
+
+        try:
+            if response is None:
+                self.logger.error("Response is None, creating fallback", extra={"correlation_id": self.correlation_id})
+                content = self._create_fallback_response()
+                errors.append("Response is None")
+                return ParsedResponse(
+                    content=content,
+                    format_type=expected_format,
+                    parsing_time=time.time() - start_time,
+                    validation_success=False,
+                    errors=errors,
+                    metadata=metadata,
+                )
+
+            if not isinstance(response, dict) or "choices" not in response:
+                self.logger.error(f"Response is not a dict or missing 'choices', creating fallback. Response: {response}", extra={"correlation_id": self.correlation_id})
+                content = self._create_fallback_response(response)
+                errors.append("Response is not a dict or missing 'choices'")
+                return ParsedResponse(
+                    content=content,
+                    format_type=expected_format,
+                    parsing_time=time.time() - start_time,
+                    validation_success=False,
+                    errors=errors,
+                    metadata=metadata,
+                )
+
+            content = self._extract_content(response)
+
+            if validate_schema:
+                if expected_format == "docstring":
+                    try:
+                        validated_content = DocstringSchema.parse_obj(content)
+                    except Exception as e:
+                        self.logger.error(f"Schema validation failed: {e}", exc_info=True, extra={"correlation_id": self.correlation_id})
+                        errors.append(str(e))
+                        return ParsedResponse(
+                            content=content,
+                            format_type=expected_format,
+                            parsing_time=time.time() - start_time,
+                            validation_success=False,
+                            errors=errors,
+                            metadata=metadata,
+                        )
+
+            return ParsedResponse(
+                content=content,
+                format_type=expected_format,
+                parsing_time=time.time() - start_time,
+                validation_success=not errors,
+                errors=errors,
+                metadata=metadata,
+            )
+        except Exception as e:
+            self.logger.error(f"Unexpected error during parsing: {e}", exc_info=True, extra={"correlation_id": self.correlation_id})
+            errors.append(f"Unexpected error: {e}")
+            content = self._create_fallback_response(response)
+            return ParsedResponse(
+                content=content,
+                format_type=expected_format,
+                parsing_time=time.time() - start_time,
+                validation_success=False,
+                errors=errors,
+                metadata=metadata,
+            )

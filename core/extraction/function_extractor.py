@@ -6,7 +6,7 @@ import ast
 import uuid
 from typing import Optional, List, Dict, Union, Any
 
-from core.logger import CorrelationLoggerAdapter
+from core.logger import CorrelationLoggerAdapter, LoggerSetup
 from core.types import (
     ExtractedFunction,
     ExtractedArgument,
@@ -26,9 +26,7 @@ class FunctionExtractor:
     ) -> None:
         """Initialize the function extractor."""
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        self.logger = CorrelationLoggerAdapter(
-            context.logger, extra={"correlation_id": self.correlation_id}
-        )
+        self.logger = LoggerSetup.get_logger(__name__, self.correlation_id)
         self.context = context
         self.errors: List[str] = []
 
@@ -194,7 +192,7 @@ class FunctionExtractor:
                     imports.append(child.module)
         return imports
 
-
+    
     async def _process_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], module_metrics: Any
     ) -> Optional[ExtractedFunction]:

@@ -71,6 +71,8 @@ class AIConfig:
     max_tokens: int = 8192
     temperature: float = 0.7
     timeout: int = 30
+    api_call_semaphore_limit: int = 10 # Added this line
+    api_call_max_retries: int = 3 # Added this line
     model_limits: dict[str, ModelConfig] = field(default_factory=lambda: {
         "gpt-4": ModelConfig(max_tokens=8192, chunk_size=4096, cost_per_token=0.00003),
         "gpt-3.5-turbo": ModelConfig(max_tokens=4096, chunk_size=2048, cost_per_token=0.000002),
@@ -86,7 +88,9 @@ class AIConfig:
             model=get_env_var("MODEL_NAME", "gpt-4"),
             max_tokens=get_env_var("MAX_TOKENS", 8192, int),
             temperature=get_env_var("TEMPERATURE", 0.7, float),
-            timeout=get_env_var("TIMEOUT", 30, int)
+            timeout=get_env_var("TIMEOUT", 30, int),
+            api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int), # Added this line
+            api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int) # Added this line
         )
 
 
@@ -148,6 +152,8 @@ class Config:
                 "max_tokens": self.ai.max_tokens,
                 "temperature": self.ai.temperature,
                 "timeout": self.ai.timeout,
+                "api_call_semaphore_limit": self.ai.api_call_semaphore_limit,
+                "api_call_max_retries": self.ai.api_call_max_retries,
                 "model_limits": {
                     model: {
                         "max_tokens": config.max_tokens,

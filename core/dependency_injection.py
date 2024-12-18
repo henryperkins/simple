@@ -3,6 +3,7 @@
 import asyncio
 from pathlib import Path
 from typing import Any
+import json
 
 from core.metrics_collector import MetricsCollector
 from core.metrics import Metrics
@@ -17,7 +18,7 @@ from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.class_extractor import ClassExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.extraction.code_extractor import CodeExtractor
-from core.logger import LoggerSetup
+from core.logger import LoggerSetup, get_correlation_id
 from core.types.base import ExtractionContext
 from core.docs import DocumentationOrchestrator
 
@@ -79,15 +80,7 @@ class Injector:
         """Set the initialization status."""
         cls._initialized = value
 
-
 async def setup_dependencies(config: Config, correlation_id: str | None = None) -> None:
-    """
-    Sets up the dependency injection framework by registering all components in the proper order.
-
-    Args:
-        config: Configuration object containing app and AI settings.
-        correlation_id: Unique identifier for logging and correlation.
-    """
     # Avoid reinitialization
     if Injector.is_initialized():
         return
@@ -138,6 +131,13 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
         prompt_manager = PromptManager(correlation_id=correlation_id)
         Injector.register("prompt_manager", prompt_manager)
         logger.debug("Registered 'prompt_manager'.")
+
+        # Load and register docstring schema
+        schema_path = Path(__file__).parent.parent / "schemas" / "docstring_schema.json"
+        with schema_path.open("r") as f:
+            docstring_schema = json.load(f)
+        Injector.register("docstring_schema", docstring_schema)
+        logger.debug("Registered 'docstring_schema'.")
 
         # 4. Initialize AI service
         ai_service = AIService(config=config.ai, correlation_id=correlation_id)
