@@ -261,8 +261,14 @@ class AIService:
             temperature=self.config.temperature,
         )
 
+        if request_params["max_tokens"] < 100:
+            self.logger.warning(
+                "Token availability is low. Consider reducing prompt size.", extra=log_extra
+            )
+
         if function_schema:
             request_params["functions"] = [function_schema]
+            request_params["function_call"] = "auto"  # Automatically select the function
             request_params["function_call"] = "auto"  # Automatically select the function
 
         self.logger.info(
@@ -297,6 +303,12 @@ class AIService:
                 ) as response:
                     if response.status == 200:
                         api_response = await response.json()
+                        self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
+                        if not isinstance(api_response, dict):
+                            self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
+                            return {
+                                "choices": [{"message": {"content": "Invalid response format"}}]
+                            }  # Return a fallback response
                         self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
                         if not isinstance(api_response, dict):
                             self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
