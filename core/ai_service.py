@@ -278,7 +278,9 @@ class AIService:
                         # Validate response format
                         if not isinstance(api_response, dict) or "choices" not in api_response:
                             self.logger.error(f"Invalid response format: {api_response}", extra=log_extra)
-                            return {"choices": [{"message": {"content": "Invalid response format"}}]}  # Return a fallback response
+                            return {
+                                "choices": [{"message": {"content": "Invalid response format"}}]
+                            }  # Return a fallback response
 
                         return api_response  # Return successful response immediately
 

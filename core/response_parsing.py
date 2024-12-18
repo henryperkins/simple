@@ -64,6 +64,7 @@ class ResponseParsingService:
     def _load_schema(self, schema_name: str) -> Dict[str, Any]:
         """Load a JSON schema for validation."""
         schema_path = Path(__file__).resolve().parent.parent / "schemas" / schema_name
+        self.logger.debug(f"Raw response: {response}", extra={"correlation_id": self.correlation_id})
         try:
             with schema_path.open("r") as f:
                 return json.load(f)
