@@ -150,12 +150,10 @@ class AIService:
             return response
         
         if "summary" in response or "description" in response:
-            formatted_response = {
+            return {
                 "choices": [{"message": {"content": json.dumps(response)}}],
                 "usage": response.get("usage", {}),
             }
-            self.logger.debug(f"Formatted direct content response to: {formatted_response}", extra=log_extra)
-            return formatted_response
         
         if "function_call" in response:
             formatted_response = {
