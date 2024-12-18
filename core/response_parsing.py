@@ -248,12 +248,10 @@ class ResponseParsingService:
             for tool_call in tool_calls:
                 if tool_call.get("function", {}).get("name") == "generate_docstring":
                     return json.loads(tool_call["function"]["arguments"])
-            if "tool_calls" in message and message["tool_calls"]:
-                tool_call = message["tool_calls"][0]
+            for tool_call in tool_calls:
                 if "function" in tool_call:
                     return self._extract_content_from_function_call(tool_call["function"], "tool_call")
-            if "content" in message:
-                return self._extract_content_from_direct_content(message["content"])
+            return {}
             return {}
         except Exception as e:
             self.logger.error(f"Error extracting content from message: {e}", extra={"correlation_id": self.correlation_id})
