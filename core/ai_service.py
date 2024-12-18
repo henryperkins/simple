@@ -308,37 +308,31 @@ class AIService:
                     json=request_params,
                     timeout=aiohttp.ClientTimeout(total=self.config.timeout)
                 ) as response:
+                    raw_response_text = await response.text()  # Capture raw response text
                     self.logger.debug(
-                        f"Raw response text: {await response.text()}",
+                        f"Raw response text: {raw_response_text}",
                         extra={"status_code": response.status, "url": url},
                     )
-                    url,
-                    headers=headers,
-                    json=request_params,
-                    timeout=aiohttp.ClientTimeout(total=self.config.timeout)
-                ) as response:
                     if response.status == 200:
                         try:
                             api_response = await response.json()
                         except aiohttp.ContentTypeError as e:
-                            error_text = await response.text()
                             self.logger.error(
-                                f"Invalid response content type or empty response: {error_text}",
+                                f"Invalid response content type or empty response: {raw_response_text}",
                                 extra={"status_code": response.status, "url": url},
                             )
                             raise APICallError(
-                                f"Invalid response content type or empty response: {error_text}"
+                                f"Invalid response content type or empty response: {raw_response_text}"
                             ) from e
-                        self.logger.debug(f"Raw API response: {api_response}", extra=log_extra)
                         if not api_response or not isinstance(api_response, dict):
-                            error_text = await response.text()
                             self.logger.error(
-                                f"Empty or invalid JSON response: {error_text}",
+                                f"Empty or invalid JSON response: {raw_response_text}",
                                 extra={"status_code": response.status, "url": url},
                             )
                             return {
                                 "choices": [{"message": {"content": "Empty or invalid JSON response"}}]
                             }  # Return a fallback response
+                        return api_response
 
                         # Validate response format
                         if not isinstance(api_response, dict) or "choices" not in api_response:
