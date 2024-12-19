@@ -7,7 +7,7 @@ from typing import Any, TypedDict
 from datetime import datetime
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.types import DocumentationData, ExtractedClass, MetricData
+from core.types import DocumentationData, ExtractedClass, ExtractedFunction, MetricData
 from core.types.docstring import DocstringData
 from core.exceptions import DocumentationError
 

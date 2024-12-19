@@ -81,6 +81,7 @@ class SanitizedLogFormatter(logging.Formatter):
     """Custom formatter to sanitize and format log records."""
 
     def format(self, record: LogRecord) -> str:
+        """Format log records with consistent formatting."""
         # Ensure correlation_id and sanitized_info fields exist
         setattr(record, "correlation_id", get_correlation_id() or "N/A")
         setattr(
@@ -97,6 +98,14 @@ class SanitizedLogFormatter(logging.Formatter):
         # Format the timestamp
         if self.usesTime():
             record.asctime = datetime.fromtimestamp(record.created).isoformat() + "Z"
+
+        # Add section breaks for error and critical logs
+        if record.levelno >= logging.ERROR:
+            formatted = "\n" + "-" * 80 + "\n"
+            formatted += f"ERROR ({record.correlation_id}):\n"
+            formatted += "  " + super().format(record)
+            formatted += "\n" + "-" * 80 + "\n"
+            return formatted
 
         return super().format(record)
 
@@ -155,6 +164,7 @@ class LoggerSetup:
 
         # Console handler with simplified format
         console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)  # Set console level to INFO
         console_handler.setFormatter(logging.Formatter(cls._default_format))
         root_logger.addHandler(console_handler)
 
@@ -174,6 +184,7 @@ class LoggerSetup:
                     datefmt="%Y-%m-%dT%H:%M:%S",
                 )
                 file_handler.setFormatter(file_formatter)
+                file_handler.setLevel(logging.DEBUG)  # Capture all logs to file
                 root_logger.addHandler(file_handler)
             except Exception as e:
                 sys.stderr.write(f"Failed to set up file handler: {e}\n")

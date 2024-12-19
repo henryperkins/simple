@@ -1,6 +1,6 @@
 Objective: Generate comprehensive Google-style documentation for the following Python module.
 
-Context: This module is part of a larger system aimed at providing AI-driven solutions. Consider the target audience as developers who will use this documentation to understand and maintain the code. Ensure the documentation is detailed enough to facilitate onboarding and maintenance.
+Context: This module is part of a larger system aimed at providing AI-driven solutions. The target audience includes developers who will use this documentation to understand and maintain the code.
 
 Module Name: {{ module_name }}
 File Path: {{ file_path }}
@@ -24,10 +24,10 @@ Functions:
 Source Code:
 {{ source_code }}
 
-Analyze the code and generate comprehensive Google-style documentation. Your response must be a JSON object with the following structure:
+Analyze the code and generate a JSON response adhering to this schema:
 
 {
-    "summary": "A brief summary of what the code does",
+    "summary": "A concise summary of what the code does",
     "description": "A detailed description of the functionality",
     "args": [
         {
@@ -49,19 +49,9 @@ Analyze the code and generate comprehensive Google-style documentation. Your res
     "complexity": 1
 }
 
-Required fields:
-- summary: A concise summary of what the code does
-- description: A detailed description of the functionality
-- returns: Must include both type and description. For example:
-    "returns": {
-        "type": "str",
-        "description": "The string representation of the object."
-    }
+Notes:
+- Ensure the response matches the schema exactly, including required fields (`summary`, `description`, `returns`, `complexity`).
+- If any data is unavailable, explicitly state "Not available."
+- Optional fields like `args` and `raises` can default to empty arrays.
 
-Optional fields with defaults:
-- args: [] (empty array if no arguments)
-- raises: [] (empty array if no exceptions)
-- complexity: 1 (default complexity score)
-
-Ensure all descriptions are clear and technically accurate. If any information is missing or cannot be determined, explicitly state that it is not available. Format your response exactly according to this schema.
-Please respond with a JSON object that matches the schema defined above.
+Respond only with the JSON object.

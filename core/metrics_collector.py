@@ -10,7 +10,13 @@ import uuid
 
 from core.logger import LoggerSetup
 from core.types.base import MetricData
-
+from core.console import (
+    print_error, 
+    print_info, 
+    print_status, 
+    print_section_break,
+    display_metrics
+)
 
 class MetricsCollector:
     """Collects and stores metrics data for code analysis."""
@@ -46,6 +52,11 @@ class MetricsCollector:
     def collect_metrics(self, module_name: str, metrics: MetricData) -> None:
         """Collect metrics for a module."""
         try:
+            if not module_name or module_name == "default_module":
+                # Try to determine actual module name
+                if hasattr(metrics, "module_name") and metrics.module_name:
+                    module_name = metrics.module_name
+
             if not module_name or not metrics:
                 self.logger.warning(
                     f"Invalid metrics data received with correlation ID: {self.correlation_id}"
@@ -70,6 +81,12 @@ class MetricsCollector:
                 "metrics": current_metrics,
                 "correlation_id": self.correlation_id,
             }
+            
+            # Add formatted console output
+            print_section_break()
+            print_info("Metrics Collection")
+            display_metrics(current_metrics, title=f"Module: {module_name}")
+            print_section_break()
 
             if module_name in self.metrics_history:
                 if self.metrics_history[module_name]:
@@ -85,19 +102,17 @@ class MetricsCollector:
                 self._save_history()
 
         except Exception as e:
-            self.logger.error(
-                f"Error collecting metrics: {e} with correlation ID: {self.correlation_id}"
+            print_error(
+                f"Error collecting metrics: {e}", 
+                correlation_id=self.correlation_id
             )
 
-    def update_scan_progress(self, total: int, scanned: int, item_type: str) -> None:
-        """Update the scan progress for functions or classes.
-        
-        Args:
-            total: Total number of items to scan
-            scanned: Number of items scanned so far
-            item_type: Type of items being scanned ('function' or 'class')
-        """
+    def update_scan_progress(self, module_name: str, item_type: str, item_name: str) -> None:
+        """Update the scan progress for functions or classes."""
         try:
+            if module_name == "default_module":
+                return
+
             if item_type == 'function':
                 self.accumulated_functions = total
                 if self.current_module_metrics and self.current_module:
@@ -165,9 +180,20 @@ class MetricsCollector:
 
             self.operations.append(operation)
 
+            # Add formatted output
+            print_status(
+                f"Operation: {operation_type}",
+                {
+                    "Success": success,
+                    "Duration": f"{duration:.2f}s",
+                    **(metadata or {})
+                }
+            )
+
         except Exception as e:
-            self.logger.error(
-                f"Error tracking operation: {e} with correlation ID: {self.correlation_id}"
+            print_error(
+                f"Error tracking operation: {e}",
+                correlation_id=self.correlation_id
             )
 
     async def close(self) -> None:

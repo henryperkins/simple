@@ -64,35 +64,30 @@ class FunctionExtractor:
                     return True
         return False
 
-    async def extract_functions(
-        self, nodes: Union[ast.AST, List[ast.AST]], module_metrics: Any
-    ) -> List[ExtractedFunction]:
+    async def extract_functions(self, nodes: Union[ast.AST, List[ast.AST]], module_metrics: Any) -> List[ExtractedFunction]:
         """Extract function definitions from AST nodes."""
         functions: List[ExtractedFunction] = []
-        for node in [nodes] if isinstance(nodes, ast.AST) else nodes:  # Ensure iterable
+        
+        # Ensure we process all nodes
+        nodes_to_process = [nodes] if isinstance(nodes, ast.AST) else nodes
+        for node in ast.walk(nodes_to_process[0] if nodes_to_process else ast.Module(body=[])):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if not self._should_process_function(node):
-                    continue
-                try:
-                    extracted_function = await self._process_function(
-                        node, module_metrics
-                    )
-                    if extracted_function:
-                        functions.append(extracted_function)
-                        # Update scan progress
-                        if self.context.metrics_collector:
-                            self.context.metrics_collector.update_scan_progress(
-                                self.context.module_name or "unknown",
-                                "function",
-                                node.name,
-                            )
-                except Exception as e:
-                    self.logger.error(
-                        f"Error extracting function {node.name}: {str(e)}",
-                        exc_info=True
-                    )
-                    if self.context.strict_mode:
-                        raise  # and stop execution if necessary
+                if self._should_process_function(node):
+                    try:
+                        extracted_function = await self._process_function(node, module_metrics)
+                        if extracted_function:
+                            functions.append(extracted_function)
+                            if self.context.metrics_collector:
+                                self.context.metrics_collector.update_scan_progress(
+                                    self.context.module_name or Path(getattr(self.context.base_path, "name", "")).stem,
+                                    "function",
+                                    node.name,
+                                )
+                    except Exception as e:
+                        self.logger.error(f"Error extracting function {node.name}: {e}", exc_info=True)
+                        if self.context.strict_mode:
+                            raise
+
         return functions
 
     def _extract_arguments(

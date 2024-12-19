@@ -90,20 +90,20 @@ class CodeExtractor:
             # Set the tree in the context
             self.context.tree = tree
 
+            # Add module name resolution
+            module_name = self.context.module_name
+            if not module_name:
+                module_name = Path(getattr(self.context, "base_path", Path())).stem
+
+            # Update extraction order to ensure dependencies are available
+            module_metrics = self.metrics.calculate_metrics(modified_source_code, module_name)
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
-
-            # Calculate metrics only once at the module level
-            module_metrics = self.metrics.calculate_metrics(
-                modified_source_code, module_name
-            )
-
-            # Extract classes and functions, passing the metrics
-            classes: List[ExtractedClass] = await self.class_extractor.extract_classes(
-                tree, module_metrics
-            )
-            functions: List[ExtractedFunction] = (
-                await self.function_extractor.extract_functions(tree, module_metrics)
-            )
+            
+            # Extract functions first
+            functions: List[ExtractedFunction] = await self.function_extractor.extract_functions(tree, module_metrics)
+            
+            # Then extract classes with the updated context
+            classes: List[ExtractedClass] = await self.class_extractor.extract_classes(tree, module_metrics)
 
             variables = self._extract_variables(tree)
             constants = self._extract_constants(tree)
@@ -116,8 +116,10 @@ class CodeExtractor:
             )
             module_metrics.total_functions = len(functions)
             module_metrics.scanned_functions = len(
-                [func for func in functions if func.docstring_info]
+[func for func in functions if func.get_docstring_info()]
             )
+            module_metrics.function_scan_ratio = module_metrics.scanned_functions / len(functions) if functions else 0.0
+            module_metrics.class_scan_ratio = module_metrics.scanned_classes / len(classes) if classes else 0.0
 
             self._display_metrics(
                 self._get_metrics_display(

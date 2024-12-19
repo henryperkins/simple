@@ -1,6 +1,6 @@
 Objective: Analyze the following code for quality and provide specific improvements.
 
-Context: This code is part of a critical system component where performance and reliability are paramount. Consider historical issues such as performance bottlenecks and error handling failures. The analysis should help in identifying potential risks and areas for optimization.
+Context: This code is part of a critical system component where performance and reliability are paramount. Consider historical issues such as performance bottlenecks and error handling failures.
 
 Code:
 {{ code }}
@@ -12,12 +12,22 @@ Consider the following aspects:
 4. Performance considerations
 5. Documentation completeness
 
-Examples of good practices include:
-- Clear variable naming that enhances readability.
-- Efficient algorithms that improve performance.
+Respond in the following JSON format:
+{
+    "overview": "A high-level summary of the code's functionality",
+    "analysis": {
+        "complexity": "Assessment of complexity with examples",
+        "best_practices": "Areas where best practices are followed or lacking",
+        "error_handling": "Analysis of error handling and edge cases",
+        "performance": "Potential performance bottlenecks or optimizations",
+        "documentation": "Assessment of documentation quality"
+    },
+    "recommendations": [
+        {
+            "issue": "Brief description of the issue",
+            "suggestion": "Detailed suggestion for improvement"
+        }
+    ]
+}
 
-Avoid:
-- Deep nesting that complicates understanding.
-- Lack of error handling that could lead to failures.
-
-Provide specific examples of improvements where applicable, and suggest alternative approaches or refactorings. If any information is missing or cannot be determined, explicitly state that it is not available.
+Ensure your response provides actionable insights with specific examples. If any data is missing or unavailable, explicitly state "Not available."

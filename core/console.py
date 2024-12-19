@@ -1,4 +1,5 @@
-"""Console utilities without rich."""
+"""Console utilities for clean output formatting."""
+
 from typing import Any, Optional
 import logging
 from rich.progress import Progress
@@ -7,14 +8,74 @@ from rich.progress import Progress
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def setup_live_layout() -> None:
-
     """Placeholder for setup_live_layout."""
     pass
 
 def stop_live_layout() -> None:
-
     """Placeholder for stop_live_layout."""
     pass
+
+def format_error_output(error_message: str) -> str:
+    """Format error messages for clean console output."""
+    lines = error_message.split("\n")
+    formatted_lines = []
+    indent = "  "
+    
+    for line in lines:
+        # Remove excessive whitespace
+        line = " ".join(line.split())
+        if line:
+            formatted_lines.append(f"{indent}{line}")
+            
+    return "\n".join(formatted_lines)
+
+def print_section_break() -> None:
+    """Print a visual section break."""
+    print("\n" + "-" * 80 + "\n")
+
+def print_error(message: str, correlation_id: str | None = None) -> None:
+    """Display formatted error messages."""
+    print_section_break()
+    print("ERROR:")
+    print(format_error_output(message))
+    if correlation_id:
+        print(f"\nCorrelation ID: {correlation_id}")
+    print_section_break()
+
+def print_status(message: str, details: dict[str, Any] | None = None) -> None:
+    """Display formatted status messages with optional details."""
+    print("\n" + message)
+    if details:
+        for key, value in details.items():
+            print(f"  {key}: {value}")
+
+def display_metrics(metrics: dict[str, Any], title: str = "Metrics") -> None:
+    """Display metrics in a formatted table."""
+    print(f"\n{title}:")
+    print("-" * 40)
+    for key, value in metrics.items():
+        if isinstance(value, float):
+            print(f"  {key:<25} {value:>.2f}")
+        else:
+            print(f"  {key:<25} {value}")
+    print("-" * 40)
+
+def print_success(message: str) -> None:
+    """Display success messages."""
+    print(f"\nSUCCESS:")
+    print(format_error_output(message))
+
+def print_info(message: str, details: Any = None) -> None:
+    """Display info messages with optional details."""
+    if details is not None:
+        print(f"\n{message}")
+        if isinstance(details, dict):
+            for key, value in details.items():
+                print(f"  {key}: {value}")
+        else:
+            print(format_error_output(str(details)))
+    else:
+        print(f"\n{message}")
 
 def update_header(text: str) -> None:
 
@@ -51,45 +112,20 @@ def display_code_snippet(
     """Display a code snippet."""
     print(f"Code Snippet ({language}):\n{code}")
 
-def print_status(message: str, style: str = "bold blue") -> None:
-
-    """Display status messages."""
-    print(f"Status: {message}")
-
-def print_error(message: str, correlation_id: str | None = None) -> None:
-
-    """Display error messages."""
-    if correlation_id:
-        message = f"{message} (Correlation ID: {correlation_id})"
-    print(f"Error: {message}")
-
-def print_success(message: str) -> None:
-
-    """Print a success message."""
-    print(f"Success: {message}")
-
 def print_warning(message: str) -> None:
 
     """Print a warning message."""
     print(f"Warning: {message}")
-
-def print_info(message: str, details: Any = None) -> None:
-
-    """Display info messages with optional details."""
-    if details is not None:
-        print(f"Info: {message} - {details}")
-    else:
-        print(f"Info: {message}")
 
 def print_debug(message: str) -> None:
 
     """Print a debug message."""
     print(f"Debug: {message}")
 
-def display_metrics(metrics: dict[str, Any], title: str = "Metrics") -> None:
+def display_metrics_report(metrics: dict[str, Any]) -> None:
 
-    """Display metrics in a formatted table."""
-    print(f"{title}:")
+    """Display a formatted metrics report."""
+    print("Metrics Report:")
     for key, value in metrics.items():
         print(f"  {key}: {value}")
 
@@ -119,13 +155,6 @@ def format_validation_status(success: bool, errors: list[str] | None = None) -> 
     if not success and errors:
         for error in errors:
             print(f"  - {error}")
-
-def display_metrics_report(metrics: dict[str, Any]) -> None:
-
-    """Display a formatted metrics report."""
-    print("Metrics Report:")
-    for key, value in metrics.items():
-        print(f"  {key}: {value}")
 
 def display_processing_phase(title: str, content: dict[str, Any]) -> None:
 
