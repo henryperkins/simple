@@ -2,7 +2,7 @@ import ast
 import uuid
 import time
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
@@ -25,8 +25,7 @@ from core.extraction.extraction_utils import (
     extract_attributes,
     extract_instance_attributes,
 )
-from utils import read_file_safe_async
-
+# Removed the problematic `from core.dependency_injection import Injector`
 
 class CodeExtractor:
     """
@@ -37,26 +36,30 @@ class CodeExtractor:
         self, context: ExtractionContext, correlation_id: str | None = None
     ) -> None:
         """Initialize the CodeExtractor."""
+        # Lazy import to resolve circular dependency
+        from core.dependency_injection import Injector
+
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__),
             extra={"correlation_id": self.correlation_id},
         )
         self.context = context
-        self.metrics_collector: MetricsCollector = MetricsCollector(
-            correlation_id=self.correlation_id
-        )
-        self.metrics: Metrics = Metrics(
-            metrics_collector=self.metrics_collector, correlation_id=self.correlation_id
-        )
-        self.docstring_processor: DocstringProcessor = DocstringProcessor()
+
+        # Use Injector to fetch dependencies
+        self.metrics_collector: MetricsCollector = Injector.get("metrics_collector")
+        self.metrics: Metrics = Injector.get("metrics_calculator")
+        self.docstring_processor: DocstringProcessor = Injector.get("docstring_processor")
+        self.read_file_safe_async = Injector.get("read_file_safe_async")
+
+        # Initialize function and class extractors
         self.function_extractor = FunctionExtractor(context, correlation_id)
-        # Assign function_extractor to the context
         self.context.function_extractor = self.function_extractor
-        # Initialize ClassExtractor with the updated context
         self.class_extractor = ClassExtractor(
             context=self.context, correlation_id=correlation_id
         )
+
+        # Initialize dependency analyzer
         self.dependency_analyzer = DependencyAnalyzer(context, correlation_id)
 
     async def extract_code(self, source_code: str) -> ExtractionResult:
@@ -116,7 +119,7 @@ class CodeExtractor:
             )
             module_metrics.total_functions = len(functions)
             module_metrics.scanned_functions = len(
-[func for func in functions if func.get_docstring_info()]
+                [func for func in functions if func.get_docstring_info()]
             )
             module_metrics.function_scan_ratio = module_metrics.scanned_functions / len(functions) if functions else 0.0
             module_metrics.class_scan_ratio = module_metrics.scanned_classes / len(classes) if classes else 0.0

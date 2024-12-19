@@ -2,12 +2,12 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Dict, List, Literal
 from dotenv import load_dotenv
 import uuid
 from pathlib import Path
-from typing import Literal
-
+import json
+import jsonschema
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +19,7 @@ DOCS_OUTPUT_DIR = ROOT_DIR / "docs_output"
 
 
 def get_env_var(
-    key: str, default: Any = None, var_type: type = str, required: bool = False
+    key: str, default: Any = None, var_type: type = str, required: bool = False, validation_schema: Optional[dict] = None
 ) -> Any:
     """Get environment variable with type conversion and validation.
 
@@ -28,6 +28,7 @@ def get_env_var(
         default: Default value if not found
         var_type: Type to convert the value to
         required: Whether the variable is required
+        validation_schema: Optional JSON schema for value validation
 
     Returns:
         The environment variable value converted to the specified type
@@ -44,11 +45,16 @@ def get_env_var(
 
     try:
         if var_type == bool:
-            return value.lower() in ("true", "1", "yes", "on")
-        return var_type(value)
-    except (ValueError, TypeError) as e:
+            converted_value = value.lower() in ("true", "1", "yes", "on")
+        else:
+            converted_value = var_type(value)
+
+        if validation_schema:
+            jsonschema.validate(instance=converted_value, schema=validation_schema)
+        return converted_value
+    except (ValueError, TypeError, jsonschema.ValidationError) as e:
         raise ValueError(
-            f"Failed to convert {key}={value} to type {var_type.__name__}: {str(e)}"
+            f"Failed to convert or validate {key}={value} to type {var_type.__name__}: {str(e)}"
         )
 
 
@@ -116,30 +122,21 @@ class AIConfig:
     @staticmethod
     def from_env() -> "AIConfig":
         """Create configuration from environment variables with Azure defaults."""
-        azure_api_base = get_env_var("AZURE_API_BASE", "")
-        if not azure_api_base:
-            raise ValueError("AZURE_API_BASE is not set. Please check your .env file or environment variables.")
-
         return AIConfig(
             api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
             endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
-            deployment=get_env_var(
-                "AZURE_OPENAI_DEPLOYMENT",
-                required=True,
-                default=None,
-                var_type=str,
-            ),
-            model=get_env_var("AZURE_OPENAI_MODEL", "gpt-4o"),
+            deployment=get_env_var("AZURE_OPENAI_DEPLOYMENT", required=True),
+            model=get_env_var("AZURE_OPENAI_MODEL", "gpt-4o", validation_schema={"type": "string", "enum": ["gpt-4o", "gpt-3.5-turbo", "gpt-4o-2024-11-20"]}),
             azure_api_version=get_env_var("AZURE_API_VERSION", "2024-10-01-preview"),
-            max_tokens=get_env_var("AZURE_MAX_TOKENS", 128000, int),
-            temperature=get_env_var("TEMPERATURE", 0.7, float),
-            timeout=get_env_var("TIMEOUT", 30, int),
-            api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int),
-            api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int),
-            azure_api_base=azure_api_base,
+            max_tokens=get_env_var("AZURE_MAX_TOKENS", 128000, int, validation_schema={"type": "integer", "minimum": 1000}),
+            temperature=get_env_var("TEMPERATURE", 0.7, float, validation_schema={"type": "number", "minimum": 0, "maximum": 1}),
+            timeout=get_env_var("TIMEOUT", 30, int, validation_schema={"type": "integer", "minimum": 10}),
+            api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int, validation_schema={"type": "integer", "minimum": 1}),
+            api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int, validation_schema={"type": "integer", "minimum": 1}),
+            azure_api_base=get_env_var("AZURE_API_BASE", ""),
             azure_deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", ""),
             max_completion_tokens=get_env_var(
-                "AZURE_MAX_COMPLETION_TOKENS", None, int, False
+                "AZURE_MAX_COMPLETION_TOKENS", None, int, False, validation_schema={"type": "integer", "minimum": 100}
             ),
             truncation_strategy=get_env_var("TRUNCATION_STRATEGY", None, dict, False),
             tool_choice=get_env_var("TOOL_CHOICE", None, str, False),
@@ -166,12 +163,12 @@ class AppConfig:
         """Create configuration from environment variables."""
         return AppConfig(
             debug=get_env_var("DEBUG", False, bool),
-            log_level=get_env_var("LOG_LEVEL", "INFO"),
+            log_level=get_env_var("LOG_LEVEL", "INFO", validation_schema={"type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]}),
             repos_dir=Path(get_env_var("REPOS_DIR", str(REPOS_DIR))),
             docs_output_dir=Path(get_env_var("DOCS_OUTPUT_DIR", str(DOCS_OUTPUT_DIR))),
             log_dir=Path(get_env_var("LOG_DIR", "logs")),
             use_cache=get_env_var("USE_CACHE", False, bool),
-            cache_ttl=get_env_var("CACHE_TTL", 3600, int),
+            cache_ttl=get_env_var("CACHE_TTL", 3600, int, validation_schema={"type": "integer", "minimum": 0}),
         )
 
     def ensure_directories(self):

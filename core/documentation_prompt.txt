@@ -49,9 +49,33 @@ Analyze the code and generate a JSON response adhering to this schema:
     "complexity": 1
 }
 
+### Example of a Valid JSON Response:
+{
+    "summary": "This module provides utility functions for string manipulation.",
+    "description": "The module includes functions for formatting, parsing, and validating strings.",
+    "args": [
+        {
+            "name": "input_string",
+            "type": "str",
+            "description": "The string to be processed."
+        }
+    ],
+    "returns": {
+        "type": "str",
+        "description": "The processed string."
+    },
+    "raises": [
+        {
+            "exception": "ValueError",
+            "description": "Raised if the input string is invalid."
+        }
+    ],
+    "complexity": 2
+}
+
 Notes:
 - Ensure the response matches the schema exactly, including required fields (`summary`, `description`, `returns`, `complexity`).
 - If any data is unavailable, explicitly state "Not available."
 - Optional fields like `args` and `raises` can default to empty arrays.
 
-Respond only with the JSON object.
+Respond **only** with a JSON object. Do not include any additional text or explanations.

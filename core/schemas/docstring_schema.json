@@ -1,73 +1,83 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Docstring Schema",
-  "type": "object",
-  "properties": {
-    "summary": {
-      "type": "string",
-      "description": "A brief summary of the function or class."
-    },
-    "description": {
-      "type": "string",
-      "description": "A detailed description of the function or class."
-    },
-    "args": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The name of the argument."
-          },
-          "type": {
-            "type": "string",
-            "description": "The type of the argument."
-          },
-          "description": {
-            "type": "string",
-            "description": "A description of the argument."
-          }
-        },
-        "required": ["name", "type", "description"]
-      }
-    },
-    "returns": {
+  "name": "google_style_docstring",
+  "schema": {
       "type": "object",
       "properties": {
-        "type": {
-          "type": "string",
-          "description": "The return type of the function."
-        },
-        "description": {
-          "type": "string",
-          "description": "A description of the return value."
-        }
-      },
-      "required": ["type", "description"]
-    },
-    "raises": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "exception": {
-            "type": "string",
-            "description": "The type of exception raised."
+          "summary": {
+              "type": "string",
+              "description": "A brief summary of the method or function."
           },
           "description": {
-            "type": "string",
-            "description": "A description of the exception."
+              "type": "string",
+              "description": "Detailed description of the method or function."
+          },
+          "args": {
+              "type": "array",
+              "description": "A list of arguments for the method or function.",
+              "items": {
+                  "type": "object",
+                  "properties": {
+                      "name": {
+                          "type": "string",
+                          "description": "The name of the argument."
+                      },
+                      "type": {
+                          "type": "string",
+                          "description": "The data type of the argument."
+                      },
+                      "description": {
+                          "type": "string",
+                          "description": "A brief description of the argument."
+                      }
+                  },
+                  "required": ["name", "type", "description"],
+                  "additionalProperties": false
+              },
+              "default": []
+          },
+          "returns": {
+              "type": "object",
+              "description": "Details about the return value of the method or function.",
+              "properties": {
+                  "type": {
+                      "type": "string",
+                      "description": "The data type of the return value."
+                  },
+                  "description": {
+                      "type": "string",
+                      "description": "A brief description of the return value."
+                  }
+              },
+              "required": ["type", "description"],
+              "additionalProperties": false
+          },
+          "raises": {
+              "type": "array",
+              "description": "A list of exceptions that may be raised by the method or function.",
+              "items": {
+                  "type": "object",
+                  "properties": {
+                      "exception": {
+                          "type": "string",
+                          "description": "The name of the exception that may be raised."
+                      },
+                      "description": {
+                          "type": "string",
+                          "description": "A brief description of the circumstances under which the exception is raised."
+                      }
+                  },
+                  "required": ["exception", "description"],
+                  "additionalProperties": false
+              },
+              "default": []
+          },
+          "complexity": {
+              "type": ["integer", "string"],
+              "description": "McCabe complexity score",
+              "default": 1
           }
-        },
-        "required": ["exception", "description"]
-      }
-    },
-    "complexity": {
-      "type": "integer",
-      "description": "The complexity level of the function or class.",
-      "minimum": 1
-    }
-  },
-  "required": ["summary", "description", "args", "returns", "raises", "complexity"]
+      },
+      "required": ["summary", "description", "returns"],
+      "additionalProperties": false
+  }
 }

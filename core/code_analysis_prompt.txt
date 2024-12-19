@@ -30,4 +30,28 @@ Respond in the following JSON format:
     ]
 }
 
+### Example of a Valid JSON Response:
+{
+    "overview": "This code implements a caching mechanism for database queries.",
+    "analysis": {
+        "complexity": "The code has a moderate complexity due to nested loops.",
+        "best_practices": "The code follows best practices for caching but lacks proper logging.",
+        "error_handling": "Error handling is minimal and does not cover edge cases.",
+        "performance": "The caching mechanism improves performance but could be optimized for large datasets.",
+        "documentation": "The code lacks detailed comments and a module-level docstring."
+    },
+    "recommendations": [
+        {
+            "issue": "Lack of error handling for database connection failures.",
+            "suggestion": "Add a try-except block to handle connection errors and retry logic."
+        },
+        {
+            "issue": "Insufficient logging.",
+            "suggestion": "Add logging statements to track cache hits and misses."
+        }
+    ]
+}
+
 Ensure your response provides actionable insights with specific examples. If any data is missing or unavailable, explicitly state "Not available."
+
+Respond **only** with a JSON object. Do not include any additional text or explanations.

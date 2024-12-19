@@ -1,7 +1,7 @@
 from typing import Optional, Any, Dict
 from pathlib import Path
 import json
-from jinja2 import Environment, FileSystemLoader, TemplateNotFound, Template
+from jinja2 import Template, TemplateError, Environment, FileSystemLoader, TemplateNotFound
 import time
 
 from core.types.base import (
@@ -20,14 +20,8 @@ from core.types.docstring import DocstringData
 
 
 class PromptManager:
-    """
-    Manages the generation and formatting of prompts for AI interactions.
-
-    This class handles creating and managing prompts for the Azure OpenAI API,
-    including support for function calling and structured outputs. It ensures
-    prompts are optimized for the model and handles templates according to
-    Azure best practices.
-    """
+    documentation_template: Template  # Explicitly declare the type of documentation_template
+    env: Environment  # Explicitly declare the type of env
 
     def __init__(self, correlation_id: Optional[str] = None) -> None:
         """Initialize the PromptManager with template loading and configuration."""
@@ -40,10 +34,30 @@ class PromptManager:
         self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
         self.token_manager = Injector.get("token_manager")
 
+        # Define schema directory
+        schema_dir = Path(__file__).parent / "schemas"
+        
+        # Load function schema
+        try:
+            self._function_schema: dict[str, Any] = self._load_and_validate_schema(
+                schema_dir / "function_tools_schema.json"
+            )
+            if not self._function_schema or "function" not in self._function_schema:
+                raise ValueError("Invalid function schema structure")
+        except Exception as e:
+            self.logger.error(f"Failed to load function schema: {e}")
+            self._function_schema = {
+                "function": {
+                    "name": "generate_docstring",
+                    "description": "Generate documentation from source code",
+                    "parameters": {}
+                }
+            }
+
         # Load templates using Jinja2 with enhanced error handling
         template_dir = Path(__file__).parent
         try:
-            self.env = Environment(
+            self.env: Environment = Environment(
                 loader=FileSystemLoader(template_dir),
                 trim_blocks=True,
                 lstrip_blocks=True,
@@ -71,18 +85,6 @@ class PromptManager:
             self.logger.error(f"Template loading failed: {e}", exc_info=True)
             raise
 
-        # Load and validate function schemas
-        try:
-            schema_path = (
-                Path(__file__).resolve().parent.parent
-                / "schemas"
-                / "function_tools_schema.json"
-            )
-            self._function_schema = self._load_and_validate_schema(schema_path)
-        except Exception as e:
-            self.logger.error(f"Schema loading failed: {e}", exc_info=True)
-            raise
-
     def _load_and_validate_schema(self, schema_path: Path) -> dict[str, Any]:
         """Load and validate a JSON schema with enhanced error handling."""
         try:
@@ -108,12 +110,18 @@ class PromptManager:
 
         This method loads template files and performs basic validation to ensure
         they contain the expected sections and placeholders.
+
+        Args:
+            template_name: The name of the template file.
+
+        Returns:
+            The loaded template as a Jinja2 Template object.
         """
         try:
             template = self.env.get_template(template_name)
 
             # Validate template content
-            rendered = template.render(
+            rendered: str = template.render(
                 {
                     "code": "TEST_CODE",
                     "module_name": "TEST_MODULE",
@@ -132,9 +140,7 @@ class PromptManager:
             self.logger.error(f"Template file not found: {template_name}")
             raise
         except Exception as e:
-            self.logger.error(
-                f"Error loading template {template_name}: {e}", exc_info=True
-            )
+            self.logger.error(f"Error loading template {template_name}: {e}", exc_info=True)
             raise
 
     def _format_class_info(self, cls: ExtractedClass) -> str:
@@ -209,23 +215,26 @@ class PromptManager:
         Create a documentation prompt using the documentation template.
 
         Args:
-            context: Structured context containing all necessary documentation information
+            context: Structured context containing all necessary documentation information.
 
         Returns:
-            ProcessingResult containing the generated prompt and associated metrics
+            ProcessingResult containing the generated prompt and associated metrics.
         """
         print_info("Generating documentation prompt using template.")
         start_time = time.time()
 
         try:
-            # Generate prompt using template
-            prompt = self.documentation_template.render(
-                module_name=context.metadata.get("module_name", ""),
-                file_path=str(context.module_path),
-                source_code=context.source_code,
-                classes=context.classes,
-                functions=context.functions,
-            )
+            # Prepare template variables with explicit typing
+            template_vars: Dict[str, Any] = {
+                "module_name": context.metadata.get("module_name", ""),
+                "file_path": str(context.module_path),
+                "source_code": context.source_code,
+                "classes": context.classes,
+                "functions": context.functions,
+            }
+
+            # Render the template with explicit type hints
+            prompt: str = self.documentation_template.render(**template_vars)
 
             # Track token usage
             token_usage = await self._calculate_token_usage(prompt)
@@ -242,10 +251,18 @@ class PromptManager:
                 schema_errors=[],
             )
 
-        except Exception as e:
-            self.logger.error(
-                f"Error generating documentation prompt: {e}", exc_info=True
+        except TemplateError as e:
+            self.logger.error(f"Template rendering failed: {e}", exc_info=True)
+            return ProcessingResult(
+                content={},
+                usage={},
+                metrics={},
+                validation_status=False,
+                validation_errors=[f"Template rendering failed: {str(e)}"],
+                schema_errors=[],
             )
+        except Exception as e:
+            self.logger.error(f"Error generating documentation prompt: {e}", exc_info=True)
             return ProcessingResult(
                 content={},
                 usage={},

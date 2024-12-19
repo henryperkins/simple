@@ -1,95 +1,95 @@
 {
-  "type": "function",
-  "function": {
-      "name": "generate_docstring",
-      "description": "Generate a Python docstring with structured information.",
-      "parameters": {
-          "type": "object",
-          "properties": {
-              "summary": {
-                  "type": "string",
-                  "description": "A concise summary of what the code does."
-              },
-              "description": {
-                  "type": "string",
-                  "description": "A detailed description of the functionality."
-              },
-              "args": {
-                  "type": "array",
-                  "items": {
-                      "type": "object",
-                      "properties": {
-                          "name": {"type": "string", "description": "The name of the argument."},
-                          "type": {"type": "string", "description": "The type of the argument."},
-                          "description": {"type": "string", "description": "A description of the argument."},
-                          "default": {"type": "string", "description": "The default value of the argument, if any.", "default": null}
-                      },
-                      "required": ["name", "type", "description"]
-                  },
-                  "description": "A list of arguments, each with a name, type, description, and optional default value.",
-                  "default": []
-              },
-              "returns": {
-                  "type": "array",
-                  "description": "A list of return values, each with a type and description.",
-                  "items": {
-                      "type": "object",
-                      "properties": {
-                          "type": {"type": "string", "description": "The type of the return value."},
-                          "description": {"type": "string", "description": "A description of the return value."}
-                      },
-                      "required": ["type", "description"]
-                  },
-                  "default": []
-              },
-              "raises": {
-                  "type": "array",
-                  "items": {
-                      "type": "object",
-                      "properties": {
-                          "exception": {"type": "string", "description": "The type of exception raised."},
-                          "description": {"type": "string", "description": "A description of when the exception is raised."}
-                      },
-                      "required": ["exception", "description"]
-                  },
-                  "description": "A list of exceptions that may be raised, each with a type and description.",
-                  "default": []
-              },
-              "complexity": {
-                  "type": "object",
-                  "description": "Complexity metrics for the function.",
-                  "properties": {
-                      "mccabe": {
-                          "type": "integer",
-                          "description": "McCabe complexity score.",
-                          "default": 1
-                      },
-                      "cyclomatic": {
-                          "type": "integer",
-                          "description": "Cyclomatic complexity score.",
-                          "default": 1
-                      },
-                      "halstead": {
-                          "type": "object",
-                          "description": "Halstead complexity metrics.",
-                          "properties": {
-                              "difficulty": {"type": "number", "description": "Halstead difficulty metric.", "default": 0},
-                              "volume": {"type": "number", "description": "Halstead volume metric.", "default": 0}
-                          }
-                      }
-                  }
-              },
-              "examples": {
-                  "type": "array",
-                  "description": "A list of code examples demonstrating how to use the function.",
-                  "items": {
-                      "type": "string",
-                      "description": "A single code example."
-                  },
-                  "default": []
-              }
-          },
-          "required": ["summary", "description", "returns"]
-      }
-  }
+    "type": "function",
+    "function": {
+        "name": "generate_docstring",
+        "description": "Generate a Python docstring with structured information.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "A concise summary of what the code does."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "A detailed description of the functionality."
+                },
+                "args": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "The name of the argument."},
+                            "type": {"type": "string", "description": "The type of the argument."},
+                            "description": {"type": "string", "description": "A description of the argument."},
+                            "default": {"type": "string", "description": "The default value of the argument, if any.", "default": null}
+                        },
+                        "required": ["name", "type", "description"]
+                    },
+                    "description": "A list of arguments, each with a name, type, description, and optional default value.",
+                    "default": []
+                },
+                "returns": {
+                    "type": "array",
+                    "description": "A list of return values, each with a type and description.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "description": "The type of the return value."},
+                            "description": {"type": "string", "description": "A description of the return value."}
+                        },
+                        "required": ["type", "description"]
+                    },
+                    "default": []
+                },
+                "raises": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "exception": {"type": "string", "description": "The type of exception raised."},
+                            "description": {"type": "string", "description": "A description of when the exception is raised."}
+                        },
+                        "required": ["exception", "description"]
+                    },
+                    "description": "A list of exceptions that may be raised, each with a type and description.",
+                    "default": []
+                },
+                "complexity": {
+                    "type": "object",
+                    "description": "Complexity metrics for the function.",
+                    "properties": {
+                        "mccabe": {
+                            "type": "integer",
+                            "description": "McCabe complexity score.",
+                            "default": 1
+                        },
+                        "cyclomatic": {
+                            "type": "integer",
+                            "description": "Cyclomatic complexity score.",
+                            "default": 1
+                        },
+                        "halstead": {
+                            "type": "object",
+                            "description": "Halstead complexity metrics.",
+                            "properties": {
+                                "difficulty": {"type": "number", "description": "Halstead difficulty metric.", "default": 0},
+                                "volume": {"type": "number", "description": "Halstead volume metric.", "default": 0}
+                            }
+                        }
+                    }
+                },
+                "examples": {
+                    "type": "array",
+                    "description": "A list of code examples demonstrating how to use the function.",
+                    "items": {
+                        "type": "string",
+                        "description": "A single code example."
+                    },
+                    "default": []
+                }
+            },
+            "required": ["summary", "description", "returns"]
+        }
+    }
 }
