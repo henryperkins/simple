@@ -1,10 +1,3 @@
-"""
-Code Extractor Module.
-
-This module provides functionality to extract various code elements from Python
-source files using the ast module.
-"""
-
 import ast
 import uuid
 import time
@@ -28,7 +21,10 @@ from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.metrics_collector import MetricsCollector
 from core.console import print_info
 from core.exceptions import ProcessingError, ExtractionError
-from core.extraction.extraction_utils import extract_attributes, extract_instance_attributes
+from core.extraction.extraction_utils import (
+    extract_attributes,
+    extract_instance_attributes,
+)
 from utils import read_file_safe_async
 
 
@@ -42,8 +38,9 @@ class CodeExtractor:
     ) -> None:
         """Initialize the CodeExtractor."""
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        self.logger = LoggerSetup.get_logger(
-            f"{__name__}.{self.__class__.__name__}", self.correlation_id
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(__name__),
+            extra={"correlation_id": self.correlation_id},
         )
         self.context = context
         self.metrics_collector: MetricsCollector = MetricsCollector(
@@ -58,8 +55,7 @@ class CodeExtractor:
         self.context.function_extractor = self.function_extractor
         # Initialize ClassExtractor with the updated context
         self.class_extractor = ClassExtractor(
-            context=self.context,
-            correlation_id=correlation_id
+            context=self.context, correlation_id=correlation_id
         )
         self.dependency_analyzer = DependencyAnalyzer(context, correlation_id)
 
@@ -69,16 +65,12 @@ class CodeExtractor:
             raise ExtractionError("Source code is empty or missing")
 
         module_name = self.context.module_name or "unnamed_module"
-        file_path = str(getattr(self.context, "base_path", "")) or ""
+
         start_time = time.time()
-        log_extra = {
-            "source_code_snippet": source_code[:50],
-            "module_name": module_name,
-            "file_path": file_path,
-        }
 
         try:
             # VALIDATE before setting the source code
+            file_path = str(getattr(self.context, "base_path", "")) or ""
             self._validate_source_code(
                 source_code,
                 file_path,
@@ -92,7 +84,7 @@ class CodeExtractor:
             )
 
             # Preprocess the source code to remove leading zeros
-            modified_source_code = re.sub(r'\b0+(\d+)\b', r'\1', source_code)
+            modified_source_code = re.sub(r"\b0+(\d+)\b", r"\1", source_code)
 
             tree = ast.parse(modified_source_code)
             # Set the tree in the context
@@ -101,7 +93,9 @@ class CodeExtractor:
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
 
             # Calculate metrics only once at the module level
-            module_metrics = self.metrics.calculate_metrics(modified_source_code, module_name)
+            module_metrics = self.metrics.calculate_metrics(
+                modified_source_code, module_name
+            )
 
             # Extract classes and functions, passing the metrics
             classes: List[ExtractedClass] = await self.class_extractor.extract_classes(
@@ -150,9 +144,7 @@ class CodeExtractor:
                     "constants_extracted": len(constants),
                 },
             )
-            self.logger.info(
-                f"Code extraction for module: '{module_name}' completed in {processing_time:.2f}s."
-            )
+            self.logger.info(f"Code extraction completed in {processing_time:.2f}s.")
 
             # Collect metrics
             self.metrics_collector.collect_metrics(module_name, module_metrics)
@@ -174,7 +166,11 @@ class CodeExtractor:
         except ProcessingError as pe:
             self.logger.error(
                 f"Processing error during code extraction: {pe}",
-                extra=log_extra,
+                extra={
+                    "source_code_snippet": source_code[:50],
+                    "module_name": module_name,
+                    "file_path": file_path,
+                },
                 exc_info=True,
             )
             await self.metrics_collector.track_operation(
@@ -187,7 +183,11 @@ class CodeExtractor:
         except ExtractionError as ee:
             self.logger.error(
                 f"Extraction error during code extraction: {ee}",
-                extra=log_extra,
+                extra={
+                    "source_code_snippet": source_code[:50],
+                    "module_name": module_name,
+                    "file_path": file_path,
+                },
                 exc_info=True,
             )
             await self.metrics_collector.track_operation(
@@ -200,7 +200,11 @@ class CodeExtractor:
         except Exception as e:
             self.logger.error(
                 f"Unexpected error during code extraction: {e}",
-                extra=log_extra,
+                extra={
+                    "source_code_snippet": source_code[:50],
+                    "module_name": module_name,
+                    "file_path": file_path,
+                },
                 exc_info=True,
             )
             await self.metrics_collector.track_operation(
@@ -215,12 +219,11 @@ class CodeExtractor:
         self, source_code: str, file_path: str, module_name: str, project_root: str
     ) -> None:
         """Validate source code."""
+        self.logger.info(f"Validating source code for file: {file_path}")
         try:
             # No need to parse here, it's done in extract_code
             # ast.parse(source_code)
-            self.logger.info(
-                f"Syntax validation successful for module: '{module_name}' in: '{file_path}'"
-            )
+            self.logger.info(f"Syntax validation successful for: {file_path}")
         except SyntaxError as e:
             error_details = {
                 "error_message": str(e),
@@ -229,7 +232,7 @@ class CodeExtractor:
                 "text": e.text.strip() if e.text else "N/A",
             }
             self.logger.error(
-                f"Syntax error during validation for module: '{module_name}' in '{file_path}': {error_details}"
+                f"Syntax error during validation for {file_path}: {error_details}"
             )
             raise ProcessingError(f"Syntax error in source code: {e}") from e
 
@@ -255,10 +258,7 @@ class CodeExtractor:
                             f"Module '{module_name}' is explicitly referenced in {init_file_path}."
                         )
         except Exception as e:
-            self.logger.error(
-                f"Error reading {init_file_path}: {e}",
-                exc_info=True,
-            )
+            self.logger.error(f"Error reading {init_file_path}: {e}")
 
     def _extract_variables(self, tree: ast.AST) -> List[Dict[str, Any]]:
         """Extract variables from the AST."""

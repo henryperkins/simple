@@ -6,12 +6,11 @@ import ast
 import uuid
 from typing import Optional, List, Dict, Union, Any
 
-from core.logger import CorrelationLoggerAdapter, LoggerSetup
-from core.types import (
+from core.logger import LoggerSetup
+from core.types.base import (
     ExtractedFunction,
     ExtractedArgument,
 )
-from utils import handle_extraction_error
 from core.extraction.extraction_utils import extract_decorators, get_node_name
 from core.exceptions import ExtractionError
 
@@ -26,7 +25,7 @@ class FunctionExtractor:
     ) -> None:
         """Initialize the function extractor."""
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        self.logger = LoggerSetup.get_logger(__name__, self.correlation_id)
+        self.logger = LoggerSetup.get_logger(__name__, correlation_id=self.correlation_id)
         self.context = context
         self.errors: List[str] = []
 
@@ -88,12 +87,9 @@ class FunctionExtractor:
                                 node.name,
                             )
                 except Exception as e:
-                    handle_extraction_error(
-                        self.logger,
-                        self.errors,
-                        "function_extraction",
-                        e,
-                        function_name=node.name,
+                    self.logger.error(
+                        f"Error extracting function {node.name}: {str(e)}",
+                        exc_info=True
                     )
                     if self.context.strict_mode:
                         raise  # and stop execution if necessary
@@ -105,10 +101,13 @@ class FunctionExtractor:
         """Extract argument details from a function definition."""
         args = []
         for arg in node.args.args:
+            arg_type = "typing.Any"
+            if arg.annotation and isinstance(arg.annotation, ast.AST):
+                arg_type = get_node_name(arg.annotation) or "typing.Any"
             args.append(
                 ExtractedArgument(
                     name=arg.arg,
-                    type=get_node_name(arg.annotation) or "typing.Any",
+                    type=arg_type,
                     description="",  # Add description extraction if needed
                 )
             )
@@ -120,9 +119,9 @@ class FunctionExtractor:
         """Extract type hints from function parameters and return value."""
         type_hints = {}
         for arg in node.args.args:
-            if arg.annotation:
+            if arg.annotation and isinstance(arg.annotation, ast.AST):
                 type_hints[arg.arg] = get_node_name(arg.annotation)
-        if node.returns:
+        if node.returns and isinstance(node.returns, ast.AST):
             type_hints["return"] = get_node_name(node.returns)
         return type_hints
 
@@ -192,7 +191,6 @@ class FunctionExtractor:
                     imports.append(child.module)
         return imports
 
-    
     async def _process_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], module_metrics: Any
     ) -> Optional[ExtractedFunction]:
@@ -205,7 +203,7 @@ class FunctionExtractor:
             docstring = ast.get_docstring(node) or ""
             decorators = extract_decorators(node)
             arguments = self._extract_arguments(node)
-            return_type = get_node_name(node.returns) or "typing.Any"
+            return_type = get_node_name(node.returns) if node.returns and isinstance(node.returns, ast.AST) else "typing.Any"
             is_async = isinstance(node, ast.AsyncFunctionDef)
 
             extracted_fn = ExtractedFunction(
@@ -221,9 +219,9 @@ class FunctionExtractor:
                 dependencies=self._extract_dependencies(node),
                 complexity_warnings=self._analyze_complexity_warnings(node),
             )
-        
-            if docstring:
-                extracted_fn.docstring_info = self.context.docstring_processor.parse(
+
+            if docstring and hasattr(self.context, "docstring_processor"):
+                extracted_fn._docstring_info = self.context.docstring_processor.parse(
                     docstring
                 )
 
@@ -237,11 +235,8 @@ class FunctionExtractor:
             return extracted_fn
 
         except Exception as e:
-            handle_extraction_error(
-                self.logger,
-                self.errors,
-                "function_processing",
-                e,
-                function_name=node.name,
+            self.logger.error(
+                f"Error processing function {node.name}: {str(e)}",
+                exc_info=True
             )
             return None

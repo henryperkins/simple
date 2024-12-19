@@ -47,7 +47,7 @@ async def initialize_extractors(
 __all__ = [
     "CodeExtractor",
     "ClassExtractor",
-    "FunctionExtractor", 
+    "FunctionExtractor",
     "DependencyAnalyzer",
     "initialize_extractors",
     "extract_decorators",

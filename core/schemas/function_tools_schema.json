@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "description": "The type of the function tool schema.",
+      "enum": ["function"]
+    },
+    "function": {
+      "type": "object",
+      "description": "Details about the function tool.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the function."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the function."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "The parameters of the function.",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "description": "A brief summary of the function."
+            },
+            "description": {
+              "type": "string",
+              "description": "A detailed description of the function."
+            },
+            "args": {
+              "type": "array",
+              "description": "A list of arguments for the function.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the argument."
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "The data type of the argument."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "A brief description of the argument."
+                  }
+                },
+                "required": ["name", "type", "description"]
+              }
+            },
+            "returns": {
+              "type": "object",
+              "description": "Details about the return value of the function.",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "The data type of the return value."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "A brief description of the return value."
+                }
+              },
+              "required": ["type", "description"]
+            },
+            "raises": {
+              "type": "array",
+              "description": "A list of exceptions that may be raised by the function.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "exception": {
+                    "type": "string",
+                    "description": "The name of the exception."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "A brief description of the exception."
+                  }
+                },
+                "required": ["exception", "description"]
+              }
+            },
+            "complexity": {
+              "type": "integer",
+              "description": "The complexity level of the function.",
+              "minimum": 1
+            }
+          },
+          "required": ["summary", "description", "args", "returns", "raises", "complexity"]
+        }
+      },
+      "required": ["name", "description", "parameters"]
+    }
+  },
+  "required": ["type", "function"]
+}

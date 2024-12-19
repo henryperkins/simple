@@ -27,6 +27,7 @@ from core.dependency_injection import Injector, setup_dependencies
 from core.logger import LoggerSetup
 from core.monitoring import SystemMonitor
 from core.docs import DocumentationOrchestrator
+from core.docstring_processor import DocstringProcessor
 from core.exceptions import ConfigurationError
 from utils import RepositoryManager, get_logger, read_file_safe_async
 
@@ -72,9 +73,8 @@ class DocumentationGenerator:
             correlation_id=self.correlation_id,
         )
         self.repo_manager: RepositoryManager | None = None
-        self.doc_orchestrator: DocumentationOrchestrator = Injector.get(
-            "doc_orchestrator"
-        )
+        self.doc_orchestrator: DocumentationOrchestrator = Injector.get("doc_orchestrator")
+        self.docstring_processor: DocstringProcessor = Injector.get("docstring_processor")
         self.ai_service: Any = Injector.get("ai_service")
 
     async def initialize(self) -> None:
@@ -133,18 +133,10 @@ class DocumentationGenerator:
                 print_info(f"Skipping file with syntax errors: {file_path}")
                 return False
 
-            # Generate documentation with schema validation
-            try:
-                await self.doc_orchestrator.generate_module_documentation(
-                    file_path, output_path.parent, source_code
-                )
-            except Exception as e:
-                self.logger.error(
-                    f"Failed to generate documentation for {file_path}: {e}",
-                    exc_info=True,
-                )
-                print_error(f"Failed to generate documentation for {file_path}: {e}")
-                return False
+            # Generate documentation
+            await self.doc_orchestrator.generate_module_documentation(
+                file_path, output_path.parent, source_code
+            )
             print_success(f"Successfully processed file: {file_path}")
             return True
         except Exception as e:
@@ -256,10 +248,6 @@ class DocumentationGenerator:
             print_info(
                 f"Processed {processed_files} files, skipped {skipped_files} files out of {total_files} total files."
             )
-            if skipped_files > 0:
-                print_error(
-                    f"Some files were skipped due to errors or invalid AI responses. Check logs for details."
-                )
 
         return success
 

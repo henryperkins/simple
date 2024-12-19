@@ -2,10 +2,11 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 from dotenv import load_dotenv
 import uuid
 from pathlib import Path
+from typing import Literal
 
 
 # Load environment variables
@@ -75,6 +76,12 @@ class AIConfig:
     timeout: int = 30
     api_call_semaphore_limit: int = 10
     api_call_max_retries: int = 3
+    max_completion_tokens: Optional[int] = None
+    truncation_strategy: Optional[dict[str, Any]] = None
+    tool_choice: Optional[str | dict[str, Any]] = None
+    parallel_tool_calls: Optional[bool] = True
+    response_format: Optional[dict[str, str]] = None
+    stream_options: Optional[dict[str, bool]] = None
 
     # Azure-specific settings
     azure_api_base: str = field(default_factory=lambda: os.getenv("AZURE_API_BASE", ""))
@@ -122,6 +129,14 @@ class AIConfig:
             api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int),
             azure_api_base=get_env_var("AZURE_API_BASE", ""),
             azure_deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", ""),
+            max_completion_tokens=get_env_var(
+                "AZURE_MAX_COMPLETION_TOKENS", None, int, False
+            ),
+            truncation_strategy=get_env_var("TRUNCATION_STRATEGY", None, dict, False),
+            tool_choice=get_env_var("TOOL_CHOICE", None, str, False),
+            parallel_tool_calls=get_env_var("PARALLEL_TOOL_CALLS", True, bool, False),
+            response_format=get_env_var("RESPONSE_FORMAT", None, dict, False),
+            stream_options=get_env_var("STREAM_OPTIONS", None, dict, False),
         )
 
 
@@ -147,7 +162,7 @@ class AppConfig:
             docs_output_dir=Path(get_env_var("DOCS_OUTPUT_DIR", str(DOCS_OUTPUT_DIR))),
             log_dir=Path(get_env_var("LOG_DIR", "logs")),
             use_cache=get_env_var("USE_CACHE", False, bool),
-            cache_ttl=get_env_var("CACHE_TTL", 3600, int)
+            cache_ttl=get_env_var("CACHE_TTL", 3600, int),
         )
 
     def ensure_directories(self):
@@ -166,7 +181,9 @@ class Config:
         self.app = AppConfig.from_env()
         self.correlation_id = str(uuid.uuid4())
         self.app.ensure_directories()
-        self.project_root = Path.cwd()  # Set project_root to the current working directory
+        self.project_root = (
+            Path.cwd()
+        )  # Set project_root to the current working directory
 
     def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary.
@@ -191,10 +208,16 @@ class Config:
                         "max_tokens": config.max_tokens,
                         "chunk_size": config.chunk_size,
                         "cost_per_token": config.cost_per_token,
-                        "rate_limit": config.rate_limit
+                        "rate_limit": config.rate_limit,
                     }
                     for model, config in self.ai.model_limits.items()
                 },
+                "max_completion_tokens": self.ai.max_completion_tokens,
+                "truncation_strategy": self.ai.truncation_strategy,
+                "tool_choice": self.ai.tool_choice,
+                "parallel_tool_calls": self.ai.parallel_tool_calls,
+                "response_format": self.ai.response_format,
+                "stream_options": self.ai.stream_options,
             },
             "app": {
                 "debug": self.app.debug,

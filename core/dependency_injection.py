@@ -1,9 +1,6 @@
 """Manages dependency injection for classes."""
 
-import asyncio
-from pathlib import Path
 from typing import Any
-import json
 
 from core.metrics_collector import MetricsCollector
 from core.metrics import Metrics
@@ -11,6 +8,8 @@ from api.token_management import TokenManager
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from core.response_parsing import ResponseParsingService
+from core.validation.docstring_validator import DocstringValidator
+from core.formatting.response_formatter import ResponseFormatter
 from core.prompt_manager import PromptManager
 from core.config import Config
 from core.ai_service import AIService
@@ -18,7 +17,7 @@ from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.class_extractor import ClassExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.extraction.code_extractor import CodeExtractor
-from core.logger import LoggerSetup, get_correlation_id
+from core.logger import LoggerSetup
 from core.types.base import ExtractionContext
 from core.docs import DocumentationOrchestrator
 
@@ -28,7 +27,14 @@ class Injector:
 
     _dependencies: dict[str, Any] = {}
     _initialized: bool = False
-    _logger = LoggerSetup.get_logger(__name__)
+    _logger: Any = None
+
+    @classmethod
+    def _get_logger(cls) -> Any:
+        """Get or initialize the logger."""
+        if cls._logger is None:
+            cls._logger = LoggerSetup.get_logger(__name__)
+        return cls._logger
 
     @classmethod
     def register(cls, name: str, dependency: Any, force: bool = False) -> None:
@@ -45,7 +51,7 @@ class Injector:
             )
 
         cls._dependencies[name] = dependency
-        cls._logger.info(f"Dependency '{name}' registered")
+        cls._get_logger().info(f"Dependency '{name}' registered")
 
     @classmethod
     def get(cls, name: str) -> Any:
@@ -68,7 +74,7 @@ class Injector:
         """Clear all registered dependencies."""
         cls._dependencies.clear()
         cls._initialized = False
-        cls._logger.info("All dependencies cleared")
+        cls._get_logger().info("All dependencies cleared")
 
     @classmethod
     def is_initialized(cls) -> bool:
@@ -80,7 +86,15 @@ class Injector:
         """Set the initialization status."""
         cls._initialized = value
 
+
 async def setup_dependencies(config: Config, correlation_id: str | None = None) -> None:
+    """
+    Sets up the dependency injection framework by registering all components in the proper order.
+
+    Args:
+        config: Configuration object containing app and AI settings.
+        correlation_id: Unique identifier for logging and correlation.
+    """
     # Avoid reinitialization
     if Injector.is_initialized():
         return
@@ -116,28 +130,29 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
         logger.debug("Registered 'token_manager'.")
 
         # 3. Register processors and generators
+        # 3. Register processors and validators
         docstring_processor = DocstringProcessor(correlation_id=correlation_id)
+        response_formatter = ResponseFormatter(correlation_id=correlation_id)
+        docstring_validator = DocstringValidator(correlation_id=correlation_id)
+        
         Injector.register("docstring_processor", docstring_processor)
-        logger.debug("Registered 'docstring_processor'.")
+        Injector.register("response_formatter", response_formatter)
+        Injector.register("docstring_validator", docstring_validator)
+        
+        logger.debug("Registered processors and validators.")
 
         markdown_generator = MarkdownGenerator(correlation_id=correlation_id)
         Injector.register("markdown_generator", markdown_generator)
         logger.debug("Registered 'markdown_generator'.")
 
+        # Initialize response parser and prompt manager
         response_parser = ResponseParsingService(correlation_id=correlation_id)
         Injector.register("response_parser", response_parser)
         logger.debug("Registered 'response_parser'.")
 
-        prompt_manager = PromptManager(correlation_id=correlation_id)
-        Injector.register("prompt_manager", prompt_manager)
+        prompt_mgr = PromptManager(correlation_id=correlation_id)
+        Injector.register("prompt_manager", prompt_mgr)
         logger.debug("Registered 'prompt_manager'.")
-
-        # Load and register docstring schema
-        schema_path = Path(__file__).parent.parent / "schemas" / "docstring_schema.json"
-        with schema_path.open("r") as f:
-            docstring_schema = json.load(f)
-        Injector.register("docstring_schema", docstring_schema)
-        logger.debug("Registered 'docstring_schema'.")
 
         # 4. Initialize AI service
         ai_service = AIService(config=config.ai, correlation_id=correlation_id)
@@ -185,7 +200,7 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
             ai_service=ai_service,
             code_extractor=code_extractor,
             markdown_generator=markdown_generator,
-            prompt_manager=prompt_manager,
+            prompt_manager=prompt_mgr,
             docstring_processor=docstring_processor,
             response_parser=response_parser,
             correlation_id=correlation_id,
