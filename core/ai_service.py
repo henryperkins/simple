@@ -293,17 +293,27 @@ class AIService:
                                 "status_code": response.status,
                                 "error_text": error_text[:200],  # Limit error text length
                                 "correlation_id": self.correlation_id,
+                                "azure_api_base": self.config.azure_api_base,
+                                "azure_deployment_name": self.config.azure_deployment_name,
                             },
                         )
 
                         # Handle specific error cases
                         if response.status == 429:  # Rate limit
                             retry_after = int(
-                                response.headers.get("Retry-After", 2**attempt)
+                                response.headers.get("Retry-After", 2**(attempt + 1))
                             )
                             await asyncio.sleep(retry_after)
                             continue
                         elif response.status == 503:  # Service unavailable
+                            if "DeploymentNotFound" in error_text:
+                                self.logger.warning(
+                                    "Deployment not found. If the deployment was recently created, please wait a few minutes and try again.",
+                                    extra={
+                                        "azure_api_base": self.config.azure_api_base,
+                                        "azure_deployment_name": self.config.azure_deployment_name,
+                                    },
+                                )
                             await asyncio.sleep(2**attempt)
                             continue
                         else:
