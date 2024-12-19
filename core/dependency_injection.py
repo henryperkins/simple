@@ -136,6 +136,12 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
         Injector.register("logger", logger_instance)
         logger.debug("Registered 'logger'.")
 
+        # Register repo_manager
+        from utils import RepositoryManager
+        repo_manager = RepositoryManager(repo_path=config.project_root, correlation_id=correlation_id)
+        Injector.register("repo_manager", repo_manager)
+        logger.debug("Registered 'repo_manager'.")
+
         # 3. Register processors and validators
         docstring_processor = DocstringProcessor(correlation_id=correlation_id)
         response_formatter = ResponseParsingService(correlation_id=correlation_id)
