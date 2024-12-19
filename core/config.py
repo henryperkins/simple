@@ -119,7 +119,12 @@ class AIConfig:
         return AIConfig(
             api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
             endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
-            deployment=get_env_var("AZURE_OPENAI_DEPLOYMENT", required=True),
+            deployment=get_env_var(
+                "AZURE_OPENAI_DEPLOYMENT",
+                required=True,
+                default=None,
+                var_type=str,
+            ),
             model=get_env_var("AZURE_OPENAI_MODEL", "gpt-4o"),
             azure_api_version=get_env_var("AZURE_API_VERSION", "2024-10-01-preview"),
             max_tokens=get_env_var("AZURE_MAX_TOKENS", 128000, int),

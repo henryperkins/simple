@@ -69,6 +69,7 @@ class AIService:
                 extra={
                     "model": self.config.model,
                     "deployment": self.config.deployment,
+                    "endpoint": self.config.endpoint,
                 },
             )
         except Exception as e:
@@ -301,18 +302,21 @@ class AIService:
                         # Handle specific error cases
                         if response.status == 429:  # Rate limit
                             retry_after = int(
-                                response.headers.get("Retry-After", 2**(attempt + 1))
+                                response.headers.get("Retry-After", 2**(attempt + 2))
                             )
                             await asyncio.sleep(retry_after)
                             continue
                         elif response.status == 503:  # Service unavailable
                             if "DeploymentNotFound" in error_text:
-                                self.logger.warning(
-                                    "Deployment not found. If the deployment was recently created, please wait a few minutes and try again.",
+                                self.logger.error(
+                                    "Azure OpenAI deployment not found. Please verify that the deployment name in the configuration matches an existing deployment in your Azure OpenAI resource.",
                                     extra={
                                         "azure_api_base": self.config.azure_api_base,
                                         "azure_deployment_name": self.config.azure_deployment_name,
                                     },
+                                )
+                                raise APICallError(
+                                    f"Deployment '{self.config.azure_deployment_name}' not found. Please check your Azure OpenAI resource."
                                 )
                             await asyncio.sleep(2**attempt)
                             continue
