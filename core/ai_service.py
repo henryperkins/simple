@@ -304,20 +304,33 @@ class AIService:
                             retry_after = int(
                                 response.headers.get("Retry-After", 2**(attempt + 2))
                             )
+                            self.logger.warning(
+                                f"Rate limit hit. Retrying after {retry_after} seconds.",
+                                extra={"attempt": attempt + 1, "correlation_id": self.correlation_id},
+                            )
                             await asyncio.sleep(retry_after)
                             continue
                         elif response.status == 503:  # Service unavailable
                             if "DeploymentNotFound" in error_text:
-                                self.logger.error(
-                                    "Azure OpenAI deployment not found. Please verify that the deployment name in the configuration matches an existing deployment in your Azure OpenAI resource.",
+                                self.logger.critical(
+                                    "Azure OpenAI deployment not found. Please verify the following:\n"
+                                    "1. The deployment name in the configuration matches an existing deployment in your Azure OpenAI resource.\n"
+                                    "2. The deployment is active and fully provisioned.\n"
+                                    "3. The API key and endpoint are correct.\n"
+                                    "4. If the deployment was recently created, wait a few minutes and try again.",
                                     extra={
                                         "azure_api_base": self.config.azure_api_base,
                                         "azure_deployment_name": self.config.azure_deployment_name,
+                                        "correlation_id": self.correlation_id,
                                     },
                                 )
-                                raise APICallError(
-                                    f"Deployment '{self.config.azure_deployment_name}' not found. Please check your Azure OpenAI resource."
-                                )
+                                retry_after = 10  # Wait longer for deployment issues
+                                await asyncio.sleep(retry_after)
+                                continue
+                            self.logger.warning(
+                                f"Service unavailable. Retrying after {2**attempt} seconds.",
+                                extra={"attempt": attempt + 1, "correlation_id": self.correlation_id},
+                            )
                             await asyncio.sleep(2**attempt)
                             continue
                         else:
