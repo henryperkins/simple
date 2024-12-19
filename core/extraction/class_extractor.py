@@ -19,7 +19,6 @@ from core.extraction.extraction_utils import (
     get_node_name,
 )
 from core.exceptions import ExtractionError
-from core.dependency_injection import Injector
 
 
 class ClassExtractor:
@@ -39,9 +38,13 @@ class ClassExtractor:
         self.context = context
         self.function_extractor = self.context.function_extractor
         self.errors: List[str] = []
+        from core.dependency_injection import Injector  # Local import
         self.docstring_parser = Injector.get("docstring_processor")
+        from core.dependency_injection import Injector  # Local import
         self.read_file_safe_async = Injector.get("read_file_safe_async")
+        from core.dependency_injection import Injector  # Local import
         self.get_logger = Injector.get("logger")
+        from core.dependency_injection import Injector  # Local import
         self.repo_manager = Injector.get("repo_manager")
 
     async def extract_classes(

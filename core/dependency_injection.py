@@ -12,7 +12,6 @@ from core.prompt_manager import PromptManager
 from core.config import Config
 from core.ai_service import AIService
 from core.extraction.function_extractor import FunctionExtractor
-from core.extraction.class_extractor import ClassExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.extraction.code_extractor import CodeExtractor
 from core.logger import LoggerSetup
@@ -164,6 +163,7 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
             metrics_collector=metrics_collector,
         )
 
+        from core.extraction.class_extractor import ClassExtractor  # Local import
         function_extractor = FunctionExtractor(
             context=extraction_context, correlation_id=correlation_id
         )
