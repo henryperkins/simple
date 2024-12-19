@@ -126,6 +126,11 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
         Injector.register("token_manager", token_manager)
         logger.debug("Registered 'token_manager'.")
 
+        # Register read_file_safe_async
+        from utils import read_file_safe_async
+        Injector.register("read_file_safe_async", read_file_safe_async)
+        logger.debug("Registered 'read_file_safe_async'.")
+
         # 3. Register processors and validators
         docstring_processor = DocstringProcessor(correlation_id=correlation_id)
         response_formatter = ResponseParsingService(correlation_id=correlation_id)
