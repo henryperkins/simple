@@ -4,9 +4,10 @@ Class extraction module for Python source code analysis.
 
 import ast
 import uuid
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, Set
+from pathlib import Path
 
-from core.logger import CorrelationLoggerAdapter
+from core.logger import CorrelationLoggerAdapter, LoggerSetup
 from core.types import ExtractionContext, ExtractedClass, ExtractedFunction
 from core.types.docstring import DocstringData
 from utils import handle_extraction_error
@@ -18,6 +19,7 @@ from core.extraction.extraction_utils import (
     get_node_name,
 )
 from core.exceptions import ExtractionError
+from core.dependency_injection import Injector
 
 
 class ClassExtractor:
@@ -36,8 +38,11 @@ class ClassExtractor:
         )
         self.context = context
         self.function_extractor = self.context.function_extractor
-        self.docstring_parser = context.docstring_processor
         self.errors: List[str] = []
+        self.docstring_parser = Injector.get("docstring_processor")
+        self.read_file_safe_async = Injector.get("read_file_safe_async")
+        self.get_logger = Injector.get("logger")
+        self.repo_manager = Injector.get("repo_manager")
 
     async def extract_classes(
         self, tree: ast.AST, module_metrics: Any
@@ -194,7 +199,7 @@ class ClassExtractor:
         }
         for child in node.body:
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if child.name.startswith("__"):
+                if child.name.startswith("__") and not child.name.endswith("__"):
                     method_groups["private"].append(child.name)
                 elif child.name.startswith("_"):
                     method_groups["protected"].append(child.name)

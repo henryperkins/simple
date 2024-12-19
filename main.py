@@ -22,17 +22,18 @@ from core.console import (
     print_success,
     setup_live_layout,
     stop_live_layout,
-    print_section_break,  # Add this import
+    print_section_break,
     print_status,
     display_metrics,
 )
 from core.dependency_injection import Injector, setup_dependencies
-from core.logger import LoggerSetup
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.monitoring import SystemMonitor
 from core.docs import DocumentationOrchestrator
 from core.docstring_processor import DocstringProcessor
 from core.exceptions import ConfigurationError
-from utils import RepositoryManager, get_logger, read_file_safe_async
+from utils import RepositoryManager  # Removed direct import of read_file_safe_async
+
 
 # Configure logging
 logger = LoggerSetup.get_logger(__name__)
@@ -66,7 +67,7 @@ class DocumentationGenerator:
         Args:
             config: Configuration object to use for initialization.
         """
-        self.logger = get_logger()
+        self.logger = Injector.get("logger")
         self.config = config
         self.correlation_id = Injector.get("correlation_id")
         self.metrics_collector = Injector.get("metrics_collector")
@@ -79,6 +80,7 @@ class DocumentationGenerator:
         self.doc_orchestrator: DocumentationOrchestrator = Injector.get("doc_orchestrator")
         self.docstring_processor: DocstringProcessor = Injector.get("docstring_processor")
         self.ai_service: Any = Injector.get("ai_service")
+        self.read_file_safe_async = Injector.get("read_file_safe_async")
 
     async def initialize(self) -> None:
         """Start systems that require asynchronous setup."""
@@ -118,7 +120,7 @@ class DocumentationGenerator:
                 return False
 
             # Read source code
-            source_code = await read_file_safe_async(file_path)
+            source_code = await self.read_file_safe_async(file_path)
             if not source_code or not source_code.strip():
                 self.logger.warning(
                     f"Skipping empty or invalid source file: {file_path}"
@@ -177,9 +179,9 @@ class DocumentationGenerator:
         start_time = asyncio.get_event_loop().time()
         success = False
         local_path: Path | None = None
-        total_files = 0  # Initialize here
-        processed_files = 0  # Initialize here 
-        skipped_files = 0  # Initialize here
+        total_files = 0
+        processed_files = 0
+        skipped_files = 0
 
         try:
             print_section_break()
@@ -216,7 +218,7 @@ class DocumentationGenerator:
 
             for file_path in python_files:
                 output_file = output_dir / (file_path.stem + ".md")
-                source_code = await read_file_safe_async(
+                source_code = await self.read_file_safe_async(
                     file_path
                 )  # Ensure source code is read
                 if (
@@ -233,12 +235,13 @@ class DocumentationGenerator:
                     skipped_files += 1
 
             # After processing files, display metrics
+            metrics = self.metrics_collector.get_metrics()
             display_metrics({
-                "Classes": processed_files,
-                "Functions": len(python_files),
+                "Classes": len(metrics.get("current_metrics", {}).get("classes", [])),
+                "Functions": len(metrics.get("current_metrics", {}).get("functions", [])),
                 "Lines of Code": total_files,
-                "Cyclomatic Complexity": 59.00,
-                "Maintainability Index": 14.67
+                "Cyclomatic Complexity": metrics.get("current_metrics", {}).get("cyclomatic_complexity", 0),
+                "Maintainability Index": metrics.get("current_metrics", {}).get("maintainability_index", 0.0)
             }, title="Code Analysis Results")
 
             success = True
