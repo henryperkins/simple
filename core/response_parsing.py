@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple, TypedDict
 import jsonschema
 import os
 
-from core.logger import LoggerSetup  # Assuming you have a logger setup
-from core.types.base import ParsedResponse, DocstringSchema
+from core.logger import LoggerSetup, CorrelationLoggerAdapter  # Import the logger
+from core.types.base import ParsedResponse
 from core.types.docstring import DocstringData
 from dataclasses import dataclass, asdict
 
@@ -15,6 +15,17 @@ class ResponseParsingService:
     """
     Unified service for formatting, validating, and parsing AI responses.
     """
+
+    class DocstringSchema(TypedDict):
+        summary: str
+        description: str
+        args: List[Dict[str, Any]]
+        returns: Dict[str, str]
+        raises: List[Dict[str, str]]
+        complexity: int
+        metadata: Dict[str, Any]
+        error: str
+        error_type: str
 
     _FALLBACK_SCHEMA: DocstringSchema = {
         "summary": "No summary available",
@@ -31,8 +42,11 @@ class ResponseParsingService:
     def __init__(
         self, correlation_id: Optional[str] = None, schema_dir: Optional[str] = None
     ) -> None:
-        self.logger = LoggerSetup.get_logger(
-            f"{__name__}.{self.__class__.__name__}", correlation_id
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(
+                f"{__name__}.{self.__class__.__name__}",
+            ),
+            extra={"correlation_id": correlation_id},
         )
         self.correlation_id = correlation_id
 
@@ -77,14 +91,12 @@ class ResponseParsingService:
             self.logger.error(
                 f"Schema validation failed: {str(e)}",
                 exc_info=True,
-                extra={"correlation_id": self.correlation_id},
             )
             return False, [str(e)]
         except Exception as e:
             self.logger.error(
                 f"Unexpected error during schema validation: {str(e)}",
                 exc_info=True,
-                extra={"correlation_id": self.correlation_id},
             )
             return False, [f"Unexpected validation error: {str(e)}"]
 
@@ -98,14 +110,12 @@ class ResponseParsingService:
             self.logger.error(
                 f"Schema file not found: {schema_name} - {e}",
                 exc_info=True,
-                extra={"correlation_id": self.correlation_id},
             )
             raise
         except json.JSONDecodeError as e:
             self.logger.error(
                 f"Error decoding JSON schema: {schema_name} - {e}",
                 exc_info=True,
-                extra={"correlation_id": self.correlation_id},
             )
             raise
 
@@ -121,12 +131,12 @@ class ResponseParsingService:
         """
         self.logger.warning(
             f"{error_type}: {error}. Creating fallback response.",
-            extra={"metadata": metadata, "correlation_id": self.correlation_id},
+            extra={"metadata": metadata},
         )
 
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
 
-        fallback_content: DocstringSchema = {
+        fallback_content: ResponseParsingService.DocstringSchema = {
             **self._FALLBACK_SCHEMA,
             "summary": f"Invalid {format_type} format",
             "description": f"The {format_type} response did not match the expected structure.",
@@ -153,7 +163,6 @@ class ResponseParsingService:
 
         self.logger.debug(
             f"Formatted fallback response: {fallback_response}",
-            extra={"correlation_id": self.correlation_id},
         )
 
         return fallback_response
@@ -217,7 +226,6 @@ class ResponseParsingService:
             if key not in result or not result[key]:
                 self.logger.debug(
                     f"Setting default value for field: '{key}'",
-                    extra={"correlation_id": self.correlation_id},
                 )
                 result[key] = default
 
