@@ -112,7 +112,6 @@ class TokenManager:
             self.model_config, 'rate_limit', 10)  # Default to 10 if not specified
         self.request_times: list[float] = []
 
-
     async def validate_and_prepare_request(
         self,
         prompt: str,
@@ -126,6 +125,22 @@ class TokenManager:
     ) -> dict[str, Any]:
         """
         Validate and prepare a request with token management.
+
+        Args:
+            prompt: The input prompt for the API.
+            max_tokens: The maximum tokens for the completion.
+            temperature: Sampling temperature for the model.
+            truncation_strategy: Strategy for truncating input if needed.
+            tool_choice: Tool selection for function calling.
+            parallel_tool_calls: Whether to allow parallel tool calls.
+            response_format: Expected response format.
+            stream_options: Options for streaming responses.
+
+        Returns:
+            A dictionary of request parameters for the API call.
+
+        Raises:
+            ValueError: If the total token count exceeds the model's limit.
         """
         try:
             # Check rate limits
@@ -142,10 +157,13 @@ class TokenManager:
                 )
 
             # Calculate max completion tokens
-            max_completion = self._calculate_max_completion(
-                available_tokens, 
-                max_tokens
-            )
+            max_completion = min(max_tokens or available_tokens, available_tokens)
+
+            if prompt_tokens + max_completion > self.model_config.max_tokens:
+                raise ValueError(
+                    f"Total token count exceeds limit: {prompt_tokens + max_completion} > "
+                    f"{self.model_config.max_tokens}"
+                )
 
             # Prepare request parameters
             request_params = {
@@ -158,13 +176,13 @@ class TokenManager:
             self.track_request(prompt_tokens, max_completion)
 
             # Log the input sent to the AI
-            self.logger.debug("Prepared Request Parameters", extra = {"request_params": request_params})
+            self.logger.debug(
+                "Prepared Request Parameters",
+                extra={"request_params": request_params}
+            )
             return request_params
 
         except Exception as e:
-            self.logger.error(f"Error preparing request: {e}", exc_info=True, extra={"prompt_snippet": prompt[:50]})
-            print_error(f"Failed to prepare request: {str(e)}")
-            raise ProcessingError(f"Failed to prepare request: {str(e)}")
             self.logger.error(f"Error preparing request: {e}", exc_info=True, extra={"prompt_snippet": prompt[:50]})
             print_error(f"Failed to prepare request: {str(e)}")
             raise ProcessingError(f"Failed to prepare request: {str(e)}")
@@ -191,32 +209,12 @@ class TokenManager:
 
         self.request_times.append(current_time)
 
-    def _calculate_max_completion(
-        self,
-        available_tokens: int,
-        max_tokens: Optional[int] = None
-    ) -> int:
-        """Calculate the maximum completion tokens based on availability and config."""
-        if max_tokens:
-            max_completion = min(max_tokens, available_tokens)
-        else:
-            max_completion = min(
-                available_tokens,
-                self.model_config.chunk_size
-            )
-
-        max_completion = max(1, max_completion)
-        if max_completion < available_tokens:
-            self.logger.debug(
-                f"Adjusted completion tokens to {max_completion} (available: {available_tokens})",
-                extra={"max_completion": max_completion, "available_tokens": available_tokens}
-
-            )
-        return max_completion
-
     def get_usage_stats(self) -> dict[str, Union[int, float]]:
         """
         Get current token usage statistics.
+
+        Returns:
+            A dictionary containing token usage statistics.
         """
         usage = self._calculate_usage(
             self.total_prompt_tokens, self.total_completion_tokens
@@ -233,6 +231,10 @@ class TokenManager:
     def track_request(self, prompt_tokens: int, max_completion: int) -> None:
         """
         Track token usage for a request.
+
+        Args:
+            prompt_tokens: Number of tokens in the prompt.
+            max_completion: Number of tokens allocated for the completion.
         """
         self.total_prompt_tokens += prompt_tokens
         self.total_completion_tokens += max_completion
@@ -242,10 +244,18 @@ class TokenManager:
         )
         print_success(f"Tokens tracked: {prompt_tokens + max_completion} total tokens.")
 
-
     async def process_completion(self, completion: Any) -> Tuple[str, dict[str, Any]]:
         """
         Process completion response and track token usage.
+
+        Args:
+            completion: The raw completion response from the API.
+
+        Returns:
+            A tuple containing the processed content and usage statistics.
+
+        Raises:
+            ProcessingError: If there is an error processing the completion response.
         """
         try:
             message = completion["choices"][0]["message"]
@@ -257,10 +267,8 @@ class TokenManager:
 
             usage = completion.get("usage", {})
             
-            
             if usage:
-                self.total_completion_tokens += usage.get(
-                    "completion_tokens", 0)
+                self.total_completion_tokens += usage.get("completion_tokens", 0)
                 self.total_prompt_tokens += usage.get("prompt_tokens", 0)
                 
                 if self.metrics_collector:
@@ -281,7 +289,6 @@ class TokenManager:
                     extra={"correlation_id": self.correlation_id, "content_length": len(content), "usage": usage}
                 )
                 print_success("Completion processed successfully.")
-
 
             return content, usage if isinstance(usage, dict) else {}
 
