@@ -8,8 +8,6 @@ from api.token_management import TokenManager
 from core.docstring_processor import DocstringProcessor
 from core.markdown_generator import MarkdownGenerator
 from core.response_parsing import ResponseParsingService
-from core.validation.docstring_validator import DocstringValidator
-from core.formatting.response_formatter import ResponseFormatter
 from core.prompt_manager import PromptManager
 from core.config import Config
 from core.ai_service import AIService
@@ -129,16 +127,12 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
         Injector.register("token_manager", token_manager)
         logger.debug("Registered 'token_manager'.")
 
-        # 3. Register processors and generators
         # 3. Register processors and validators
         docstring_processor = DocstringProcessor(correlation_id=correlation_id)
-        response_formatter = ResponseFormatter(correlation_id=correlation_id)
-        docstring_validator = DocstringValidator(correlation_id=correlation_id)
-        
+        response_formatter = ResponseParsingService(correlation_id=correlation_id)
         Injector.register("docstring_processor", docstring_processor)
         Injector.register("response_formatter", response_formatter)
-        Injector.register("docstring_validator", docstring_validator)
-        
+
         logger.debug("Registered processors and validators.")
 
         markdown_generator = MarkdownGenerator(correlation_id=correlation_id)
@@ -216,3 +210,5 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
     except Exception as e:
         logger.error(f"Error during dependency injection setup: {e}", exc_info=True)
         raise
+    finally:
+        logger.info("Dependency injection setup attempt completed.")

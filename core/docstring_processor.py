@@ -1,32 +1,27 @@
 """Processes and validates docstrings."""
 
 import json
-from typing import Any
 import time
+from typing import Any, Tuple, List, Dict, Optional
 
-from docstring_parser import parse, DocstringStyle
-from core.validation.schema_validator import SchemaValidator
-from jsonschema import ValidationError
+from docstring_parser import DocstringStyle, parse
+from jsonschema import validate, ValidationError
 
 from core.console import display_metrics
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.types.docstring import DocstringData
-from core.types.base import ProcessingResult
-from core.metrics_collector import MetricsCollector
 from core.exceptions import DataValidationError
+from core.logger import CorrelationLoggerAdapter, LoggerSetup
+from core.metrics_collector import MetricsCollector
+from core.types.base import ProcessingResult
+from core.types.docstring import DocstringData
 
 
 class DocstringProcessor:
     """Processes and validates docstrings."""
 
-    def __init__(self, correlation_id: str | None = None) -> None:
+    def __init__(self, correlation_id: Optional[str] = None, schema_path: Optional[str] = None) -> None:
         """Initializes the DocstringProcessor."""
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__), extra={"correlation_id": correlation_id}
-        )
-        self.schema_validator = SchemaValidator(
-            logger_name=f"{__name__}.{self.__class__.__name__}",
-            correlation_id=correlation_id,
         )
         self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
         self.docstring_stats = {
@@ -37,6 +32,20 @@ class DocstringProcessor:
             "avg_length": 0,
         }
         self.correlation_id = correlation_id
+        self.schema_path = schema_path or "core/schemas/docstring_schema.json"
+        self._load_schema()
+
+    def _load_schema(self) -> None:
+        """Loads the docstring schema from a file."""
+        try:
+            with open(self.schema_path, "r", encoding="utf-8") as f:
+                self.schema = json.load(f)
+        except FileNotFoundError as e:
+            self.logger.error(f"Schema file not found: {self.schema_path} - {e}", exc_info=True)
+            raise
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error decoding JSON schema: {self.schema_path} - {e}", exc_info=True)
+            raise
 
     def parse(self, docstring: str) -> DocstringData:
         """Parses a docstring string into structured data."""
@@ -134,19 +143,10 @@ class DocstringProcessor:
             "complexity": 1,
         }
 
-    def validate(self, docstring_data: dict[str, Any]) -> tuple[bool, list[str]]:
+    def validate(self, docstring_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """Validates a docstring dictionary against the schema."""
         try:
-            # Load schema from file
-            with open("core/schemas/docstring_schema.json", "r") as f:
-                schema = json.loads(f.read())
-            
-            is_valid, errors = self.schema_validator.validate_schema(
-                instance=docstring_data,
-                schema=schema
-            )
-            if not is_valid:
-                return False, errors
+            validate(instance=docstring_data, schema=self.schema)
             self.metrics_collector.collect_validation_metrics(success=True)
             return True, []
         except ValidationError as e:

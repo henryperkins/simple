@@ -47,8 +47,8 @@ class DocstringSchema(BaseModel):
 
     def validate_returns(self, self_param: Any, v: Dict[str, str]) -> Dict[str, str]:
         """Validate the 'returns' field content."""
-        if 'type' not in v or 'description' not in v:
-            raise ValueError("Returns must contain 'type' and 'description'")
+        if 'type' not in v:
+            raise ValueError("Returns must contain 'type'")
         return v
 
 
@@ -236,7 +236,7 @@ class ExtractedFunction(ExtractedElement):
             "parent_class": self.parent_class,
         }
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ExtractedFunction:
+    def from_dict(cls, data: Dict[str, Any]) -> "ExtractedFunction":
         """Create an ExtractedFunction instance from a dictionary."""
         return cls(
             name=data.get("name", ""),
@@ -296,7 +296,7 @@ class ExtractedClass:
     inheritance_chain: List[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ExtractedClass:
+    def from_dict(cls, data: Dict[str, Any]) -> "ExtractedClass":
         """Create an ExtractedClass instance from a dictionary."""
         return cls(
             name=data.get("name", ""),

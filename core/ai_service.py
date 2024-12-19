@@ -279,7 +279,10 @@ class AIService:
                             except (TypeError, ValueError) as e:
                                 self.logger.warning(
                                     f"Invalid JSON received from AI response (attempt {attempt + 1}), retrying: {e}",
-                                    extra=log_extra
+                                    extra={
+                                        **(log_extra or {}),
+                                        "raw_response": response_json,
+                                    }
                                 )
                                 await asyncio.sleep(2**attempt)
                                 continue
@@ -320,8 +323,6 @@ class AIService:
                         f"API call failed after {max_retries} retries: {e}"
                     )
                 await asyncio.sleep(2**attempt)
-
-        raise APICallError(f"API call failed after {max_retries} retries")
 
     async def generate_documentation(
         self, context: DocumentationContext, schema: Optional[Dict[str, Any]] = None
