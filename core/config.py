@@ -116,7 +116,12 @@ class AIConfig:
     @staticmethod
     def from_env() -> "AIConfig":
         """Create configuration from environment variables with Azure defaults."""
+        azure_api_base = get_env_var("AZURE_API_BASE", "")
+        if not azure_api_base:
+            raise ValueError("AZURE_API_BASE is not set. Please check your .env file or environment variables.")
+
         return AIConfig(
+            azure_api_base=azure_api_base,
             api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
             endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
             deployment=get_env_var(

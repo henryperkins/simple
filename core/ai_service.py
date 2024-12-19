@@ -249,6 +249,7 @@ class AIService:
             f"{self.config.azure_api_base.rstrip('/')}/openai/deployments/{self.config.azure_deployment_name}"
             f"/chat/completions?api-version={self.config.azure_api_version}"
         )
+        self.logger.debug(f"Constructed API URL: {url}")
 
         for attempt in range(max_retries):
             try:
