@@ -131,6 +131,11 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
         Injector.register("read_file_safe_async", read_file_safe_async)
         logger.debug("Registered 'read_file_safe_async'.")
 
+        # Register logger
+        logger_instance = LoggerSetup.get_logger("ClassExtractor")
+        Injector.register("logger", logger_instance)
+        logger.debug("Registered 'logger'.")
+
         # 3. Register processors and validators
         docstring_processor = DocstringProcessor(correlation_id=correlation_id)
         response_formatter = ResponseParsingService(correlation_id=correlation_id)
