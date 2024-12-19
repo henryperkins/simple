@@ -121,7 +121,6 @@ class AIConfig:
             raise ValueError("AZURE_API_BASE is not set. Please check your .env file or environment variables.")
 
         return AIConfig(
-            azure_api_base=azure_api_base,
             api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
             endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
             deployment=get_env_var(
@@ -137,7 +136,7 @@ class AIConfig:
             timeout=get_env_var("TIMEOUT", 30, int),
             api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int),
             api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int),
-            azure_api_base=get_env_var("AZURE_API_BASE", ""),
+            azure_api_base=azure_api_base,
             azure_deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", ""),
             max_completion_tokens=get_env_var(
                 "AZURE_MAX_COMPLETION_TOKENS", None, int, False
