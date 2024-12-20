@@ -224,7 +224,7 @@ class DocumentationGenerator:
             with Progress() as progress:  # Add progress bar
                 task = progress.add_task("Processing Files", total=total_files)
                 for i, file_path in enumerate(python_files, 1):
-                    progress.update(task, advance=1)  # Update progress bar
+                    progress.update(task, advance=1)  # Update progress bar only on meaningful progress
                 output_file = output_dir / (file_path.stem + ".md")
                 source_code = await self.read_file_safe_async(file_path)
                 if source_code and not source_code.isspace():
@@ -397,7 +397,9 @@ async def main(args: argparse.Namespace) -> int:
         correlation_id = str(uuid.uuid4())
         config = Config()
         print_section_break()
-        print_info("📊 Final Summary 📊")  # Add high-level summary
+        # Consolidate final summary into a single block
+        print_section_break()
+        print_info("📊 Final Summary 📊")
         print_status("Repository Processing Summary", {
             "Total Files": total_files,
             "Successfully Processed": processed_files,
@@ -406,19 +408,17 @@ async def main(args: argparse.Namespace) -> int:
         })
         if doc_generator and doc_generator.metrics_collector:
             metrics = doc_generator.metrics_collector.get_aggregated_token_usage()
-            print_info("Token Usage Summary", {
+            # Aggregate token usage and metrics into a single summary
+            print_section_break()
+            print_info("📊 Token Usage Summary 📊")
+            display_metrics({
                 "Total Prompt Tokens": metrics.get("total_prompt_tokens", 0),
                 "Total Completion Tokens": metrics.get("total_completion_tokens", 0),
                 "Total Tokens": metrics.get("total_tokens", 0),
                 "Estimated Cost": f"${metrics.get('total_cost', 0):.2f}"
             })
-        print_info("📊 Final Summary 📊")
-        print_status("Repository Processing Summary", {
-            "Total Files": total_files,
-            "Successfully Processed": processed_files,
-            "Skipped Files": skipped_files,
-            "Total Processing Time (seconds)": f"{processing_time:.2f}"
-        })
+            print_section_break()
+        print_section_break()
         print_phase_header("Initialization")
         print_info("Initializing system components...")
         print_info("Configuration Summary:", {
@@ -474,6 +474,7 @@ async def main(args: argparse.Namespace) -> int:
         print_error(f"Dependency injection error: {ke}")
         return 1
     except (asyncio.CancelledError, KeyboardInterrupt):
+        # Gracefully handle user interruptions
         print_error("🔥 Operation Interrupted: The script was stopped by the user.")
         if doc_generator:
             await doc_generator.cleanup()
@@ -497,7 +498,17 @@ async def main(args: argparse.Namespace) -> int:
             "Total Processing Time (seconds)": f"{processing_time:.2f}"
         })
         print_section_break()
+        # Add a concise high-level summary at the end
+        print_section_break()
         print_info("Exiting documentation generation")
+        print_section_break()
+        print_info("📊 Final Summary:")
+        print_status("Repository Processing Summary", {
+            "Total Files": total_files,
+            "Successfully Processed": processed_files,
+            "Skipped": skipped_files,
+            "Total Processing Time (seconds)": f"{processing_time:.2f}"
+        })
         print_section_break()
         print_info("📊 Final Summary:")
         print_status("Repository Processing Summary", {
@@ -513,6 +524,8 @@ async def main(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     cli_args = parse_arguments()
-    print_info(f"Command-line arguments: {cli_args}")
+    # Add verbosity level for detailed logs
+    if config.app.verbose:
+        print_debug(f"Command-line arguments: {cli_args}")
     exit_code = asyncio.run(main(cli_args))
     sys.exit(exit_code)
