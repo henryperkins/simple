@@ -124,28 +124,34 @@ class AIConfig:
     @staticmethod
     def from_env() -> "AIConfig":
         """Create configuration from environment variables with Azure defaults."""
-        config = AIConfig(
-            api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
-            endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
-            deployment=get_env_var("AZURE_OPENAI_DEPLOYMENT", required=True),
-            model=get_env_var("AZURE_OPENAI_MODEL", "gpt-4o", validation_schema={"type": "string", "enum": ["gpt-4o", "gpt-3.5-turbo", "gpt-4o-2024-11-20"]}),
-            azure_api_version=get_env_var("AZURE_API_VERSION", "2024-10-01-preview"),
-            max_tokens=get_env_var("AZURE_MAX_TOKENS", 128000, int, validation_schema={"type": "integer", "minimum": 1000}),
-            temperature=get_env_var("TEMPERATURE", 0.7, float, validation_schema={"type": "number", "minimum": 0, "maximum": 1}),
-            timeout=get_env_var("TIMEOUT", 30, int, validation_schema={"type": "integer", "minimum": 10}),
-            api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int, validation_schema={"type": "integer", "minimum": 1}),
-            api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int, validation_schema={"type": "integer", "minimum": 1}),
-            azure_api_base=get_env_var("AZURE_API_BASE", ""),
-            azure_deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", ""),
-            max_completion_tokens=get_env_var(
-                "AZURE_MAX_COMPLETION_TOKENS", None, int, False, validation_schema={"type": "integer", "minimum": 100}
-            ),
-            truncation_strategy=get_env_var("TRUNCATION_STRATEGY", None, dict, False),
-            tool_choice=get_env_var("TOOL_CHOICE", None, str, False),
-            parallel_tool_calls=get_env_var("PARALLEL_TOOL_CALLS", True, bool, False),
-            response_format=get_env_var("RESPONSE_FORMAT", None, dict, False),
-            stream_options=get_env_var("STREAM_OPTIONS", None, dict, False),
-        )
+        try:
+            config = AIConfig(
+                api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
+                endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
+                deployment=get_env_var("AZURE_OPENAI_DEPLOYMENT", required=True),
+                model=get_env_var("AZURE_OPENAI_MODEL", "gpt-4o", validation_schema={"type": "string", "enum": ["gpt-4o", "gpt-3.5-turbo", "gpt-4o-2024-11-20"]}),
+                azure_api_version=get_env_var("AZURE_API_VERSION", "2024-10-01-preview"),
+                max_tokens=get_env_var("AZURE_MAX_TOKENS", 128000, int, validation_schema={"type": "integer", "minimum": 1000}),
+                temperature=get_env_var("TEMPERATURE", 0.7, float, validation_schema={"type": "number", "minimum": 0, "maximum": 1}),
+                timeout=get_env_var("TIMEOUT", 30, int, validation_schema={"type": "integer", "minimum": 10}),
+                api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int, validation_schema={"type": "integer", "minimum": 1}),
+                api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int, validation_schema={"type": "integer", "minimum": 1}),
+                azure_api_base=get_env_var("AZURE_API_BASE", ""),
+                azure_deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", ""),
+                max_completion_tokens=get_env_var(
+                    "AZURE_MAX_COMPLETION_TOKENS", None, int, False, validation_schema={"type": "integer", "minimum": 100}
+                ),
+                truncation_strategy=get_env_var("TRUNCATION_STRATEGY", None, dict, False),
+                tool_choice=get_env_var("TOOL_CHOICE", None, str, False),
+                parallel_tool_calls=get_env_var("PARALLEL_TOOL_CALLS", True, bool, False),
+                response_format=get_env_var("RESPONSE_FORMAT", None, dict, False),
+                stream_options=get_env_var("STREAM_OPTIONS", None, dict, False),
+            )
+            print_info("AIConfig initialized successfully", config.__dict__)
+            return config
+        except Exception as e:
+            print_error(f"Failed to initialize AIConfig: {e}")
+            raise
 
 
 @dataclass
