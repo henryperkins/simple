@@ -174,8 +174,13 @@ class TokenManager:
                 print_error(f"🔥 {error_msg}")
                 raise ValueError(error_msg)
 
+            # Ensure available tokens do not exceed the model's completion token limit
+            max_completion_limit = self.model_config.chunk_size  # Use the model's chunk_size as the completion token limit
+            available_tokens = min(available_tokens, max_completion_limit)
+
             # Dynamically calculate max completion tokens
-            max_completion = min(max_tokens or available_tokens, available_tokens)
+            max_completion_limit = self.model_config.chunk_size  # Use the model's chunk_size as the completion token limit
+            max_completion = min(available_tokens, max_completion_limit)
 
             if prompt_tokens + max_completion > self.model_config.max_tokens:
                 error_msg = f"Total token count exceeds limit: {prompt_tokens + max_completion} > {self.model_config.max_tokens}"
