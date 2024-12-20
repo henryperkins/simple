@@ -99,6 +99,12 @@ class AIService:
         self.semaphore = asyncio.Semaphore(10)  # Default concurrency limit
         self._client: Optional[ClientSession] = None
 
+    async def close(self) -> None:
+        """Close the aiohttp client session."""
+        if self._client:
+            await self._client.close()
+            self.logger.info("AI Service client session closed")
+
     async def start(self) -> None:
         """Start the aiohttp client session if not already started."""
         if self._client is None:
