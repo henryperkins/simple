@@ -53,16 +53,8 @@ class MetricsCollector:
     def collect_metrics(self, module_name: str, metrics: MetricData) -> None:
         """Collect metrics for a module."""
         try:
-            if not module_name or module_name == "default_module":
-                if hasattr(metrics, "module_name") and metrics.module_name:
-                    module_name = metrics.module_name
-
             if not module_name or not metrics:
-                self.logger.warning(
-                    f"Invalid metrics data received for module '{module_name}' "
-                    f"with correlation ID: {self.correlation_id}"
-                )
-                return
+                return  # Suppress logging if no meaningful action is performed
 
             if module_name not in self.metrics_history:
                 self.metrics_history[module_name] = []

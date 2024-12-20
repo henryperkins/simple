@@ -99,10 +99,11 @@ class AIConfig:
 
     def __post_init__(self):
         if not self.azure_deployment_name:
-            print_warning(
-                "⚠️ Warning: The 'AZURE_DEPLOYMENT_NAME' environment variable is not set. "
-                "Ensure it matches the deployment name in your Azure OpenAI resource."
+            self.logger.warning(
+                "⚠️ Warning: The 'AZURE_DEPLOYMENT_NAME' environment variable is not set."
             )
+        # Suppress logging unless meaningful action is performed
+        self.logger.info("AIConfig initialized successfully")
 
     # Model configurations including Azure-specific limits
     model_limits: dict[str, ModelConfig] = field(

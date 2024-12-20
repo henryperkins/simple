@@ -77,7 +77,8 @@ class SystemMonitor:
             try:
                 metrics = self._collect_system_metrics()
                 await self._store_metrics(metrics)
-                self.logger.debug("System metrics collected and stored")
+                if metrics:  # Log only if metrics are collected
+                    self.logger.debug("System metrics collected and stored")
                 await asyncio.sleep(self.check_interval)
             except Exception as e:
                 self.logger.error(
