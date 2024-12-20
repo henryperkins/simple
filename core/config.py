@@ -167,6 +167,7 @@ class AppConfig:
 
     debug: bool = False
     log_level: str = "INFO"
+    verbose: bool = False
     repos_dir: Path = REPOS_DIR
     docs_output_dir: Path = DOCS_OUTPUT_DIR
     log_dir: Path = ROOT_DIR / "logs"
