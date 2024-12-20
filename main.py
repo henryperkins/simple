@@ -115,20 +115,6 @@ class DocumentationGenerator:
         """
         try:
             print_section_break()
-            print_info("📊 Metrics Summary 📊")
-            display_metrics({
-                "Total Files Processed": total_files,
-                "Total Lines of Code": metrics.get("total_lines_of_code", 0),
-                "Average Cyclomatic Complexity": metrics.get("average_cyclomatic_complexity", 0),
-                "Maintainability Index": metrics.get("maintainability_index", 0),
-            })
-            print_info("📊 Repository Processing Summary 📊")
-            display_metrics({
-                "Total Files": total_files,
-                "Successfully Processed": processed_files,
-                "Skipped Files": skipped_files,
-                "Total Processing Time (seconds)": f"{processing_time:.2f}"
-            })
             print_phase_header(f"📄 Processing File: {file_path}")
             print_phase_header(f"📄 Processing File: {file_path}")
 

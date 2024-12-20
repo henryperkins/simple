@@ -25,7 +25,7 @@ from core.metrics_collector import MetricsCollector
 from core.extraction.code_extractor import CodeExtractor
 from core.response_parsing import ResponseParsingService  # Correct import for ResponseParser
 from utils import ensure_directory, read_file_safe_async
-from core.console import print_phase_header, print_status, print_success, print_error, display_metrics
+from core.console import print_phase_header, print_status, print_success, print_error, display_metrics, print_warning
 
 class DocumentationOrchestrator:
     """
