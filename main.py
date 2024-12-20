@@ -88,7 +88,7 @@ class DocumentationGenerator:
     async def initialize(self) -> None:
         """Start systems that require asynchronous setup."""
         try:
-            print_info(
+            self.logger.debug(
                 f"Initializing system components with correlation ID: {self.correlation_id}"
             )
             if hasattr(self, "system_monitor"):
