@@ -101,7 +101,8 @@ class DocumentationOrchestrator:
             )
 
             # Detect and log circular dependencies
-            circular_dependencies = self.code_extractor.context.dependency_analyzer.detect_circular_dependencies()
+            dependencies = extraction_result.source_code
+            circular_dependencies = self.code_extractor.context.dependency_analyzer.detect_circular_dependencies(dependencies)
             if circular_dependencies:
                 print_warning("Circular Dependencies Detected:")
                 for dep in circular_dependencies:

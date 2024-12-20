@@ -39,7 +39,7 @@ class DependencyAnalyzer:
             raw_deps = self._extract_dependencies(node)
             categorized_deps = self._categorize_dependencies(raw_deps)
 
-            circular_deps = self._detect_circular_dependencies(categorized_deps)
+            circular_deps = self.detect_circular_dependencies(categorized_deps)
             if circular_deps:
                 self.logger.warning(f"Circular dependencies detected: {circular_deps}")
 
