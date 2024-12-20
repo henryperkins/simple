@@ -46,7 +46,6 @@ class MetricsCollector:
             self.current_module_metrics: dict[str, Any] = {}
             self.accumulated_functions = 0
             self.accumulated_classes = 0
-            self.current_module: str | None = None
             self.has_metrics = False
             self._load_history()
             self.__class__._initialized = True
@@ -60,7 +59,8 @@ class MetricsCollector:
 
             if not module_name or not metrics:
                 self.logger.warning(
-                    f"Invalid metrics data received for module '{module_name}' with correlation ID: {self.correlation_id}"
+                    f"Invalid metrics data received for module '{module_name}' "
+                    f"with correlation ID: {self.correlation_id}"
                 )
                 return
 
@@ -101,13 +101,13 @@ class MetricsCollector:
                 self.metrics_history[module_name] = [entry]
                 self._save_history()
 
-        except Exception as e:
+        except (IOError, ValueError) as e:
             print_error(
                 f"🔥 Error collecting metrics for module '{module_name}': {e}",
-                correlation_id=self.correlation_id
+                correlation_id=self.correlation_id,
             )
 
-    def update_scan_progress(self, module_name: str, item_type: str, item_name: str) -> None:
+    def update_scan_progress(self, module_name: str, item_type: str) -> None:
         """Update the scan progress for functions or classes."""
         try:
             if module_name == "default_module":
@@ -161,9 +161,10 @@ class MetricsCollector:
         operation_type: str,
         success: bool,
         duration: float,
-        metadata: dict[str, Any] | None = None,
-        usage: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> None:
+        metadata = kwargs.get("metadata")
+        usage = kwargs.get("usage")
         """Track an operation with its metrics."""
         try:
             operation: dict[str, Any] = {
@@ -184,7 +185,10 @@ class MetricsCollector:
             if metadata:
                 status_details.update(metadata)
 
-            print_status(f"🔄 Operation: {operation_type}", status_details)
+            print_status(
+                f"🔄 Operation: {operation_type}",
+                status_details,
+            )
 
         except Exception as e:
             print_error(
@@ -205,7 +209,7 @@ class MetricsCollector:
         """Load metrics history from storage."""
         try:
             if os.path.exists("metrics_history.json"):
-                with open("metrics_history.json", "r") as f:
+                with open("metrics_history.json", "r", encoding="utf-8") as f:
                     self.metrics_history = json.load(f)
                 self.logger.info("Metrics history loaded successfully.")  # Added info log
         except Exception as e:
@@ -218,7 +222,7 @@ class MetricsCollector:
     def _save_history(self) -> None:
         """Save metrics history to storage."""
         try:
-            with open("metrics_history.json", "w") as f:
+            with open("metrics_history.json", "w", encoding="utf-8") as f:
                 json.dump(self.metrics_history, f, indent=2, default=str)
             self.logger.info("Metrics history saved successfully.")  # Added info log
         except Exception as e:
@@ -284,9 +288,21 @@ class MetricsCollector:
 
     def get_aggregated_token_usage(self) -> dict[str, Union[int, float]]:
         """Aggregate token usage statistics across operations."""
-        total_prompt_tokens = sum(op.get("prompt_tokens", 0) for op in self.operations if op["operation_type"] == "token_usage")
-        total_completion_tokens = sum(op.get("completion_tokens", 0) for op in self.operations if op["operation_type"] == "token_usage")
-        total_cost = sum(op.get("total_cost", 0) for op in self.operations if op["operation_type"] == "token_usage")
+        total_prompt_tokens = sum(
+            op.get("prompt_tokens", 0)
+            for op in self.operations
+            if op["operation_type"] == "token_usage"
+        )
+        total_completion_tokens = sum(
+            op.get("completion_tokens", 0)
+            for op in self.operations
+            if op["operation_type"] == "token_usage"
+        )
+        total_cost = sum(
+            op.get("total_cost", 0)
+            for op in self.operations
+            if op["operation_type"] == "token_usage"
+        )
 
         return {
             "total_prompt_tokens": total_prompt_tokens,
