@@ -9,6 +9,7 @@ import asyncio
 import sys
 import uuid
 from pathlib import Path
+from rich.progress import Progress  # Added for progress tracking
 from typing import Any
 
 # Third party imports
@@ -26,6 +27,7 @@ from core.console import (
     print_status,
     display_metrics,
     print_phase_header,
+    print_debug,  # Added for verbosity levels
 )
 from core.dependency_injection import Injector, setup_dependencies
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
@@ -115,8 +117,7 @@ class DocumentationGenerator:
         """
         try:
             print_section_break()
-            print_phase_header(f"📄 Processing File: {file_path}")
-            print_phase_header(f"📄 Processing File: {file_path}")
+            print_phase_header(f"📄 Processing File: {file_path}")  # Remove duplicate
 
             # Validate file type
             if file_path.suffix != ".py":
@@ -220,7 +221,10 @@ class DocumentationGenerator:
             print_info("🔨 Starting Documentation of Python Files 🔨")
             print_section_break()
 
-            for i, file_path in enumerate(python_files, 1):
+            with Progress() as progress:  # Add progress bar
+                task = progress.add_task("Processing Files", total=total_files)
+                for i, file_path in enumerate(python_files, 1):
+                    progress.update(task, advance=1)  # Update progress bar
                 output_file = output_dir / (file_path.stem + ".md")
                 source_code = await self.read_file_safe_async(file_path)
                 if source_code and not source_code.isspace():
@@ -393,6 +397,19 @@ async def main(args: argparse.Namespace) -> int:
         correlation_id = str(uuid.uuid4())
         config = Config()
         print_section_break()
+        print_info("📊 Final Summary 📊")  # Add high-level summary
+        print_status("Repository Processing Summary", {
+            "Total Files": total_files,
+            "Successfully Processed": processed_files,
+            "Skipped Files": skipped_files,
+            "Total Processing Time (seconds)": f"{processing_time:.2f}"
+        })
+        print_info("Token Usage Summary", {
+            "Total Prompt Tokens": metrics.get("total_prompt_tokens", 0),
+            "Total Completion Tokens": metrics.get("total_completion_tokens", 0),
+            "Total Tokens": metrics.get("total_tokens", 0),
+            "Estimated Cost": f"${metrics.get('total_cost', 0):.2f}"
+        })
         print_info("📊 Final Summary 📊")
         print_status("Repository Processing Summary", {
             "Total Files": total_files,
@@ -446,19 +463,27 @@ async def main(args: argparse.Namespace) -> int:
                 )
 
     except (RuntimeError, ValueError, IOError) as unexpected_error:
-        print_error(f"Unexpected error: {unexpected_error}")
+        print_error(
+            f"🔥 Error: Unexpected error occurred: {unexpected_error}",
+            details={"Suggested Fix": "Check the logs for more details or retry the operation."}
+        )
         return 1
     except KeyError as ke:
         print_error(f"Dependency injection error: {ke}")
         return 1
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, KeyboardInterrupt):
         print_error("🔥 Operation Interrupted: The script was stopped by the user.")
+        if doc_generator:
+            await doc_generator.cleanup()
+        print_success("✅ Cleanup completed. Exiting.")
         if doc_generator:
             await doc_generator.cleanup()  # Ensure cleanup is called
         return 1
     finally:
         if doc_generator:
+            print_info("Info: Starting cleanup process...")
             await doc_generator.cleanup()
+            print_success("✅ Cleanup completed successfully.")
         if args.live_layout:
             stop_live_layout()
         print_section_break()
