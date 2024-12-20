@@ -169,6 +169,9 @@ class DependencyAnalyzer:
 
         circular_deps: List[Tuple[str, str]] = []
 
+        visited = set()
+        path = set()
+
         def visit(module: str) -> None:
             """Perform depth-first search to detect circular dependencies."""
             if module in path:
