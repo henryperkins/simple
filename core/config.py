@@ -98,11 +98,11 @@ class AIConfig:
     )
 
     def __post_init__(self):
+        self.logger = LoggerSetup.get_logger(__name__)
         if not self.azure_deployment_name:
             self.logger.warning(
                 "⚠️ Warning: The 'AZURE_DEPLOYMENT_NAME' environment variable is not set."
             )
-        # Suppress logging unless meaningful action is performed
         self.logger.info("AIConfig initialized successfully")
 
     # Model configurations including Azure-specific limits
@@ -204,7 +204,18 @@ class Config:
             self.ai = AIConfig.from_env()
         except Exception as e:
             print_error(f"Error initializing AIConfig: {e}")
-            self.ai = None  # Explicitly set to None if initialization fails
+            self.ai = AIConfig(
+                api_key="",
+                endpoint="",
+                deployment="",
+                model="",
+                azure_api_version="",
+                max_tokens=0,
+                temperature=0.0,
+                timeout=0,
+                api_call_semaphore_limit=0,
+                api_call_max_retries=0,
+            )  # Provide a fallback AIConfig instance to avoid NoneType errors
         self.app = AppConfig.from_env()
         self.correlation_id = str(uuid.uuid4())
         self.app.ensure_directories()
