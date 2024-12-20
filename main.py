@@ -524,6 +524,9 @@ async def main(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     cli_args = parse_arguments()
+    # Initialize configuration
+    config = Config()
+
     # Add verbosity level for detailed logs
     if config.app.verbose:
         print_debug(f"Command-line arguments: {cli_args}")
