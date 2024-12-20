@@ -72,7 +72,18 @@ class MetricsCollector:
 
             print_section_break()
             print_info(f"📊 Metrics Collected for Module: {module_name} 📊")
-            display_metrics(current_metrics, title=f"Module: {module_name}")
+            display_metrics(
+                {
+                    "Total Classes": current_metrics.get("total_classes", 0),
+                    "Total Functions": current_metrics.get("total_functions", 0),
+                    "Total Variables": len(metrics.variables),
+                    "Total Constants": len(metrics.constants),
+                    "Cyclomatic Complexity": current_metrics.get("cyclomatic_complexity", 0),
+                    "Maintainability Index": current_metrics.get("maintainability_index", 0.0),
+                    "Lines of Code": current_metrics.get("lines_of_code", 0),
+                },
+                title=f"📊 Metrics Collected for Module: {module_name} 📊",
+            )
             print_section_break()
 
             entry = {
