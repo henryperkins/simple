@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, TypeVar
 
 from aiohttp.client import ClientSession  # type: ignore
 from aiohttp.client import ClientTimeout  # type: ignore
+from aiohttp import ClientError  # Added import for ClientError
 from openai import AzureOpenAI  # type: ignore
 
 from api.token_management import TokenManager

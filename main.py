@@ -318,7 +318,7 @@ class DocumentationGenerator:
                 f"Starting cleanup process with correlation ID: {self.correlation_id}"
             )
             if hasattr(self, "ai_service") and self.ai_service:
-                await self.ai_service.close()
+                await self.ai_service.close()  # Ensure AIService.close() is called
             if hasattr(self, "metrics_collector") and self.metrics_collector:
                 await self.metrics_collector.close()
             if hasattr(self, "system_monitor") and self.system_monitor:

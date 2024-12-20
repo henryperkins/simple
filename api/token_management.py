@@ -17,6 +17,7 @@ from core.console import (
     print_success,
     print_warning,
     print_error,
+    print_info,  # Added import for print_info
 )
 
 

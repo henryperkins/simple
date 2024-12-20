@@ -56,6 +56,8 @@ def get_env_var(
         raise ValueError(
             f"Failed to convert or validate {key}={value} to type {var_type.__name__}: {str(e)}"
         )
+        print_info("Loaded Azure OpenAI Configuration", config.__dict__)  # Debugging log for configuration
+        return config
 
 
 @dataclass
@@ -122,7 +124,7 @@ class AIConfig:
     @staticmethod
     def from_env() -> "AIConfig":
         """Create configuration from environment variables with Azure defaults."""
-        return AIConfig(
+        config = AIConfig(
             api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
             endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
             deployment=get_env_var("AZURE_OPENAI_DEPLOYMENT", required=True),
