@@ -168,8 +168,6 @@ class DependencyAnalyzer:
             )
 
         circular_deps: List[Tuple[str, str]] = []
-        visited: Set[str] = set()
-        path: Set[str] = set()
 
         def visit(module: str) -> None:
             """Perform depth-first search to detect circular dependencies."""
