@@ -55,7 +55,12 @@ def print_status(message: str, details: dict[str, Any] | None = None) -> None:
     print(f"Status: {message}")
     if details:
         for key, value in details.items():
-            print(f"  {key}: {value}")
+            if isinstance(value, dict):  # Handle nested dictionaries
+                print(f"  {key}:")
+                for sub_key, sub_value in value.items():
+                    print(f"    {sub_key}: {sub_value}")
+            else:
+                print(f"  {key}: {value}")
 
 def display_metrics(metrics: dict[str, Any], title: str = "Metrics") -> None:
     """Display metrics in a formatted table."""
