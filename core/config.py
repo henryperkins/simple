@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 import json
 import jsonschema
-from core.console import print_info, print_error
+from core.console import print_info, print_error, print_warning
 
 # Load environment variables
 load_dotenv()
