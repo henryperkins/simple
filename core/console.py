@@ -191,3 +191,6 @@ def display_progress_summary(summary: dict[str, Any]) -> None:
     print("Processing Summary")
     for key, value in summary.items():
         print(f"  {key}: {value}")
+def print_section_break() -> None:
+    """Print a visual section break."""
+    print("-" * 60)

@@ -25,6 +25,7 @@ from core.console import (
     print_section_break,
     print_status,
     display_metrics,
+    print_phase_header,
 )
 from core.dependency_injection import Injector, setup_dependencies
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
