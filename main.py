@@ -404,12 +404,14 @@ async def main(args: argparse.Namespace) -> int:
             "Skipped Files": skipped_files,
             "Total Processing Time (seconds)": f"{processing_time:.2f}"
         })
-        print_info("Token Usage Summary", {
-            "Total Prompt Tokens": metrics.get("total_prompt_tokens", 0),
-            "Total Completion Tokens": metrics.get("total_completion_tokens", 0),
-            "Total Tokens": metrics.get("total_tokens", 0),
-            "Estimated Cost": f"${metrics.get('total_cost', 0):.2f}"
-        })
+        if doc_generator and doc_generator.metrics_collector:
+            metrics = doc_generator.metrics_collector.get_aggregated_token_usage()
+            print_info("Token Usage Summary", {
+                "Total Prompt Tokens": metrics.get("total_prompt_tokens", 0),
+                "Total Completion Tokens": metrics.get("total_completion_tokens", 0),
+                "Total Tokens": metrics.get("total_tokens", 0),
+                "Estimated Cost": f"${metrics.get('total_cost', 0):.2f}"
+            })
         print_info("📊 Final Summary 📊")
         print_status("Repository Processing Summary", {
             "Total Files": total_files,
