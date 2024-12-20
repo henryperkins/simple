@@ -38,6 +38,10 @@ class DependencyAnalyzer:
 
             raw_deps = self._extract_dependencies(node)
             categorized_deps = self._categorize_dependencies(raw_deps)
+            self.logger.debug(
+                f"Categorized dependencies: {categorized_deps}",
+                extra={"correlation_id": get_correlation_id()},
+            )
 
             circular_deps = self.detect_circular_dependencies(categorized_deps)
             if circular_deps:
@@ -60,11 +64,15 @@ class DependencyAnalyzer:
 
         except Exception as e:
             handle_extraction_error(self.logger, self.errors, "dependency_analysis", e)
+            self.logger.error(
+                "Failed to analyze dependencies. Returning empty structure.",
+                extra={"correlation_id": get_correlation_id()},
+            )
             return {
                 "stdlib": set(),
                 "third_party": set(),
                 "local": set(),
-            }  # Return empty if error
+            }
 
     def _extract_dependencies(self, node: ast.AST) -> Dict[str, Set[str]]:
         """Extract raw dependencies from AST node."""
@@ -155,6 +163,10 @@ class DependencyAnalyzer:
     def detect_circular_dependencies(
         self, dependencies: Dict[str, Set[str]]
     ) -> List[Tuple[str, str]]:
+        if not isinstance(dependencies, dict):
+            raise TypeError(
+                f"Expected 'dependencies' to be a dictionary, got {type(dependencies).__name__}"
+            )
         """Detect circular dependencies."""
 
         circular_deps: List[Tuple[str, str]] = []
