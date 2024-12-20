@@ -158,7 +158,7 @@ class AIConfig:
                 stream_options=get_env_var("STREAM_OPTIONS", None, dict, False),
             )
             import logging
-            LoggerSetup.log_once(self.logger, logging.INFO, "AIConfig initialized successfully")
+            LoggerSetup.log_once(config.logger, logging.INFO, "AIConfig initialized successfully")
             return config
         except Exception as e:
             print_error(f"Failed to initialize AIConfig: {e}")
