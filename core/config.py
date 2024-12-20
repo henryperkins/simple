@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 import json
 import jsonschema
+from core.console import print_info, print_error
 
 # Load environment variables
 load_dotenv()
@@ -56,8 +57,6 @@ def get_env_var(
         raise ValueError(
             f"Failed to convert or validate {key}={value} to type {var_type.__name__}: {str(e)}"
         )
-        print_info("Loaded Azure OpenAI Configuration", config.__dict__)  # Debugging log for configuration
-        print_info("AIConfig initialized successfully", config.__dict__)  # Debugging log
         return config
 
 
