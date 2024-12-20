@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 import jsonschema
 from core.console import print_info, print_error, print_warning
+from core.logger import LoggerSetup
 
 # Load environment variables
 load_dotenv()
