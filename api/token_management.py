@@ -237,7 +237,7 @@ class TokenManager:
         print_info("📊 Current Token Usage Statistics:")
         display_metrics(stats)
         print_section_break()
-        self.logger.info("Token usage stats retrieved.", stats)
+        self.logger.info("Token usage stats retrieved: %s", stats)
         return stats
 
     def track_request(self, prompt_tokens: int, max_completion: int) -> None:
