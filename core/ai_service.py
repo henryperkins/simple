@@ -162,6 +162,10 @@ class AIService:
                         url, headers, request_params, attempt, log_extra
                     )
                     if response_json:
+                        # Save raw response to a debug file
+                        debug_file = Path("logs") / f"api_response_{self.correlation_id}.json"
+                        debug_file.write_text(json.dumps(response_json, indent=2), encoding="utf-8")
+                        self.logger.debug(f"Raw API response saved to {debug_file}")
                         return response_json
 
             except asyncio.TimeoutError:
@@ -345,7 +349,9 @@ class AIService:
             )
 
             # Log the raw response before validation
-            self.logger.info(f"AI service response: {json.dumps(response, indent=2)}", extra=log_extra)
+            # Extract and log relevant fields from the response
+            summary = response.get("choices", [{}])[0].get("message", {}).get("content", "")[:100]
+            self.logger.info(f"AI Response Summary: {summary}", extra=log_extra)
             self.logger.debug(f"Raw AI response: {response}", extra=log_extra)
 
             # Parse and validate response

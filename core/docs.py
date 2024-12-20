@@ -103,6 +103,13 @@ class DocumentationOrchestrator:
                 original_source
             )
 
+            # Detect and log circular dependencies
+            circular_dependencies = self.code_extractor.context.dependency_analyzer.detect_circular_dependencies()
+            if circular_dependencies:
+                print_warning("Circular Dependencies Detected:")
+                for dep in circular_dependencies:
+                    print(f"  - {dep[0]} -> {dep[1]}")
+
             if not extraction_result.source_code:
                 raise DocumentationError("Extraction failed - no valid code elements found.")
 

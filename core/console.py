@@ -31,12 +31,12 @@ def format_error_output(error_message: str) -> str:
 
 def print_phase_header(title: str) -> None:
     """Print a section header with formatting."""
-    print(f"--- {title} ---")
+    print(f"--- {title} ---")  # Use consistent formatting for section headers
 
 def print_error(message: str, correlation_id: str | None = None, details: dict[str, Any] | None = None) -> None:
     """Display formatted error messages."""
     print_section_break()
-    print(f"🔥 Error: {message}")
+    print(f"🔥 Error: {message}")  # Highlight errors with a flame emoji
     if details:
         for key, value in details.items():
             print(f"  {key}: {value}")
@@ -68,7 +68,7 @@ def display_metrics(metrics: dict[str, Any], title: str = "Metrics") -> None:
 
 def print_success(message: str, details: dict[str, Any] | None = None) -> None:
     """Display success messages."""
-    print(f"Success: {message}")
+    print(f"✅ Success: {message}")  # Highlight successes with a checkmark emoji
     if details:
         for key, value in details.items():
             print(f"  {key}: {value}")
@@ -120,7 +120,7 @@ def display_code_snippet(
 def print_warning(message: str) -> None:
 
     """Print a warning message."""
-    print(f"Warning: {message}")
+    print(f"⚠️ Warning: {message}")  # Highlight warnings with a warning emoji
 
 def print_debug(message: str) -> None:
 
