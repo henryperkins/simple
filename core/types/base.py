@@ -153,6 +153,7 @@ class MetricData:
     scanned_classes: int = 0
     class_scan_ratio: float = 0.0
     variables: List[Dict[str, Any]] = field(default_factory=list)
+    constants: List[Dict[str, Any]] = field(default_factory=list)
     complexity_graph: Optional[Any] = None
 
 
