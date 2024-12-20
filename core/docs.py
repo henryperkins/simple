@@ -1,6 +1,6 @@
 import uuid
 from pathlib import Path
-from typing import Any, cast, Optional, Dict
+from typing import Any, Dict
 from datetime import datetime
 
 # Group imports from core package
@@ -15,17 +15,15 @@ from core.types.base import (
     ExtractedClass,
     ExtractedFunction,
     ProcessingResult,
-    MetricData,
-    ExtractionResult,
-    ParsedResponse
+    ExtractionResult
 )
 from core.types.docstring import DocstringData
 from core.exceptions import DocumentationError
 from core.metrics_collector import MetricsCollector
 from core.extraction.code_extractor import CodeExtractor
-from core.response_parsing import ResponseParsingService  # Correct import for ResponseParser
+from core.response_parsing import ResponseParsingService
 from utils import ensure_directory, read_file_safe_async
-from core.console import print_phase_header, print_status, print_success, print_error, display_metrics, print_warning
+from core.console import print_phase_header, print_status, print_success, print_error, print_warning
 
 class DocumentationOrchestrator:
     """
@@ -81,7 +79,6 @@ class DocumentationOrchestrator:
         """
         start_time = datetime.now()
         module_name = ""
-        log_extra = {"correlation_id": self.correlation_id}
 
         try:
             # Step 1: Validate source code
@@ -118,16 +115,6 @@ class DocumentationOrchestrator:
             functions = self._convert_to_extracted_functions(extraction_result.functions)
 
             # Step 3: Create AI prompt
-            prompt_result = await self.prompt_manager.create_documentation_prompt(
-                DocumentationContext(
-                    source_code=original_source,
-                    module_path=context.module_path,
-                    include_source=True,
-                    metadata=context.metadata,
-                    classes=classes,
-                    functions=functions
-                )
-            )
 
             # Step 4: Generate documentation with AI service
             processing_result: ProcessingResult = await self.ai_service.generate_documentation(
