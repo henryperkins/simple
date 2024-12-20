@@ -30,6 +30,11 @@ class DocstringProcessor:
             "total_lines": 0,
             "avg_length": 0,
         }
+        self.docstring_stats["common_issues"] = {
+            "Missing Args": 0,
+            "Missing Returns": 0,
+            "Missing Summary": 0,
+        }
         self.correlation_id = correlation_id
         self.schema_path = schema_path or "core/schemas/docstring_schema.json"
         self._load_schema()

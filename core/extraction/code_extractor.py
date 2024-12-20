@@ -220,7 +220,19 @@ class CodeExtractor:
                 duration=time.time() - start_time,
                 metadata={"error": str(e)},
             )
-            raise ExtractionError(f"Unexpected error during extraction: {e}") from e
+            self.logger.error(f"Skipping file due to error: {e}", exc_info=True)
+            return ExtractionResult(
+                source_code="",
+                module_docstring={},
+                classes=[],
+                functions=[],
+                variables=[],
+                constants=[],
+                dependencies={},
+                metrics={},
+                module_name="",
+                file_path="",
+            )
 
     def _validate_source_code(
         self, source_code: str, file_path: str, module_name: str, project_root: str
