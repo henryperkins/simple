@@ -4,12 +4,10 @@ Class extraction module for Python source code analysis.
 
 import ast
 import uuid
-from typing import Any, Optional, List, Dict, Set
-from pathlib import Path
+from typing import Any, Optional, List, Dict
 
-from core.logger import CorrelationLoggerAdapter, LoggerSetup
-from core.types import ExtractionContext, ExtractedClass, ExtractedFunction
-from core.types.docstring import DocstringData
+from core.logger import CorrelationLoggerAdapter
+from core.types import ExtractionContext, ExtractedClass
 from utils import handle_extraction_error
 from core.extraction.extraction_utils import (
     extract_decorators,
@@ -40,18 +38,13 @@ class ClassExtractor:
         self.errors: List[str] = []
         from core.dependency_injection import Injector  # Local import
         self.docstring_parser = Injector.get("docstring_processor")
-        from core.dependency_injection import Injector  # Local import
-        self.read_file_safe_async = Injector.get("read_file_safe_async")
-        from core.dependency_injection import Injector  # Local import
-        self.get_logger = Injector.get("logger")
-        from core.dependency_injection import Injector  # Local import
-        self.repo_manager = Injector.get("repo_manager")
 
     async def extract_classes(
         self, tree: ast.AST, module_metrics: Any
     ) -> List[ExtractedClass]:
         """Extract class definitions from AST nodes."""
         classes: List[ExtractedClass] = []
+        self.logger.info("Starting class extraction.")
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 if not self._should_process_class(node):
@@ -61,10 +54,14 @@ class ClassExtractor:
                     extracted_class = await self._process_class(node, module_metrics)
                     if extracted_class:
                         classes.append(extracted_class)
+                        self.logger.debug(
+                            f"Extracted class: {extracted_class.name}, Methods: {[method.name for method in extracted_class.methods]}, Attributes: {extracted_class.attributes}",
+                            extra={"class_name": extracted_class.name, "correlation_id": self.correlation_id},
+                        )
                         # Update scan progress
-                        if self.context.metrics_collector:
+                        if self.context.metrics_collector and self.context.module_name:
                             self.context.metrics_collector.update_scan_progress(
-                                self.context.module_name or "unknown",
+                                self.context.module_name,
                                 "class",
                                 node.name,
                             )
@@ -78,15 +75,22 @@ class ClassExtractor:
                     )
                     if self.context.strict_mode:
                         raise  # Reraise the exception to stop if in strict mode
+        self.logger.info(f"Class extraction completed. Total classes extracted: {len(classes)}")
         return classes
 
     def _should_process_class(self, node: ast.ClassDef) -> bool:
         """Check if a class should be processed based on context."""
         if not self.context.include_private and node.name.startswith("_"):
-            self.logger.debug(f"Skipping private class: {node.name}")
+            self.logger.debug(
+                f"Skipping private class: {node.name}",
+                extra={"class_name": node.name, "correlation_id": self.correlation_id},
+            )
             return False
         if not self.context.include_nested and self._is_nested_class(node):
-            self.logger.debug(f"Skipping nested class: {node.name}")
+            self.logger.debug(
+                f"Skipping nested class: {node.name}",
+                extra={"class_name": node.name, "correlation_id": self.correlation_id},
+            )
             return False
         return True
 
@@ -152,11 +156,15 @@ class ClassExtractor:
         return properties
 
     def _extract_class_variables(self, node: ast.ClassDef) -> List[Dict[str, Any]]:
-        """Extract class-level variables from a class node."""
+        """Extract class variables and their types from a class definition."""
         class_variables = []
-        source_code = self.context.get_source_code() or ""
+
+        # Get source code context 
+        source_code = self.context.get_source_code()
+
         for child in node.body:
             try:
+                # Handle annotated class variables
                 if isinstance(child, ast.AnnAssign) and isinstance(
                     child.target, ast.Name
                 ):
@@ -164,11 +172,12 @@ class ClassExtractor:
                     class_variables.append(
                         {
                             "name": child.target.id,
-                            "type": get_node_name(child.annotation),
+                            "type": get_node_name(child.annotation), 
                             "value": attr_value,
                             "lineno": child.lineno,
                         }
                     )
+                # Handle regular assignments
                 elif isinstance(child, ast.Assign):
                     for target in child.targets:
                         if isinstance(target, ast.Name):
@@ -185,12 +194,12 @@ class ClassExtractor:
                 handle_extraction_error(
                     self.logger,
                     self.errors,
-                    "class_variable_extraction",
+                    "class_variable_extraction", 
                     e,
                     class_name=node.name,
                     attribute_name=getattr(child, "name", "unknown"),
                 )
-                continue
+
         return class_variables
 
     def _group_methods_by_access(self, node: ast.ClassDef) -> Dict[str, List[str]]:
@@ -229,7 +238,7 @@ class ClassExtractor:
                         base_node = next(
                             n
                             for n in ast.walk(self.context.tree)
-                            if self.context.tree and isinstance(n, ast.AST) and n is not None and hasattr(n, '_fields') and hasattr(n, 'name') and n.name == base_name
+                            if isinstance(n, ast.ClassDef) and n.name == base_name
                         )
                         current = base_node
                         break
@@ -247,6 +256,10 @@ class ClassExtractor:
         try:
             source_code = self.context.get_source_code()
             if not source_code:
+                self.logger.error(
+                    "Source code is not available in the context",
+                    extra={"class_name": node.name, "correlation_id": self.correlation_id},
+                )
                 raise ExtractionError("Source code is not available in the context")
 
             docstring = ast.get_docstring(node) or ""
@@ -273,11 +286,8 @@ class ClassExtractor:
                 metaclass=metaclass,
                 is_exception=is_exception,
                 ast_node=node,
-                dependencies=(
-                    self.context.dependency_analyzer.analyze_dependencies(node)
-                    if self.context.dependency_analyzer
-                    else {}
-                ),
+                dependencies=(self.context.dependency_analyzer.analyze_dependencies(node)
+                              if self.context.dependency_analyzer else {}),
                 complexity_warnings=[],
                 is_dataclass=any(
                     d.id == "dataclass" if isinstance(d, ast.Name) else d == "dataclass" for d in decorators

@@ -9,6 +9,7 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter  # Import the logg
 from core.types.base import ParsedResponse
 from core.types.docstring import DocstringData
 from dataclasses import dataclass, asdict
+from core.console import print_info, print_error
 
 
 class ResponseParsingService:
@@ -54,7 +55,7 @@ class ResponseParsingService:
         if schema_dir:
             self.schema_dir = Path(schema_dir)
         else:
-            default_schema_dir = Path(__file__).resolve().parent.parent / "schemas"
+            default_schema_dir = Path(__file__).resolve().parent / "schemas"
             self.schema_dir = Path(os.environ.get("SCHEMA_DIR", default_schema_dir))
 
         if not self.schema_dir.exists():
@@ -297,6 +298,7 @@ class ResponseParsingService:
             )
 
         if "choices" not in response or not response["choices"]:
+            self.logger.warning(f"No choices in response. Response: {response}") # Added logging
             return self._create_error_response(
                 "No choices in response",
                 expected_format,
@@ -306,6 +308,7 @@ class ResponseParsingService:
             )
 
         if not response["choices"][0].get("message"):
+            self.logger.warning(f"No message in response. Response: {response}") # Added logging
             return self._create_error_response(
                 "No message in response",
                 expected_format,
@@ -315,6 +318,7 @@ class ResponseParsingService:
             )
 
         if "content" not in response["choices"][0]["message"]:
+            self.logger.warning(f"No content field in message. Response: {response}") # Added logging
             return self._create_error_response(
                 "No content field in message",
                 expected_format,
@@ -356,7 +360,7 @@ class ResponseParsingService:
         content: str,
         expected_format: str,
         validate_schema: bool,
-        start_time: float, 
+        start_time: float,
         metadata: Dict[str, Any],
     ) -> ParsedResponse:
         """Parse and validate message content from AI response."""
@@ -370,6 +374,11 @@ class ResponseParsingService:
                     errors=["Empty response content"],
                     metadata=metadata,
                 )
+
+            # Attempt to remove markdown code block if present
+            if content.startswith("```json") and content.endswith("```"):
+                content = content[len("```json"):-len("```")].strip()
+                self.logger.debug("Detected and removed markdown code block from content.")
 
             try:
                 parsed_content = json.loads(content)
@@ -426,7 +435,7 @@ class ResponseParsingService:
                 errors=[f"Unexpected error: {e}"],
                 metadata=metadata,
             )
-
+        
     async def parse_response(
         self,
         response: Dict[str, Any],

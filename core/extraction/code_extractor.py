@@ -68,6 +68,7 @@ class CodeExtractor:
             raise ExtractionError("Source code is empty or missing")
 
         module_name = self.context.module_name or "unnamed_module"
+        self.logger.info(f"ExtractionContext module_name: {module_name}, file_path: {getattr(self.context, 'base_path', 'Unknown')}")
 
         start_time = time.time()
 
@@ -166,6 +167,7 @@ class CodeExtractor:
                 module_name=module_name,
                 file_path=file_path,
             )
+            self.logger.debug(f"ExtractionResult: Classes: {len(extraction_result.classes)}, Functions: {len(extraction_result.functions)}, Variables: {len(extraction_result.variables)}, Constants: {len(extraction_result.constants)}")
             return extraction_result
 
         except ProcessingError as pe:

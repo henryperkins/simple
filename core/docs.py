@@ -25,12 +25,12 @@ from core.metrics_collector import MetricsCollector
 from core.extraction.code_extractor import CodeExtractor
 from core.response_parsing import ResponseParsingService  # Correct import for ResponseParser
 from utils import ensure_directory, read_file_safe_async
-
+from core.console import print_phase_header, print_status, print_success, print_error, display_metrics
 
 class DocumentationOrchestrator:
     """
     Orchestrates the entire documentation generation process.
-    
+
     This class coordinates the interaction between various components to generate
     documentation, ensuring proper type usage and data flow throughout the process.
     """
@@ -64,7 +64,7 @@ class DocumentationOrchestrator:
         self.response_parser = response_parser
 
     async def generate_documentation(
-        self, 
+        self,
         context: DocumentationContext
     ) -> tuple[str, str]:
         """
@@ -129,11 +129,8 @@ class DocumentationOrchestrator:
             )
 
             # Step 5: Parse AI response
-            parsed_response: ParsedResponse = await self.response_parser.parse_response(
-                processing_result.content,
-                expected_format="docstring",
-                validate_schema=True
-            )
+            # The response is already parsed by the AI service
+            parsed_response = processing_result
 
             # Step 6: Create documentation data
             documentation_data = DocumentationData(
@@ -178,7 +175,7 @@ class DocumentationOrchestrator:
             raise
 
     def _convert_to_extracted_classes(
-        self, 
+        self,
         classes: list[dict[str, Any]]
     ) -> list[ExtractedClass]:
         """Convert raw class data to ExtractedClass instances."""
@@ -202,7 +199,7 @@ class DocumentationOrchestrator:
         return converted_classes
 
     def _convert_to_extracted_functions(
-        self, 
+        self,
         functions: list[dict[str, Any]]
     ) -> list[ExtractedFunction]:
         """Convert raw function data to ExtractedFunction instances."""
@@ -232,7 +229,6 @@ class DocumentationOrchestrator:
             raises=content.get("raises", []),
             complexity=int(content.get("complexity", 1)),
         )
-
 
     async def _track_generation_metrics(
         self,
@@ -278,7 +274,6 @@ class DocumentationOrchestrator:
     ) -> None:
         """
         Generates documentation for a single module file.
-        ...
         """
         start_time = datetime.now()
         log_extra = {"correlation_id": self.correlation_id}
@@ -288,40 +283,36 @@ class DocumentationOrchestrator:
                 self.logger.warning(f"Skipping non-Python file: {file_path}", extra=log_extra)
                 return  # Early exit
 
+            print_phase_header(f"Processing Module: {file_path}")
+
             # Read source code if not provided
             if source_code is None:
-                self.logger.info(
-                    f"Attempting to read source code from {file_path}", extra=log_extra
-                )
+                print_status(f"Reading source code from: {file_path}")
                 source_code = await read_file_safe_async(file_path)
 
-            if source_code:
-                self.logger.info(
-                    f"Source code read from {file_path}. Length: {len(source_code)}",
-                    extra=log_extra,
-                )
-            else:
-                error_msg = f"Source code is missing or empty for {file_path}"
-                self.logger.warning(error_msg, extra=log_extra)
+            if not source_code:
+                print_warning(f"Source code is missing or empty for: {file_path}")
                 return  # Early exit for empty files
 
             # Prepare context for documentation generation
+            module_name = file_path.stem
+            print_status(f"Preparing context for: {module_name}", details={"file_path": str(file_path)})
             context = DocumentationContext(
                 source_code=source_code,
                 module_path=file_path,
                 include_source=True,
                 metadata={
                     "file_path": str(file_path),
-                    "module_name": file_path.stem,
+                    "module_name": module_name,
                     "creation_time": datetime.now().isoformat(),
                 },
             )
 
-            self.logger.info(f"Generating documentation for {file_path}", extra=log_extra)
+            # Generate documentation
+            print_status(f"Generating documentation for: {module_name}")
             output_dir = ensure_directory(output_dir)
             output_path = output_dir / file_path.with_suffix(".md").name
 
-            # Generate documentation
             updated_code, markdown_doc = await self.generate_documentation(context)
 
             # Write outputs
@@ -336,19 +327,13 @@ class DocumentationOrchestrator:
                 duration=processing_time,
                 metadata={"module_path": str(file_path)},
             )
-            self.logger.info(f"Documentation written to {output_path}", extra=log_extra)
-            self.logger.info(
-                f"Documentation generation completed in {processing_time:.2f}s",
-                extra=log_extra
-            )
+            print_success(f"Successfully processed file: {file_path}")
 
         except DocumentationError as doc_error:
-            error_msg = f"Module documentation generation failed for {file_path}: {doc_error}"
-            self.logger.error(error_msg, exc_info=True, extra=log_extra)
-            raise DocumentationError(error_msg) from doc_error
+            print_error(f"Module documentation generation failed for {file_path}: {doc_error}")
+            raise DocumentationError(f"Error processing {file_path}") from doc_error
         except Exception as gen_error:
-            error_msg = f"Unexpected error generating documentation for {file_path}: {gen_error}"
-            self.logger.error(error_msg, exc_info=True, extra=log_extra)
+            print_error(f"Unexpected error generating documentation for {file_path}: {gen_error}")
             processing_time = (datetime.now() - start_time).total_seconds()
             await self.metrics_collector.track_operation(
                 operation_type="module_documentation_generation",
@@ -356,4 +341,4 @@ class DocumentationOrchestrator:
                 duration=processing_time,
                 metadata={"module_path": str(file_path), "error": str(gen_error)},
             )
-            raise DocumentationError(error_msg) from gen_error
+            raise DocumentationError(f"Error processing {file_path}") from gen_error

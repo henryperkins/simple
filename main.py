@@ -113,41 +113,42 @@ class DocumentationGenerator:
             True if the file was successfully processed, False otherwise.
         """
         try:
+            print_section_break()
+            print_info(f"📄 Processing File: {file_path}")
+
             # Validate file type
             if file_path.suffix != ".py":
-                self.logger.warning(f"Skipping non-Python file: {file_path}")
-                print_info(f"Skipping non-Python file: {file_path}")
+                print_info(f"⏩ Skipping non-Python file: {file_path}")
                 return False
 
             # Read source code
             source_code = await self.read_file_safe_async(file_path)
             if not source_code or not source_code.strip():
-                self.logger.warning(
-                    f"Skipping empty or invalid source file: {file_path}"
-                )
-                print_info(f"Skipping empty or invalid source file: {file_path}")
+                print_info(f"⚠️ Skipping empty or invalid source file: {file_path}")
                 return False
 
             # Optionally fix indentation
             if fix_indentation:
+                print_info(f"🧹 Fixing indentation for: {file_path}")
                 source_code = self._fix_indentation(source_code)
 
             # Validate syntax
             if not self.analyze_syntax(source_code, file_path):
-                self.logger.warning(f"Skipping file with syntax errors: {file_path}")
-                print_info(f"Skipping file with syntax errors: {file_path}")
+                print_info(f"❌ Skipping file with syntax errors: {file_path}")
                 return False
 
             # Generate documentation
+            print_status(f"✍️ Generating documentation for: {file_path}")
             await self.doc_orchestrator.generate_module_documentation(
                 file_path, output_path.parent, source_code
             )
-            print_success(f"Successfully processed file: {file_path}")
+            print_success(f"✅ Successfully processed file: {file_path}")
             return True
         except Exception as e:
-            self.logger.error(f"Error processing file {file_path}: {e}", exc_info=True)
-            print_error(f"Error processing file: {file_path}. Reason: {e}")
+            print_error(f"🔥 Error processing file {file_path}: {e}")
             return False
+        finally:
+            print_section_break()
 
     def _fix_indentation(self, source_code: str) -> str:
         """Fix inconsistent indentation using autopep8."""
@@ -185,56 +186,53 @@ class DocumentationGenerator:
 
         try:
             print_section_break()
-            print_info(f"Processing Repository: {repo_path}")
+            print_info(f"🚀 Starting Documentation Generation for Repository: {repo_path} 🚀")
+            print_info(f"Output Directory: {output_dir}")
             print_section_break()
 
             repo_path = repo_path.strip()
 
             if self._is_url(repo_path):
+                print_info(f"Cloning repository from: {repo_path}")
                 local_path = await self._clone_repository(repo_path)
+                if not local_path:
+                    print_error(f"Failed to clone repository: {repo_path}")
+                    return False
+                print_success(f"Repository successfully cloned to: {local_path}")
             else:
                 local_path = Path(repo_path)
 
-            if not local_path or not local_path.exists():
-                print_error(f"Repository path not found: {local_path or repo_path}")
+            if not local_path.exists():
+                print_error(f"Repository path not found: {local_path}")
                 return False
 
             self.doc_orchestrator.code_extractor.context.base_path = local_path
             self.repo_manager = RepositoryManager(local_path)
 
-            # Initialize variables
-            total_files = 0
-            processed_files = 0
-            skipped_files = 0
-
-            # Process each Python file in the repository
             python_files = [file for file in local_path.rglob("*.py") if file.suffix == ".py"]
             total_files = len(python_files)
 
-            print_status("Starting documentation generation", {
-                "Files Found": total_files,
-                "Output Path": str(output_dir)
-            })
+            print_status("Preparing for Documentation Generation", {"Files Found": total_files})
 
-            for file_path in python_files:
+            print_section_break()
+            print_info("🔨 Starting Documentation of Python Files 🔨")
+            print_section_break()
+
+            for i, file_path in enumerate(python_files, 1):
                 output_file = output_dir / (file_path.stem + ".md")
-                source_code = await self.read_file_safe_async(
-                    file_path
-                )  # Ensure source code is read
-                if (
-                    source_code and not source_code.isspace()
-                ):  # Check if source code is not empty or just whitespace
+                source_code = await self.read_file_safe_async(file_path)
+                if source_code and not source_code.isspace():
+                    print_status(f"Processing file ({i}/{total_files}): {file_path.name}")
                     if await self.process_file(file_path, output_file, fix_indentation):
                         processed_files += 1
                     else:
                         skipped_files += 1
                 else:
-                    print_error(
-                        f"Source code is missing or empty for file: {file_path}"
-                    )
+                    print_error(f"Skipping empty or invalid source file: {file_path}")
                     skipped_files += 1
 
-            # After processing files, display metrics
+            print_section_break()
+            print_info("📊 Code Analysis Results 📊")
             metrics = self.metrics_collector.get_metrics()
             display_metrics({
                 "Classes": len(metrics.get("current_metrics", {}).get("classes", [])),
@@ -242,12 +240,13 @@ class DocumentationGenerator:
                 "Lines of Code": total_files,
                 "Cyclomatic Complexity": metrics.get("current_metrics", {}).get("cyclomatic_complexity", 0),
                 "Maintainability Index": metrics.get("current_metrics", {}).get("maintainability_index", 0.0)
-            }, title="Code Analysis Results")
+            })
+            print_section_break()
 
             success = True
 
         except (FileNotFoundError, ValueError, IOError) as repo_error:
-            print_error(f"Error processing repository {repo_path}: {repo_error}")
+            print_error(f"🚨 Error processing repository {repo_path}: {repo_error} 🚨")
         except asyncio.CancelledError:
             print_error("Operation was cancelled.")
             return False
@@ -265,12 +264,14 @@ class DocumentationGenerator:
                 },
             )
 
-            print_info(
-                f"Finished repository processing: {repo_path} with correlation ID: {self.correlation_id}"
-            )
-            print_info(
-                f"Processed {processed_files} files, skipped {skipped_files} files out of {total_files} total files."
-            )
+            print_section_break()
+            if success:
+                print_success(f"✅ Successfully Generated Documentation for Repository: {repo_path} ✅")
+            else:
+                print_error(f"❌ Documentation Generation Failed for Repository: {repo_path} ❌")
+            print_info(f"Processed {processed_files} files, skipped {skipped_files} files out of {total_files} total files.")
+            print(f"Total processing time: {processing_time:.2f} seconds")
+            print_section_break()
 
         return success
 

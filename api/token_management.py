@@ -10,8 +10,14 @@ from core.config import AIConfig
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import TokenUsage
 from core.exceptions import ProcessingError
-from core.console import print_info, print_success, print_error
 from core.metrics_collector import MetricsCollector
+from core.console import (
+    print_section_break,
+    display_metrics,
+    print_success,
+    print_warning,
+    print_error,
+)
 
 
 class TokenManager:
@@ -75,6 +81,7 @@ class TokenManager:
             if key in model_name.lower():
                 return value
 
+        print_warning(f"⚠️ Unknown model '{model_name}', defaulting to gpt-4o for token encoding.")
         self.logger.warning(
             f"Unknown model {model_name}, defaulting to gpt-4o for token encoding",
              extra={"model": model_name}
@@ -89,6 +96,7 @@ class TokenManager:
             return len(self.encoding.encode(text))
         except Exception as e:
             self.logger.error(f"Error estimating tokens: {e}", exc_info=True, extra={"text_snippet": text[:50]})
+            print_error(f"🔥 Error estimating tokens. Using fallback estimate.") # Added user-facing error
             return len(text) // 4
 
     def _calculate_usage(self, prompt_tokens: int, completion_tokens: int) -> TokenUsage:
@@ -151,19 +159,17 @@ class TokenManager:
             available_tokens = self.model_config.max_tokens - prompt_tokens
 
             if prompt_tokens > self.model_config.max_tokens:
-                raise ValueError(
-                    f"Prompt exceeds Azure OpenAI token limit: {prompt_tokens} > "
-                    f"{self.model_config.max_tokens}"
-                )
+                error_msg = f"Prompt exceeds Azure OpenAI token limit: {prompt_tokens} > {self.model_config.max_tokens}"
+                print_error(f"🔥 {error_msg}")
+                raise ValueError(error_msg)
 
             # Calculate max completion tokens
             max_completion = min(max_tokens or available_tokens, available_tokens)
 
             if prompt_tokens + max_completion > self.model_config.max_tokens:
-                raise ValueError(
-                    f"Total token count exceeds limit: {prompt_tokens + max_completion} > "
-                    f"{self.model_config.max_tokens}"
-                )
+                error_msg = f"Total token count exceeds limit: {prompt_tokens + max_completion} > {self.model_config.max_tokens}"
+                print_error(f"🔥 {error_msg}")
+                raise ValueError(error_msg)
 
             # Prepare request parameters
             request_params = {
@@ -184,7 +190,7 @@ class TokenManager:
 
         except Exception as e:
             self.logger.error(f"Error preparing request: {e}", exc_info=True, extra={"prompt_snippet": prompt[:50]})
-            print_error(f"Failed to prepare request: {str(e)}")
+            print_error(f"🔥 Failed to prepare request: {e}")
             raise ProcessingError(f"Failed to prepare request: {str(e)}")
 
     async def _check_rate_limits(self) -> None:
@@ -201,6 +207,7 @@ class TokenManager:
         if len(self.request_times) >= self.rate_limit_per_minute:
             wait_time = 60 - (current_time - self.request_times[0])
             if wait_time > 0:
+                print_warning(f"⏳ Rate limit reached. Waiting {wait_time:.2f} seconds before the next request.")
                 self.logger.warning(
                     f"Rate limit reached. Waiting {wait_time:.2f} seconds.",
                     extra={"wait_time": wait_time}
@@ -220,12 +227,16 @@ class TokenManager:
             self.total_prompt_tokens, self.total_completion_tokens
         )
         stats = {
-            "total_prompt_tokens": self.total_prompt_tokens,
-            "total_completion_tokens": self.total_completion_tokens,
-            "total_tokens": self.total_prompt_tokens + self.total_completion_tokens,
-            "estimated_cost": usage.estimated_cost,
+            "Total Prompt Tokens": self.total_prompt_tokens,
+            "Total Completion Tokens": self.total_completion_tokens,
+            "Total Tokens": self.total_prompt_tokens + self.total_completion_tokens,
+            "Estimated Cost": f"${usage.estimated_cost:.4f}",
         }
-        print_info("Token usage stats retrieved.", stats)
+        print_section_break()
+        print_info("📊 Current Token Usage Statistics:")
+        display_metrics(stats)
+        print_section_break()
+        self.logger.info("Token usage stats retrieved.", stats)
         return stats
 
     def track_request(self, prompt_tokens: int, max_completion: int) -> None:
@@ -238,11 +249,11 @@ class TokenManager:
         """
         self.total_prompt_tokens += prompt_tokens
         self.total_completion_tokens += max_completion
+        print_success(f"✅ Tracked Tokens - Prompt: {prompt_tokens}, Completion: {max_completion} (Total: {prompt_tokens + max_completion})")
         self.logger.info(
             f"Tracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}",
             extra={"correlation_id": self.correlation_id, "prompt_tokens": prompt_tokens, "max_completion": max_completion}
         )
-        print_success(f"Tokens tracked: {prompt_tokens + max_completion} total tokens.")
 
     async def process_completion(self, completion: Any) -> Tuple[str, dict[str, Any]]:
         """
@@ -288,11 +299,11 @@ class TokenManager:
                     f"Processed completion - Content Length: {len(content)}, Usage: {usage}",
                     extra={"correlation_id": self.correlation_id, "content_length": len(content), "usage": usage}
                 )
-                print_success("Completion processed successfully.")
+                print_success(f"✅ Completion processed successfully - Usage: {usage}") # More informative success
 
             return content, usage if isinstance(usage, dict) else {}
 
         except Exception as e:
             self.logger.error(f"Error processing completion: {e}", exc_info=True)
-            print_error(f"Failed to process completion: {str(e)}")
+            print_error(f"🔥 Failed to process completion: {e}")
             raise ProcessingError(f"Failed to process completion: {str(e)}")

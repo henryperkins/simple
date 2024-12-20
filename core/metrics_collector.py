@@ -11,12 +11,14 @@ import uuid
 from core.logger import LoggerSetup
 from core.types.base import MetricData
 from core.console import (
-    print_error, 
-    print_info, 
-    print_status, 
+    print_error,
+    print_info,
+    print_status,
     print_section_break,
-    display_metrics
+    display_metrics,
+    print_warning,
 )
+
 
 class MetricsCollector:
     """Collects and stores metrics data for code analysis."""
@@ -32,7 +34,7 @@ class MetricsCollector:
 
     def __init__(self, correlation_id: str | None = None) -> None:
         """Initialize the metrics collector.
-        
+
         Args:
             correlation_id: Optional correlation ID for tracking metrics
         """
@@ -53,13 +55,12 @@ class MetricsCollector:
         """Collect metrics for a module."""
         try:
             if not module_name or module_name == "default_module":
-                # Try to determine actual module name
                 if hasattr(metrics, "module_name") and metrics.module_name:
                     module_name = metrics.module_name
 
             if not module_name or not metrics:
                 self.logger.warning(
-                    f"Invalid metrics data received with correlation ID: {self.correlation_id}"
+                    f"Invalid metrics data received for module '{module_name}' with correlation ID: {self.correlation_id}"
                 )
                 return
 
@@ -76,17 +77,16 @@ class MetricsCollector:
 
             self.current_module_metrics[module_name] = metrics
 
+            print_section_break()
+            print_info(f"📊 Metrics Collected for Module: {module_name} 📊")
+            display_metrics(current_metrics, title=f"Module: {module_name}")
+            print_section_break()
+
             entry = {
                 "timestamp": datetime.now().isoformat(),
                 "metrics": current_metrics,
                 "correlation_id": self.correlation_id,
             }
-            
-            # Add formatted console output
-            print_section_break()
-            print_info("Metrics Collection")
-            display_metrics(current_metrics, title=f"Module: {module_name}")
-            print_section_break()
 
             if module_name in self.metrics_history:
                 if self.metrics_history[module_name]:
@@ -103,7 +103,7 @@ class MetricsCollector:
 
         except Exception as e:
             print_error(
-                f"Error collecting metrics: {e}", 
+                f"🔥 Error collecting metrics for module '{module_name}': {e}",
                 correlation_id=self.correlation_id
             )
 
@@ -125,9 +125,9 @@ class MetricsCollector:
                     metrics = self.current_module_metrics[self.current_module]
                     metrics.total_classes = total
                     metrics.scanned_classes = scanned
-            
+
             self.has_metrics = True
-            
+
         except Exception as e:
             self.logger.error(
                 f"Error updating scan progress: {e} with correlation ID: {self.correlation_id}"
@@ -180,19 +180,15 @@ class MetricsCollector:
 
             self.operations.append(operation)
 
-            # Add formatted output
-            print_status(
-                f"Operation: {operation_type}",
-                {
-                    "Success": success,
-                    "Duration": f"{duration:.2f}s",
-                    **(metadata or {})
-                }
-            )
+            status_details = {"Success": "✅" if success else "❌", "Duration": f"{duration:.2f}s"}
+            if metadata:
+                status_details.update(metadata)
+
+            print_status(f"🔄 Operation: {operation_type}", status_details)
 
         except Exception as e:
             print_error(
-                f"Error tracking operation: {e}",
+                f"🔥 Error tracking operation '{operation_type}': {e}",
                 correlation_id=self.correlation_id
             )
 
@@ -211,10 +207,12 @@ class MetricsCollector:
             if os.path.exists("metrics_history.json"):
                 with open("metrics_history.json", "r") as f:
                     self.metrics_history = json.load(f)
+                self.logger.info("Metrics history loaded successfully.")  # Added info log
         except Exception as e:
             self.logger.error(
                 f"Error loading metrics history: {str(e)} with correlation ID: {self.correlation_id}"
             )
+            print_warning("⚠️ Could not load previous metrics history.")  # Added user warning
             self.metrics_history = {}
 
     def _save_history(self) -> None:
@@ -222,11 +220,13 @@ class MetricsCollector:
         try:
             with open("metrics_history.json", "w") as f:
                 json.dump(self.metrics_history, f, indent=2, default=str)
+            self.logger.info("Metrics history saved successfully.")  # Added info log
         except Exception as e:
             self.logger.error(
                 f"Error saving metrics history: {str(e)} with correlation ID: {self.correlation_id}",
                 exc_info=True
             )
+            print_warning("⚠️ Could not save current metrics history.")  # Added user warning
 
     def clear_history(self) -> None:
         """Clear all metrics history."""
