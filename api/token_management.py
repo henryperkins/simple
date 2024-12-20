@@ -11,6 +11,7 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import TokenUsage
 from core.exceptions import ProcessingError
 from core.metrics_collector import MetricsCollector
+import json
 from core.console import (
     print_section_break,
     display_metrics,
