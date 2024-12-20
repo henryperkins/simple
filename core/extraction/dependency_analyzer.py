@@ -9,10 +9,9 @@ import sysconfig
 from typing import Dict, Set, Optional, List, Tuple, Any
 from pathlib import Path
 
-from core.logger import CorrelationLoggerAdapter, LoggerSetup, get_correlation_id
+from core.logger import LoggerSetup, get_correlation_id
 from core.types import ExtractionContext
 from utils import handle_extraction_error, get_node_name
-from core.exceptions import ExtractionError
 
 
 class DependencyAnalyzer:
@@ -99,7 +98,7 @@ class DependencyAnalyzer:
                 elif isinstance(child, ast.Attribute):
                     dependencies["attributes"].add(get_node_name(child))
 
-            except Exception as e:  # Handle individual errors during extraction
+            except (AttributeError, ValueError) as e:  # Handle specific errors during extraction
                 handle_extraction_error(
                     self.logger, self.errors, "dependency_item_extraction", e
                 )
@@ -167,13 +166,13 @@ class DependencyAnalyzer:
             raise TypeError(
                 f"Expected 'dependencies' to be a dictionary, got {type(dependencies).__name__}"
             )
-        """Detect circular dependencies."""
 
         circular_deps: List[Tuple[str, str]] = []
         visited: Set[str] = set()
         path: Set[str] = set()
 
         def visit(module: str) -> None:
+            """Perform depth-first search to detect circular dependencies."""
             """Inner function to perform depth-first search."""
             if module in path:
                 circular_deps.append(
@@ -247,38 +246,42 @@ class DependencyAnalyzer:
     def generate_dependency_graph(self) -> Optional[str]:
         """Generate a visual representation of dependencies."""
         try:
-            import graphviz
+import graphviz
 
             # Create a new directed graph
             dot = graphviz.Digraph(comment="Module Dependencies")
             dot.attr(rankdir="LR")
 
             # Add nodes and edges based on dependencies
-            if self.context.tree:
-                deps = self.analyze_dependencies(self.context.tree)
+            if not self.context.tree:
+                return None
 
-                # Add current module
-                if self.module_name:
-                    dot.node(self.module_name, self.module_name, shape="box")
+            deps = self.analyze_dependencies(self.context.tree)
 
-                # Add dependencies with different colors by type
-                colors = {
-                    "stdlib": "lightblue",
-                    "third_party": "lightgreen",
-                    "local": "lightyellow",
-                }
+            # Add current module
+            if self.module_name:
+                dot.node(self.module_name, self.module_name, shape="box")
 
-                for dep_type, deps_set in deps.items():
-                    if dep_type != "maintainability_impact":
-                        for dep in deps_set:
-                            dot.node(
-                                dep,
-                                dep,
-                                fillcolor=colors.get(dep_type, "white"),
-                                style="filled",
-                            )
-                            if self.module_name:
-                                dot.edge(self.module_name, dep)
+            # Add dependencies with different colors by type
+            colors = {
+                "stdlib": "lightblue",
+                "third_party": "lightgreen",
+                "local": "lightyellow",
+            }
+
+            for dep_type, deps_set in deps.items():
+                if dep_type == "maintainability_impact":
+                    continue
+
+                for dep in deps_set:
+                    dot.node(
+                        dep,
+                        dep,
+                        fillcolor=colors.get(dep_type, "white"),
+                        style="filled",
+                    )
+                    if self.module_name:
+                        dot.edge(self.module_name, dep)
 
             # Return the graph in DOT format
             return dot.source
@@ -318,48 +321,12 @@ class DependencyAnalyzer:
     async def analyze_project_dependencies(self, project_root: Path) -> Dict[str, Any]:
         """Analyze dependencies across an entire project."""
         try:
-            project_deps = {
-                "modules": {},
-                "global_metrics": {
-                    "total_modules": 0,
-                    "total_dependencies": 0,
-                    "avg_maintainability": 0.0,
-                    "circular_dependencies": [],
-                },
-            }
+            project_deps = self._initialize_project_deps()
 
-            # Analyze each Python file in the project
             for py_file in project_root.rglob("*.py"):
-                try:
-                    with open(py_file, "r", encoding="utf-8") as f:
-                        source = f.read()
+                self._analyze_file_dependencies(py_file, project_deps)
 
-                    tree = ast.parse(source)
-                    module_name = py_file.stem
-
-                    # Analyze dependencies for this module
-                    deps = self.analyze_dependencies(tree, module_name)
-                    metrics = self.get_dependency_metrics()
-
-                    project_deps["modules"][module_name] = {
-                        "dependencies": deps,
-                        "metrics": metrics,
-                    }
-
-                    # Update global metrics
-                    project_deps["global_metrics"]["total_modules"] += 1
-                    project_deps["global_metrics"]["total_dependencies"] += metrics[
-                        "total_dependencies"
-                    ]
-
-                except Exception as e:
-                    handle_extraction_error(
-                        self.logger,
-                        self.errors,
-                        "project_dependency_analysis",
-                        e,
-                        file_path=str(py_file),
-                    )
+            self._finalize_project_metrics(project_deps)
 
             # Calculate average maintainability
             if project_deps["global_metrics"]["total_modules"] > 0:
@@ -383,7 +350,7 @@ class DependencyAnalyzer:
                     visited = set()
                     path = set()
 
-                    def visit(mod: str) -> None:
+                    def visit(mod: str, path: set, visited: set) -> None:
                         if mod in path:
                             circular_deps.append((mod, module))
                             return
@@ -401,7 +368,7 @@ class DependencyAnalyzer:
                         )
                         for dep in local_deps:
                             if dep != mod and (mod, dep) not in circular_deps:
-                                visit(dep)
+                                visit(dep, path, visited)
 
                         path.remove(mod)
 
