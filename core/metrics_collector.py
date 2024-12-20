@@ -10,6 +10,7 @@ import uuid
 
 from core.logger import LoggerSetup
 from core.types.base import MetricData
+import logging
 from core.console import (
     print_error,
     print_info,
