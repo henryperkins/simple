@@ -60,11 +60,15 @@ def print_status(message: str, details: dict[str, Any] | None = None) -> None:
 def display_metrics(metrics: dict[str, Any], title: str = "Metrics") -> None:
     """Display metrics in a formatted table."""
     print(f"{title}:")
+    print("+----------------------+----------------+")
+    print(f"| {'Metric':<20} | {'Value':<14} |")
+    print("+----------------------+----------------+")
     for key, value in metrics.items():
         if isinstance(value, float):
-            print(f"  {key:<30} {value:>.2f}")
+            print(f"| {key:<20} | {value:>14.2f} |")
         else:
-            print(f"  {key:<30} {value}")
+            print(f"| {key:<20} | {value:>14} |")
+    print("+----------------------+----------------+")
 
 def print_success(message: str, details: dict[str, Any] | None = None) -> None:
     """Display success messages."""

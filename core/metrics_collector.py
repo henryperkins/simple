@@ -259,6 +259,17 @@ class MetricsCollector:
                 f"Token usage collected: {prompt_tokens + completion_tokens} tokens, ${cost:.4f}.",
                 extra={"model": model, "correlation_id": self.correlation_id}
             )
+
+            # Display token usage in verbose mode
+            if LoggerSetup.get_logger().isEnabledFor(logging.DEBUG):
+                print_info("📊 --- Token Usage Summary --- 📊")
+                display_metrics({
+                    "Prompt Tokens": prompt_tokens,
+                    "Completion Tokens": completion_tokens,
+                    "Total Tokens": prompt_tokens + completion_tokens,
+                    "Estimated Cost": f"${cost:.2f}",
+                    "Model": model,
+                })
         except Exception as e:
             self.logger.error(f"Error collecting token usage: {e}", exc_info=True)
 

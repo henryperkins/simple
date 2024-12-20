@@ -490,6 +490,19 @@ async def main(args: argparse.Namespace) -> int:
         if args.live_layout:
             stop_live_layout()
         print_section_break()
+
+        # Display final token usage summary
+        if doc_generator and doc_generator.metrics_collector:
+            metrics = doc_generator.metrics_collector.get_aggregated_token_usage()
+            print_info("📊 Final Token Usage Summary 📊")
+            display_metrics({
+                "Total Prompt Tokens": metrics.get("total_prompt_tokens", 0),
+                "Total Completion Tokens": metrics.get("total_completion_tokens", 0),
+                "Total Tokens": metrics.get("total_tokens", 0),
+                "Estimated Cost": f"${metrics.get('total_cost', 0):.2f}",
+            })
+
+        print_section_break()
         print_info("📊 Final Summary 📊")
         print_status("Repository Processing Summary", {
             "Total Files": total_files,
