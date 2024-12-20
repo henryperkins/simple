@@ -104,6 +104,7 @@ class AIConfig:
             self.logger.warning(
                 "⚠️ Warning: The 'AZURE_DEPLOYMENT_NAME' environment variable is not set."
             )
+        import logging
         LoggerSetup.log_once(self.logger, logging.DEBUG, "AIConfig initialized successfully")
 
     # Model configurations including Azure-specific limits
@@ -156,7 +157,8 @@ class AIConfig:
                 response_format=get_env_var("RESPONSE_FORMAT", None, dict, False),
                 stream_options=get_env_var("STREAM_OPTIONS", None, dict, False),
             )
-            LoggerSetup.log_once(logger, logging.INFO, "AIConfig initialized successfully")
+            import logging
+            LoggerSetup.log_once(self.logger, logging.INFO, "AIConfig initialized successfully")
             return config
         except Exception as e:
             print_error(f"Failed to initialize AIConfig: {e}")
