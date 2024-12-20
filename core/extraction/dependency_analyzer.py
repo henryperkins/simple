@@ -242,7 +242,7 @@ class DependencyAnalyzer:
 
     def generate_dependency_graph(self) -> Optional[str]:
         """Generate a visual representation of dependencies."""
-import graphviz
+        import graphviz
 
         try:
 
