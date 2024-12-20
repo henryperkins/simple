@@ -117,6 +117,9 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
         Injector.register("metrics_calculator", metrics, force=True)
         logger.debug("Registered 'metrics_calculator'.")
 
+        if not config.ai:
+            raise ValueError("AIConfig is not initialized. Check environment variables and configuration.")
+
         token_manager = TokenManager(
             model=config.ai.model,
             config=config.ai,

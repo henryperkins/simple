@@ -57,6 +57,7 @@ def get_env_var(
             f"Failed to convert or validate {key}={value} to type {var_type.__name__}: {str(e)}"
         )
         print_info("Loaded Azure OpenAI Configuration", config.__dict__)  # Debugging log for configuration
+        print_info("AIConfig initialized successfully", config.__dict__)  # Debugging log
         return config
 
 
@@ -185,7 +186,11 @@ class Config:
 
     def __init__(self):
         """Initialize configuration from environment."""
-        self.ai = AIConfig.from_env()
+        try:
+            self.ai = AIConfig.from_env()
+        except Exception as e:
+            print_error(f"Error initializing AIConfig: {e}")
+            self.ai = None  # Explicitly set to None if initialization fails
         self.app = AppConfig.from_env()
         self.correlation_id = str(uuid.uuid4())
         self.app.ensure_directories()
