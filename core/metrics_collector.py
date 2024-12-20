@@ -114,17 +114,17 @@ class MetricsCollector:
                 return
 
             if item_type == 'function':
-                self.accumulated_functions = total
+                self.accumulated_functions = 0  # Initialize to 0
                 if self.current_module_metrics and self.current_module:
                     metrics = self.current_module_metrics[self.current_module]
-                    metrics.total_functions = total
-                    metrics.scanned_functions = scanned
+                    metrics.total_functions = 0  # Initialize to 0
+                    metrics.scanned_functions = 0  # Initialize to 0
             elif item_type == 'class':
-                self.accumulated_classes = total
+                self.accumulated_classes = 0  # Initialize to 0
                 if self.current_module_metrics and self.current_module:
                     metrics = self.current_module_metrics[self.current_module]
-                    metrics.total_classes = total
-                    metrics.scanned_classes = scanned
+                    metrics.total_classes = 0  # Initialize to 0
+                    metrics.scanned_classes = 0  # Initialize to 0
 
             self.has_metrics = True
 
