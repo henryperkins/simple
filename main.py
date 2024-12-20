@@ -116,6 +116,7 @@ class DocumentationGenerator:
         try:
             print_section_break()
             print_phase_header(f"📄 Processing File: {file_path}")
+            print_phase_header(f"📄 Processing File: {file_path}")
 
             # Validate file type
             if file_path.suffix != ".py":
@@ -233,7 +234,18 @@ class DocumentationGenerator:
                     skipped_files += 1
 
             print_section_break()
-            print_info("📊 Code Analysis Results 📊")
+            print_section_break()
+            print_info("📊 Repository Processing Summary 📊")
+            print_info("Aggregated Metrics Summary:")
+            metrics = self.metrics_collector.get_metrics()
+            display_metrics({
+                "Total Files": total_files,
+                "Successfully Processed": processed_files,
+                "Skipped Files": skipped_files,
+                "Total Lines of Code": metrics.get("total_lines_of_code", 0),
+                "Average Cyclomatic Complexity": metrics.get("average_cyclomatic_complexity", 0),
+                "Maintainability Index": metrics.get("maintainability_index", 0),
+            })
             print_section_break()
             print_info("Aggregated Metrics Summary:")
             metrics = self.metrics_collector.get_metrics()
@@ -380,6 +392,17 @@ async def main(args: argparse.Namespace) -> int:
     try:
         correlation_id = str(uuid.uuid4())
         config = Config()
+        print_section_break()
+        print_phase_header("Initialization")
+        print_info("Initializing system components...")
+        print_info("Configuration Summary:", {
+            "AI Model": config.ai.model,
+            "Deployment": config.ai.deployment,
+            "Max Tokens": config.ai.max_tokens,
+            "Temperature": config.ai.temperature,
+            "Output Directory": args.output,
+        })
+        print_section_break()
         await setup_dependencies(config, correlation_id)
 
         if args.live_layout:
@@ -422,13 +445,22 @@ async def main(args: argparse.Namespace) -> int:
         print_error(f"Dependency injection error: {ke}")
         return 1
     except asyncio.CancelledError:
-        print_error("Operation was cancelled.")
+        print_error("🔥 Operation Interrupted: The script was stopped by the user.")
         return 1
     finally:
         if doc_generator:
             await doc_generator.cleanup()
         if args.live_layout:
             stop_live_layout()
+        print_section_break()
+        print_info("📊 Final Summary 📊")
+        print_status("Repository Processing Summary", {
+            "Total Files": total_files,
+            "Successfully Processed": processed_files,
+            "Skipped Files": skipped_files,
+            "Total Processing Time (seconds)": f"{processing_time:.2f}"
+        })
+        print_section_break()
         print_info("Exiting documentation generation")
         print_section_break()
         print_info("📊 Final Summary:")
