@@ -5,7 +5,6 @@ Dependency analysis module for Python source code.
 import ast
 import sys
 import pkgutil
-import sysconfig
 from typing import Dict, Set, Optional, List, Tuple, Any
 from pathlib import Path
 
@@ -61,7 +60,7 @@ class DependencyAnalyzer:
                 categorized_deps = {"stdlib": set(), "third_party": set(), "local": set()}
             return categorized_deps
 
-        except Exception as e:
+        except (AttributeError, ValueError) as e:
             handle_extraction_error(self.logger, self.errors, "dependency_analysis", e)
             self.logger.error(
                 "Failed to analyze dependencies. Returning empty structure.",
@@ -128,6 +127,7 @@ class DependencyAnalyzer:
         return categorized
 
     def _is_stdlib_module(self, module_name: str) -> bool:
+        """Check if the given module is part of the Python standard library."""
         """Check if module is in standard library."""
         if self._stdlib_modules is None:  # compute this once
             self._stdlib_modules = {
@@ -173,7 +173,6 @@ class DependencyAnalyzer:
 
         def visit(module: str) -> None:
             """Perform depth-first search to detect circular dependencies."""
-            """Inner function to perform depth-first search."""
             if module in path:
                 circular_deps.append(
                     (module, self.module_name)
@@ -245,8 +244,9 @@ class DependencyAnalyzer:
 
     def generate_dependency_graph(self) -> Optional[str]:
         """Generate a visual representation of dependencies."""
+import graphviz
+
         try:
-            import graphviz
 
             # Create a new directed graph
             dot = graphviz.Digraph(comment="Module Dependencies")
@@ -310,7 +310,7 @@ class DependencyAnalyzer:
                 "local_count": len(deps.get("local", set())),
                 "maintainability_impact": deps.get("maintainability_impact", 0.0),
                 "has_circular_dependencies": bool(
-                    self._detect_circular_dependencies(deps)
+                    self.detect_circular_dependencies(deps)
                 ),
             }
 
@@ -345,14 +345,14 @@ class DependencyAnalyzer:
                 all_local_deps.update(data["dependencies"].get("local", set()))
 
             circular_deps = []
-            for module in all_local_deps:
-                if module in project_deps["modules"]:
-                    visited = set()
-                    path = set()
+            for local_module in all_local_deps:
+                if local_module in project_deps["modules"]:
+                    visited_modules = set()
+                    path_modules = set()
 
-                    def visit(mod: str, path: set, visited: set) -> None:
+                    def dfs_visit(mod: str, path: set, visited: set) -> None:
                         if mod in path:
-                            circular_deps.append((mod, module))
+                            circular_deps.append((mod, local_module))
                             return
                         if mod in visited:
                             return
@@ -368,11 +368,11 @@ class DependencyAnalyzer:
                         )
                         for dep in local_deps:
                             if dep != mod and (mod, dep) not in circular_deps:
-                                visit(dep, path, visited)
+                                dfs_visit(dep, path, visited)
 
                         path.remove(mod)
 
-                    visit(module)
+                    dfs_visit(local_module, path_modules, visited_modules)
 
             project_deps["global_metrics"]["circular_dependencies"] = circular_deps
 
