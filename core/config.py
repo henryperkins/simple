@@ -97,6 +97,13 @@ class AIConfig:
         default_factory=lambda: os.getenv("AZURE_DEPLOYMENT_NAME", "")
     )
 
+    def __post_init__(self):
+        if not self.azure_deployment_name:
+            print_warning(
+                "⚠️ Warning: The 'AZURE_DEPLOYMENT_NAME' environment variable is not set. "
+                "Ensure it matches the deployment name in your Azure OpenAI resource."
+            )
+
     # Model configurations including Azure-specific limits
     model_limits: dict[str, ModelConfig] = field(
         default_factory=lambda: {
