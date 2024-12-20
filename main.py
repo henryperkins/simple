@@ -114,7 +114,7 @@ class DocumentationGenerator:
         """
         try:
             print_section_break()
-            print_info(f"📄 Processing File: {file_path}")
+            print_phase_header(f"📄 Processing File: {file_path}")
 
             # Validate file type
             if file_path.suffix != ".py":
@@ -233,6 +233,15 @@ class DocumentationGenerator:
 
             print_section_break()
             print_info("📊 Code Analysis Results 📊")
+            print_section_break()
+            print_info("Aggregated Metrics Summary:")
+            display_metrics({
+                "Total Classes": len(metrics.get("current_metrics", {}).get("classes", [])),
+                "Total Functions": len(metrics.get("current_metrics", {}).get("functions", [])),
+                "Total Lines of Code": total_files,
+                "Average Cyclomatic Complexity": metrics.get("current_metrics", {}).get("cyclomatic_complexity", 0),
+                "Maintainability Index": metrics.get("current_metrics", {}).get("maintainability_index", 0.0)
+            })
             metrics = self.metrics_collector.get_metrics()
             display_metrics({
                 "Classes": len(metrics.get("current_metrics", {}).get("classes", [])),
@@ -416,6 +425,15 @@ async def main(args: argparse.Namespace) -> int:
         if args.live_layout:
             stop_live_layout()
         print_info("Exiting documentation generation")
+        print_section_break()
+        print_info("📊 Final Summary:")
+        print_status("Repository Processing Summary", {
+            "Total Files": total_files,
+            "Successfully Processed": processed_files,
+            "Skipped": skipped_files,
+            "Total Processing Time (seconds)": f"{processing_time:.2f}"
+        })
+        print_section_break()
 
     return 0
 

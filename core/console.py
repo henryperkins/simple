@@ -36,7 +36,13 @@ def print_section_break() -> None:
 def print_error(message: str, correlation_id: str | None = None, details: dict[str, Any] | None = None) -> None:
     """Display formatted error messages."""
     print_section_break()
-    print(f"Error: {message}")
+    print(f"🔥 Error: {message}")
+    if details:
+        for key, value in details.items():
+            print(f"  {key}: {value}")
+    if correlation_id:
+        print(f"  Correlation ID: {correlation_id}")
+    print("Suggested Fix: Check the logs for more details or retry the operation.")
     if details:
         for key, value in details.items():
             print(f"  {key}: {value}")

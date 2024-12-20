@@ -212,6 +212,10 @@ class AIService:
                                 "correlation_id": self.correlation_id,
                             },
                         )
+                        # Save raw response to a debug file
+                        debug_file = Path("logs") / f"api_response_{self.correlation_id}.json"
+                        debug_file.write_text(json.dumps(response_json, indent=2), encoding="utf-8")
+                        self.logger.debug(f"Raw API response saved to {debug_file}")
                         return response_json
                     except json.JSONDecodeError as e:
                         self.logger.warning(
