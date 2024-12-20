@@ -165,13 +165,29 @@ class TokenManager:
                 print_error(f"🔥 {error_msg}")
                 raise ValueError(error_msg)
 
-            # Calculate max completion tokens
+            # Add a buffer to the token limit
+            buffer = 100  # Reserve 100 tokens as a safety buffer
+            available_tokens = self.model_config.max_tokens - prompt_tokens - buffer
+
+            if available_tokens < 0:
+                error_msg = f"Prompt exceeds Azure OpenAI token limit even with buffer: {prompt_tokens} > {self.model_config.max_tokens - buffer}"
+                print_error(f"🔥 {error_msg}")
+                raise ValueError(error_msg)
+
+            # Dynamically calculate max completion tokens
             max_completion = min(max_tokens or available_tokens, available_tokens)
 
             if prompt_tokens + max_completion > self.model_config.max_tokens:
                 error_msg = f"Total token count exceeds limit: {prompt_tokens + max_completion} > {self.model_config.max_tokens}"
                 print_error(f"🔥 {error_msg}")
                 raise ValueError(error_msg)
+
+            # Log token usage details for debugging
+            self.logger.info(
+                f"Token usage details - Prompt Tokens: {prompt_tokens}, "
+                f"Available Tokens: {available_tokens}, Max Completion Tokens: {max_completion}",
+                extra={"correlation_id": self.correlation_id}
+            )
 
             # Prepare request parameters
             request_params = {
