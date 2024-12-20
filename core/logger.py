@@ -184,6 +184,15 @@ class LoggerSetup:
             except Exception as e:
                 sys.stderr.write(f"Failed to set up file handler: {e}\n")
 
+    _logged_messages = set()
+
+    @classmethod
+    def log_once(cls, logger, level, message):
+        """Log a message only once."""
+        if message not in cls._logged_messages:
+            cls._logged_messages.add(message)
+            logger.log(level, message)
+
     @classmethod
     def get_logger(
         cls, name: str | None = None, correlation_id: str | None = None
