@@ -125,7 +125,7 @@ class DocstringProcessor:
         if self.docstring_stats["total_processed"] % 10 == 0:
             self._display_docstring_stats()
 
-        return {
+        docstring_data = {
             "summary": parsed_docstring.short_description or "No summary available.",
             "description": parsed_docstring.long_description
             or "No description provided.",
@@ -151,6 +151,10 @@ class DocstringProcessor:
             ],
             "complexity": 1,
         }
+
+        # Track common issues
+        self._track_common_issues(docstring_data)
+        return docstring_data
 
     def validate(self, docstring_data: Dict[str, Any], context: Optional[str] = None) -> Tuple[bool, List[str]]:
         """Validates a docstring dictionary against the schema."""
@@ -187,18 +191,20 @@ class DocstringProcessor:
         except ValidationError as e:
             return False, [str(e)]
 
-    def _display_docstring_stats(self) -> None:
-        """Displays current docstring processing statistics."""
+    def _track_common_issues(self, docstring_data: Dict[str, Any]) -> None:
+        """Track common issues in docstrings."""
+        if not docstring_data.get("args"):
+            self.docstring_stats["common_issues"]["Missing Args"] += 1
+        if not docstring_data.get("returns"):
+            self.docstring_stats["common_issues"]["Missing Returns"] += 1
+        if not docstring_data.get("summary"):
+            self.docstring_stats["common_issues"]["Missing Summary"] += 1
+
+    def _display_common_issues(self) -> None:
+        """Display common docstring issues."""
         display_metrics(
-            {
-                "Total Processed": self.docstring_stats["total_processed"],
-                "Successfully Parsed": self.docstring_stats["successful"],
-                "Failed to Parse": self.docstring_stats["failed"],
-                "Average Length": f"{self.docstring_stats['avg_length']}",
-                "Total Lines": self.docstring_stats["total_lines"],
-                "Success Rate": f"{(self.docstring_stats['successful'] / self.docstring_stats['total_processed'] * 100):.1f}%",
-            },
-            title="Docstring Processing Statistics",
+            self.docstring_stats["common_issues"],
+            title="Common Docstring Issues",
         )
 
     async def process_docstring(

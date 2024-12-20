@@ -398,14 +398,35 @@ async def main(args: argparse.Namespace) -> int:
         config = Config()
         print_section_break()
         # Consolidate final summary into a single block
-        print_section_break()
-        print_info("📊 Final Summary 📊")
-        print_status("Repository Processing Summary", {
-            "Total Files": total_files,
-            "Successfully Processed": processed_files,
-            "Skipped Files": skipped_files,
-            "Total Processing Time (seconds)": f"{processing_time:.2f}"
-        })
+        if doc_generator and doc_generator.metrics_collector:
+            metrics = doc_generator.metrics_collector.get_metrics()
+            aggregated_metrics = {
+                "Total Files Processed": len(metrics.get("history", {})),
+                "Total Classes Extracted": sum(
+                    m.get("total_classes", 0) for m in metrics.get("history", {}).values()
+                ),
+                "Total Functions Extracted": sum(
+                    m.get("total_functions", 0) for m in metrics.get("history", {}).values()
+                ),
+                "Total Variables Extracted": sum(
+                    len(m.get("variables", [])) for m in metrics.get("history", {}).values()
+                ),
+                "Total Constants Extracted": sum(
+                    len(m.get("constants", [])) for m in metrics.get("history", {}).values()
+                ),
+                "Average Cyclomatic Complexity": sum(
+                    m.get("cyclomatic_complexity", 0) for m in metrics.get("history", {}).values()
+                )
+                / len(metrics.get("history", {})),
+                "Average Maintainability Index": sum(
+                    m.get("maintainability_index", 0.0) for m in metrics.get("history", {}).values()
+                )
+                / len(metrics.get("history", {})),
+                "Total Lines of Code": sum(
+                    m.get("lines_of_code", 0) for m in metrics.get("history", {}).values()
+                ),
+            }
+            display_metrics(aggregated_metrics, title="Aggregated Statistics")
         if doc_generator and doc_generator.metrics_collector:
             metrics = doc_generator.metrics_collector.get_aggregated_token_usage()
             # Aggregate token usage and metrics into a single summary
