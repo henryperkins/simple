@@ -152,7 +152,7 @@ class DependencyAnalyzer:
 
         return False
 
-    def _detect_circular_dependencies(
+    def detect_circular_dependencies(
         self, dependencies: Dict[str, Set[str]]
     ) -> List[Tuple[str, str]]:
         """Detect circular dependencies."""

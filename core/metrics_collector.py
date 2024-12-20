@@ -107,7 +107,7 @@ class MetricsCollector:
                 correlation_id=self.correlation_id,
             )
 
-    def update_scan_progress(self, module_name: str, item_type: str) -> None:
+    def update_scan_progress(self, module_name: str, item_type: str, count: int = 0) -> None:
         """Update the scan progress for functions or classes."""
         try:
             if module_name == "default_module":
