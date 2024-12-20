@@ -29,9 +29,9 @@ def format_error_output(error_message: str) -> str:
 
     return "\n".join(formatted_lines)
 
-def print_section_break() -> None:
-    """Print a visual section break."""
-    print("-" * 60)  # Reduced width for less overwhelming breaks
+def print_phase_header(title: str) -> None:
+    """Print a section header with formatting."""
+    print(f"--- {title} ---")
 
 def print_error(message: str, correlation_id: str | None = None, details: dict[str, Any] | None = None) -> None:
     """Display formatted error messages."""

@@ -235,6 +235,7 @@ class DocumentationGenerator:
             print_info("📊 Code Analysis Results 📊")
             print_section_break()
             print_info("Aggregated Metrics Summary:")
+            metrics = self.metrics_collector.get_metrics()
             display_metrics({
                 "Total Classes": len(metrics.get("current_metrics", {}).get("classes", [])),
                 "Total Functions": len(metrics.get("current_metrics", {}).get("functions", [])),
@@ -242,7 +243,6 @@ class DocumentationGenerator:
                 "Average Cyclomatic Complexity": metrics.get("current_metrics", {}).get("cyclomatic_complexity", 0),
                 "Maintainability Index": metrics.get("current_metrics", {}).get("maintainability_index", 0.0)
             })
-            metrics = self.metrics_collector.get_metrics()
             display_metrics({
                 "Classes": len(metrics.get("current_metrics", {}).get("classes", [])),
                 "Functions": len(metrics.get("current_metrics", {}).get("functions", [])),
@@ -372,6 +372,10 @@ def parse_arguments() -> argparse.Namespace:
 async def main(args: argparse.Namespace) -> int:
     """Main entry point for the documentation generator."""
     doc_generator: DocumentationGenerator | None = None
+    total_files = 0
+    processed_files = 0
+    skipped_files = 0
+    processing_time = 0.0
     try:
         correlation_id = str(uuid.uuid4())
         config = Config()
