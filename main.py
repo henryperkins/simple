@@ -442,13 +442,12 @@ async def main(args: argparse.Namespace) -> int:
         print_section_break()
         print_phase_header("Initialization")
         print_info("Initializing system components...")
-        print_info("Configuration Summary:", {
-            "AI Model": config.ai.model,
-            "Deployment": config.ai.deployment,
-            "Max Tokens": config.ai.max_tokens,
-            "Temperature": config.ai.temperature,
-            "Output Directory": args.output,
-        })
+        print_info("Configuration Summary:")
+        print(f"  AI Model: {config.ai.model}")
+        print(f"  Deployment: {config.ai.deployment}")
+        print(f"  Max Tokens: {config.ai.max_tokens}")
+        print(f"  Temperature: {config.ai.temperature}")
+        print(f"  Output Directory: {args.output}")
         print_section_break()
         await setup_dependencies(config, correlation_id)
 

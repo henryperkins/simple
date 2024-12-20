@@ -104,7 +104,7 @@ class AIConfig:
             self.logger.warning(
                 "⚠️ Warning: The 'AZURE_DEPLOYMENT_NAME' environment variable is not set."
             )
-        self.logger.info("AIConfig initialized successfully")
+        self.logger.debug("AIConfig initialized successfully")
 
     # Model configurations including Azure-specific limits
     model_limits: dict[str, ModelConfig] = field(
