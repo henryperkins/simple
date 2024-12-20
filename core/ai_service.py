@@ -249,7 +249,8 @@ class AIService:
                             "1. The deployment name in the configuration matches an existing deployment in your Azure OpenAI resource.\n"
                             "2. The deployment is active and fully provisioned.\n"
                             "3. The API key and endpoint are correct.\n"
-                            "4. If the deployment was recently created, wait a few minutes and try again.",
+                            "4. If the deployment was recently created, wait a few minutes and try again.\n"
+                            "5. Ensure the deployment name is set correctly in the AZURE_OPENAI_DEPLOYMENT environment variable.",
                             extra={
                                 "azure_api_base": self.config.azure_api_base,
                                 "azure_deployment_name": self.config.azure_deployment_name,
