@@ -246,7 +246,7 @@ class DependencyAnalyzer:
     def generate_dependency_graph(self) -> Optional[str]:
         """Generate a visual representation of dependencies."""
         try:
-import graphviz
+            import graphviz
 
             # Create a new directed graph
             dot = graphviz.Digraph(comment="Module Dependencies")
