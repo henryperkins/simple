@@ -331,12 +331,12 @@ class DocumentationGenerator:
                 f"Error processing repository {repo_path}",
                 self.correlation_id,
             )
-                if hasattr(self, "metrics_collector") and self.metrics_collector:
-                    await self.metrics_collector.close()
-                if hasattr(self, "system_monitor") and self.system_monitor:
-                    await self.system_monitor.stop()
-            except Exception as cleanup_error:
-                print_error(f"Error during cleanup after interruption: {cleanup_error}")
+            if hasattr(self, "metrics_collector") and self.metrics_collector:
+                await self.metrics_collector.close()
+            if hasattr(self, "system_monitor") and self.system_monitor:
+                await self.system_monitor.stop()
+        except Exception as cleanup_error:
+            print_error(f"Error during cleanup after interruption: {cleanup_error}")
             finally:
                 print_info("Cleanup completed after interruption.")
             return False
