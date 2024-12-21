@@ -154,13 +154,13 @@ class DocumentationGenerator:
             print_success(f"✅ Successfully processed file: {file_path}")
             return True
         except Exception as e:
-log_and_raise_error(
-    self.logger,
-    e,
-    DocumentationError,
-    "Error processing file",
-    self.correlation_id,
-)
+            log_and_raise_error(
+                self.logger,
+                e,
+                DocumentationError,
+                "Error processing file",
+                self.correlation_id,
+            )
             return False
         finally:
             print_section_break()
