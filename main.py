@@ -16,8 +16,6 @@ from core.console import (
     print_error,
     print_info,
     print_success,
-    setup_live_layout,
-    stop_live_layout,
     print_section_break,
     print_status,
     display_metrics,
@@ -41,7 +39,6 @@ logger = LoggerSetup.get_logger(__name__)
 
 # Register global exception handler
 sys.excepthook = LoggerSetup.handle_exception
-
 
 class DocumentationGenerator:
     """
@@ -123,7 +120,7 @@ class DocumentationGenerator:
         """
         try:
             print_section_break()
-            print_phase_header(f"📄 Processing File: {file_path}")  # Remove duplicate
+            print_phase_header(f"📄 Processing File: {file_path}")
 
             # Validate file type
             if file_path.suffix != ".py":
@@ -317,12 +314,6 @@ class DocumentationGenerator:
 
             success = True
 
-        except KeyboardInterrupt:
-            print_error("🔥 Operation interrupted during repository processing.")
-            raise  # Re-raise the exception to allow higher-level handling
-        except KeyboardInterrupt:
-            print_error("🔥 Operation interrupted during repository processing.")
-            raise  # Re-raise the exception to allow higher-level handling
         except (FileNotFoundError, ValueError, IOError) as repo_error:
             log_and_raise_error(
                 self.logger,
@@ -439,7 +430,6 @@ class DocumentationGenerator:
         """Call the cleanup resources function."""
         await self._cleanup_resources()
 
-
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -462,13 +452,7 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Enable indentation fixing using autopep8",
     )
-    parser.add_argument(
-        "--live-layout",
-        action="store_true",
-        help="Enable live layout using rich",
-    )
     return parser.parse_args()
-
 
 async def main(args: argparse.Namespace) -> int:
     """Main entry point for the documentation generator."""
@@ -491,9 +475,6 @@ async def main(args: argparse.Namespace) -> int:
         print(f"  Output Directory: {args.output}")
         print_section_break()
         await setup_dependencies(config, correlation_id)
-
-        if args.live_layout:
-            setup_live_layout()
 
         doc_generator = DocumentationGenerator(config=Injector.get("config"))
         await doc_generator.initialize()
@@ -562,15 +543,9 @@ async def main(args: argparse.Namespace) -> int:
         except Exception as cleanup_error:
             print_error(f"Error during cleanup after interruption: {cleanup_error}")
         finally:
-            if args.live_layout:
-                stop_live_layout()  # Stop the live layout properly
-        print_success("✅ Cleanup completed. Exiting.")
+            print_success("✅ Cleanup completed. Exiting.")
         return 130  # Standard exit code for terminated by Ctrl+C
-    except asyncio.CancelledError:
-        print_error("🔥 Operation was cancelled.")
-        if doc_generator:
-            await doc_generator.cleanup()
-        return 1
+
     finally:
         try:
             if doc_generator:
@@ -578,16 +553,7 @@ async def main(args: argparse.Namespace) -> int:
                 await doc_generator.cleanup()
         except Exception as cleanup_error:
             print_error(f"Error during cleanup: {cleanup_error}")
-        finally:
-            try:
-                if doc_generator:
-                    print_info("Info: Starting cleanup process...")
-                    await doc_generator.cleanup()
-            except Exception as cleanup_error:
-                print_error(f"Error during cleanup: {cleanup_error}")
-            finally:
-                if args.live_layout:
-                    stop_live_layout()  # Stop live layout here
+
         print_section_break()
 
         # Display final token usage summary and other metrics only after initialization and processing
@@ -721,20 +687,8 @@ async def main(args: argparse.Namespace) -> int:
             },
         )
         print_section_break()
-        print_info("📊 Final Summary:")
-        print_status(
-            "Repository Processing Summary",
-            {
-                "Total Files": total_files,
-                "Successfully Processed": processed_files,
-                "Skipped": skipped_files,
-                "Total Processing Time (seconds)": f"{processing_time:.2f}",
-            },
-        )
-        print_section_break()
 
     return 0
-
 
 if __name__ == "__main__":
     cli_args = parse_arguments()
@@ -749,14 +703,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         # Gracefully handle user interruptions
         print_error("🔥 Operation Interrupted: The script was stopped by the user.")
-        try:
-            if doc_generator:
-                await doc_generator.cleanup()  # Ensure cleanup is awaited
-        except Exception as cleanup_error:
-            print_error(f"Error during cleanup after interruption: {cleanup_error}")
-        finally:
-            if args.live_layout:
-                stop_live_layout()  # Stop the live layout properly
-        print_success("✅ Cleanup completed. Exiting.")
-        return 130  # Standard exit code for terminated by Ctrl+C
+        exit_code = 130  # Standard exit code for terminated by Ctrl+C
     sys.exit(exit_code)
