@@ -418,7 +418,7 @@ class DocumentationGenerator:
                 try:
                     if hasattr(self.ai_service, "client_session") and self.ai_service.client_session:
                         if not self.ai_service.client_session.closed:
-                            await self.ai_service.client_session.close()
+                            await self.ai_service.client_session.close()  # Ensure session is closed
                     await self.ai_service.close()
                 except Exception as e:
                     print_error(f"Error closing AI service: {e}")
@@ -577,7 +577,7 @@ async def main(args: argparse.Namespace) -> int:
             print_error(f"Error during cleanup: {cleanup_error}")
         finally:
             if args.live_layout:
-                stop_live_layout()
+                stop_live_layout()  # Stop live layout here
         print_section_break()
 
         # Display final token usage summary and other metrics only after initialization and processing
