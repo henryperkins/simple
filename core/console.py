@@ -20,22 +20,14 @@ def stop_live_layout() -> None:
 
 def format_error_output(error_message: str) -> str:
     """Format error messages for clean console output."""
-    lines = error_message.split("\n")
-    formatted_lines = []
-    indent = "  "
-
-    for line in lines:
-        # Remove excessive whitespace
-        line = " ".join(line.split())
-        if line:
-            formatted_lines.append(f"{indent}{line}")
-
+    lines = error_message.splitlines()
+    formatted_lines = [f"  {line.strip()}" for line in lines if line.strip()]
     return "\n".join(formatted_lines)
 
 
 def print_phase_header(title: str) -> None:
     """Print a section header with formatting."""
-    print(f"--- {title} ---")  # Use consistent formatting for section headers
+    print(f"--- {title} ---")
 
 
 def print_error(
@@ -45,18 +37,13 @@ def print_error(
 ) -> None:
     """Display formatted error messages."""
     print_section_break()
-    print(f"🔥 Error: {message}")  # Highlight errors with a flame emoji
+    print(f"🔥 Error: {message}")
     if details:
         for key, value in details.items():
             print(f"  {key}: {value}")
     if correlation_id:
         print(f"  Correlation ID: {correlation_id}")
-    print("Suggested Fix: Check the logs for more details or retry the operation.")
-    if details:
-        for key, value in details.items():
-            print(f"  {key}: {value}")
-    if correlation_id:
-        print(f"  Correlation ID: {correlation_id}")
+    print("  Suggested Fix: Check the logs for more details or retry the operation.")
     print_section_break()
 
 
@@ -65,7 +52,7 @@ def print_status(message: str, details: dict[str, Any] | None = None) -> None:
     print(f"Status: {message}")
     if details:
         for key, value in details.items():
-            if isinstance(value, dict):  # Handle nested dictionaries
+            if isinstance(value, dict):
                 print(f"  {key}:")
                 for sub_key, sub_value in value.items():
                     print(f"    {sub_key}: {sub_value}")
@@ -89,7 +76,7 @@ def display_metrics(metrics: dict[str, Any], title: str = "Metrics") -> None:
 
 def print_success(message: str, details: dict[str, Any] | None = None) -> None:
     """Display success messages."""
-    print(f"✅ Success: {message}")  # Highlight successes with a checkmark emoji
+    print(f"✅ Success: {message}")
     if details:
         for key, value in details.items():
             print(f"  {key}: {value}")
@@ -101,7 +88,7 @@ def print_info(message: str, details: Any = None) -> None:
     if isinstance(details, dict):
         for key, value in details.items():
             print(f"  {key}: {value}")
-    elif details is not None:
+    elif details:
         print(format_error_output(str(details)))
 
 
@@ -142,12 +129,13 @@ def display_code_snippet(
 
 def print_warning(message: str) -> None:
     """Print a warning message."""
-    print(f"⚠️ Warning: {message}")  # Highlight warnings with a warning emoji
+    print(f"⚠️ Warning: {message}")
 
 
 def print_debug(message: str) -> None:
     """Print a debug message."""
-    print(f"Debug: {message}")
+    if logger.isEnabledFor(logging.DEBUG):
+        print(f"Debug: {message}")
 
 
 def display_metrics_report(metrics: dict[str, Any]) -> None:
@@ -211,4 +199,4 @@ def display_progress_summary(summary: dict[str, Any]) -> None:
 
 def print_section_break() -> None:
     """Print a visual section break."""
-    print("-" * 60)
+    print("-" * 40)
