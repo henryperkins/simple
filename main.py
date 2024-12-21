@@ -290,27 +290,30 @@ class DocumentationGenerator:
 
             # Consolidate metrics display
             print_info("Aggregated Metrics Summary:")
-            display_metrics(
-                {
-                    "Total Files": total_files,
-                    "Successfully Processed": processed_files,
-                    "Skipped Files": skipped_files,
-                    "Total Lines of Code": metrics.get("total_lines_of_code", 0),
-                    "Maintainability Index": metrics.get("maintainability_index", 0),
-                    "Total Classes": len(
-                        metrics.get("current_metrics", {}).get("classes", [])
-                    ),
-                    "Total Functions": len(
-                        metrics.get("current_metrics", {}).get("functions", [])
-                    ),
-                    "Average Cyclomatic Complexity": metrics.get(
-                        "current_metrics", {}
-                    ).get("cyclomatic_complexity", 0),
-                    "Average Maintainability Index": metrics.get(
-                        "current_metrics", {}
-                    ).get("maintainability_index", 0.0),
-                }
-            )
+            if isinstance(metrics, dict):
+                display_metrics(
+                    {
+                        "Total Files": total_files,
+                        "Successfully Processed": processed_files,
+                        "Skipped Files": skipped_files,
+                        "Total Lines of Code": metrics.get("total_lines_of_code", 0),
+                        "Maintainability Index": metrics.get("maintainability_index", 0),
+                        "Total Classes": len(
+                            metrics.get("current_metrics", {}).get("classes", [])
+                        ),
+                        "Total Functions": len(
+                            metrics.get("current_metrics", {}).get("functions", [])
+                        ),
+                        "Average Cyclomatic Complexity": metrics.get(
+                            "current_metrics", {}
+                        ).get("cyclomatic_complexity", 0),
+                        "Average Maintainability Index": metrics.get(
+                            "current_metrics", {}
+                        ).get("maintainability_index", 0.0),
+                    }
+                )
+            else:
+                print_info("No metrics available to display.")
             print_section_break()
 
             success = True
