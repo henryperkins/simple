@@ -337,8 +337,8 @@ class DocumentationGenerator:
                 await self.system_monitor.stop()
         except Exception as cleanup_error:
             print_error(f"Error during cleanup after interruption: {cleanup_error}")
-            finally:
-                print_info("Cleanup completed after interruption.")
+        finally:
+            print_info("Cleanup completed after interruption.")
             return False
         finally:
             if 'progress' in locals():  # Ensure progress exists before stopping
