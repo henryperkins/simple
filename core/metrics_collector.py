@@ -2,23 +2,22 @@
 Metrics collection and storage module.
 """
 
-from typing import Any, Union
-from datetime import datetime
+import asyncio
 import json
 import os
 import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 
-from core.logger import LoggerSetup
-from core.types.base import MetricData
-import logging
 from core.console import (
+    display_metrics,
     print_error,
     print_info,
     print_status,
-    print_section_break,
-    display_metrics,
     print_warning,
 )
+from core.logger import LoggerSetup
+from core.types.base import MetricData
 from utils import get_logger
 
 class MetricsCollector:
@@ -70,25 +69,21 @@ class MetricsCollector:
 
             self.current_module_metrics[module_name] = metrics
 
-            print_section_break()
-            print_info(f"📊 Metrics Collected for Module: {module_name} 📊")
-            display_metrics(
-                {
-                    "Total Classes": current_metrics.get("total_classes", 0),
-                    "Total Functions": current_metrics.get("total_functions", 0),
-                    "Total Variables": len(metrics.variables),
-                    "Total Constants": len(getattr(metrics, "constants", [])),
-                    "Cyclomatic Complexity": current_metrics.get(
-                        "cyclomatic_complexity", 0
-                    ),
-                    "Maintainability Index": current_metrics.get(
-                        "maintainability_index", 0.0
-                    ),
-                    "Lines of Code": current_metrics.get("lines_of_code", 0),
-                },
-                title=f"📊 Metrics Collected for Module: {module_name} 📊",
-            )
-            print_section_break()
+            # Display metrics in console if verbose mode is enabled
+            if self.logger.isEnabledFor(logging.DEBUG):
+                print_info(f"📊 Metrics Collected for Module: {module_name} 📊")
+                display_metrics(
+                    {
+                        "Total Classes": current_metrics.get("total_classes", 0),
+                        "Total Functions": current_metrics.get("total_functions", 0),
+                        "Total Variables": len(metrics.variables),
+                        "Total Constants": len(getattr(metrics, "constants", [])),
+                        "Cyclomatic Complexity": current_metrics.get("cyclomatic_complexity", 0),
+                        "Maintainability Index": current_metrics.get("maintainability_index", 0.0),
+                        "Lines of Code": current_metrics.get("lines_of_code", 0),
+                    },
+                    title=f"📊 Metrics Collected for Module: {module_name} 📊",
+                )
 
             entry = {
                 "timestamp": datetime.now().isoformat(),
@@ -115,21 +110,19 @@ class MetricsCollector:
                 correlation_id=self.correlation_id,
             )
 
-    def update_scan_progress(
-        self, module_name: str, item_type: str, count: int = 0
-    ) -> None:
+    def update_scan_progress(self, module_name: str, item_type: str, count: int = 0) -> None:
         """Update the scan progress for functions or classes."""
         try:
             if module_name == "default_module":
                 return
 
-            if item_type == "function":
+            if item_type == 'function':
                 self.accumulated_functions = 0  # Initialize to 0
                 if self.current_module_metrics and self.current_module:
                     metrics = self.current_module_metrics[self.current_module]
                     metrics.total_functions = 0  # Initialize to 0
                     metrics.scanned_functions = 0  # Initialize to 0
-            elif item_type == "class":
+            elif item_type == 'class':
                 self.accumulated_classes = 0  # Initialize to 0
                 if self.current_module_metrics and self.current_module:
                     metrics = self.current_module_metrics[self.current_module]
@@ -165,7 +158,7 @@ class MetricsCollector:
                 f"Error converting metrics to dict: {e} with correlation ID: {self.correlation_id}"
             )
             return {}
-
+            
     async def track_operation(
         self,
         operation_type: str,
@@ -173,6 +166,7 @@ class MetricsCollector:
         duration: float,
         **kwargs: Any,
     ) -> None:
+        """Track an operation with its metrics."""
         metadata = kwargs.get("metadata")
         usage = kwargs.get("usage")
         """Track an operation with its metrics."""
@@ -191,22 +185,20 @@ class MetricsCollector:
 
             self.operations.append(operation)
 
-            status_details = {
-                "Success": "✅" if success else "❌",
-                "Duration": f"{duration:.2f}s",
-            }
-            if metadata:
-                status_details.update(metadata)
-
-            print_status(
-                f"🔄 Operation: {operation_type}",
-                status_details,
-            )
+            # Print status to the console if verbose mode is enabled
+            if self.logger.isEnabledFor(logging.DEBUG):
+                status_details = {"Success": "✅" if success else "❌", "Duration": f"{duration:.2f}s"}
+                if metadata:
+                    status_details.update(metadata)
+                print_status(
+                    f"🔄 Operation: {operation_type}",
+                    status_details,
+                )
 
         except Exception as e:
             print_error(
                 f"🔥 Error tracking operation '{operation_type}': {e}",
-                correlation_id=self.correlation_id,
+                correlation_id=self.correlation_id
             )
 
     async def close(self) -> None:
@@ -224,16 +216,12 @@ class MetricsCollector:
             if os.path.exists("metrics_history.json"):
                 with open("metrics_history.json", "r", encoding="utf-8") as f:
                     self.metrics_history = json.load(f)
-                self.logger.info(
-                    "Metrics history loaded successfully."
-                )  # Added info log
+                self.logger.info("Metrics history loaded successfully.")
         except Exception as e:
             self.logger.error(
                 f"Error loading metrics history: {str(e)} with correlation ID: {self.correlation_id}"
             )
-            print_warning(
-                "⚠️ Could not load previous metrics history."
-            )  # Added user warning
+            print_warning("⚠️ Could not load previous metrics history.")
             self.metrics_history = {}
 
     def _save_history(self) -> None:
@@ -241,15 +229,13 @@ class MetricsCollector:
         try:
             with open("metrics_history.json", "w", encoding="utf-8") as f:
                 json.dump(self.metrics_history, f, indent=2, default=str)
-            self.logger.info("Metrics history saved successfully.")  # Added info log
+            self.logger.info("Metrics history saved successfully.")
         except Exception as e:
             self.logger.error(
                 f"Error saving metrics history: {str(e)} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+                exc_info=True
             )
-            print_warning(
-                "⚠️ Could not save current metrics history."
-            )  # Added user warning
+            print_warning("⚠️ Could not save current metrics history.")
 
     def clear_history(self) -> None:
         """Clear all metrics history."""
@@ -269,40 +255,34 @@ class MetricsCollector:
         """Get metrics history for a specific module."""
         return self.metrics_history.get(module_name, [])
 
-    def collect_token_usage(
-        self, prompt_tokens: int, completion_tokens: int, cost: float, model: str
-    ) -> None:
+    def collect_token_usage(self, prompt_tokens: int, completion_tokens: int, cost: float, model: str) -> None:
         """Collect metrics specifically for token usage."""
         try:
-            self.operations.append(
-                {
-                    "timestamp": datetime.now().isoformat(),
-                    "operation_type": "token_usage",
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": prompt_tokens + completion_tokens,
-                    "total_cost": cost,
-                    "model": model,
-                    "correlation_id": self.correlation_id,
-                }
-            )
+            self.operations.append({
+                "timestamp": datetime.now().isoformat(),
+                "operation_type": "token_usage",
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
+                "total_cost": cost,
+                "model": model,
+                "correlation_id": self.correlation_id,
+            })
             self.logger.info(
                 f"Token usage collected: {prompt_tokens + completion_tokens} tokens, ${cost:.4f}.",
-                extra={"model": model, "correlation_id": self.correlation_id},
+                extra={"model": model, "correlation_id": self.correlation_id}
             )
 
             # Display token usage in verbose mode
-            if LoggerSetup.get_logger().isEnabledFor(logging.DEBUG):
+            if self.logger.isEnabledFor(logging.DEBUG):
                 print_info("📊 --- Token Usage Summary --- 📊")
-                display_metrics(
-                    {
-                        "Prompt Tokens": prompt_tokens,
-                        "Completion Tokens": completion_tokens,
-                        "Total Tokens": prompt_tokens + completion_tokens,
-                        "Estimated Cost": f"${cost:.2f}",
-                        "Model": model,
-                    }
-                )
+                display_metrics({
+                    "Prompt Tokens": prompt_tokens,
+                    "Completion Tokens": completion_tokens,
+                    "Total Tokens": prompt_tokens + completion_tokens,
+                    "Estimated Cost": f"${cost:.2f}",
+                    "Model": model,
+                })
         except Exception as e:
             self.logger.error(f"Error collecting token usage: {e}", exc_info=True)
 
@@ -314,9 +294,7 @@ class MetricsCollector:
             else:
                 self._increment_metric("validation_failure")
         except Exception as e:
-            self.logger.error(
-                f"Error collecting validation metrics: {e}", exc_info=True
-            )
+            self.logger.error(f"Error collecting validation metrics: {e}", exc_info=True)
 
     def _increment_metric(self, metric_name: str) -> None:
         """Increment a specific metric."""

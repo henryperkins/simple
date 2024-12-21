@@ -12,19 +12,16 @@ from core.types.docstring import DocstringData
 from core.exceptions import DocumentationError
 from utils import log_and_raise_error
 
-
 class FunctionDict(TypedDict, total=False):
     name: str
     metrics: MetricData
     args: list[dict[str, Any]]
     returns: dict[str, str]
 
-
 class ConstantDict(TypedDict, total=False):
     name: str
     type: str
     value: str
-
 
 class MarkdownGenerator:
     """Generates formatted markdown documentation."""
@@ -81,6 +78,62 @@ class MarkdownGenerator:
             formatted_cols.append(escaped)
 
         return f"| {' | '.join(formatted_cols)} |"
+    
+    def _format_dict_for_table(self, data: dict) -> str:
+        """Formats a dictionary for display in a table cell."""
+        formatted_parts = []
+        for key, value in data.items():
+            # Recursively format nested structures
+            if isinstance(value, dict):
+                formatted_value = self._format_dict_for_table(value)
+            elif isinstance(value, list):
+                formatted_value = self._format_list_for_table(value)
+            else:
+                formatted_value = self._escape_markdown(str(value))
+            formatted_parts.append(f"`{key}`: {formatted_value}")
+        return "<br>".join(formatted_parts)
+
+    def _format_list_for_table(self, data: list) -> str:
+        """Formats a list for display in a table cell."""
+        formatted_items = []
+        for item in data:
+            # Recursively format nested structures
+            if isinstance(item, dict):
+                formatted_item = self._format_dict_for_table(item)
+            elif isinstance(item, list):
+                formatted_item = self._format_list_for_table(item)
+            else:
+                formatted_item = self._escape_markdown(str(item))
+            formatted_items.append(formatted_item)
+        return "<br>".join(formatted_items)
+
+    def _format_table_value(self, value: str) -> str:
+        """Format a value for display in markdown tables."""
+        if not value or value == "N/A":
+            return "N/A"
+
+        try:
+            # Clean up value first
+            value = value.strip()
+            if value.startswith("constant"):
+                value = value.replace("constant", "").strip()
+
+            # Handle dictionary and list values
+            if isinstance(value, dict):
+                return self._format_dict_for_table(value)
+            elif isinstance(value, list):
+                return self._format_list_for_table(value)
+            elif value.startswith("{") or value.startswith("["):
+                # For long complex values, format as Python code block
+                if len(value) > 60:
+                    return f"```python\n{value}\n```"
+                return f"`{self._escape_markdown(value)}`"
+
+            # Format other values
+            return f"`{self._escape_markdown(value)}`"
+        except Exception as e:
+            self.logger.error(f"Error formatting table value: {e}, Value: {value}")
+            return "Error formatting value"
 
     def _generate_metadata_section(self, file_path: str, module_name: str) -> str:
         """Generate metadata section with file and module info."""
@@ -101,9 +154,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
         # Add class hierarchy information
         for cls_dict in classes:
-            cls = ExtractedClass.from_dict(
-                cls_dict
-            )  # Use from_dict to ensure proper conversion
+            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
             if cls.inheritance_chain:
                 tables.append(f"\n### Class Hierarchy for {cls.name}\n")
                 tables.append("```\n" + " -> ".join(cls.inheritance_chain) + "\n```\n")
@@ -143,9 +194,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         )
 
         for cls_dict in classes:
-            cls = ExtractedClass.from_dict(
-                cls_dict
-            )  # Use from_dict to ensure proper conversion
+            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
 
             # Ensure docstring_info is a DocstringData object
             if isinstance(cls.docstring_info, dict):
@@ -161,23 +210,17 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         tables.extend(
             [
                 "\n### Methods\n",
-                "| Class | Method | Parameters | Returns | Description |",
-                "|-------|--------|------------|---------|-------------|",
+                "| Class | Method | Parameters | Returns | Complexity | Description |",
+                "|-------|--------|------------|---------|------------|-------------|",
             ]
         )
 
         for cls_dict in classes:
-            cls = ExtractedClass.from_dict(
-                cls_dict
-            )  # Use from_dict to ensure proper conversion
+            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
 
             # Ensure methods are ExtractedFunction objects
             cls.methods = [
-                (
-                    ExtractedFunction.from_dict(method)
-                    if isinstance(method, dict)
-                    else method
-                )
+                ExtractedFunction.from_dict(method) if isinstance(method, dict) else method
                 for method in cls.methods
             ]
 
@@ -196,8 +239,11 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                     method.returns.get("type", "Any") if method.returns else "Any"
                 )
 
+                complexity = self._get_complexity(method.metrics)
+                warning = " ⚠️" if complexity > 10 else ""
+
                 tables.append(
-                    f"| `{cls.name}` | `{method.name}` | `{params_str}` | `{returns_str}` | {desc} |"
+                    f"| `{cls.name}` | `{method.name}` | `{params_str}` | `{returns_str}` | {complexity}{warning} | {desc} |"
                 )
 
         return "\n".join(tables)
@@ -210,8 +256,8 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         # Improve table formatting
         table_lines = [
             "## Functions\n",
-            "| Function | Parameters | Returns | Complexity Score* |",
-            "|----------|------------|---------|------------------|",
+            "| Function | Parameters | Returns | Complexity Score* | Description |",
+            "|----------|------------|---------|------------------|-------------|",
         ]
 
         for func in functions:
@@ -240,8 +286,13 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             params_str = self._escape_markdown(params_str)
             returns_str = self._escape_markdown(returns_str)
 
+            # Get description from docstring if available
+            docstring_info = func.get("docstring_info")
+            description = docstring_info.get("summary", "No description") if docstring_info else "No description"
+            description = self._escape_markdown(description.replace("\n", " ").strip())
+
             table_lines.append(
-                f"| `{func_name}` | `{params_str}` | `{returns_str}` | {complexity}{warning} |"
+                f"| `{func_name}` | `{params_str}` | `{returns_str}` | {complexity}{warning} | {description} |"
             )
 
         return "\n".join(table_lines)
@@ -259,7 +310,10 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - [Installation](#installation)
 - [Usage](#usage)
 - [Classes](#classes)
-  - [Methods](#methods)
+    - [Class Hierarchy](#class-hierarchy)
+    - [Implemented Interfaces](#implemented-interfaces)
+    - [Properties](#properties)
+    - [Methods](#methods)
 - [Functions](#functions)
 - [Constants & Variables](#constants--variables)
 - [Dependencies](#dependencies)
@@ -297,42 +351,56 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
     def _infer_module_type(self, file_path: str) -> str:
         """Infer the type of module from its name and location."""
-        path = file_path.lower()
-        if "test" in path:
+        path_str = file_path.lower()
+        if "test" in path_str or "tests" in path_str:
             return "testing"
-        elif "api" in path:
+        elif "api" in path_str or "endpoint" in path_str:
             return "API"
-        elif "utils" in path or "helpers" in path:
+        elif "util" in path_str or "helper" in path_str:
             return "utility"
-        elif "models" in path:
+        elif "model" in path_str:
             return "data model"
-        elif "views" in path:  # pylint: disable=undefined-variable
+        elif "view" in path_str:
             return "view"
-        elif "controllers" in path:
+        elif "controller" in path_str:
             return "controller"
-        elif "services" in path:
+        elif "service" in path_str:
             return "service"
+        elif "config" in path_str:
+            return "configuration"
+        elif "db" in path_str or "database" in path_str:
+            return "database"
+        elif "middleware" in path_str:
+            return "middleware"
         return ""
 
     def _format_table_value(self, value: str) -> str:
         """Format a value for display in markdown tables."""
         if not value or value == "N/A":
             return "N/A"
+        
+        try:
+            # Clean up value first
+            value = value.strip()
+            if value.startswith("constant"):
+                value = value.replace("constant", "").strip()
 
-        # Clean up value first
-        value = value.strip()
-        if value.startswith("constant"):
-            value = value.replace("constant", "").strip()
+            # Handle dictionary and list values
+            if isinstance(value, dict):
+                return self._format_dict_for_table(value)
+            elif isinstance(value, list):
+                return self._format_list_for_table(value)
+            elif value.startswith("{") or value.startswith("["):
+                # For long complex values, format as Python code block
+                if len(value) > 60:
+                    return f"```python\n{value}\n```"
+                return f"`{self._escape_markdown(value)}`"
 
-        # Handle dictionary and list values
-        if value.startswith("{") or value.startswith("["):
-            # For long complex values, format as Python code block
-            if len(value) > 60:
-                return f"```python\n{value}\n```"
+            # Format other values
             return f"`{self._escape_markdown(value)}`"
-
-        # Format other values
-        return f"`{self._escape_markdown(value)}`"
+        except Exception as e:
+            self.logger.error(f"Error formatting table value: {e}, Value: {value}")
+            return "Error formatting value"
 
     def _generate_constants_table(self, constants: Sequence[ConstantDict]) -> str:
         """Generate the constants section with proper formatting."""

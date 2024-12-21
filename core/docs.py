@@ -15,7 +15,7 @@ from core.types.base import (
     ExtractedClass,
     ExtractedFunction,
     ProcessingResult,
-    ExtractionResult,
+    ExtractionResult
 )
 from core.types.docstring import DocstringData
 from core.exceptions import DocumentationError
@@ -23,14 +23,7 @@ from core.metrics_collector import MetricsCollector
 from core.extraction.code_extractor import CodeExtractor
 from core.response_parsing import ResponseParsingService
 from utils import ensure_directory, read_file_safe_async, log_and_raise_error
-from core.console import (
-    print_phase_header,
-    print_status,
-    print_success,
-    print_error,
-    print_warning,
-)
-
+from core.console import print_phase_header, print_status, print_success, print_error, print_warning
 
 class DocumentationOrchestrator:
     """
@@ -69,7 +62,8 @@ class DocumentationOrchestrator:
         self.response_parser = response_parser
 
     async def generate_documentation(
-        self, context: DocumentationContext
+        self,
+        context: DocumentationContext
     ) -> tuple[str, str]:
         """
         Generates documentation for the given context.
@@ -99,13 +93,11 @@ class DocumentationOrchestrator:
                     f"Source code is empty after stripping whitespace for {context.module_path}"
                 )
 
-            module_name = (
-                context.metadata.get("module_name", "") if context.metadata else ""
-            )
+            module_name = context.metadata.get("module_name", "") if context.metadata else ""
 
             # Step 2: Extract code elements
-            extraction_result: ExtractionResult = (
-                await self.code_extractor.extract_code(original_source)
+            extraction_result: ExtractionResult = await self.code_extractor.extract_code(
+                original_source
             )
 
             # Detect and log circular dependencies
@@ -114,32 +106,25 @@ class DocumentationOrchestrator:
                 f"Dependencies before circular dependency check: {dependencies}",
                 extra={"correlation_id": self.correlation_id},
             )
-            circular_dependencies = self.code_extractor.context.dependency_analyzer.detect_circular_dependencies(
-                dependencies
-            )
+            circular_dependencies = self.code_extractor.context.dependency_analyzer.detect_circular_dependencies(dependencies)
             if circular_dependencies:
                 print_warning("Circular Dependencies Detected:")
                 for dep in circular_dependencies:
                     print(f"  - {dep[0]} -> {dep[1]}")
 
             if not extraction_result.source_code:
-                raise DocumentationError(
-                    "Extraction failed - no valid code elements found."
-                )
+                raise DocumentationError("Extraction failed - no valid code elements found.")
 
             # Convert extracted elements to proper types
             classes = self._convert_to_extracted_classes(extraction_result.classes)
-            functions = self._convert_to_extracted_functions(
-                extraction_result.functions
-            )
+            functions = self._convert_to_extracted_functions(extraction_result.functions)
 
             # Step 3: Create AI prompt
 
             # Step 4: Generate documentation with AI service
-            processing_result: ProcessingResult = (
-                await self.ai_service.generate_documentation(
-                    context, schema=None  # Add schema if needed
-                )
+            processing_result: ProcessingResult = await self.ai_service.generate_documentation(
+                context,
+                schema=None  # Add schema if needed
             )
 
             # Step 5: Parse AI response
@@ -175,19 +160,22 @@ class DocumentationOrchestrator:
             await self._track_generation_metrics(
                 start_time=start_time,
                 module_name=module_name,
-                processing_result=processing_result,
+                processing_result=processing_result
             )
 
             return original_source, markdown_doc
 
         except Exception as error:
             await self._handle_generation_error(
-                error=error, start_time=start_time, module_name=module_name
+                error=error,
+                start_time=start_time,
+                module_name=module_name
             )
             raise
 
     def _convert_to_extracted_classes(
-        self, classes: list[dict[str, Any]]
+        self,
+        classes: list[dict[str, Any]]
     ) -> list[ExtractedClass]:
         """Convert raw class data to ExtractedClass instances."""
         converted_classes = []
@@ -195,24 +183,23 @@ class DocumentationOrchestrator:
             if isinstance(cls_data, ExtractedClass):
                 converted_classes.append(cls_data)
             else:
-                converted_classes.append(
-                    ExtractedClass(
-                        name=cls_data.get("name", "Unknown"),
-                        lineno=cls_data.get("lineno", 0),
-                        source=cls_data.get("source"),
-                        docstring=cls_data.get("docstring"),
-                        methods=self._convert_to_extracted_functions(
-                            cls_data.get("methods", [])
-                        ),
-                        bases=cls_data.get("bases", []),
-                        metrics=cls_data.get("metrics", {}),
-                        inheritance_chain=cls_data.get("inheritance_chain", []),
-                    )
-                )
+                converted_classes.append(ExtractedClass(
+                    name=cls_data.get("name", "Unknown"),
+                    lineno=cls_data.get("lineno", 0),
+                    source=cls_data.get("source"),
+                    docstring=cls_data.get("docstring"),
+                    methods=self._convert_to_extracted_functions(
+                        cls_data.get("methods", [])
+                    ),
+                    bases=cls_data.get("bases", []),
+                    metrics=cls_data.get("metrics", {}),
+                    inheritance_chain=cls_data.get("inheritance_chain", [])
+                ))
         return converted_classes
 
     def _convert_to_extracted_functions(
-        self, functions: list[dict[str, Any]]
+        self,
+        functions: list[dict[str, Any]]
     ) -> list[ExtractedFunction]:
         """Convert raw function data to ExtractedFunction instances."""
         converted_functions = []
@@ -220,17 +207,15 @@ class DocumentationOrchestrator:
             if isinstance(func_data, ExtractedFunction):
                 converted_functions.append(func_data)
             else:
-                converted_functions.append(
-                    ExtractedFunction(
-                        name=func_data.get("name", "Unknown"),
-                        lineno=func_data.get("lineno", 0),
-                        source=func_data.get("source"),
-                        docstring=func_data.get("docstring"),
-                        args=func_data.get("args", []),
-                        returns=func_data.get("returns", {}),
-                        metrics=func_data.get("metrics", {}),
-                    )
-                )
+                converted_functions.append(ExtractedFunction(
+                    name=func_data.get("name", "Unknown"),
+                    lineno=func_data.get("lineno", 0),
+                    source=func_data.get("source"),
+                    docstring=func_data.get("docstring"),
+                    args=func_data.get("args", []),
+                    returns=func_data.get("returns", {}),
+                    metrics=func_data.get("metrics", {}),
+                ))
         return converted_functions
 
     def _create_docstring_data(self, content: Dict[str, Any]) -> DocstringData:
@@ -248,7 +233,7 @@ class DocumentationOrchestrator:
         self,
         start_time: datetime,
         module_name: str,
-        processing_result: ProcessingResult,
+        processing_result: ProcessingResult
     ) -> None:
         """Track metrics for documentation generation."""
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -259,12 +244,15 @@ class DocumentationOrchestrator:
             metadata={
                 "module_name": module_name,
                 "processing_time": processing_time,
-                "token_usage": processing_result.usage,
-            },
+                "token_usage": processing_result.usage
+            }
         )
 
     async def _handle_generation_error(
-        self, error: Exception, start_time: datetime, module_name: str
+        self,
+        error: Exception,
+        start_time: datetime,
+        module_name: str
     ) -> None:
         """Handle errors during documentation generation."""
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -288,9 +276,7 @@ class DocumentationOrchestrator:
         try:
             # Validate file type
             if not file_path.suffix == ".py":
-                self.logger.warning(
-                    f"Skipping non-Python file: {file_path}", extra=log_extra
-                )
+                self.logger.warning(f"Skipping non-Python file: {file_path}", extra=log_extra)
                 return  # Early exit
 
             print_phase_header(f"Processing Module: {file_path}")
@@ -306,10 +292,7 @@ class DocumentationOrchestrator:
 
             # Prepare context for documentation generation
             module_name = file_path.stem
-            print_status(
-                f"Preparing context for: {module_name}",
-                details={"file_path": str(file_path)},
-            )
+            print_status(f"Preparing context for: {module_name}", details={"file_path": str(file_path)})
             context = DocumentationContext(
                 source_code=source_code,
                 module_path=file_path,

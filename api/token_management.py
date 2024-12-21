@@ -1,386 +1,366 @@
-"""Token management module for interacting with the OpenAI API."""
+"""
+Token Management Module
 
+Handles token counting, optimization, and management for Azure OpenAI API requests.
+Provides efficient token estimation and prompt optimization with caching.
+
+Version: 1.2.0
+Author: Development Team
+"""
+
+from dataclasses import dataclass
+from functools import lru_cache
+from typing import Dict, List, Optional, Tuple, Union
 import tiktoken
-import sentry_sdk
-from typing import Any, Tuple, Union, Optional
-import time
-import asyncio
 
-from core.config import AIConfig
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.types import TokenUsage
-from core.exceptions import ProcessingError
 from core.metrics_collector import MetricsCollector
-import json
-from core.console import (
-    print_section_break,
-    display_metrics,
-    print_success,
-    print_warning,
-    print_error,
-    print_info,
-)
-from utils import log_and_raise_error
 
+@dataclass
+class TokenUsage:
+    """Token usage statistics and cost calculation."""
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost: float
 
 class TokenManager:
-    """Manages token usage and cost estimation for Azure OpenAI API interactions."""
+    """
+    Manages token counting, optimization, and cost calculation for Azure OpenAI API requests.
+    Handles different models and their specific token limits and pricing.
+    """
 
-    def __init__(
-        self,
-        model: str,
-        config: Optional[AIConfig] = None,
-        correlation_id: Optional[str] = None,
-        metrics_collector: Optional["MetricsCollector"] = None,
-    ) -> None:
-        """Initialize TokenManager with Azure OpenAI configurations."""
+    # Token limits and pricing for different models
+    MODEL_LIMITS = {
+        "gpt-4": {
+            "max_tokens": 8192,
+            "cost_per_1k_prompt": 0.03,
+            "cost_per_1k_completion": 0.06
+        },
+        "gpt-4-32k": {
+            "max_tokens": 32768,
+            "cost_per_1k_prompt": 0.06,
+            "cost_per_1k_completion": 0.12
+        },
+        "gpt-3.5-turbo": {
+            "max_tokens": 4096,
+            "cost_per_1k_prompt": 0.0015,
+            "cost_per_1k_completion": 0.002
+        },
+        "gpt-3.5-turbo-16k": {
+            "max_tokens": 16384,
+            "cost_per_1k_prompt": 0.003,
+            "cost_per_1k_completion": 0.004
+        },
+        "gpt-4o-2024-08-06": {
+            "max_tokens": 8192,
+            "cost_per_1k_prompt": 2.50,
+            "cost_per_1k_completion": 10.00,
+            "cached_cost_per_1k_prompt": 1.25,
+            "cached_cost_per_1k_completion": 5.00
+        }
+    }
+
+    # Mapping of deployment names to model names
+    DEPLOYMENT_TO_MODEL = {
+        "gpt-4o": "gpt-4o-2024-08-06",
+        "gpt-4": "gpt-4",
+        "gpt-4-32k": "gpt-4-32k",
+        "gpt-35-turbo": "gpt-3.5-turbo",
+        "gpt-35-turbo-16k": "gpt-3.5-turbo-16k"
+    }
+
+    def __init__(self, model: str = "gpt-4", deployment_name: Optional[str] = None, correlation_id: Optional[str] = None):
+        """
+        Initialize TokenManager with model configuration.
+
+        Args:
+            model (str): The model name to use for token management
+            deployment_name (Optional[str]): The deployment name, which may differ from model name
+            correlation_id (Optional[str]): Correlation ID for logging
+        """
+        # Map deployment name to model if provided
+        if deployment_name:
+            self.model = self.DEPLOYMENT_TO_MODEL.get(deployment_name, model)
+        else:
+            self.model = model
+
+        self.deployment_name = deployment_name
+
+        # Initialize tokenizer
+        try:
+            self.encoding = tiktoken.encoding_for_model(self.model)
+        except KeyError:
+            # Fallback to cl100k_base for newer models
+            self.encoding = tiktoken.get_encoding("cl100k_base")
+            
+        # Get model configuration
+        self.model_config = self.MODEL_LIMITS.get(self.model, self.MODEL_LIMITS["gpt-4"])
         self.logger = CorrelationLoggerAdapter(
-            logger=LoggerSetup.get_logger(__name__),
-            extra={"correlation_id": correlation_id},
+            LoggerSetup.get_logger(__name__),
+            extra={"correlation_id": correlation_id}
         )
-        self.config = config if config else AIConfig.from_env()
-        self.model = model
-        self.deployment_id = self.config.deployment
-        self.metrics_collector = metrics_collector or MetricsCollector(
-            correlation_id=correlation_id
-        )
-        self.correlation_id = correlation_id
+        self.logger.debug(f"TokenManager initialized for model: {self.model}, deployment: {deployment_name}")
 
-        # Initialize token tracking
+        # Initialize token usage tracking
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
 
-        # Initialize encoding
-        try:
-            base_model = self._get_base_model_name(self.model)
-            self.encoding = tiktoken.encoding_for_model(base_model)
-        except KeyError as e:
-            self.logger.warning(
-                f"Model {self.model} not found. Using cl100k_base encoding.",
-                exc_info=True,
-                extra={"model": self.model},
-            )
-            self.encoding = tiktoken.get_encoding("cl100k_base")
-            sentry_sdk.capture_exception(e)
+        # Initialize metrics collector
+        self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
 
-        self.model_config = self.config.model_limits.get(
-            self.model, self.config.model_limits["gpt-4o-2024-11-20"]
-        )
-
-        self._initialize_rate_limiting()
-
-    def _get_base_model_name(self, model_name: str) -> str:
+    @lru_cache(maxsize=128)
+    def estimate_tokens(self, text: str) -> int:
         """
-        Get the base model name from a deployment model name.
-        """
-        model_mappings = {
-            "gpt-4o": "gpt-4o-2024-11-20",  # New primary model
-            "gpt-35-turbo": "gpt-3.5-turbo",  # Keep fallback options
-            "gpt-3.5-turbo": "gpt-3.5-turbo",
-        }
+        Estimate token count for text with caching.
 
-        for key, value in model_mappings.items():
-            if key in model_name.lower():
-                return value
+        Args:
+            text (str): Text to estimate tokens for
 
-        print_warning(
-            f"⚠️ Unknown model '{model_name}', defaulting to gpt-4o for token encoding."
-        )
-        self.logger.warning(
-            f"Unknown model {model_name}, defaulting to gpt-4o for token encoding",
-            extra={"model": model_name},
-        )
-        return "gpt-4o-2024-11-20"  # Default to our primary model
-
-    def _estimate_tokens(self, text: str) -> int:
-        """
-        Estimate the number of tokens in a text string.
+        Returns:
+            int: Estimated token count
         """
         try:
-            return len(self.encoding.encode(text))
+            tokens = len(self.encoding.encode(text))
+            self.logger.debug(f"Estimated {tokens} tokens for text")
+            return tokens
         except Exception as e:
-            log_and_raise_error(
-                self.logger,
-                e,
-                ProcessingError,
-                "Error estimating tokens",
-                self.correlation_id,
-                text_snippet=text[:50],
-            )
-            return len(text) // 4
+            self.logger.error(f"Error estimating tokens: {e}")
+            return 0
 
-    def _calculate_usage(
-        self, prompt_tokens: int, completion_tokens: int
-    ) -> TokenUsage:
-        """Calculate token usage statistics."""
+    def optimize_prompt(
+        self,
+        text: str,
+        max_tokens: Optional[int] = None,
+        preserve_sections: Optional[List[str]] = None
+    ) -> Tuple[str, TokenUsage]:
+        """
+        Optimize prompt to fit within token limits while preserving essential sections.
+
+        Args:
+            text (str): Text to optimize
+            max_tokens (Optional[int]): Maximum allowed tokens
+            preserve_sections (Optional[List[str]]): Sections that must be preserved
+
+        Returns:
+            Tuple[str, TokenUsage]: Optimized text and token usage statistics
+        """
+        max_tokens = max_tokens or int(self.model_config["max_tokens"] // 2)
+        current_tokens = self.estimate_tokens(text)
+
+        if current_tokens <= max_tokens:
+            self.logger.info("Prompt is within token limits, no optimization needed.")
+            return text, self._calculate_usage(current_tokens, 0)
+
+        try:
+            # Split into sections and preserve important parts
+            sections = text.split('\n\n')
+            preserved = []
+            optional = []
+
+            for section in sections:
+                if preserve_sections and any(p in section for p in preserve_sections):
+                    preserved.append(section)
+                else:
+                    optional.append(section)
+
+            # Start with preserved content
+            optimized = '\n\n'.join(preserved)
+            remaining_tokens = max_tokens - self.estimate_tokens(optimized)
+
+            # Add optional sections that fit
+            for section in optional:
+                section_tokens = self.estimate_tokens(section)
+                if remaining_tokens >= section_tokens:
+                    optimized = f"{optimized}\n\n{section}"
+                    remaining_tokens -= section_tokens
+
+            final_tokens = self.estimate_tokens(optimized)
+            self.logger.info(f"Prompt optimized from {current_tokens} to {final_tokens} tokens")
+            return optimized, self._calculate_usage(final_tokens, 0)
+
+        except Exception as e:
+            self.logger.error(f"Error optimizing prompt: {e}")
+            return text, self._calculate_usage(current_tokens, 0)
+
+    def _calculate_usage(self, prompt_tokens: int, completion_tokens: int, cached: bool = False) -> TokenUsage:
+        """
+        Calculate token usage and cost.
+
+        Args:
+            prompt_tokens (int): Number of tokens in the prompt
+            completion_tokens (int): Number of tokens in the completion
+            cached (bool): Whether to use cached pricing rates
+
+        Returns:
+            TokenUsage: Token usage statistics including cost
+        """
         total_tokens = prompt_tokens + completion_tokens
-        cost_per_token = self.model_config.cost_per_token
-        estimated_cost = total_tokens * cost_per_token
+        
+        if cached:
+            prompt_cost = (prompt_tokens / 1000) * self.model_config["cached_cost_per_1k_prompt"]
+            completion_cost = (completion_tokens / 1000) * self.model_config["cached_cost_per_1k_completion"]
+        else:
+            prompt_cost = (prompt_tokens / 1000) * self.model_config["cost_per_1k_prompt"]
+            completion_cost = (completion_tokens / 1000) * self.model_config["cost_per_1k_completion"]
 
         return TokenUsage(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
-            estimated_cost=estimated_cost,
+            estimated_cost=prompt_cost + completion_cost
         )
 
-    def _initialize_rate_limiting(self) -> None:
-        """Initialize rate limiting for Azure OpenAI API."""
-        self.requests_this_minute = 0
-        self.minute_start = time.time()
-        self.rate_limit_per_minute = getattr(
-            self.model_config, "rate_limit", 10
-        )  # Default to 10 if not specified
-        self.request_times: list[float] = []
-
-    async def validate_and_prepare_request(
-        self,
-        prompt: str,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        truncation_strategy: Optional[str] = None,
-        tool_choice: Optional[str] = None,
-        parallel_tool_calls: Optional[bool] = None,
-        response_format: Optional[str] = None,
-        stream_options: Optional[dict] = None,
-    ) -> dict[str, Any]:
-        """
-        Validate and prepare a request with token management.
-
-        Args:
-            prompt: The input prompt for the API.
-            max_tokens: The maximum tokens for the completion.
-            temperature: Sampling temperature for the model.
-            truncation_strategy: Strategy for truncating input if needed.
-            tool_choice: Tool selection for function calling.
-            parallel_tool_calls: Whether to allow parallel tool calls.
-            response_format: Expected response format.
-            stream_options: Options for streaming responses.
-
-        Returns:
-            A dictionary of request parameters for the API call.
-
-        Raises:
-            ValueError: If the total token count exceeds the model's limit.
-        """
-        try:
-            # Check rate limits
-            await self._check_rate_limits()
-
-            # Estimate tokens
-            prompt_tokens = self._estimate_tokens(prompt)
-            available_tokens = self.model_config.max_tokens - prompt_tokens
-
-            if prompt_tokens > self.model_config.max_tokens:
-                error_msg = f"Prompt exceeds Azure OpenAI token limit: {prompt_tokens} > {self.model_config.max_tokens}"
-                log_and_raise_error(
-                    self.logger,
-                    ValueError(error_msg),
-                    ValueError,
-                    error_msg,
-                    self.correlation_id,
-                )
-
-            # Add a buffer to the token limit
-            buffer = 100  # Reserve 100 tokens as a safety buffer
-            available_tokens = self.model_config.max_tokens - prompt_tokens - buffer
-
-            if available_tokens < 0:
-                error_msg = f"Prompt exceeds Azure OpenAI token limit even with buffer: {prompt_tokens} > {self.model_config.max_tokens - buffer}"
-                log_and_raise_error(
-                    self.logger,
-                    ValueError(error_msg),
-                    ValueError,
-                    error_msg,
-                    self.correlation_id,
-                )
-
-            # Ensure available tokens do not exceed the model's completion token limit
-            max_completion_limit = (
-                self.model_config.chunk_size
-            )  # Use the model's chunk_size as the completion token limit
-            available_tokens = min(available_tokens, max_completion_limit)
-
-            # Dynamically calculate max completion tokens
-            max_completion_limit = (
-                self.model_config.chunk_size
-            )  # Use the model's chunk_size as the completion token limit
-            max_completion = min(available_tokens, max_completion_limit)
-
-            if prompt_tokens + max_completion > self.model_config.max_tokens:
-                error_msg = f"Total token count exceeds limit: {prompt_tokens + max_completion} > {self.model_config.max_tokens}"
-                log_and_raise_error(
-                    self.logger,
-                    ValueError(error_msg),
-                    ValueError,
-                    error_msg,
-                    self.correlation_id,
-                )
-
-            # Log token usage details for debugging
-            self.logger.info(
-                f"Token usage details - Prompt Tokens: {prompt_tokens}, "
-                f"Available Tokens: {available_tokens}, Max Completion Tokens: {max_completion}",
-                extra={"correlation_id": self.correlation_id},
-            )
-
-            # Prepare request parameters
-            request_params = {
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": max_completion,
-                "temperature": temperature or self.config.temperature,
-            }
-
-            # Track token usage
-            self.track_request(prompt_tokens, max_completion)
-
-            # Log the input sent to the AI
-            self.logger.debug(
-                "Prepared Request Parameters", extra={"request_params": request_params}
-            )
-            return request_params
-
-        except Exception as e:
-            log_and_raise_error(
-                self.logger,
-                e,
-                ProcessingError,
-                "Failed to prepare request",
-                self.correlation_id,
-                prompt_snippet=prompt[:50],
-            )
-            return {}
-
-    async def _check_rate_limits(self) -> None:
-        """Check and enforce Azure OpenAI rate limits."""
-        current_time = time.time()
-
-        # Clean old request times
-        self.request_times = [t for t in self.request_times if current_time - t < 60]
-
-        # Check rate limit
-        if len(self.request_times) >= self.rate_limit_per_minute:
-            wait_time = 60 - (current_time - self.request_times[0])
-            if wait_time > 0:
-                print_warning(
-                    f"⏳ Rate limit reached. Waiting {wait_time:.2f} seconds before the next request."
-                )
-                self.logger.warning(
-                    f"Rate limit reached. Waiting {wait_time:.2f} seconds.",
-                    extra={"wait_time": wait_time},
-                )
-                await asyncio.sleep(wait_time)
-
-        self.request_times.append(current_time)
-
-    def get_usage_stats(self) -> dict[str, Union[int, float]]:
-        """
-        Get current token usage statistics.
-
-        Returns:
-            A dictionary containing token usage statistics.
-        """
-        usage = self._calculate_usage(
-            self.total_prompt_tokens, self.total_completion_tokens
-        )
-        stats = {
-            "Total Prompt Tokens": self.total_prompt_tokens,
-            "Total Completion Tokens": self.total_completion_tokens,
-            "Total Tokens": self.total_prompt_tokens + self.total_completion_tokens,
-            "Estimated Cost": f"${usage.estimated_cost:.4f}",
-        }
-        print_section_break()
-        print_info("📊 Current Token Usage Statistics:")
-        display_metrics(stats)
-        print_section_break()
-        self.logger.info("Token usage stats retrieved: %s", json.dumps(stats, indent=2))
-        return stats
-
-    def track_request(self, prompt_tokens: int, max_completion: int) -> None:
+    def track_request(self, request_tokens: int, response_tokens: int) -> None:
         """
         Track token usage for a request.
 
         Args:
-            prompt_tokens: Number of tokens in the prompt.
-            max_completion: Number of tokens allocated for the completion.
+            request_tokens (int): Number of tokens in the request
+            response_tokens (int): Number of tokens in the response
         """
-        self.total_prompt_tokens += prompt_tokens
-        self.total_completion_tokens += max_completion
-        print_success(
-            f"✅ Tracked Tokens - Prompt: {prompt_tokens}, Completion: {max_completion} (Total: {prompt_tokens + max_completion})"
-        )
-        self.logger.info(
-            f"Tracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}",
-            extra={
-                "correlation_id": self.correlation_id,
-                "prompt_tokens": prompt_tokens,
-                "max_completion": max_completion,
-            },
-        )
+        self.total_prompt_tokens += request_tokens
+        self.total_completion_tokens += response_tokens
+        self.logger.debug(f"Tracked request: {request_tokens} prompt tokens, {response_tokens} completion tokens")
 
-    async def process_completion(self, completion: Any) -> Tuple[str, dict[str, Any]]:
+        # Track token usage in MetricsCollector
+        self.metrics_collector.track_token_usage(request_tokens, response_tokens)
+
+    def get_usage_stats(self) -> Dict[str, Union[int, float]]:
         """
-        Process completion response and track token usage.
-
-        Args:
-            completion: The raw completion response from the API.
+        Get current token usage statistics.
 
         Returns:
-            A tuple containing the processed content and usage statistics.
-
-        Raises:
-            ProcessingError: If there is an error processing the completion response.
+            Dict[str, int]: Total prompt and completion tokens.
         """
-        try:
-            message = completion["choices"][0]["message"]
+        return {
+            "total_prompt_tokens": int(self.total_prompt_tokens),
+            "total_completion_tokens": int(self.total_completion_tokens)
+        }
 
-            if "function_call" in message:
-                content = message["function_call"]["arguments"]
-            else:
-                content = message.get("content", "")
+    def validate_request(
+        self,
+        prompt: str,
+        max_completion_tokens: Optional[int] = None
+    ) -> Tuple[bool, Dict[str, Union[int, float]], str]:
+        """
+        Validate if request is within token limits.
 
-            usage = completion.get("usage", {})
+        Args:
+            prompt (str): The prompt to validate
+            max_completion_tokens (Optional[int]): Maximum allowed completion tokens
 
-            if usage:
-                self.total_completion_tokens += usage.get("completion_tokens", 0)
-                self.total_prompt_tokens += usage.get("prompt_tokens", 0)
+        Returns:
+            Tuple[bool, Dict[str, Union[int, float]], str]: 
+                - Boolean indicating if request is valid
+                - Dictionary of token metrics
+                - Status message
+        """
+        prompt_tokens = self.estimate_tokens(prompt)
+        max_completion = max_completion_tokens or (self.model_config["max_tokens"] - prompt_tokens)
+        total_tokens = prompt_tokens + max_completion
 
-                if self.metrics_collector:
-                    await self.metrics_collector.track_operation(
-                        "token_usage",
-                        success=True,
-                        duration=0,
-                        usage=self._calculate_usage(
-                            usage.get("prompt_tokens", 0),
-                            usage.get("completion_tokens", 0),
-                        ).__dict__,
-                        metadata={
-                            "model": self.model,
-                            "deployment_id": self.deployment_id,
-                            "correlation_id": self.correlation_id,
-                        },
-                    )
+        metrics = {
+            "prompt_tokens": prompt_tokens,
+            "max_completion_tokens": max_completion,
+            "total_tokens": total_tokens,
+            "model_limit": self.model_config["max_tokens"]
+        }
 
-                self.logger.info(
-                    f"Processed completion - Content Length: {len(content)}, Usage: {usage}",
-                    extra={
-                        "correlation_id": self.correlation_id,
-                        "content_length": len(content),
-                        "usage": usage,
-                    },
-                )
-                print_success(
-                    f"✅ Completion processed successfully - Usage: {usage}"
-                )  # More informative success
+        if total_tokens > self.model_config["max_tokens"]:
+            message = f"Total tokens ({total_tokens}) exceeds model limit ({self.model_config['max_tokens']})"
+            self.logger.error(message)
+            return False, metrics, message
 
-            return content, usage if isinstance(usage, dict) else {}
+        self.logger.info("Request validated successfully")
+        return True, metrics, "Request validated successfully"
 
-        except Exception as e:
-            log_and_raise_error(
-                self.logger,
-                e,
-                ProcessingError,
-                "Failed to process completion",
-                self.correlation_id,
-            )
-            raise
+    def get_model_limits(self) -> Dict[str, int]:
+        """
+        Get the token limits for the current model.
+
+        Returns:
+            Dict[str, int]: Dictionary containing model token limits
+        """
+        return {
+            "max_tokens": self.model_config["max_tokens"],
+            "max_prompt_tokens": self.model_config["max_tokens"] // 2,  # Conservative estimate
+            "max_completion_tokens": self.model_config["max_tokens"] // 2
+        }
+
+    def get_token_costs(self, cached: bool = False) -> Dict[str, float]:
+        """
+        Get the token costs for the current model.
+
+        Args:
+            cached (bool): Whether to return cached pricing rates
+
+        Returns:
+            Dict[str, float]: Dictionary containing token costs per 1k tokens
+        """
+        if cached and "cached_cost_per_1k_prompt" in self.model_config:
+            return {
+                "prompt_cost_per_1k": self.model_config["cached_cost_per_1k_prompt"],
+                "completion_cost_per_1k": self.model_config["cached_cost_per_1k_completion"]
+            }
+        return {
+            "prompt_cost_per_1k": self.model_config["cost_per_1k_prompt"],
+            "completion_cost_per_1k": self.model_config["cost_per_1k_completion"]
+        }
+
+    def estimate_cost(
+        self,
+        prompt_tokens: int,
+        estimated_completion_tokens: int,
+        cached: bool = False
+    ) -> float:
+        """
+        Estimate the cost for a request.
+
+        Args:
+            prompt_tokens (int): Number of tokens in the prompt
+            estimated_completion_tokens (int): Estimated number of completion tokens
+            cached (bool): Whether to use cached pricing rates
+
+        Returns:
+            float: Estimated cost in currency units
+        """
+        usage = self._calculate_usage(prompt_tokens, estimated_completion_tokens, cached)
+        return usage.estimated_cost
+
+    def reset_cache(self) -> None:
+        """Reset the token estimation cache."""
+        self.estimate_tokens.cache_clear()
+        self.logger.debug("Token estimation cache cleared")
+
+
+# Module-level functions for backward compatibility
+@lru_cache(maxsize=128)
+def estimate_tokens(text: str, model: str = "gpt-4") -> int:
+    """
+    Legacy function for token estimation.
+
+    Args:
+        text (str): Text to estimate tokens for
+        model (str): Model name to use for estimation
+
+    Returns:
+        int: Estimated token count
+    """
+    manager = TokenManager(model)
+    return manager.estimate_tokens(text)
+
+def optimize_prompt(text: str, max_tokens: int = 4000) -> str:
+    """
+    Legacy function for prompt optimization.
+
+    Args:
+        text (str): Text to optimize
+        max_tokens (int): Maximum allowed tokens
+
+    Returns:
+        str: Optimized text
+    """
+    manager = TokenManager()
+    optimized_text, _ = manager.optimize_prompt(text, max_tokens)
+    return optimized_text

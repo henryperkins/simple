@@ -12,7 +12,13 @@ from openai import AzureOpenAI
 from api.token_management import TokenManager
 from core.config import AIConfig
 from core.docstring_processor import DocstringProcessor
-from core.exceptions import APICallError, DocumentationError, InvalidRequestError
+from core.exceptions import (
+    APICallError,
+    DocumentationError,
+    InvalidRequestError,
+    ResponseParsingError,
+    ConfigurationError
+)
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics_collector import MetricsCollector
 from core.prompt_manager import PromptManager
@@ -20,7 +26,6 @@ from core.types.base import ProcessingResult, DocumentationContext
 from utils import log_and_raise_error
 
 T = TypeVar("T")  # For generic type hints
-
 
 class AIService:
     """
@@ -46,9 +51,12 @@ class AIService:
 
         self.config: AIConfig = config or Injector.get("config")().ai
         self.correlation_id = correlation_id
-        self.logger = LoggerSetup.get_logger(
-            f"{__name__}.{self.__class__.__name__}",
-            correlation_id=self.correlation_id,
+        self.logger = CorrelationLoggerAdapter(
+            LoggerSetup.get_logger(
+                f"{__name__}.{self.__class__.__name__}",
+                correlation_id=self.correlation_id,
+            ),
+            extra={"correlation_id": self.correlation_id},
         )
 
         # Initialize the Azure OpenAI client
@@ -83,6 +91,11 @@ class AIService:
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")  # type: ignore
         self.metrics_collector = MetricsCollector(correlation_id=correlation_id)
+        self.token_manager = TokenManager(
+            model=self.config.model,
+            deployment_name=self.config.azure_deployment_name,
+            correlation_id=correlation_id,
+        )
 
         # Initialize docstring processor
         try:
@@ -98,11 +111,6 @@ class AIService:
             self.docstring_processor = DocstringProcessor()
             Injector.register("docstring_processor", self.docstring_processor)
 
-        self.token_manager = TokenManager(
-            model=self.config.model,
-            config=self.config,
-            correlation_id=correlation_id,
-        )
         self.semaphore = asyncio.Semaphore(10)  # Default concurrency limit
         self._client: Optional[ClientSession] = None
 
@@ -131,6 +139,15 @@ class AIService:
             headers["x-correlation-id"] = self.correlation_id
 
         try:
+            # Estimate and validate tokens
+            prompt_tokens = self.token_manager.estimate_tokens(prompt)
+            is_valid, metrics, message = self.token_manager.validate_request(
+                prompt, self.config.max_tokens
+            )
+            if not is_valid:
+                self.logger.warning(f"Request validation failed: {message}")
+                raise APICallError(message)
+
             request_params = await self.token_manager.validate_and_prepare_request(
                 prompt,
                 max_tokens=self.config.max_tokens,
@@ -185,6 +202,12 @@ class AIService:
                         url, headers, request_params, attempt, log_extra
                     )
                     if response_json:
+                        # Track token usage
+                        prompt_tokens = response_json.get('usage', {}).get('prompt_tokens', 0)
+                        completion_tokens = response_json.get('usage', {}).get('completion_tokens', 0)
+                        self.token_manager.track_request(prompt_tokens, completion_tokens)
+                        self.logger.debug(f"Tracked token usage: prompt={prompt_tokens}, completion={completion_tokens}")
+
                         # Save raw response to a debug file
                         debug_file = (
                             Path("logs") / f"api_response_{self.correlation_id}.json"
@@ -446,7 +469,7 @@ class AIService:
                 metadata={
                     "module": context.metadata.get("module_name", ""),
                     "file": str(context.module_path),
-                    "tokens": response.get("usage", {}),  # Corrected selectedText error
+                    "tokens": response.get("usage", {}),
                     "validation_success": parsed_response.validation_success,
                     "errors": (
                         parsed_response.errors
@@ -459,7 +482,7 @@ class AIService:
             # Return ProcessingResult with validation status and any errors
             return ProcessingResult(
                 content=parsed_response.content,  # Use the content even if validation failed
-                usage=response.get("usage", {}),  # Corrected selectedText error
+                usage=response.get("usage", {}),
                 metrics={"processing_time": processing_time},
                 validation_status=parsed_response.validation_success,
                 validation_errors=parsed_response.errors or [],

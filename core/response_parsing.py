@@ -13,7 +13,6 @@ from core.console import print_info, print_error
 from core.exceptions import ResponseParsingError
 from utils import log_and_raise_error
 
-
 class ResponseParsingService:
     """
     Unified service for formatting, validating, and parsing AI responses.
@@ -80,7 +79,7 @@ class ResponseParsingService:
             "failed_parses": 0,
             "validation_failures": 0,
         }
-
+        
         self.schema_usage_metrics = {
             "function": 0,
             "docstring": 0,
@@ -104,7 +103,7 @@ class ResponseParsingService:
                 "Schema validation failed",
                 self.correlation_id,
                 instance=instance,
-                schema=schema,
+                schema=schema
             )
             return False, [str(e)]
         except Exception as e:
@@ -115,7 +114,7 @@ class ResponseParsingService:
                 "Unexpected error during schema validation",
                 self.correlation_id,
                 instance=instance,
-                schema=schema,
+                schema=schema
             )
             return False, [f"Unexpected validation error: {str(e)}"]
 
@@ -194,23 +193,17 @@ class ResponseParsingService:
 
         return fallback_response
 
-    def _select_schema(
-        self, content: Dict[str, Any]
-    ) -> Tuple[Optional[Dict[str, Any]], str]:
+    def _select_schema(self, content: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         Dynamically select the appropriate schema based on the content.
         """
         if "parameters" in content or "examples" in content:
-            self.logger.info(
-                "Selected schema: function_tools_schema (priority: parameters/examples)"
-            )
+            self.logger.info("Selected schema: function_tools_schema (priority: parameters/examples)")
             self.schema_usage_metrics["function"] += 1
             return self.function_schema, "function"
 
         if "summary" in content and "description" in content:
-            self.logger.info(
-                "Selected schema: docstring_schema (priority: summary/description)"
-            )
+            self.logger.info("Selected schema: docstring_schema (priority: summary/description)")
             self.schema_usage_metrics["docstring"] += 1
             return self.docstring_schema, "docstring"
 
@@ -231,7 +224,9 @@ class ResponseParsingService:
         self.logger.info(f"Validating content against schema type: {schema_type}")
         return self._validate_schema(content, schema)
 
-    def _ensure_required_fields(self, content: Any) -> Dict[str, Any]:
+    def _ensure_required_fields(
+        self, content: Any
+    ) -> Dict[str, Any]:
         """Ensure required fields exist in docstring-like content."""
         if isinstance(content, str):
             return {
@@ -401,10 +396,8 @@ class ResponseParsingService:
 
             # Attempt to remove markdown code block if present
             if content.startswith("```json") and content.endswith("```"):
-                content = content[len("```json") : -len("```")].strip()
-                self.logger.debug(
-                    "Detected and removed markdown code block from content."
-                )
+                content = content[len("```json"):-len("```")].strip()
+                self.logger.debug("Detected and removed markdown code block from content.")
 
             try:
                 parsed_content = json.loads(content)
@@ -466,7 +459,7 @@ class ResponseParsingService:
                 errors=[f"Unexpected error: {e}"],
                 metadata=metadata,
             )
-
+        
     async def parse_response(
         self,
         response: Dict[str, Any],
@@ -487,7 +480,7 @@ class ResponseParsingService:
                 return validated_response
 
             content = response["choices"][0]["message"].get("content", "")
-
+            
             return await self._parse_message_content(
                 content=content,
                 expected_format=expected_format,
