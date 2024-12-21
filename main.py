@@ -330,9 +330,13 @@ class DocumentationGenerator:
             print_error("Operation was cancelled or interrupted.")
             if hasattr(self, "ai_service") and self.ai_service:
                 await self.ai_service.close()
+            if hasattr(self, "metrics_collector") and self.metrics_collector:
+                await self.metrics_collector.close()
+            if hasattr(self, "system_monitor") and self.system_monitor:
+                await self.system_monitor.stop()
             return False
         finally:
-            processing_time = asyncio.get_event_loop().time() - start_time
+            processing_time = asyncio.get_running_loop().time() - start_time
             await self.metrics_collector.track_operation(
                 operation_type="repository_processing",
                 success=success,
@@ -407,8 +411,9 @@ class DocumentationGenerator:
                 f"Starting cleanup process with correlation ID: {self.correlation_id}"
             )
             if hasattr(self, "ai_service") and self.ai_service:
-                if hasattr(self.ai_service, "client_session"):
-                    await self.ai_service.client_session.close()
+                if hasattr(self.ai_service, "client_session") and self.ai_service.client_session:
+                    if not self.ai_service.client_session.closed:
+                        await self.ai_service.client_session.close()
                 await self.ai_service.close()  # Ensure AIService.close() is called
             if hasattr(self, "metrics_collector") and self.metrics_collector:
                 await self.metrics_collector.close()
@@ -549,11 +554,15 @@ async def main(args: argparse.Namespace) -> int:
             await doc_generator.cleanup()
         return 1
     finally:
-        if doc_generator:
-            print_info("Info: Starting cleanup process...")
-            await doc_generator.cleanup()
-        if args.live_layout:
-            stop_live_layout()
+        try:
+            if doc_generator:
+                print_info("Info: Starting cleanup process...")
+                await doc_generator.cleanup()
+        except Exception as cleanup_error:
+            print_error(f"Error during cleanup: {cleanup_error}")
+        finally:
+            if args.live_layout:
+                stop_live_layout()
         print_section_break()
 
         # Display final token usage summary and other metrics only after initialization and processing
@@ -710,5 +719,9 @@ if __name__ == "__main__":
     # Add verbosity level for detailed logs
     if config.app.verbose:
         print_debug(f"Command-line arguments: {cli_args}")
-    exit_code = asyncio.run(main(cli_args))
+    try:
+        exit_code = asyncio.run(main(cli_args))
+    except KeyboardInterrupt:
+        print_error("🔥 Operation Interrupted: The script was stopped by the user.")
+        exit_code = 130  # Standard exit code for terminated by Ctrl+C
     sys.exit(exit_code)
