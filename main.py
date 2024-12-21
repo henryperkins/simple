@@ -523,20 +523,17 @@ async def main(args: argparse.Namespace) -> int:
             "Dependency injection error",
         )
         return 1
-    except (asyncio.CancelledError, KeyboardInterrupt):
+    except KeyboardInterrupt:
         # Gracefully handle user interruptions
         print_error("🔥 Operation Interrupted: The script was stopped by the user.")
         if doc_generator:
             await doc_generator.cleanup()
         print_success("✅ Cleanup completed. Exiting.")
-        if doc_generator:
-            await doc_generator.cleanup()  # Ensure cleanup is called
         return 1
     finally:
         if doc_generator:
             print_info("Info: Starting cleanup process...")
             await doc_generator.cleanup()
-            print_success("✅ Cleanup completed successfully.")
         if args.live_layout:
             stop_live_layout()
         print_section_break()
