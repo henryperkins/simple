@@ -145,43 +145,143 @@ class TokenManager:
         Returns:
             Tuple[str, TokenUsage]: Optimized text and token usage statistics
         """
-        max_tokens = max_tokens or int(self.model_config["max_tokens"] // 2)
+        max_tokens = max_tokens or int(self.model_config["max_tokens"] * 0.75)
         current_tokens = self.estimate_tokens(text)
 
         if current_tokens <= max_tokens:
-            self.logger.info("Prompt is within token limits, no optimization needed.")
             return text, self._calculate_usage(current_tokens, 0)
 
         try:
-            # Split into sections and preserve important parts
+            # Split into sections
             sections = text.split('\n\n')
             preserved = []
             optional = []
-
+            
+            # Identify critical sections to preserve
+            preserve_sections = preserve_sections or ["summary", "description", "parameters", "returns", "raises"]
+            
+            # First pass: Keep only the most critical sections with length limits
             for section in sections:
-                if preserve_sections and any(p in section for p in preserve_sections):
+                if any(p in section.lower() for p in preserve_sections):
+                    # Limit size of preserved sections
+                    if self.estimate_tokens(section) > (max_tokens // 4):
+                        section = self._trim_section(section, max_tokens // 4)
                     preserved.append(section)
-                else:
+                elif len(optional) < 5:  # Limit number of optional sections
                     optional.append(section)
 
             # Start with preserved content
             optimized = '\n\n'.join(preserved)
-            remaining_tokens = max_tokens - self.estimate_tokens(optimized)
-
-            # Add optional sections that fit
-            for section in optional:
-                section_tokens = self.estimate_tokens(section)
-                if remaining_tokens >= section_tokens:
-                    optimized = f"{optimized}\n\n{section}"
-                    remaining_tokens -= section_tokens
+            tokens_so_far = self.estimate_tokens(optimized)
+            
+            if tokens_so_far > max_tokens:
+                # If still too large, aggressively trim each section
+                preserved_sections = []
+                max_section_tokens = max_tokens // len(preserved)
+                for section in preserved:
+                    trimmed_section = self._trim_section(section, max_section_tokens)
+                    if self.estimate_tokens(trimmed_section) <= max_section_tokens:
+                        preserved_sections.append(trimmed_section)
+                optimized = '\n\n'.join(preserved_sections)
+            else:
+                # Add optional sections that fit, with size limits
+                remaining_tokens = max_tokens - tokens_so_far
+                max_optional_tokens = remaining_tokens // 2
+                for section in optional:
+                    if self.estimate_tokens(section) > max_optional_tokens:
+                        section = self._trim_section(section, max_optional_tokens)
+                    section_tokens = self.estimate_tokens(section)
+                    if section_tokens <= remaining_tokens:
+                        optimized = f"{optimized}\n\n{section}"
+                        remaining_tokens -= section_tokens
 
             final_tokens = self.estimate_tokens(optimized)
-            self.logger.info(f"Prompt optimized from {current_tokens} to {final_tokens} tokens")
+            if final_tokens > max_tokens:
+                # Final failsafe: emergency truncation
+                optimized = self._emergency_truncate(optimized, max_tokens)
+                final_tokens = self.estimate_tokens(optimized)
+
             return optimized, self._calculate_usage(final_tokens, 0)
 
         except Exception as e:
             self.logger.error(f"Error optimizing prompt: {e}")
-            return text, self._calculate_usage(current_tokens, 0)
+            return self._emergency_truncate(text, max_tokens), self._calculate_usage(max_tokens, 0)
+
+    def _trim_section(self, section: str, max_tokens: int) -> str:
+        """Trim a section to fit within token limit while preserving meaning."""
+        current_tokens = self.estimate_tokens(section)
+        if current_tokens <= max_tokens:
+            return section
+
+        # Split into lines and preserve important parts
+        lines = section.split('\n')
+        if len(lines) <= 2:  # Very short section
+            return section[:int(len(section) * (max_tokens / current_tokens))]
+
+        # Keep first and last lines if possible
+        result = [lines[0]]
+        remaining_tokens = max_tokens - self.estimate_tokens(lines[0]) - self.estimate_tokens(lines[-1])
+        
+        # Add middle lines that fit
+        for line in lines[1:-1]:
+            line_tokens = self.estimate_tokens(line)
+            if line_tokens <= remaining_tokens:
+                result.append(line)
+                remaining_tokens -= line_tokens
+        
+        result.append(lines[-1])
+        return '\n'.join(result)
+
+    def _emergency_truncate(self, text: str, max_tokens: int) -> str:
+        """Emergency truncation when other methods fail."""
+        tokens = self.estimate_tokens(text)
+        if tokens <= max_tokens:
+            return text
+
+        try:
+            # Try to preserve important sections by keeping first 40% and last 20%
+            total_chars = len(text)
+            front_chars = int(total_chars * 0.4)
+            back_chars = int(total_chars * 0.2)
+            
+            truncated = text[:front_chars] + "\n...\n" + text[-back_chars:]
+            
+            while self.estimate_tokens(truncated) > max_tokens and len(truncated) > 100:
+                front_chars = int(front_chars * 0.8)  # Reduce by 20% each time
+                back_chars = int(back_chars * 0.8)
+                truncated = text[:front_chars] + "\n...\n" + text[-back_chars:]
+            
+            return truncated
+
+        except Exception:
+            # If all else fails, do simple truncation
+            ratio = max_tokens / tokens
+            char_estimate = int(len(text) * ratio)
+            return text[:char_estimate] + "..."
+
+    def _truncate_to_token_limit(self, text: str, max_tokens: int) -> str:
+        """Truncate text to fit within token limit while trying to preserve meaning."""
+        if self.estimate_tokens(text) <= max_tokens:
+            return text
+
+        sections = text.split('\n\n')
+        result = []
+        current_tokens = 0
+
+        # Always include first section
+        result.append(sections[0])
+        current_tokens = self.estimate_tokens(sections[0])
+
+        # Try to add complete sections
+        for section in sections[1:]:
+            section_tokens = self.estimate_tokens(section)
+            if current_tokens + section_tokens <= max_tokens:
+                result.append(section)
+                current_tokens += section_tokens
+            else:
+                break
+
+        return '\n\n'.join(result)
 
     def _calculate_usage(self, prompt_tokens: int, completion_tokens: int, cached: bool = False) -> TokenUsage:
         """

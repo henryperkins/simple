@@ -120,9 +120,8 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
 
         token_manager = TokenManager(
             model=config.ai.model,
-            config=config.ai,
-            correlation_id=correlation_id,
-            metrics_collector=metrics_collector,
+            deployment_name=config.ai.deployment,
+            correlation_id=correlation_id
         )
         Injector.register("token_manager", token_manager)
         logger.debug("Registered 'token_manager'.")

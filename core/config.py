@@ -160,7 +160,7 @@ class AIConfig:
             config = AIConfig(
                 api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
                 endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
-                deployment=get_env_var("AZURE_OPENAI_DEPLOYMENT", required=True),
+deployment=get_env_var("AZURE_DEPLOYMENT_NAME", required=True),
                 model=get_env_var(
                     "AZURE_OPENAI_MODEL",
                     "gpt-4o",

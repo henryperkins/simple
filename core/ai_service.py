@@ -139,35 +139,46 @@ class AIService:
             headers["x-correlation-id"] = self.correlation_id
 
         try:
-            # Estimate and validate tokens
+            # Estimate and validate tokens with aggressive optimization
             prompt_tokens = self.token_manager.estimate_tokens(prompt)
+            max_allowed_tokens = int(self.config.max_tokens * 0.75)  # Use 75% of limit for safety
+            
             is_valid, metrics, message = self.token_manager.validate_request(
-                prompt, self.config.max_tokens
+                prompt, max_allowed_tokens
             )
+            
             if not is_valid:
-                self.logger.warning(f"Request validation failed: {message}")
-                raise APICallError(message)
+                self.logger.warning(
+                    f"Initial request validation failed: {message}. Attempting optimization..."
+                )
+                # Try aggressive optimization
+                optimized_prompt, usage = self.token_manager.optimize_prompt(
+                    prompt,
+                    max_tokens=max_allowed_tokens,
+                    preserve_sections=["summary", "description", "parameters", "returns"]
+                )
+                prompt = optimized_prompt
+                prompt_tokens = usage.prompt_tokens
+                
+                # Validate again after optimization
+                is_valid, metrics, message = self.token_manager.validate_request(
+                    prompt, max_allowed_tokens
+                )
+                if not is_valid:
+                    self.logger.warning("Still above token limit after optimization. Force truncating.")
+                    prompt = prompt[: int(len(prompt) * 0.6)]
+                    prompt_tokens = self.token_manager.estimate_tokens(prompt)
+                    # Return truncated prompt instead of raising error
+                    self.logger.warning(f"Using truncated prompt (tokens={prompt_tokens}).")
+                    request_params["messages"][0]["content"] = prompt
 
-            request_params = await self.token_manager.validate_and_prepare_request(
-                prompt,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
-                truncation_strategy=(
-                    str(self.config.truncation_strategy)
-                    if self.config.truncation_strategy
-                    else None
-                ),
-                tool_choice=(
-                    str(self.config.tool_choice) if self.config.tool_choice else None
-                ),
-                parallel_tool_calls=self.config.parallel_tool_calls,
-                response_format=(
-                    str(self.config.response_format)
-                    if self.config.response_format
-                    else None
-                ),
-                stream_options=self.config.stream_options,
-            )
+            # Prepare request parameters with optimized prompt
+            request_params = {
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": self.config.max_tokens - prompt_tokens,
+                "temperature": self.config.temperature,
+            }
+
         except ValueError as e:
             log_and_raise_error(
                 self.logger,
@@ -333,7 +344,7 @@ class AIService:
                             "2. The deployment is active and fully provisioned.\n"
                             "3. The API key and endpoint are correct.\n"
                             "4. If the deployment was recently created, wait a few minutes and try again.\n"
-                            "5. Ensure the deployment name is set correctly in the AZURE_OPENAI_DEPLOYMENT environment variable.",
+"5. Ensure the deployment name is set correctly in the AZURE_DEPLOYMENT_NAME environment variable.",
                             extra={
                                 "azure_api_base": self.config.azure_api_base,
                                 "azure_deployment_name": self.config.azure_deployment_name,
@@ -391,16 +402,7 @@ class AIService:
     async def generate_documentation(
         self, context: DocumentationContext, schema: Optional[Dict[str, Any]] = None
     ) -> ProcessingResult:
-        """
-        Generate documentation for the provided source code context.
-
-        Args:
-            context: A DocumentationContext object containing source code and metadata.
-            schema: Optional function schema to influence the AI's response format.
-
-        Returns:
-            ProcessingResult with parsed and validated documentation content.
-        """
+        """Generate documentation for the provided source code context."""
         start_time = time.time()
         log_extra = {
             "correlation_id": self.correlation_id,
@@ -426,8 +428,51 @@ class AIService:
             if not prompt:
                 raise DocumentationError("Generated prompt is empty")
 
+            # First try to optimize the prompt before validation
+            optimized_prompt, usage = self.token_manager.optimize_prompt(
+                prompt,
+                max_tokens=int(self.config.max_tokens * 0.75),  # Use 75% of limit
+                preserve_sections=["summary", "description", "parameters", "returns"]
+            )
+            prompt = optimized_prompt
+            prompt_tokens = usage.prompt_tokens
+
+            # Validate token count
+            is_valid, metrics, message = self.token_manager.validate_request(
+                prompt, 
+                max_completion_tokens=self.config.max_completion_tokens
+            )
+            
+            if not is_valid:
+                self.logger.warning(f"Token validation failed: {message}")
+                # Try more aggressive optimization with lower token limit
+                optimized_prompt, usage = self.token_manager.optimize_prompt(
+                    prompt,
+                    max_tokens=int(self.config.max_tokens * 0.5),  # Use 50% of limit for more aggressive optimization
+                    preserve_sections=["summary", "description"]  # Keep only essential sections
+                )
+                prompt = optimized_prompt
+                prompt_tokens = usage.prompt_tokens
+                
+                # Final validation
+                is_valid, metrics, message = self.token_manager.validate_request(
+                    prompt, self.config.max_completion_tokens
+                )
+                if not is_valid:
+                    self.logger.warning("Unable to reduce token usage sufficiently; returning partial documentation.")
+                    # Instead of raising DocumentationError, return a minimal response
+                    return ProcessingResult(
+                        content="Partial documentation due to token limit.",
+                        usage={},
+                        metrics={},
+                        validation_status=False,
+                        validation_errors=["Token limit exceeded; partial documentation returned."],
+                        schema_errors=[],
+                    )
+
             self.logger.info(
-                "Rendered prompt", extra={**log_extra, "prompt_length": len(prompt)}
+                "Rendered prompt", 
+                extra={**log_extra, "prompt_length": len(prompt), "prompt_tokens": prompt_tokens}
             )
 
             # Add function calling instructions if schema is provided
@@ -445,22 +490,18 @@ class AIService:
                 log_extra=log_extra,
             )
 
-            # Log the raw response before validation
-            # Extract and log relevant fields from the response
+            # Parse response, track metrics, etc.
             summary = (
                 response.get("choices", [{}])[0]
                 .get("message", {})
                 .get("content", "")[:100]
             )
+            
             self.logger.info(f"AI Response Summary: {summary}", extra=log_extra)
-            self.logger.debug(f"Raw AI response: {response}", extra=log_extra)
-
-            # Parse and validate response
             parsed_response = await self.response_parser.parse_response(
                 response, expected_format="docstring", validate_schema=True
             )
 
-            # Track metrics based on validation success
             processing_time = time.time() - start_time
             await self.metrics_collector.track_operation(
                 operation_type="documentation_generation",
@@ -471,17 +512,12 @@ class AIService:
                     "file": str(context.module_path),
                     "tokens": response.get("usage", {}),
                     "validation_success": parsed_response.validation_success,
-                    "errors": (
-                        parsed_response.errors
-                        if not parsed_response.validation_success
-                        else None
-                    ),
+                    "errors": parsed_response.errors if not parsed_response.validation_success else None,
                 },
             )
 
-            # Return ProcessingResult with validation status and any errors
             return ProcessingResult(
-                content=parsed_response.content,  # Use the content even if validation failed
+                content=parsed_response.content,
                 usage=response.get("usage", {}),
                 metrics={"processing_time": processing_time},
                 validation_status=parsed_response.validation_success,

@@ -2,12 +2,11 @@
 Metrics collection and storage module.
 """
 
-import asyncio
 import json
 import os
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Any, Union
 
 from core.console import (
     display_metrics,
@@ -16,9 +15,10 @@ from core.console import (
     print_status,
     print_warning,
 )
-from core.logger import LoggerSetup
 from core.types.base import MetricData
 from utils import get_logger
+import logging
+
 
 class MetricsCollector:
     """Collects and stores metrics data for code analysis."""
@@ -256,7 +256,6 @@ class MetricsCollector:
         return self.metrics_history.get(module_name, [])
 
     def collect_token_usage(self, prompt_tokens: int, completion_tokens: int, cost: float, model: str) -> None:
-        """Collect metrics specifically for token usage."""
         try:
             self.operations.append({
                 "timestamp": datetime.now().isoformat(),

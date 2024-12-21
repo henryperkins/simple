@@ -353,15 +353,20 @@ class PromptManager:
             }
         return metrics  # Return as-is if already a dict
 
+    # In core/prompt_manager.py
     async def _calculate_token_usage(self, prompt: str) -> TokenUsage:
         """Calculate token usage for the prompt."""
-        prompt_tokens = self.token_manager._estimate_tokens(prompt)
+        prompt_tokens = self.token_manager.estimate_tokens(prompt)
+        
+        # Get token costs from the model config
+        costs = self.token_manager.get_token_costs()
+        cost_per_token = costs["prompt_cost_per_1k"] / 1000  # Convert from per 1k tokens to per token
+        
         return TokenUsage(
             prompt_tokens=prompt_tokens,
             completion_tokens=0,  # Will be filled later
             total_tokens=prompt_tokens,
-            estimated_cost=self.token_manager.model_config.cost_per_token
-            * prompt_tokens,
+            estimated_cost=cost_per_token * prompt_tokens
         )
 
     async def _create_metrics(self, prompt: str, start_time: float) -> MetricData:
