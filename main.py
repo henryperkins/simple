@@ -280,14 +280,6 @@ class DocumentationGenerator:
                 raise
             finally:
                 progress.stop()
-                    else:
-                        print_error(
-                            f"Skipping empty or invalid source file: {file_path}"
-                        )
-                        skipped_files += 1
-                        progress.update(
-                            task, advance=1
-                        )  # Update progress even if skipped
 
             print_section_break()
             print_section_break()
