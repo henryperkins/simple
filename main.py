@@ -496,7 +496,7 @@ async def main(args: argparse.Namespace) -> int:
                     and op.get("success")
                 ]
             )
-            print_success(f"Repository documentation generated successfully: {success}")
+        print_success(f"Repository documentation generated successfully: {success}")
             print_info(f"Processed {processed_files} files.")
 
         if args.files:
