@@ -408,7 +408,7 @@ class DocumentationGenerator:
             print_error(f"Error cloning repository {repo_url}: {e}")
             return None  # Ensure None is returned on error
 
-    async def cleanup(self) -> None:
+    async def _cleanup_resources(self) -> None:
         """Cleanup resources used by the DocumentationGenerator."""
         try:
             print_info(
@@ -419,7 +419,7 @@ class DocumentationGenerator:
                     if hasattr(self.ai_service, "client_session") and self.ai_service.client_session:
                         if not self.ai_service.client_session.closed:
                             await self.ai_service.client_session.close()
-                    await self.ai_service.close()  # Ensure AIService.close() is called
+                    await self.ai_service.close()
                 except Exception as e:
                     print_error(f"Error closing AI service: {e}")
             if hasattr(self, "metrics_collector") and self.metrics_collector:
@@ -431,6 +431,10 @@ class DocumentationGenerator:
             )
         except (RuntimeError, ValueError, IOError) as cleanup_error:
             print_error(f"Error during cleanup: {cleanup_error}")
+
+    async def cleanup(self) -> None:
+        """Call the cleanup resources function."""
+        await self._cleanup_resources()
 
 
 def parse_arguments() -> argparse.Namespace:
