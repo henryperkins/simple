@@ -547,11 +547,9 @@ async def main(args: argparse.Namespace) -> int:
             # Calculate the sums, handling empty history safely
             total_classes_extracted = (
                 sum(
-                sum(
                     entry.get("total_classes", 0)
                     for module_metrics in metrics.get("history", {}).values()
                     for entry in module_metrics
-                )
                 )
                 if metrics.get("history")
                 else 0
