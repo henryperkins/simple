@@ -196,7 +196,7 @@ class DocumentationGenerator:
         fix_indentation: bool = False,
     ) -> bool:
         """Process a repository for documentation."""
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         success = False
         local_path: Path | None = None
         total_files = 0
@@ -328,6 +328,8 @@ class DocumentationGenerator:
             )
         except (asyncio.CancelledError, KeyboardInterrupt):
             print_error("Operation was cancelled or interrupted.")
+            if hasattr(self, "ai_service") and self.ai_service:
+                await self.ai_service.close()
             return False
         finally:
             processing_time = asyncio.get_event_loop().time() - start_time
@@ -405,6 +407,8 @@ class DocumentationGenerator:
                 f"Starting cleanup process with correlation ID: {self.correlation_id}"
             )
             if hasattr(self, "ai_service") and self.ai_service:
+                if hasattr(self.ai_service, "client_session"):
+                    await self.ai_service.client_session.close()
                 await self.ai_service.close()  # Ensure AIService.close() is called
             if hasattr(self, "metrics_collector") and self.metrics_collector:
                 await self.metrics_collector.close()
@@ -539,6 +543,11 @@ async def main(args: argparse.Namespace) -> int:
             stop_live_layout()
         print_success("✅ Cleanup completed. Exiting.")
         return 130  # Standard exit code for terminated by Ctrl+C
+    except asyncio.CancelledError:
+        print_error("🔥 Operation was cancelled.")
+        if doc_generator:
+            await doc_generator.cleanup()
+        return 1
     finally:
         if doc_generator:
             print_info("Info: Starting cleanup process...")
