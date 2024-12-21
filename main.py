@@ -320,6 +320,9 @@ class DocumentationGenerator:
         except KeyboardInterrupt:
             print_error("🔥 Operation interrupted during repository processing.")
             raise  # Re-raise the exception to allow higher-level handling
+        except KeyboardInterrupt:
+            print_error("🔥 Operation interrupted during repository processing.")
+            raise  # Re-raise the exception to allow higher-level handling
         except (FileNotFoundError, ValueError, IOError) as repo_error:
             log_and_raise_error(
                 self.logger,
@@ -338,6 +341,8 @@ class DocumentationGenerator:
                 print_info("Cleanup completed after interruption.")
             return False
         finally:
+            if 'progress' in locals():  # Ensure progress exists before stopping
+                progress.stop()  # Stop the progress bar explicitly
             processing_time = asyncio.get_running_loop().time() - start_time
             await self.metrics_collector.track_operation(
                 operation_type="repository_processing",
@@ -574,8 +579,15 @@ async def main(args: argparse.Namespace) -> int:
         except Exception as cleanup_error:
             print_error(f"Error during cleanup: {cleanup_error}")
         finally:
-            if args.live_layout:
-                stop_live_layout()  # Stop live layout here
+            try:
+                if doc_generator:
+                    print_info("Info: Starting cleanup process...")
+                    await doc_generator.cleanup()
+            except Exception as cleanup_error:
+                print_error(f"Error during cleanup: {cleanup_error}")
+            finally:
+                if args.live_layout:
+                    stop_live_layout()  # Stop live layout here
         print_section_break()
 
         # Display final token usage summary and other metrics only after initialization and processing
@@ -735,6 +747,16 @@ if __name__ == "__main__":
     try:
         exit_code = asyncio.run(main(cli_args))
     except KeyboardInterrupt:
+        # Gracefully handle user interruptions
         print_error("🔥 Operation Interrupted: The script was stopped by the user.")
-        exit_code = 130  # Standard exit code for terminated by Ctrl+C
+        try:
+            if doc_generator:
+                await doc_generator.cleanup()  # Ensure cleanup is awaited
+        except Exception as cleanup_error:
+            print_error(f"Error during cleanup after interruption: {cleanup_error}")
+        finally:
+            if args.live_layout:
+                stop_live_layout()  # Stop the live layout properly
+        print_success("✅ Cleanup completed. Exiting.")
+        return 130  # Standard exit code for terminated by Ctrl+C
     sys.exit(exit_code)
