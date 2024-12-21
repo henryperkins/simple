@@ -246,33 +246,40 @@ class DocumentationGenerator:
             print_info("🔨 Starting Documentation of Python Files 🔨")
             print_section_break()
 
-            with Progress() as progress:
-                task = progress.add_task("Processing Files", total=total_files)
-                for i, file_path in enumerate(python_files, 1):
-                    # Use output_dir to create an output path that mirrors the structure of the cloned repo
-                    relative_path = file_path.relative_to(base_path)
-                    output_file = output_dir / relative_path.with_suffix(".md")
+            progress = Progress()
+            try:
+                with progress:
+                    task = progress.add_task("Processing Files", total=total_files)
+                    for i, file_path in enumerate(python_files, 1):
+                        # Use output_dir to create an output path that mirrors the structure of the cloned repo
+                        relative_path = file_path.relative_to(base_path)
+                        output_file = output_dir / relative_path.with_suffix(".md")
 
-                    # Ensure the output directory for this file exists
-                    output_file.parent.mkdir(parents=True, exist_ok=True)
+                        # Ensure the output directory for this file exists
+                        output_file.parent.mkdir(parents=True, exist_ok=True)
 
-                    source_code = await self.read_file_safe_async(file_path)
-                    if source_code and not source_code.isspace():
-                        print_status(
-                            f"Processing file ({i}/{total_files}): {file_path.name}"
-                        )
-                        if await self.process_file(
-                            file_path, output_file.parent, fix_indentation
-                        ):
-                            processed_files += 1
-                            progress.update(
-                                task, advance=1
-                            )  # Update progress after successful processing
-                        else:
-                            skipped_files += 1
-                            progress.update(
-                                task, advance=1
-                            )  # Update progress even if skipped
+                        source_code = await self.read_file_safe_async(file_path)
+                        if source_code and not source_code.isspace():
+                            print_status(
+                                f"Processing file ({i}/{total_files}): {file_path.name}"
+                            )
+                            if await self.process_file(
+                                file_path, output_file.parent, fix_indentation
+                            ):
+                                processed_files += 1
+                                progress.update(
+                                    task, advance=1
+                                )  # Update progress after successful processing
+                            else:
+                                skipped_files += 1
+                                progress.update(
+                                    task, advance=1
+                                )  # Update progress even if skipped
+            except KeyboardInterrupt:
+                print_error("🔥 Operation interrupted during file processing.")
+                raise
+            finally:
+                progress.stop()
                     else:
                         print_error(
                             f"Skipping empty or invalid source file: {file_path}"
@@ -327,13 +334,18 @@ class DocumentationGenerator:
                 self.correlation_id,
             )
         except (asyncio.CancelledError, KeyboardInterrupt):
-            print_error("Operation was cancelled or interrupted.")
-            if hasattr(self, "ai_service") and self.ai_service:
-                await self.ai_service.close()
-            if hasattr(self, "metrics_collector") and self.metrics_collector:
-                await self.metrics_collector.close()
-            if hasattr(self, "system_monitor") and self.system_monitor:
-                await self.system_monitor.stop()
+            print_error("🔥 Operation was cancelled or interrupted.")
+            try:
+                if hasattr(self, "ai_service") and self.ai_service:
+                    await self.ai_service.close()
+                if hasattr(self, "metrics_collector") and self.metrics_collector:
+                    await self.metrics_collector.close()
+                if hasattr(self, "system_monitor") and self.system_monitor:
+                    await self.system_monitor.stop()
+            except Exception as cleanup_error:
+                print_error(f"Error during cleanup after interruption: {cleanup_error}")
+            finally:
+                print_info("Cleanup completed after interruption.")
             return False
         finally:
             processing_time = asyncio.get_running_loop().time() - start_time
@@ -411,10 +423,13 @@ class DocumentationGenerator:
                 f"Starting cleanup process with correlation ID: {self.correlation_id}"
             )
             if hasattr(self, "ai_service") and self.ai_service:
-                if hasattr(self.ai_service, "client_session") and self.ai_service.client_session:
-                    if not self.ai_service.client_session.closed:
-                        await self.ai_service.client_session.close()
-                await self.ai_service.close()  # Ensure AIService.close() is called
+                try:
+                    if hasattr(self.ai_service, "client_session") and self.ai_service.client_session:
+                        if not self.ai_service.client_session.closed:
+                            await self.ai_service.client_session.close()
+                    await self.ai_service.close()  # Ensure AIService.close() is called
+                except Exception as e:
+                    print_error(f"Error closing AI service: {e}")
             if hasattr(self, "metrics_collector") and self.metrics_collector:
                 await self.metrics_collector.close()
             if hasattr(self, "system_monitor") and self.system_monitor:
@@ -542,10 +557,14 @@ async def main(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         # Gracefully handle user interruptions
         print_error("🔥 Operation Interrupted: The script was stopped by the user.")
-        if doc_generator:
-            await doc_generator.cleanup()
-        if args.live_layout:
-            stop_live_layout()
+        try:
+            if doc_generator:
+                await doc_generator.cleanup()
+        except Exception as cleanup_error:
+            print_error(f"Error during cleanup after interruption: {cleanup_error}")
+        finally:
+            if args.live_layout:
+                stop_live_layout()
         print_success("✅ Cleanup completed. Exiting.")
         return 130  # Standard exit code for terminated by Ctrl+C
     except asyncio.CancelledError:
