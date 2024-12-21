@@ -1,15 +1,10 @@
-"""
-Main module for running the AI documentation generation process.
-"""
-
-# Standard library imports
 import argparse
 import ast
 import asyncio
 import sys
 import uuid
 from pathlib import Path
-from rich.progress import Progress  # Added for progress tracking
+from rich.progress import Progress
 from typing import Any
 
 # Third party imports
@@ -27,16 +22,19 @@ from core.console import (
     print_status,
     display_metrics,
     print_phase_header,
-    print_debug,  # Added for verbosity levels
+    print_debug,
 )
 from core.dependency_injection import Injector, setup_dependencies
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.logger import LoggerSetup
 from core.monitoring import SystemMonitor
 from core.docs import DocumentationOrchestrator
 from core.docstring_processor import DocstringProcessor
-from core.exceptions import ConfigurationError
-from utils import RepositoryManager  # Removed direct import of read_file_safe_async
-
+from core.exceptions import ConfigurationError, DocumentationError
+from utils import (
+    RepositoryManager,
+    fetch_dependency,
+    log_and_raise_error,
+)  # Updated imports
 
 # Configure logging
 logger = LoggerSetup.get_logger(__name__)
@@ -70,20 +68,24 @@ class DocumentationGenerator:
         Args:
             config: Configuration object to use for initialization.
         """
-        self.logger = Injector.get("logger")
+        self.logger = fetch_dependency("logger")
         self.config = config
-        self.correlation_id = Injector.get("correlation_id")
-        self.metrics_collector = Injector.get("metrics_collector")
+        self.correlation_id = fetch_dependency("correlation_id")
+        self.metrics_collector = fetch_dependency("metrics_collector")
         self.system_monitor = SystemMonitor(
-            token_manager=Injector.get("token_manager"),
+            token_manager=fetch_dependency("token_manager"),
             metrics_collector=self.metrics_collector,
             correlation_id=self.correlation_id,
         )
         self.repo_manager: RepositoryManager | None = None
-        self.doc_orchestrator: DocumentationOrchestrator = Injector.get("doc_orchestrator")
-        self.docstring_processor: DocstringProcessor = Injector.get("docstring_processor")
-        self.ai_service: Any = Injector.get("ai_service")
-        self.read_file_safe_async = Injector.get("read_file_safe_async")
+        self.doc_orchestrator: DocumentationOrchestrator = fetch_dependency(
+            "doc_orchestrator"
+        )
+        self.docstring_processor: DocstringProcessor = fetch_dependency(
+            "docstring_processor"
+        )
+        self.ai_service: Any = fetch_dependency("ai_service")
+        self.read_file_safe_async = fetch_dependency("read_file_safe_async")
 
     async def initialize(self) -> None:
         """Start systems that require asynchronous setup."""
@@ -97,9 +99,13 @@ class DocumentationGenerator:
                 f"All components initialized successfully with correlation ID: {self.correlation_id}"
             )
         except (RuntimeError, ValueError) as init_error:
-            await self.cleanup()
-            error_msg = f"Initialization failed: {init_error}"
-            raise ConfigurationError(error_msg) from init_error
+            log_and_raise_error(
+                self.logger,
+                init_error,
+                ConfigurationError,
+                "Initialization failed",
+                self.correlation_id,
+            )
 
     async def process_file(
         self, file_path: Path, output_path: Path, fix_indentation: bool = False
@@ -143,12 +149,18 @@ class DocumentationGenerator:
             # Generate documentation
             print_status(f"✍️ Generating documentation for: {file_path}")
             await self.doc_orchestrator.generate_module_documentation(
-                file_path, output_path.parent, source_code
+                file_path, output_path, source_code
             )
             print_success(f"✅ Successfully processed file: {file_path}")
             return True
         except Exception as e:
-            print_error(f"🔥 Error processing file {file_path}: {e}")
+log_and_raise_error(
+    self.logger,
+    e,
+    DocumentationError,
+    "Error processing file",
+    self.correlation_id,
+)
             return False
         finally:
             print_section_break()
@@ -156,9 +168,10 @@ class DocumentationGenerator:
     def _fix_indentation(self, source_code: str) -> str:
         """Fix inconsistent indentation using autopep8."""
         try:
-            return autopep8.fix_code(source_code)  # type: ignore
-        except ImportError:
-            print_info("autopep8 not installed. Skipping indentation fix.")
+            return autopep8.fix_code(source_code)
+        except Exception as e:
+            print_info(f"Error fixing indentation with autopep8: {e}")
+            print_info("Skipping indentation fix.")
             return source_code
 
     def analyze_syntax(self, source_code: str, file_path: Path) -> bool:
@@ -167,9 +180,12 @@ class DocumentationGenerator:
             ast.parse(source_code)
             return True
         except SyntaxError as e:
-            print_error(
-                f"Syntax error in {file_path}: {e}",
-                correlation_id=self.correlation_id,
+            log_and_raise_error(
+                self.logger,
+                e,
+                DocumentationError,
+                f"Syntax error in {file_path}",
+                self.correlation_id,
             )
             return False
 
@@ -189,7 +205,9 @@ class DocumentationGenerator:
 
         try:
             print_section_break()
-            print_info(f"🚀 Starting Documentation Generation for Repository: {repo_path} 🚀")
+            print_info(
+                f"🚀 Starting Documentation Generation for Repository: {repo_path} 🚀"
+            )
             print_info(f"Output Directory: {output_dir}")
             print_section_break()
 
@@ -209,70 +227,102 @@ class DocumentationGenerator:
                 print_error(f"Repository path not found: {local_path}")
                 return False
 
-            self.doc_orchestrator.code_extractor.context.base_path = local_path
-            self.repo_manager = RepositoryManager(local_path)
+            # base_path is now set to the directory where the repo was cloned
+            base_path = local_path
 
-            python_files = [file for file in local_path.rglob("*.py") if file.suffix == ".py"]
+            self.doc_orchestrator.code_extractor.context.base_path = base_path
+            self.repo_manager = RepositoryManager(base_path)
+
+            python_files = [
+                file for file in base_path.rglob("*.py") if file.suffix == ".py"
+            ]
             total_files = len(python_files)
 
-            print_status("Preparing for Documentation Generation", {"Files Found": total_files})
+            print_status(
+                "Preparing for Documentation Generation", {"Files Found": total_files}
+            )
 
             print_section_break()
             print_info("🔨 Starting Documentation of Python Files 🔨")
             print_section_break()
 
-            with Progress() as progress:  # Add progress bar
+            with Progress() as progress:
                 task = progress.add_task("Processing Files", total=total_files)
                 for i, file_path in enumerate(python_files, 1):
-                    progress.update(task, advance=1)  # Update progress bar only on meaningful progress
-                output_file = output_dir / (file_path.stem + ".md")
-                source_code = await self.read_file_safe_async(file_path)
-                if source_code and not source_code.isspace():
-                    print_status(f"Processing file ({i}/{total_files}): {file_path.name}")
-                    if await self.process_file(file_path, output_file, fix_indentation):
-                        processed_files += 1
+                    # Use output_dir to create an output path that mirrors the structure of the cloned repo
+                    relative_path = file_path.relative_to(base_path)
+                    output_file = output_dir / relative_path.with_suffix(".md")
+
+                    # Ensure the output directory for this file exists
+                    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+                    source_code = await self.read_file_safe_async(file_path)
+                    if source_code and not source_code.isspace():
+                        print_status(
+                            f"Processing file ({i}/{total_files}): {file_path.name}"
+                        )
+                        if await self.process_file(
+                            file_path, output_file.parent, fix_indentation
+                        ):
+                            processed_files += 1
+                            progress.update(
+                                task, advance=1
+                            )  # Update progress after successful processing
+                        else:
+                            skipped_files += 1
+                            progress.update(
+                                task, advance=1
+                            )  # Update progress even if skipped
                     else:
+                        print_error(
+                            f"Skipping empty or invalid source file: {file_path}"
+                        )
                         skipped_files += 1
-                else:
-                    print_error(f"Skipping empty or invalid source file: {file_path}")
-                    skipped_files += 1
+                        progress.update(
+                            task, advance=1
+                        )  # Update progress even if skipped
 
             print_section_break()
             print_section_break()
             print_info("📊 Repository Processing Summary 📊")
-            print_info("Aggregated Metrics Summary:")
+
             metrics = self.metrics_collector.get_metrics()
-            display_metrics({
-                "Total Files": total_files,
-                "Successfully Processed": processed_files,
-                "Skipped Files": skipped_files,
-                "Total Lines of Code": metrics.get("total_lines_of_code", 0),
-                "Average Cyclomatic Complexity": metrics.get("average_cyclomatic_complexity", 0),
-                "Maintainability Index": metrics.get("maintainability_index", 0),
-            })
-            print_section_break()
+
+            # Consolidate metrics display
             print_info("Aggregated Metrics Summary:")
-            metrics = self.metrics_collector.get_metrics()
-            display_metrics({
-                "Total Classes": len(metrics.get("current_metrics", {}).get("classes", [])),
-                "Total Functions": len(metrics.get("current_metrics", {}).get("functions", [])),
-                "Total Lines of Code": total_files,
-                "Average Cyclomatic Complexity": metrics.get("current_metrics", {}).get("cyclomatic_complexity", 0),
-                "Maintainability Index": metrics.get("current_metrics", {}).get("maintainability_index", 0.0)
-            })
-            display_metrics({
-                "Classes": len(metrics.get("current_metrics", {}).get("classes", [])),
-                "Functions": len(metrics.get("current_metrics", {}).get("functions", [])),
-                "Lines of Code": total_files,
-                "Cyclomatic Complexity": metrics.get("current_metrics", {}).get("cyclomatic_complexity", 0),
-                "Maintainability Index": metrics.get("current_metrics", {}).get("maintainability_index", 0.0)
-            })
+            display_metrics(
+                {
+                    "Total Files": total_files,
+                    "Successfully Processed": processed_files,
+                    "Skipped Files": skipped_files,
+                    "Total Lines of Code": metrics.get("total_lines_of_code", 0),
+                    "Maintainability Index": metrics.get("maintainability_index", 0),
+                    "Total Classes": len(
+                        metrics.get("current_metrics", {}).get("classes", [])
+                    ),
+                    "Total Functions": len(
+                        metrics.get("current_metrics", {}).get("functions", [])
+                    ),
+                    "Average Cyclomatic Complexity": metrics.get(
+                        "current_metrics", {}
+                    ).get("cyclomatic_complexity", 0),
+                    "Average Maintainability Index": metrics.get(
+                        "current_metrics", {}
+                    ).get("maintainability_index", 0.0),
+                }
+            )
             print_section_break()
 
             success = True
 
         except (FileNotFoundError, ValueError, IOError) as repo_error:
-            print_error(f"🚨 Error processing repository {repo_path}: {repo_error} 🚨")
+            log_and_raise_error(
+                self.logger,
+                repo_error,
+                DocumentationError,
+                f"Error processing repository {repo_path}",
+                self.correlation_id,
+            )
         except asyncio.CancelledError:
             print_error("Operation was cancelled.")
             return False
@@ -292,10 +342,16 @@ class DocumentationGenerator:
 
             print_section_break()
             if success:
-                print_success(f"✅ Successfully Generated Documentation for Repository: {repo_path} ✅")
+                print_success(
+                    f"✅ Successfully Generated Documentation for Repository: {repo_path} ✅"
+                )
             else:
-                print_error(f"❌ Documentation Generation Failed for Repository: {repo_path} ❌")
-            print_info(f"Processed {processed_files} files, skipped {skipped_files} files out of {total_files} total files.")
+                print_error(
+                    f"❌ Documentation Generation Failed for Repository: {repo_path} ❌"
+                )
+            print_info(
+                f"Processed {processed_files} files, skipped {skipped_files} files out of {total_files} total files."
+            )
             print(f"Total processing time: {processing_time:.2f} seconds")
             print_section_break()
 
@@ -311,7 +367,9 @@ class DocumentationGenerator:
             print_info(
                 f"Cloning repository: {repo_url} with correlation ID: {self.correlation_id}"
             )
-            local_path = Path(".") / repo_url.split("/")[-1].replace(".git", "")
+            local_path = (
+                Path(".") / "docs" / repo_url.split("/")[-1].replace(".git", "")
+            )
             if local_path.exists():
                 print_info(f"Repository already exists at {local_path}")
                 return local_path
@@ -335,7 +393,7 @@ class DocumentationGenerator:
             return local_path
         except Exception as e:
             print_error(f"Error cloning repository {repo_url}: {e}")
-            return None
+            return None  # Ensure None is returned on error
 
     async def cleanup(self) -> None:
         """Cleanup resources used by the DocumentationGenerator."""
@@ -397,49 +455,6 @@ async def main(args: argparse.Namespace) -> int:
         correlation_id = str(uuid.uuid4())
         config = Config()
         print_section_break()
-        # Consolidate final summary into a single block
-        if doc_generator and doc_generator.metrics_collector:
-            metrics = doc_generator.metrics_collector.get_metrics()
-            aggregated_metrics = {
-                "Total Files Processed": len(metrics.get("history", {})),
-                "Total Classes Extracted": sum(
-                    m.get("total_classes", 0) for m in metrics.get("history", {}).values()
-                ),
-                "Total Functions Extracted": sum(
-                    m.get("total_functions", 0) for m in metrics.get("history", {}).values()
-                ),
-                "Total Variables Extracted": sum(
-                    len(m.get("variables", [])) for m in metrics.get("history", {}).values()
-                ),
-                "Total Constants Extracted": sum(
-                    len(m.get("constants", [])) for m in metrics.get("history", {}).values()
-                ),
-                "Average Cyclomatic Complexity": sum(
-                    m.get("cyclomatic_complexity", 0) for m in metrics.get("history", {}).values()
-                )
-                / len(metrics.get("history", {})),
-                "Average Maintainability Index": sum(
-                    m.get("maintainability_index", 0.0) for m in metrics.get("history", {}).values()
-                )
-                / len(metrics.get("history", {})),
-                "Total Lines of Code": sum(
-                    m.get("lines_of_code", 0) for m in metrics.get("history", {}).values()
-                ),
-            }
-            display_metrics(aggregated_metrics, title="Aggregated Statistics")
-        if doc_generator and doc_generator.metrics_collector:
-            metrics = doc_generator.metrics_collector.get_aggregated_token_usage()
-            # Aggregate token usage and metrics into a single summary
-            print_section_break()
-            print_info("📊 Token Usage Summary 📊")
-            display_metrics({
-                "Total Prompt Tokens": metrics.get("total_prompt_tokens", 0),
-                "Total Completion Tokens": metrics.get("total_completion_tokens", 0),
-                "Total Tokens": metrics.get("total_tokens", 0),
-                "Estimated Cost": f"${metrics.get('total_cost', 0):.2f}"
-            })
-            print_section_break()
-        print_section_break()
         print_phase_header("Initialization")
         print_info("Initializing system components...")
         print_info("Configuration Summary:")
@@ -483,15 +498,27 @@ async def main(args: argparse.Namespace) -> int:
                 print_success(
                     f"Documentation generated successfully for {file_path}: {success}"
                 )
-
+    except ConfigurationError as e:
+        log_and_raise_error(logger, e, ConfigurationError, "Configuration error")
+        return 1
     except (RuntimeError, ValueError, IOError) as unexpected_error:
-        print_error(
-            f"🔥 Error: Unexpected error occurred: {unexpected_error}",
-            details={"Suggested Fix": "Check the logs for more details or retry the operation."}
+        log_and_raise_error(
+            logger,
+            unexpected_error,
+            Exception,
+            "Unexpected error occurred",
+            details={
+                "Suggested Fix": "Check the logs for more details or retry the operation."
+            },
         )
         return 1
     except KeyError as ke:
-        print_error(f"Dependency injection error: {ke}")
+        log_and_raise_error(
+            logger,
+            ke,
+            Exception,
+            "Dependency injection error",
+        )
         return 1
     except (asyncio.CancelledError, KeyboardInterrupt):
         # Gracefully handle user interruptions
@@ -511,45 +538,149 @@ async def main(args: argparse.Namespace) -> int:
             stop_live_layout()
         print_section_break()
 
-        # Display final token usage summary
+        # Display final token usage summary and other metrics only after initialization and processing
         if doc_generator and doc_generator.metrics_collector:
-            metrics = doc_generator.metrics_collector.get_aggregated_token_usage()
-            print_info("📊 Final Token Usage Summary 📊")
-            display_metrics({
-                "Total Prompt Tokens": metrics.get("total_prompt_tokens", 0),
-                "Total Completion Tokens": metrics.get("total_completion_tokens", 0),
-                "Total Tokens": metrics.get("total_tokens", 0),
-                "Estimated Cost": f"${metrics.get('total_cost', 0):.2f}",
-            })
+            metrics = doc_generator.metrics_collector.get_metrics()
 
+            total_files_processed = len(metrics.get("history", {}))
+
+            # Calculate the sums, handling empty history safely
+            total_classes_extracted = (
+                sum(
+                sum(
+                    entry.get("total_classes", 0)
+                    for module_metrics in metrics.get("history", {}).values()
+                    for entry in module_metrics
+                )
+                )
+                if metrics.get("history")
+                else 0
+            )
+            total_functions_extracted = (
+                sum(
+                    m.get("total_functions", 0)
+                    for m in metrics.get("history", {}).values()
+                )
+                if metrics.get("history")
+                else 0
+            )
+            total_variables_extracted = (
+                sum(
+                    len(m.get("variables", []))
+                    for m in metrics.get("history", {}).values()
+                )
+                if metrics.get("history")
+                else 0
+            )
+            total_constants_extracted = (
+                sum(
+                    len(m.get("constants", []))
+                    for m in metrics.get("history", {}).values()
+                )
+                if metrics.get("history")
+                else 0
+            )
+
+            total_cyclomatic_complexity = (
+                sum(
+                    m.get("cyclomatic_complexity", 0)
+                    for m in metrics.get("history", {}).values()
+                )
+                if metrics.get("history")
+                else 0
+            )
+            average_cyclomatic_complexity = (
+                total_cyclomatic_complexity / total_files_processed
+                if total_files_processed > 0
+                else 0
+            )
+
+            total_maintainability_index = (
+                sum(
+                    m.get("maintainability_index", 0.0)
+                    for m in metrics.get("history", {}).values()
+                )
+                if metrics.get("history")
+                else 0
+            )
+            average_maintainability_index = (
+                total_maintainability_index / total_files_processed
+                if total_files_processed > 0
+                else 0.0
+            )
+
+            total_lines_of_code = (
+                sum(
+                    m.get("lines_of_code", 0)
+                    for m in metrics.get("history", {}).values()
+                )
+                if metrics.get("history")
+                else 0
+            )
+
+            aggregated_metrics = {
+                "Total Files Processed": total_files_processed,
+                "Total Classes Extracted": total_classes_extracted,
+                "Total Functions Extracted": total_functions_extracted,
+                "Total Variables Extracted": total_variables_extracted,
+                "Total Constants Extracted": total_constants_extracted,
+                "Average Cyclomatic Complexity": average_cyclomatic_complexity,
+                "Average Maintainability Index": average_maintainability_index,
+                "Total Lines of Code": total_lines_of_code,
+            }
+            display_metrics(aggregated_metrics, title="Aggregated Statistics")
+
+            token_metrics = doc_generator.metrics_collector.get_aggregated_token_usage()
+            print_section_break()
+            print_info("📊 Token Usage Summary 📊")
+            display_metrics(
+                {
+                    "Total Prompt Tokens": token_metrics.get("total_prompt_tokens", 0),
+                    "Total Completion Tokens": token_metrics.get(
+                        "total_completion_tokens", 0
+                    ),
+                    "Total Tokens": token_metrics.get("total_tokens", 0),
+                    "Estimated Cost": f"${token_metrics.get('total_cost', 0):.2f}",
+                }
+            )
+            print_section_break()
         print_section_break()
         print_info("📊 Final Summary 📊")
-        print_status("Repository Processing Summary", {
-            "Total Files": total_files,
-            "Successfully Processed": processed_files,
-            "Skipped Files": skipped_files,
-            "Total Processing Time (seconds)": f"{processing_time:.2f}"
-        })
+        print_status(
+            "Repository Processing Summary",
+            {
+                "Total Files": total_files,
+                "Successfully Processed": processed_files,
+                "Skipped Files": skipped_files,
+                "Total Processing Time (seconds)": f"{processing_time:.2f}",
+            },
+        )
         print_section_break()
         # Add a concise high-level summary at the end
         print_section_break()
         print_info("Exiting documentation generation")
         print_section_break()
         print_info("📊 Final Summary:")
-        print_status("Repository Processing Summary", {
-            "Total Files": total_files,
-            "Successfully Processed": processed_files,
-            "Skipped": skipped_files,
-            "Total Processing Time (seconds)": f"{processing_time:.2f}"
-        })
+        print_status(
+            "Repository Processing Summary",
+            {
+                "Total Files": total_files,
+                "Successfully Processed": processed_files,
+                "Skipped": skipped_files,
+                "Total Processing Time (seconds)": f"{processing_time:.2f}",
+            },
+        )
         print_section_break()
         print_info("📊 Final Summary:")
-        print_status("Repository Processing Summary", {
-            "Total Files": total_files,
-            "Successfully Processed": processed_files,
-            "Skipped": skipped_files,
-            "Total Processing Time (seconds)": f"{processing_time:.2f}"
-        })
+        print_status(
+            "Repository Processing Summary",
+            {
+                "Total Files": total_files,
+                "Successfully Processed": processed_files,
+                "Skipped": skipped_files,
+                "Total Processing Time (seconds)": f"{processing_time:.2f}",
+            },
+        )
         print_section_break()
 
     return 0

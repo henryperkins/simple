@@ -2,7 +2,7 @@
 Core package for documentation generation and code analysis.
 
 This package provides the core functionality for:
-- Code extraction and analysis 
+- Code extraction and analysis
 - Documentation generation
 - AI services integration
 - Metrics and monitoring
@@ -40,7 +40,7 @@ from core.console import (
     print_info,
     print_debug,
     display_metrics,
-    create_progress
+    create_progress,
 )
 from core.exceptions import (
     ProcessingError,
@@ -55,8 +55,11 @@ from core.exceptions import (
     TokenLimitError,
     DocumentationGenerationError,
     APICallError,
-    DataValidationError
-
+    DataValidationError,
+    PromptGenerationError,
+    TemplateLoadingError,
+    DependencyAnalysisError,
+    MaintainabilityError,
 )
 from core.types import (
     DocstringData,
@@ -69,8 +72,7 @@ from core.types import (
     MetricData,
     ParsedResponse,
     ExtractedElement,
-    ExtractedArgument
-
+    ExtractedArgument,
 )
 
 # Initialize logging first
@@ -81,7 +83,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "DocumentationOrchestrator",
-    "CodeExtractor", 
+    "CodeExtractor",
     "AIService",
     "DocstringProcessor",
     "ResponseParsingService",
@@ -119,7 +121,7 @@ __all__ = [
     "APICallError",
     "DocstringData",
     "ExtractedFunction",
-    "ExtractedClass", 
+    "ExtractedClass",
     "ExtractionResult",
     "TokenUsage",
     "ProcessingResult",
@@ -130,5 +132,5 @@ __all__ = [
     "ExtractedArgument",
     "DataValidationError",
     "ProcessingError",
-    "LoggerSetup"
+    "LoggerSetup",
 ]

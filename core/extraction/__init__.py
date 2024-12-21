@@ -1,6 +1,7 @@
 """
 Code extraction package for analyzing Python source code.
 """
+
 from typing import Any, Optional
 from core.logger import LoggerSetup
 from core.metrics import Metrics
@@ -17,14 +18,14 @@ from core.extraction.extraction_utils import (
     extract_attributes,
     extract_instance_attributes,
     extract_bases,
-    get_node_name
+    get_node_name,
 )
 
 logger = LoggerSetup.get_logger(__name__)
 
+
 async def initialize_extractors(
-    config: Any = None,
-    correlation_id: Optional[str] = None
+    config: Any = None, correlation_id: Optional[str] = None
 ) -> None:
     """Initialize extraction system with dependencies."""
     try:
@@ -44,6 +45,7 @@ async def initialize_extractors(
         logger.error(f"Failed to initialize extractors: {e}", exc_info=True)
         raise
 
+
 __all__ = [
     "CodeExtractor",
     "ClassExtractor",
@@ -54,5 +56,5 @@ __all__ = [
     "extract_attributes",
     "extract_instance_attributes",
     "extract_bases",
-    "get_node_name"
+    "get_node_name",
 ]

@@ -5,14 +5,16 @@ Function extraction module for Python source code analysis.
 import ast
 import uuid
 from typing import Optional, List, Dict, Union, Any
+from pathlib import Path
 
-from core.logger import LoggerSetup
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types.base import (
     ExtractedFunction,
     ExtractedArgument,
 )
 from core.extraction.extraction_utils import extract_decorators, get_node_name
 from core.exceptions import ExtractionError
+from utils import log_and_raise_error
 
 
 class FunctionExtractor:
@@ -25,7 +27,9 @@ class FunctionExtractor:
     ) -> None:
         """Initialize the function extractor."""
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        self.logger = LoggerSetup.get_logger(__name__, correlation_id=self.correlation_id)
+        self.logger = LoggerSetup.get_logger(
+            __name__, correlation_id=self.correlation_id
+        )
         self.context = context
         self.errors: List[str] = []
 
@@ -34,21 +38,24 @@ class FunctionExtractor:
     ) -> bool:
         """Determine if a function should be processed based on context settings."""
         if not self.context.include_private and node.name.startswith("_"):
-            self.logger.debug(f"Skipping private function: {node.name}")
-            self.logger.debug(f"Skipping private function: {node.name} (include_private=False)")
+            self.logger.debug(
+                f"Skipping private function: {node.name} (include_private=False)"
+            )
             return False
         if (
             not self.context.include_magic
             and node.name.startswith("__")
             and node.name.endswith("__")
         ):
-            self.logger.debug(f"Skipping magic function: {node.name}")
-            self.logger.debug(f"Skipping magic function: {node.name} (include_magic=False)")
+            self.logger.debug(
+                f"Skipping magic function: {node.name} (include_magic=False)"
+            )
             return False
 
         if not self.context.include_nested and self._is_nested_function(node):
-            self.logger.debug(f"Skipping nested function: {node.name}")
-            self.logger.debug(f"Skipping nested function: {node.name} (include_nested=False)")
+            self.logger.debug(
+                f"Skipping nested function: {node.name} (include_nested=False)"
+            )
             return False
         return True
 
@@ -67,33 +74,51 @@ class FunctionExtractor:
                     return True
         return False
 
-    async def extract_functions(self, nodes: Union[ast.AST, List[ast.AST]], module_metrics: Any) -> List[ExtractedFunction]:
+    async def extract_functions(
+        self, nodes: Union[ast.AST, List[ast.AST]], module_metrics: Any
+    ) -> List[ExtractedFunction]:
         """Extract function definitions from AST nodes."""
         functions: List[ExtractedFunction] = []
-        
+
         # Ensure we process all nodes
         nodes_to_process = [nodes] if isinstance(nodes, ast.AST) else nodes
         self.logger.info("Starting function extraction.")
-        for node in ast.walk(nodes_to_process[0] if nodes_to_process else ast.Module(body=[])):
+        for node in ast.walk(
+            nodes_to_process[0] if nodes_to_process else ast.Module(body=[])
+        ):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if self._should_process_function(node):
                     try:
-                        extracted_function = await self._process_function(node, module_metrics)
+                        extracted_function = await self._process_function(
+                            node, module_metrics
+                        )
                         if extracted_function:
                             functions.append(extracted_function)
-                            self.logger.debug(f"Extracted function: {extracted_function.name}, Arguments: {[arg.name for arg in extracted_function.args]}, Return Type: {extracted_function.returns['type']}")
+                            self.logger.debug(
+                                f"Extracted function: {extracted_function.name}, Arguments: {[arg.name for arg in extracted_function.args]}, Return Type: {extracted_function.returns['type']}"
+                            )
                             if self.context.metrics_collector:
                                 self.context.metrics_collector.update_scan_progress(
-                                    self.context.module_name or Path(getattr(self.context.base_path, "name", "")).stem,
+                                    self.context.module_name
+                                    or Path(
+                                        getattr(self.context.base_path, "name", "")
+                                    ).stem,
                                     "function",
                                     node.name,
                                 )
                     except Exception as e:
-                        self.logger.error(f"Error extracting function {node.name}: {e}", exc_info=True)
-                        if self.context.strict_mode:
-                            raise
+                        log_and_raise_error(
+                            self.logger,
+                            e,
+                            ExtractionError,
+                            f"Error extracting function {node.name}",
+                            self.correlation_id,
+                            function_name=node.name,
+                        )
 
-        self.logger.info(f"Function extraction completed. Total functions extracted: {len(functions)}")
+        self.logger.info(
+            f"Function extraction completed. Total functions extracted: {len(functions)}"
+        )
         return functions
 
     def _extract_arguments(
@@ -199,12 +224,23 @@ class FunctionExtractor:
         try:
             source_code = self.context.get_source_code()
             if not source_code:
-                raise ExtractionError("Source code is not available in the context")
+                log_and_raise_error(
+                    self.logger,
+                    ExtractionError("Source code is not available in the context"),
+                    ExtractionError,
+                    "Source code is not available in the context",
+                    self.correlation_id,
+                    function_name=node.name,
+                )
 
             docstring = ast.get_docstring(node) or ""
             decorators = extract_decorators(node)
             arguments = self._extract_arguments(node)
-            return_type = get_node_name(node.returns) if node.returns and isinstance(node.returns, ast.AST) else "typing.Any"
+            return_type = (
+                get_node_name(node.returns)
+                if node.returns and isinstance(node.returns, ast.AST)
+                else "typing.Any"
+            )
             is_async = isinstance(node, ast.AsyncFunctionDef)
 
             extracted_fn = ExtractedFunction(
@@ -236,8 +272,12 @@ class FunctionExtractor:
             return extracted_fn
 
         except Exception as e:
-            self.logger.error(
-                f"Error processing function {node.name}: {str(e)}",
-                exc_info=True
+            log_and_raise_error(
+                self.logger,
+                e,
+                ExtractionError,
+                f"Error processing function {node.name}",
+                self.correlation_id,
+                function_name=node.name,
             )
             return None

@@ -10,6 +10,8 @@ from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.types import DocumentationData, ExtractedClass, ExtractedFunction, MetricData
 from core.types.docstring import DocstringData
 from core.exceptions import DocumentationError
+from utils import log_and_raise_error
+
 
 class FunctionDict(TypedDict, total=False):
     name: str
@@ -17,10 +19,12 @@ class FunctionDict(TypedDict, total=False):
     args: list[dict[str, Any]]
     returns: dict[str, str]
 
+
 class ConstantDict(TypedDict, total=False):
     name: str
     type: str
     value: str
+
 
 class MarkdownGenerator:
     """Generates formatted markdown documentation."""
@@ -97,7 +101,9 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
         # Add class hierarchy information
         for cls_dict in classes:
-            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
+            cls = ExtractedClass.from_dict(
+                cls_dict
+            )  # Use from_dict to ensure proper conversion
             if cls.inheritance_chain:
                 tables.append(f"\n### Class Hierarchy for {cls.name}\n")
                 tables.append("```\n" + " -> ".join(cls.inheritance_chain) + "\n```\n")
@@ -137,7 +143,9 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         )
 
         for cls_dict in classes:
-            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
+            cls = ExtractedClass.from_dict(
+                cls_dict
+            )  # Use from_dict to ensure proper conversion
 
             # Ensure docstring_info is a DocstringData object
             if isinstance(cls.docstring_info, dict):
@@ -159,11 +167,17 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         )
 
         for cls_dict in classes:
-            cls = ExtractedClass.from_dict(cls_dict)  # Use from_dict to ensure proper conversion
+            cls = ExtractedClass.from_dict(
+                cls_dict
+            )  # Use from_dict to ensure proper conversion
 
             # Ensure methods are ExtractedFunction objects
             cls.methods = [
-                ExtractedFunction.from_dict(method) if isinstance(method, dict) else method
+                (
+                    ExtractedFunction.from_dict(method)
+                    if isinstance(method, dict)
+                    else method
+                )
                 for method in cls.methods
             ]
 
@@ -187,7 +201,6 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                 )
 
         return "\n".join(tables)
-
 
     def _generate_function_tables(self, functions: Sequence[FunctionDict]) -> str:
         """Generate the functions section."""
@@ -416,5 +429,11 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             return "\n\n".join(section for section in markdown_sections if section)
 
         except Exception as e:
-            self.logger.error(f"Error generating markdown: {e}")
-            raise DocumentationError(f"Failed to generate markdown: {e}")
+            log_and_raise_error(
+                self.logger,
+                e,
+                DocumentationError,
+                "Error generating markdown",
+                self.correlation_id,
+            )
+            raise

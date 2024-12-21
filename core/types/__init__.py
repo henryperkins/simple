@@ -17,7 +17,7 @@ from core.types.base import (
     ParsedResponse,
     TokenUsage,
     ProcessingResult,
-    DocumentationContext
+    DocumentationContext,
 )
 
 __all__ = [
@@ -34,5 +34,5 @@ __all__ = [
     "ParsedResponse",
     "TokenUsage",
     "ProcessingResult",
-    "DocstringData"
+    "DocstringData",
 ]

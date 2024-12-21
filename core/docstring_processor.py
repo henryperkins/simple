@@ -13,11 +13,15 @@ from core.logger import CorrelationLoggerAdapter, LoggerSetup
 from core.metrics_collector import MetricsCollector
 from core.types.base import ProcessingResult
 from core.types.docstring import DocstringData
+from utils import log_and_raise_error
+
 
 class DocstringProcessor:
     """Processes and validates docstrings."""
 
-    def __init__(self, correlation_id: Optional[str] = None, schema_path: Optional[str] = None) -> None:
+    def __init__(
+        self, correlation_id: Optional[str] = None, schema_path: Optional[str] = None
+    ) -> None:
         """Initializes the DocstringProcessor."""
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(__name__), extra={"correlation_id": correlation_id}
@@ -45,11 +49,21 @@ class DocstringProcessor:
             with open(self.schema_path, "r", encoding="utf-8") as f:
                 self.schema = json.load(f)
         except FileNotFoundError as e:
-            self.logger.error(f"Schema file not found: {self.schema_path} - {e}", exc_info=True)
-            raise
+            log_and_raise_error(
+                self.logger,
+                e,
+                DataValidationError,
+                f"Schema file not found: {self.schema_path}",
+                self.correlation_id,
+            )
         except json.JSONDecodeError as e:
-            self.logger.error(f"Error decoding JSON schema: {self.schema_path} - {e}", exc_info=True)
-            raise
+            log_and_raise_error(
+                self.logger,
+                e,
+                DataValidationError,
+                f"Error decoding JSON schema: {self.schema_path}",
+                self.correlation_id,
+            )
 
     def parse(self, docstring: str, context: Optional[str] = None) -> DocstringData:
         """Parses a docstring string into structured data."""
@@ -61,21 +75,28 @@ class DocstringProcessor:
                 args=result["args"],
                 returns=result["returns"],
                 raises=result["raises"],
-                complexity=result["complexity"]
+                complexity=result["complexity"],
             )
         except Exception as e:
-            self.logger.error(f"Error parsing docstring: {e}", exc_info=True)
-            print_error(f"Failed to parse docstring{f' for {context}' if context else ''}: {e}")
+            log_and_raise_error(
+                self.logger,
+                e,
+                DataValidationError,
+                f"Error parsing docstring{f' for {context}' if context else ''}",
+                self.correlation_id,
+            )
             return DocstringData(
                 summary="Failed to parse docstring",
                 description=str(e),
                 args=[],
                 returns={"type": "Any", "description": ""},
                 raises=[],
-                complexity=1
+                complexity=1,
             )
 
-    def _parse_docstring_content(self, docstring: str, context: Optional[str] = None) -> dict[str, Any]:
+    def _parse_docstring_content(
+        self, docstring: str, context: Optional[str] = None
+    ) -> dict[str, Any]:
         """Parses docstring content into a structured dictionary."""
         docstring_str = docstring.strip()
         lines = len(docstring_str.splitlines())
@@ -111,7 +132,9 @@ class DocstringProcessor:
                     "Failed to parse docstring with any style",
                     extra={"docstring": docstring_str[:50]},
                 )
-                print_error(f"Failed to parse docstring{f' for {context}' if context else ''}.")
+                print_error(
+                    f"Failed to parse docstring{f' for {context}' if context else ''}."
+                )
                 return {
                     "summary": docstring_str,
                     "description": "",
@@ -123,12 +146,16 @@ class DocstringProcessor:
             else:
                 self.docstring_stats["successful"] += 1
                 if context:
-                    print_success(f"Successfully parsed docstring for {context} (Style: {parsed_style})")
+                    print_success(
+                        f"Successfully parsed docstring for {context} (Style: {parsed_style})"
+                    )
                 else:
-                    print_success(f"Successfully parsed docstring (Style: {parsed_style})")
+                    print_success(
+                        f"Successfully parsed docstring (Style: {parsed_style})"
+                    )
 
         if self.docstring_stats["total_processed"] % 10 == 0:
-            self._display_docstring_stats()
+            self._display_common_issues()  # Corrected line
 
         docstring_data = {
             "summary": parsed_docstring.short_description or "No summary available.",
@@ -144,8 +171,16 @@ class DocstringProcessor:
                 for param in parsed_docstring.params
             ],
             "returns": {
-                "type": parsed_docstring.returns.type_name if parsed_docstring.returns else "Any",
-                "description": parsed_docstring.returns.description if parsed_docstring.returns else ""
+                "type": (
+                    parsed_docstring.returns.type_name
+                    if parsed_docstring.returns
+                    else "Any"
+                ),
+                "description": (
+                    parsed_docstring.returns.description
+                    if parsed_docstring.returns
+                    else ""
+                ),
             },
             "raises": [
                 {
@@ -161,7 +196,9 @@ class DocstringProcessor:
         self._track_common_issues(docstring_data)
         return docstring_data
 
-    def validate(self, docstring_data: Dict[str, Any], context: Optional[str] = None) -> Tuple[bool, List[str]]:
+    def validate(
+        self, docstring_data: Dict[str, Any], context: Optional[str] = None
+    ) -> Tuple[bool, List[str]]:
         """Validates a docstring dictionary against the schema."""
         try:
             is_valid, errors = self._validate_docstring_data(docstring_data)
@@ -181,14 +218,19 @@ class DocstringProcessor:
                 return False, errors
         except Exception as e:
             self.metrics_collector.collect_validation_metrics(success=False)
-            self.logger.error(f"Error during docstring validation: {e}", exc_info=True)
-            if context:
-                print_error(f"Error during docstring validation for {context}: {e}")
-            else:
-                print_error(f"Error during docstring validation: {e}")
+            log_and_raise_error(
+                self.logger,
+                e,
+                DataValidationError,
+                "Error during docstring validation",
+                self.correlation_id,
+                context=context,
+            )
             return False, [str(e)]
 
-    def _validate_docstring_data(self, docstring_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    def _validate_docstring_data(
+        self, docstring_data: Dict[str, Any]
+    ) -> Tuple[bool, List[str]]:
         """Internal method to validate docstring data against the schema."""
         try:
             validate(instance=docstring_data, schema=self.schema)
@@ -213,19 +255,26 @@ class DocstringProcessor:
         )
 
     async def process_docstring(
-        self,
-        docstring: str,
-        context: Optional[str] = None
+        self, docstring: str, context: Optional[str] = None
     ) -> ProcessingResult:
         """Process a docstring and return structured results."""
         start_time = time.time()
         try:
-            print_status(f"Processing docstring{f' for {context}' if context else ''}...")
+            print_status(
+                f"Processing docstring{f' for {context}' if context else ''}..."
+            )
             parsed_data = self.parse(docstring, context)
             is_valid, errors = self.validate(parsed_data.to_dict(), context)
 
             if not is_valid:
-                raise DataValidationError(f"Docstring validation failed: {errors}")
+                log_and_raise_error(
+                    self.logger,
+                    DataValidationError(f"Docstring validation failed: {errors}"),
+                    DataValidationError,
+                    "Docstring validation failed",
+                    self.correlation_id,
+                    errors=errors,
+                )
 
             processing_time = time.time() - start_time
             await self.metrics_collector.track_operation(
@@ -237,7 +286,7 @@ class DocstringProcessor:
                     "length": len(docstring),
                     "has_args": bool(parsed_data.args),
                     "has_returns": bool(parsed_data.returns.get("description")),
-                    "has_raises": bool(parsed_data.raises)
+                    "has_raises": bool(parsed_data.raises),
                 },
             )
 
@@ -250,16 +299,16 @@ class DocstringProcessor:
                 },
                 validation_status=True,
                 validation_errors=[],
-                schema_errors=[]
+                schema_errors=[],
             )
         except Exception as e:
             processing_time = time.time() - start_time
-            self.logger.error(f"Error processing docstring: {e}", exc_info=True)
-            await self.metrics_collector.track_operation(
-                operation_type="docstring_processing",
-                success=False,
-                duration=processing_time,
-                metadata={"error": str(e)},
+            log_and_raise_error(
+                self.logger,
+                e,
+                DataValidationError,
+                "Error processing docstring",
+                self.correlation_id,
             )
             return ProcessingResult(
                 content={},
@@ -270,5 +319,5 @@ class DocstringProcessor:
                 },
                 validation_status=False,
                 validation_errors=[str(e)],
-                schema_errors=[]
+                schema_errors=[],
             )

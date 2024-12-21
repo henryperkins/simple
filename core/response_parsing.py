@@ -10,6 +10,8 @@ from core.types.base import ParsedResponse
 from core.types.docstring import DocstringData
 from dataclasses import dataclass, asdict
 from core.console import print_info, print_error
+from core.exceptions import ResponseParsingError
+from utils import log_and_raise_error
 
 
 class ResponseParsingService:
@@ -59,8 +61,14 @@ class ResponseParsingService:
             self.schema_dir = Path(os.environ.get("SCHEMA_DIR", default_schema_dir))
 
         if not self.schema_dir.exists():
-            self.logger.error(f"Schema directory does not exist: {self.schema_dir}")
-            raise FileNotFoundError(f"Schema directory not found: {self.schema_dir}")
+            log_and_raise_error(
+                self.logger,
+                FileNotFoundError(f"Schema directory not found: {self.schema_dir}"),
+                ConfigurationError,
+                "Schema directory not found",
+                self.correlation_id,
+                schema_dir=self.schema_dir,
+            )
 
         # Load Schemas
         self.docstring_schema = self._load_schema("docstring_schema.json")
@@ -72,7 +80,7 @@ class ResponseParsingService:
             "failed_parses": 0,
             "validation_failures": 0,
         }
-        
+
         self.schema_usage_metrics = {
             "function": 0,
             "docstring": 0,
@@ -89,15 +97,25 @@ class ResponseParsingService:
             jsonschema.validate(instance=instance, schema=schema)
             return True, []
         except jsonschema.ValidationError as e:
-            self.logger.error(
-                f"Schema validation failed: {str(e)}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                ResponseParsingError,
+                "Schema validation failed",
+                self.correlation_id,
+                instance=instance,
+                schema=schema,
             )
             return False, [str(e)]
         except Exception as e:
-            self.logger.error(
-                f"Unexpected error during schema validation: {str(e)}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                ResponseParsingError,
+                "Unexpected error during schema validation",
+                self.correlation_id,
+                instance=instance,
+                schema=schema,
             )
             return False, [f"Unexpected validation error: {str(e)}"]
 
@@ -108,15 +126,23 @@ class ResponseParsingService:
             with schema_path.open("r", encoding="utf-8") as f:
                 return json.load(f)
         except FileNotFoundError as e:
-            self.logger.error(
-                f"Schema file not found: {schema_name} - {e}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                ConfigurationError,
+                f"Schema file not found: {schema_name}",
+                self.correlation_id,
+                schema_path=schema_path,
             )
             raise
         except json.JSONDecodeError as e:
-            self.logger.error(
-                f"Error decoding JSON schema: {schema_name} - {e}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                ConfigurationError,
+                f"Error decoding JSON schema: {schema_name}",
+                self.correlation_id,
+                schema_path=schema_path,
             )
             raise
 
@@ -168,17 +194,23 @@ class ResponseParsingService:
 
         return fallback_response
 
-    def _select_schema(self, content: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+    def _select_schema(
+        self, content: Dict[str, Any]
+    ) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         Dynamically select the appropriate schema based on the content.
         """
         if "parameters" in content or "examples" in content:
-            self.logger.info("Selected schema: function_tools_schema (priority: parameters/examples)")
+            self.logger.info(
+                "Selected schema: function_tools_schema (priority: parameters/examples)"
+            )
             self.schema_usage_metrics["function"] += 1
             return self.function_schema, "function"
 
         if "summary" in content and "description" in content:
-            self.logger.info("Selected schema: docstring_schema (priority: summary/description)")
+            self.logger.info(
+                "Selected schema: docstring_schema (priority: summary/description)"
+            )
             self.schema_usage_metrics["docstring"] += 1
             return self.docstring_schema, "docstring"
 
@@ -199,9 +231,7 @@ class ResponseParsingService:
         self.logger.info(f"Validating content against schema type: {schema_type}")
         return self._validate_schema(content, schema)
 
-    def _ensure_required_fields(
-        self, content: Any
-    ) -> Dict[str, Any]:
+    def _ensure_required_fields(self, content: Any) -> Dict[str, Any]:
         """Ensure required fields exist in docstring-like content."""
         if isinstance(content, str):
             return {
@@ -268,7 +298,6 @@ class ResponseParsingService:
         Basic structure validation of the AI response.
         """
         if response is None:
-            self.logger.error("Response is None.")
             return self._create_error_response(
                 "Response is None",
                 expected_format,
@@ -278,7 +307,6 @@ class ResponseParsingService:
             )
 
         if isinstance(response, str) and not response.strip():
-            self.logger.error("Empty response received from AI service.")
             return self._create_error_response(
                 "Empty response from AI service",
                 expected_format,
@@ -288,7 +316,6 @@ class ResponseParsingService:
             )
 
         if not isinstance(response, dict):
-            self.logger.error(f"Unexpected response type: {type(response)}")
             return self._create_error_response(
                 f"Unexpected response type: {type(response)}",
                 expected_format,
@@ -298,7 +325,6 @@ class ResponseParsingService:
             )
 
         if "choices" not in response or not response["choices"]:
-            self.logger.warning(f"No choices in response. Response: {response}") # Added logging
             return self._create_error_response(
                 "No choices in response",
                 expected_format,
@@ -308,7 +334,6 @@ class ResponseParsingService:
             )
 
         if not response["choices"][0].get("message"):
-            self.logger.warning(f"No message in response. Response: {response}") # Added logging
             return self._create_error_response(
                 "No message in response",
                 expected_format,
@@ -318,7 +343,6 @@ class ResponseParsingService:
             )
 
         if "content" not in response["choices"][0]["message"]:
-            self.logger.warning(f"No content field in message. Response: {response}") # Added logging
             return self._create_error_response(
                 "No content field in message",
                 expected_format,
@@ -377,8 +401,10 @@ class ResponseParsingService:
 
             # Attempt to remove markdown code block if present
             if content.startswith("```json") and content.endswith("```"):
-                content = content[len("```json"):-len("```")].strip()
-                self.logger.debug("Detected and removed markdown code block from content.")
+                content = content[len("```json") : -len("```")].strip()
+                self.logger.debug(
+                    "Detected and removed markdown code block from content."
+                )
 
             try:
                 parsed_content = json.loads(content)
@@ -392,7 +418,6 @@ class ResponseParsingService:
                         metadata=metadata,
                     )
             except json.JSONDecodeError as e:
-                self.logger.error(f"Invalid JSON in message content: {e}")
                 return self._create_response(
                     content={},
                     format_type=expected_format,
@@ -426,7 +451,13 @@ class ResponseParsingService:
             )
 
         except Exception as e:
-            self.logger.error(f"Unexpected error parsing message content: {e}", exc_info=True)
+            log_and_raise_error(
+                self.logger,
+                e,
+                ResponseParsingError,
+                "Unexpected error parsing message content",
+                self.correlation_id,
+            )
             return self._create_response(
                 content={},
                 format_type=expected_format,
@@ -435,7 +466,7 @@ class ResponseParsingService:
                 errors=[f"Unexpected error: {e}"],
                 metadata=metadata,
             )
-        
+
     async def parse_response(
         self,
         response: Dict[str, Any],
@@ -456,7 +487,7 @@ class ResponseParsingService:
                 return validated_response
 
             content = response["choices"][0]["message"].get("content", "")
-            
+
             return await self._parse_message_content(
                 content=content,
                 expected_format=expected_format,
@@ -466,7 +497,13 @@ class ResponseParsingService:
             )
 
         except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid JSON received from AI response: {e}")
+            log_and_raise_error(
+                self.logger,
+                e,
+                ResponseParsingError,
+                "Invalid JSON received from AI response",
+                self.correlation_id,
+            )
             return self._create_error_response(
                 f"Invalid JSON: {e}",
                 expected_format,
@@ -475,7 +512,13 @@ class ResponseParsingService:
                 error_type="parse_error",
             )
         except Exception as e:
-            self.logger.error(f"Error parsing response: {e}", exc_info=True)
+            log_and_raise_error(
+                self.logger,
+                e,
+                ResponseParsingError,
+                "Error parsing response",
+                self.correlation_id,
+            )
             return self._create_error_response(
                 f"Unexpected error during parsing: {e}",
                 expected_format,

@@ -17,13 +17,16 @@ T = TypeVar("T", bound=Logger)
 # Context variable for the correlation ID
 correlation_id_var: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
+
 def set_correlation_id(correlation_id: str) -> None:
     """Set the correlation ID in the context."""
     correlation_id_var.set(correlation_id)
 
+
 def get_correlation_id() -> str | None:
     """Retrieve the correlation ID from the context or return None if not set."""
     return correlation_id_var.get()
+
 
 class CorrelationLoggerAdapter(logging.LoggerAdapter[T], Generic[T]):
     """Logger adapter that includes correlation ID in log messages."""
@@ -73,6 +76,7 @@ class CorrelationLoggerAdapter(logging.LoggerAdapter[T], Generic[T]):
         kwargs["extra"] = sanitized_extra
         return msg, kwargs
 
+
 class SanitizedLogFormatter(logging.Formatter):
     """Custom formatter to sanitize and format log records."""
 
@@ -119,6 +123,7 @@ class SanitizedLogFormatter(logging.Formatter):
             )
             return item
         return item
+
 
 class LoggerSetup:
     """Configures and manages application logging."""

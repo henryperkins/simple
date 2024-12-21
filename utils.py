@@ -1,18 +1,5 @@
 """
 Core utilities module for Python code analysis and documentation generation.
-
-This module provides comprehensive utilities for:
-- AST (Abstract Syntax Tree) processing
-- Repository management
-- Token counting and management
-- File system operations
-- JSON processing
-- Configuration management
-- String processing
-- Error handling
-
-The utilities are organized into logical groups and provide consistent
-error handling and logging throughout.
 """
 
 import asyncio
@@ -44,9 +31,9 @@ from git import Repo
 from git.exc import GitCommandError
 import tiktoken
 
-from core.exceptions import LiveError, DocumentationError
+from core.exceptions import LiveError, DocumentationError, WorkflowError
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
-from core.types import TokenUsage
+from core.types.base import TokenUsage
 
 # Initialize logger
 correlation_id_var = ContextVar("correlation_id", default=None)
@@ -62,9 +49,14 @@ def set_correlation_id(correlation_id: str) -> None:
     correlation_id_var.set(correlation_id)
 
 
-def get_logger() -> CorrelationLoggerAdapter:
-    """Get a logger instance."""
-    return CorrelationLoggerAdapter(LoggerSetup.get_logger(__name__))
+def get_logger(
+    name: str | None = None, correlation_id: str | None = None
+) -> CorrelationLoggerAdapter:
+    """Get a logger instance with optional correlation ID."""
+    return CorrelationLoggerAdapter(
+        LoggerSetup.get_logger(name or __name__),
+        extra={"correlation_id": correlation_id or get_correlation_id()},
+    )
 
 
 logger = get_logger()
@@ -117,50 +109,77 @@ def handle_extraction_error(
     )
 
 
+def log_and_raise_error(
+    logger: CorrelationLoggerAdapter,
+    error: Exception,
+    error_type: type[WorkflowError],
+    message: str,
+    correlation_id: Optional[str] = None,
+    **kwargs: Any,
+) -> None:
+    """Logs an error message and raises a custom exception."""
+    extra = {
+        "correlation_id": correlation_id or get_correlation_id(),
+        "error_type": error_type.__name__,
+        "details": kwargs,
+    }
+    logger.error(message, exc_info=True, extra=extra)
+    raise error_type(message) from error
+
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def handle_error(func: F) -> Union[F, Callable[..., Awaitable[Any]]]:
-    """Decorator for common error handling with enhanced logging."""
+def handle_error(
+    default_value: Any = None,
+) -> Callable[[F], Union[F, Callable[..., Awaitable[Any]]]]:
+    """Decorator for common error handling with enhanced logging and optional default return."""
 
-    @wraps(func)
-    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-        try:
-            return await func(*args, **kwargs)
-        except Exception as e:
-            logger = get_logger()
-            logger.error(
-                f"Error in {func.__name__}: {str(e)}",
-                exc_info=True,
-                extra={
-                    "correlation_id": get_correlation_id(),
-                    "function_args": args,
-                    "function_kwargs": kwargs,
-                },
-            )
-            raise
+    def decorator(func: F) -> Union[F, Callable[..., Awaitable[Any]]]:
+        @wraps(func)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                logger = get_logger()
+                logger.error(
+                    f"Error in {func.__name__}: {str(e)}",
+                    exc_info=True,
+                    extra={
+                        "correlation_id": get_correlation_id(),
+                        "function_args": args,
+                        "function_kwargs": kwargs,
+                    },
+                )
+                if default_value is not None:
+                    return default_value
+                raise
 
-    @wraps(func)
-    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            logger = get_logger()
-            logger.error(
-                f"Error in {func.__name__}: {str(e)}",
-                exc_info=True,
-                extra={
-                    "correlation_id": get_correlation_id(),
-                    "function_args": args,
-                    "function_kwargs": kwargs,
-                },
-            )
-            raise
+        @wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logger = get_logger()
+                logger.error(
+                    f"Error in {func.__name__}: {str(e)}",
+                    exc_info=True,
+                    extra={
+                        "correlation_id": get_correlation_id(),
+                        "function_args": args,
+                        "function_kwargs": kwargs,
+                    },
+                )
+                if default_value is not None:
+                    return default_value
+                raise
 
-    # Check if the decorated function is a coroutine function
-    if asyncio.iscoroutinefunction(func):
-        return async_wrapper
-    return sync_wrapper
+        # Check if the decorated function is a coroutine function
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        return sync_wrapper
+
+    return decorator
 
 
 # -----------------------------------------------------------------------------
@@ -254,15 +273,7 @@ class RepositoryManager:
     def __init__(self, repo_path: Path, correlation_id: Optional[str] = None):
         self.repo_path = repo_path
         self.repo = None
-        self.logger = self._get_logger(correlation_id)
-
-    def _get_logger(
-        self, correlation_id: Optional[str] = None
-    ) -> CorrelationLoggerAdapter:
-        return CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__),
-            extra={"correlation_id": correlation_id or get_correlation_id()},
-        )
+        self.logger = get_logger(__name__, correlation_id)
 
     async def clone_repository(self, repo_url: str) -> Path:
         """Clone a repository and return its path."""
@@ -316,20 +327,12 @@ class TokenCounter:
     """Handles token counting and usage calculation."""
 
     def __init__(self, model: str = "gpt-4", correlation_id: Optional[str] = None):
-        self.logger = self._get_logger(correlation_id)
+        self.logger = get_logger(__name__, correlation_id)
         try:
             self.encoding = tiktoken.encoding_for_model(model)
         except KeyError:
             self.logger.warning(f"Model {model} not found. Using cl100k_base encoding.")
             self.encoding = tiktoken.get_encoding("cl100k_base")
-
-    def _get_logger(
-        self, correlation_id: Optional[str] = None
-    ) -> CorrelationLoggerAdapter:
-        return CorrelationLoggerAdapter(
-            LoggerSetup.get_logger(__name__),
-            extra={"correlation_id": correlation_id or get_correlation_id()},
-        )
 
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count for text."""
@@ -436,53 +439,35 @@ def get_env_var(
 # -----------------------------------------------------------------------------
 
 
+def _read_file(file_path: Path) -> str:
+    """Read a file and return its contents."""
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            return file.read().strip()
+    except (FileNotFoundError, IOError) as e:
+        logger.error(f"Error reading file {file_path}: {e}", exc_info=True)
+        return ""
+
+
 def read_file_safe(
     file_path: Union[str, Path], correlation_id: Optional[str] = None
 ) -> str:
     """Safely read a file and return its contents."""
-    try:
-        with open(file_path, "r", encoding="utf-8") as file:
-            content = file.read()
-            if not content.strip():
-                logger.warning(
-                    f"File {file_path} is empty or contains only whitespace.",
-                    extra={"correlation_id": correlation_id or get_correlation_id()},
-                )
-                return ""
-            return content.strip()
-    except (FileNotFoundError, IOError) as e:
-        logger.error(
-            f"Error reading file {file_path}: {e}",
-            exc_info=True,
+    file_path = Path(file_path)
+    content = _read_file(file_path)
+    if not content:
+        logger.warning(
+            f"File {file_path} is empty or contains only whitespace.",
             extra={"correlation_id": correlation_id or get_correlation_id()},
         )
-        logger.debug(
-            f"Invalid response format or content: {file_path}",
-            extra={"correlation_id": get_correlation_id()},
-        )
-        return ""
+    return content
 
 
-@handle_error
+@handle_error(default_value="")
 async def read_file_safe_async(file_path: Union[str, Path]) -> str:
     """Safely read a file asynchronously."""
-    try:
-        file_path = Path(file_path)
-        if not file_path.exists():
-            logger.error(
-                f"File does not exist: {file_path}",
-                extra={"correlation_id": get_correlation_id()},
-            )
-            return ""
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception as e:
-        logger.error(
-            f"Error reading file {file_path}: {e}",
-            exc_info=True,
-            extra={"correlation_id": get_correlation_id()},
-        )
-        return ""
+    file_path = Path(file_path)
+    return _read_file(file_path)
 
 
 # -----------------------------------------------------------------------------
@@ -547,6 +532,17 @@ def normalize_path(
         return Path(path)
 
 
+def fetch_dependency(name: str) -> Any:
+    """Fetch a dependency using Injector.get()."""
+    from core.dependency_injection import Injector  # Import here
+
+    try:
+        return Injector.get(name)
+    except KeyError as e:
+        logger.error(f"Error fetching dependency '{name}': {e}", exc_info=True)
+        raise
+
+
 # List of all utility functions and classes to be exported
 __all__ = [
     # AST Processing
@@ -569,4 +565,9 @@ __all__ = [
     "normalize_path",
     "handle_extraction_error",
     "handle_error",
+    "log_and_raise_error",
+    "get_logger",
+    "fetch_dependency",
+    "read_file_safe",
+    "read_file_safe_async",
 ]

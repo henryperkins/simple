@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from core.metrics_collector import MetricsCollector
 from core.metrics import Metrics
 from api.token_management import TokenManager
 from core.docstring_processor import DocstringProcessor
@@ -17,7 +16,7 @@ from core.extraction.code_extractor import CodeExtractor
 from core.logger import LoggerSetup
 from core.types.base import ExtractionContext
 from core.docs import DocumentationOrchestrator
-
+from core.metrics_collector import MetricsCollector  # Import here
 
 class Injector:
     """Manages dependency injection for classes."""
@@ -82,7 +81,6 @@ class Injector:
     def set_initialized(cls, value: bool) -> None:
         """Set the initialization status."""
         cls._initialized = value
-
 
 async def setup_dependencies(config: Config, correlation_id: str | None = None) -> None:
     """

@@ -8,7 +8,8 @@ from typing import Any, Optional, List, Dict
 
 from core.logger import CorrelationLoggerAdapter
 from core.types import ExtractionContext, ExtractedClass
-from utils import handle_extraction_error
+from core.exceptions import ExtractionError
+from utils import handle_extraction_error, log_and_raise_error
 from core.extraction.extraction_utils import (
     extract_decorators,
     extract_attributes,
@@ -16,7 +17,6 @@ from core.extraction.extraction_utils import (
     extract_bases,
     get_node_name,
 )
-from core.exceptions import ExtractionError
 
 
 class ClassExtractor:
@@ -37,6 +37,7 @@ class ClassExtractor:
         self.function_extractor = self.context.function_extractor
         self.errors: List[str] = []
         from core.dependency_injection import Injector  # Local import
+
         self.docstring_parser = Injector.get("docstring_processor")
 
     async def extract_classes(
@@ -47,16 +48,16 @@ class ClassExtractor:
         self.logger.info("Starting class extraction.")
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
-                if not self._should_process_class(node):
-                    continue
-
                 try:
                     extracted_class = await self._process_class(node, module_metrics)
                     if extracted_class:
                         classes.append(extracted_class)
                         self.logger.debug(
                             f"Extracted class: {extracted_class.name}, Methods: {[method.name for method in extracted_class.methods]}, Attributes: {extracted_class.attributes}",
-                            extra={"class_name": extracted_class.name, "correlation_id": self.correlation_id},
+                            extra={
+                                "class_name": extracted_class.name,
+                                "correlation_id": self.correlation_id,
+                            },
                         )
                         # Update scan progress
                         if self.context.metrics_collector and self.context.module_name:
@@ -66,16 +67,17 @@ class ClassExtractor:
                                 node.name,
                             )
                 except Exception as e:
-                    handle_extraction_error(
+                    log_and_raise_error(
                         self.logger,
-                        self.errors,
-                        "class_extraction",
                         e,
+                        ExtractionError,
+                        f"Error extracting class {node.name}",
+                        self.correlation_id,
                         class_name=node.name,
                     )
-                    if self.context.strict_mode:
-                        raise  # Reraise the exception to stop if in strict mode
-        self.logger.info(f"Class extraction completed. Total classes extracted: {len(classes)}")
+        self.logger.info(
+            f"Class extraction completed. Total classes extracted: {len(classes)}"
+        )
         return classes
 
     def _should_process_class(self, node: ast.ClassDef) -> bool:
@@ -159,7 +161,7 @@ class ClassExtractor:
         """Extract class variables and their types from a class definition."""
         class_variables = []
 
-        # Get source code context 
+        # Get source code context
         source_code = self.context.get_source_code()
 
         for child in node.body:
@@ -172,7 +174,7 @@ class ClassExtractor:
                     class_variables.append(
                         {
                             "name": child.target.id,
-                            "type": get_node_name(child.annotation), 
+                            "type": get_node_name(child.annotation),
                             "value": attr_value,
                             "lineno": child.lineno,
                         }
@@ -191,11 +193,12 @@ class ClassExtractor:
                                 }
                             )
             except Exception as e:
-                handle_extraction_error(
+                log_and_raise_error(
                     self.logger,
-                    self.errors,
-                    "class_variable_extraction", 
                     e,
+                    ExtractionError,
+                    f"Error extracting class variable in class {node.name}",
+                    self.correlation_id,
                     class_name=node.name,
                     attribute_name=getattr(child, "name", "unknown"),
                 )
@@ -256,11 +259,14 @@ class ClassExtractor:
         try:
             source_code = self.context.get_source_code()
             if not source_code:
-                self.logger.error(
+                log_and_raise_error(
+                    self.logger,
+                    ExtractionError("Source code is not available in the context"),
+                    ExtractionError,
                     "Source code is not available in the context",
-                    extra={"class_name": node.name, "correlation_id": self.correlation_id},
+                    self.correlation_id,
+                    class_name=node.name,
                 )
-                raise ExtractionError("Source code is not available in the context")
 
             docstring = ast.get_docstring(node) or ""
             decorators = extract_decorators(node)
@@ -286,11 +292,15 @@ class ClassExtractor:
                 metaclass=metaclass,
                 is_exception=is_exception,
                 ast_node=node,
-                dependencies=(self.context.dependency_analyzer.analyze_dependencies(node)
-                              if self.context.dependency_analyzer else {}),
+                dependencies=(
+                    self.context.dependency_analyzer.analyze_dependencies(node)
+                    if self.context.dependency_analyzer
+                    else {}
+                ),
                 complexity_warnings=[],
                 is_dataclass=any(
-                    d.id == "dataclass" if isinstance(d, ast.Name) else d == "dataclass" for d in decorators
+                    d.id == "dataclass" if isinstance(d, ast.Name) else d == "dataclass"
+                    for d in decorators
                 ),
                 is_abstract=any(
                     base == "ABC" for base in bases if isinstance(base, str)
@@ -315,7 +325,12 @@ class ClassExtractor:
             return extracted_class
 
         except Exception as e:
-            handle_extraction_error(
-                self.logger, self.errors, "class_processing", e, class_name=node.name
+            log_and_raise_error(
+                self.logger,
+                e,
+                ExtractionError,
+                f"Error processing class {node.name}",
+                self.correlation_id,
+                class_name=node.name,
             )
             return None

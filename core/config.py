@@ -10,6 +10,8 @@ import json
 import jsonschema
 from core.console import print_info, print_error, print_warning
 from core.logger import LoggerSetup
+from core.exceptions import ConfigurationError
+from utils import log_and_raise_error
 
 # Load environment variables
 load_dotenv()
@@ -21,7 +23,11 @@ DOCS_OUTPUT_DIR = ROOT_DIR / "docs_output"
 
 
 def get_env_var(
-    key: str, default: Any = None, var_type: type = str, required: bool = False, validation_schema: Optional[dict] = None
+    key: str,
+    default: Any = None,
+    var_type: type = str,
+    required: bool = False,
+    validation_schema: Optional[dict] = None,
 ) -> Any:
     """Get environment variable with type conversion and validation.
 
@@ -38,11 +44,18 @@ def get_env_var(
     Raises:
         ValueError: If a required variable is missing or type conversion fails
     """
+    logger = LoggerSetup.get_logger(__name__)
     value = os.getenv(key)
 
     if value is None:
         if required:
-            raise ValueError(f"Required environment variable {key} is not set")
+            log_and_raise_error(
+                logger,
+                ValueError(f"Required environment variable {key} is not set"),
+                ConfigurationError,
+                "Missing required environment variable",
+                key=key,
+            )
         return default
 
     try:
@@ -55,8 +68,14 @@ def get_env_var(
             jsonschema.validate(instance=converted_value, schema=validation_schema)
         return converted_value
     except (ValueError, TypeError, jsonschema.ValidationError) as e:
-        raise ValueError(
-            f"Failed to convert or validate {key}={value} to type {var_type.__name__}: {str(e)}"
+        log_and_raise_error(
+            logger,
+            e,
+            ConfigurationError,
+            "Failed to convert or validate environment variable",
+            key=key,
+            value=value,
+            var_type=var_type.__name__,
         )
         return config
 
@@ -105,7 +124,10 @@ class AIConfig:
                 "⚠️ Warning: The 'AZURE_DEPLOYMENT_NAME' environment variable is not set."
             )
         import logging
-        LoggerSetup.log_once(self.logger, logging.DEBUG, "AIConfig initialized successfully")
+
+        LoggerSetup.log_once(
+            self.logger, logging.DEBUG, "AIConfig initialized successfully"
+        )
 
     # Model configurations including Azure-specific limits
     model_limits: dict[str, ModelConfig] = field(
@@ -139,26 +161,71 @@ class AIConfig:
                 api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
                 endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
                 deployment=get_env_var("AZURE_OPENAI_DEPLOYMENT", required=True),
-                model=get_env_var("AZURE_OPENAI_MODEL", "gpt-4o", validation_schema={"type": "string", "enum": ["gpt-4o", "gpt-3.5-turbo", "gpt-4o-2024-11-20"]}),
-                azure_api_version=get_env_var("AZURE_API_VERSION", "2024-10-01-preview"),
-                max_tokens=get_env_var("AZURE_MAX_TOKENS", 128000, int, validation_schema={"type": "integer", "minimum": 1000}),
-                temperature=get_env_var("TEMPERATURE", 0.7, float, validation_schema={"type": "number", "minimum": 0, "maximum": 1}),
-                timeout=get_env_var("TIMEOUT", 30, int, validation_schema={"type": "integer", "minimum": 10}),
-                api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int, validation_schema={"type": "integer", "minimum": 1}),
-                api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int, validation_schema={"type": "integer", "minimum": 1}),
+                model=get_env_var(
+                    "AZURE_OPENAI_MODEL",
+                    "gpt-4o",
+                    validation_schema={
+                        "type": "string",
+                        "enum": ["gpt-4o", "gpt-3.5-turbo", "gpt-4o-2024-11-20"],
+                    },
+                ),
+                azure_api_version=get_env_var(
+                    "AZURE_API_VERSION", "2024-10-01-preview"
+                ),
+                max_tokens=get_env_var(
+                    "AZURE_MAX_TOKENS",
+                    128000,
+                    int,
+                    validation_schema={"type": "integer", "minimum": 1000},
+                ),
+                temperature=get_env_var(
+                    "TEMPERATURE",
+                    0.7,
+                    float,
+                    validation_schema={"type": "number", "minimum": 0, "maximum": 1},
+                ),
+                timeout=get_env_var(
+                    "TIMEOUT",
+                    30,
+                    int,
+                    validation_schema={"type": "integer", "minimum": 10},
+                ),
+                api_call_semaphore_limit=get_env_var(
+                    "API_CALL_SEMAPHORE_LIMIT",
+                    10,
+                    int,
+                    validation_schema={"type": "integer", "minimum": 1},
+                ),
+                api_call_max_retries=get_env_var(
+                    "API_CALL_MAX_RETRIES",
+                    3,
+                    int,
+                    validation_schema={"type": "integer", "minimum": 1},
+                ),
                 azure_api_base=get_env_var("AZURE_API_BASE", ""),
                 azure_deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", ""),
                 max_completion_tokens=get_env_var(
-                    "AZURE_MAX_COMPLETION_TOKENS", None, int, False, validation_schema={"type": "integer", "minimum": 100}
+                    "AZURE_MAX_COMPLETION_TOKENS",
+                    None,
+                    int,
+                    False,
+                    validation_schema={"type": "integer", "minimum": 100},
                 ),
-                truncation_strategy=get_env_var("TRUNCATION_STRATEGY", None, dict, False),
+                truncation_strategy=get_env_var(
+                    "TRUNCATION_STRATEGY", None, dict, False
+                ),
                 tool_choice=get_env_var("TOOL_CHOICE", None, str, False),
-                parallel_tool_calls=get_env_var("PARALLEL_TOOL_CALLS", True, bool, False),
+                parallel_tool_calls=get_env_var(
+                    "PARALLEL_TOOL_CALLS", True, bool, False
+                ),
                 response_format=get_env_var("RESPONSE_FORMAT", None, dict, False),
                 stream_options=get_env_var("STREAM_OPTIONS", None, dict, False),
             )
             import logging
-            LoggerSetup.log_once(config.logger, logging.INFO, "AIConfig initialized successfully")
+
+            LoggerSetup.log_once(
+                config.logger, logging.INFO, "AIConfig initialized successfully"
+            )
             return config
         except Exception as e:
             print_error(f"Failed to initialize AIConfig: {e}")
@@ -183,12 +250,24 @@ class AppConfig:
         """Create configuration from environment variables."""
         return AppConfig(
             debug=get_env_var("DEBUG", False, bool),
-            log_level=get_env_var("LOG_LEVEL", "INFO", validation_schema={"type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]}),
+            log_level=get_env_var(
+                "LOG_LEVEL",
+                "INFO",
+                validation_schema={
+                    "type": "string",
+                    "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                },
+            ),
             repos_dir=Path(get_env_var("REPOS_DIR", str(REPOS_DIR))),
             docs_output_dir=Path(get_env_var("DOCS_OUTPUT_DIR", str(DOCS_OUTPUT_DIR))),
             log_dir=Path(get_env_var("LOG_DIR", "logs")),
             use_cache=get_env_var("USE_CACHE", False, bool),
-            cache_ttl=get_env_var("CACHE_TTL", 3600, int, validation_schema={"type": "integer", "minimum": 0}),
+            cache_ttl=get_env_var(
+                "CACHE_TTL",
+                3600,
+                int,
+                validation_schema={"type": "integer", "minimum": 0},
+            ),
         )
 
     def ensure_directories(self):

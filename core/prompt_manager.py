@@ -1,7 +1,13 @@
 from typing import Optional, Any, Dict
 from pathlib import Path
 import json
-from jinja2 import Template, TemplateError, Environment, FileSystemLoader, TemplateNotFound
+from jinja2 import (
+    Template,
+    TemplateError,
+    Environment,
+    FileSystemLoader,
+    TemplateNotFound,
+)
 import time
 
 from core.types.base import (
@@ -17,10 +23,14 @@ from core.logger import CorrelationLoggerAdapter, LoggerSetup
 from core.metrics_collector import MetricsCollector
 from core.console import print_info
 from core.types.docstring import DocstringData
+from core.exceptions import PromptGenerationError, TemplateLoadingError
+from utils import log_and_raise_error
 
 
 class PromptManager:
-    documentation_template: Template  # Explicitly declare the type of documentation_template
+    documentation_template: (
+        Template  # Explicitly declare the type of documentation_template
+    )
     env: Environment  # Explicitly declare the type of env
 
     def __init__(self, correlation_id: Optional[str] = None) -> None:
@@ -36,7 +46,7 @@ class PromptManager:
 
         # Define schema directory
         schema_dir = Path(__file__).parent / "schemas"
-        
+
         # Load function schema
         try:
             self._function_schema: dict[str, Any] = self._load_and_validate_schema(
@@ -45,12 +55,18 @@ class PromptManager:
             if not self._function_schema or "function" not in self._function_schema:
                 raise ValueError("Invalid function schema structure")
         except Exception as e:
-            self.logger.error(f"Failed to load function schema: {e}")
+            log_and_raise_error(
+                self.logger,
+                e,
+                PromptGenerationError,
+                "Failed to load function schema",
+                self.correlation_id,
+            )
             self._function_schema = {
                 "function": {
                     "name": "generate_docstring",
                     "description": "Generate documentation from source code",
-                    "parameters": {}
+                    "parameters": {},
                 }
             }
 
@@ -82,8 +98,13 @@ class PromptManager:
 
             self.logger.info("Templates loaded successfully")
         except Exception as e:
-            self.logger.error(f"Template loading failed: {e}", exc_info=True)
-            raise
+            log_and_raise_error(
+                self.logger,
+                e,
+                TemplateLoadingError,
+                "Template loading failed",
+                self.correlation_id,
+            )
 
     def _load_and_validate_schema(self, schema_path: Path) -> dict[str, Any]:
         """Load and validate a JSON schema with enhanced error handling."""
@@ -98,10 +119,24 @@ class PromptManager:
 
             return schema
         except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid JSON in schema file: {e}", exc_info=True)
+            log_and_raise_error(
+                self.logger,
+                e,
+                PromptGenerationError,
+                "Invalid JSON in schema file",
+                self.correlation_id,
+                schema_path=str(schema_path),
+            )
             raise
         except Exception as e:
-            self.logger.error(f"Schema loading error: {e}", exc_info=True)
+            log_and_raise_error(
+                self.logger,
+                e,
+                PromptGenerationError,
+                "Schema loading error",
+                self.correlation_id,
+                schema_path=str(schema_path),
+            )
             raise
 
     def _load_template(self, template_name: str) -> Template:
@@ -130,17 +165,29 @@ class PromptManager:
             )
 
             if not rendered or len(rendered) < 100:
-                raise ValueError(
+                raise TemplateLoadingError(
                     f"Template {template_name} appears to be empty or invalid"
                 )
 
             return template
 
-        except TemplateNotFound:
-            self.logger.error(f"Template file not found: {template_name}")
+        except TemplateNotFound as e:
+            log_and_raise_error(
+                self.logger,
+                e,
+                TemplateLoadingError,
+                f"Template file not found: {template_name}",
+                self.correlation_id,
+            )
             raise
         except Exception as e:
-            self.logger.error(f"Error loading template {template_name}: {e}", exc_info=True)
+            log_and_raise_error(
+                self.logger,
+                e,
+                TemplateLoadingError,
+                f"Error loading template {template_name}",
+                self.correlation_id,
+            )
             raise
 
     def _format_class_info(self, cls: ExtractedClass) -> str:
@@ -252,7 +299,13 @@ class PromptManager:
             )
 
         except TemplateError as e:
-            self.logger.error(f"Template rendering failed: {e}", exc_info=True)
+            log_and_raise_error(
+                self.logger,
+                e,
+                PromptGenerationError,
+                "Template rendering failed",
+                self.correlation_id,
+            )
             return ProcessingResult(
                 content={},
                 usage={},
@@ -262,7 +315,13 @@ class PromptManager:
                 schema_errors=[],
             )
         except Exception as e:
-            self.logger.error(f"Error generating documentation prompt: {e}", exc_info=True)
+            log_and_raise_error(
+                self.logger,
+                e,
+                PromptGenerationError,
+                "Error generating documentation prompt",
+                self.correlation_id,
+            )
             return ProcessingResult(
                 content={},
                 usage={},
@@ -414,8 +473,12 @@ class PromptManager:
             )
 
         except Exception as e:
-            self.logger.error(
-                f"Error generating code analysis prompt: {e}", exc_info=True
+            log_and_raise_error(
+                self.logger,
+                e,
+                PromptGenerationError,
+                "Error generating code analysis prompt",
+                self.correlation_id,
             )
             return ProcessingResult(
                 content={},

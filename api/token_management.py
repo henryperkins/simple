@@ -18,8 +18,9 @@ from core.console import (
     print_success,
     print_warning,
     print_error,
-    print_info,  # Added import for print_info
+    print_info,
 )
+from utils import log_and_raise_error
 
 
 class TokenManager:
@@ -30,12 +31,12 @@ class TokenManager:
         model: str,
         config: Optional[AIConfig] = None,
         correlation_id: Optional[str] = None,
-        metrics_collector: Optional['MetricsCollector'] = None
+        metrics_collector: Optional["MetricsCollector"] = None,
     ) -> None:
         """Initialize TokenManager with Azure OpenAI configurations."""
         self.logger = CorrelationLoggerAdapter(
             logger=LoggerSetup.get_logger(__name__),
-            extra={"correlation_id": correlation_id}
+            extra={"correlation_id": correlation_id},
         )
         self.config = config if config else AIConfig.from_env()
         self.model = model
@@ -57,14 +58,13 @@ class TokenManager:
             self.logger.warning(
                 f"Model {self.model} not found. Using cl100k_base encoding.",
                 exc_info=True,
-                extra={"model": self.model}
+                extra={"model": self.model},
             )
             self.encoding = tiktoken.get_encoding("cl100k_base")
             sentry_sdk.capture_exception(e)
 
         self.model_config = self.config.model_limits.get(
-            self.model,
-            self.config.model_limits["gpt-4o-2024-11-20"]
+            self.model, self.config.model_limits["gpt-4o-2024-11-20"]
         )
 
         self._initialize_rate_limiting()
@@ -83,10 +83,12 @@ class TokenManager:
             if key in model_name.lower():
                 return value
 
-        print_warning(f"⚠️ Unknown model '{model_name}', defaulting to gpt-4o for token encoding.")
+        print_warning(
+            f"⚠️ Unknown model '{model_name}', defaulting to gpt-4o for token encoding."
+        )
         self.logger.warning(
             f"Unknown model {model_name}, defaulting to gpt-4o for token encoding",
-             extra={"model": model_name}
+            extra={"model": model_name},
         )
         return "gpt-4o-2024-11-20"  # Default to our primary model
 
@@ -97,11 +99,19 @@ class TokenManager:
         try:
             return len(self.encoding.encode(text))
         except Exception as e:
-            self.logger.error(f"Error estimating tokens: {e}", exc_info=True, extra={"text_snippet": text[:50]})
-            print_error(f"🔥 Error estimating tokens. Using fallback estimate.") # Added user-facing error
+            log_and_raise_error(
+                self.logger,
+                e,
+                ProcessingError,
+                "Error estimating tokens",
+                self.correlation_id,
+                text_snippet=text[:50],
+            )
             return len(text) // 4
 
-    def _calculate_usage(self, prompt_tokens: int, completion_tokens: int) -> TokenUsage:
+    def _calculate_usage(
+        self, prompt_tokens: int, completion_tokens: int
+    ) -> TokenUsage:
         """Calculate token usage statistics."""
         total_tokens = prompt_tokens + completion_tokens
         cost_per_token = self.model_config.cost_per_token
@@ -111,7 +121,7 @@ class TokenManager:
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
-            estimated_cost=estimated_cost
+            estimated_cost=estimated_cost,
         )
 
     def _initialize_rate_limiting(self) -> None:
@@ -119,7 +129,8 @@ class TokenManager:
         self.requests_this_minute = 0
         self.minute_start = time.time()
         self.rate_limit_per_minute = getattr(
-            self.model_config, 'rate_limit', 10)  # Default to 10 if not specified
+            self.model_config, "rate_limit", 10
+        )  # Default to 10 if not specified
         self.request_times: list[float] = []
 
     async def validate_and_prepare_request(
@@ -131,7 +142,7 @@ class TokenManager:
         tool_choice: Optional[str] = None,
         parallel_tool_calls: Optional[bool] = None,
         response_format: Optional[str] = None,
-        stream_options: Optional[dict] = None
+        stream_options: Optional[dict] = None,
     ) -> dict[str, Any]:
         """
         Validate and prepare a request with token management.
@@ -162,8 +173,13 @@ class TokenManager:
 
             if prompt_tokens > self.model_config.max_tokens:
                 error_msg = f"Prompt exceeds Azure OpenAI token limit: {prompt_tokens} > {self.model_config.max_tokens}"
-                print_error(f"🔥 {error_msg}")
-                raise ValueError(error_msg)
+                log_and_raise_error(
+                    self.logger,
+                    ValueError(error_msg),
+                    ValueError,
+                    error_msg,
+                    self.correlation_id,
+                )
 
             # Add a buffer to the token limit
             buffer = 100  # Reserve 100 tokens as a safety buffer
@@ -171,27 +187,41 @@ class TokenManager:
 
             if available_tokens < 0:
                 error_msg = f"Prompt exceeds Azure OpenAI token limit even with buffer: {prompt_tokens} > {self.model_config.max_tokens - buffer}"
-                print_error(f"🔥 {error_msg}")
-                raise ValueError(error_msg)
+                log_and_raise_error(
+                    self.logger,
+                    ValueError(error_msg),
+                    ValueError,
+                    error_msg,
+                    self.correlation_id,
+                )
 
             # Ensure available tokens do not exceed the model's completion token limit
-            max_completion_limit = self.model_config.chunk_size  # Use the model's chunk_size as the completion token limit
+            max_completion_limit = (
+                self.model_config.chunk_size
+            )  # Use the model's chunk_size as the completion token limit
             available_tokens = min(available_tokens, max_completion_limit)
 
             # Dynamically calculate max completion tokens
-            max_completion_limit = self.model_config.chunk_size  # Use the model's chunk_size as the completion token limit
+            max_completion_limit = (
+                self.model_config.chunk_size
+            )  # Use the model's chunk_size as the completion token limit
             max_completion = min(available_tokens, max_completion_limit)
 
             if prompt_tokens + max_completion > self.model_config.max_tokens:
                 error_msg = f"Total token count exceeds limit: {prompt_tokens + max_completion} > {self.model_config.max_tokens}"
-                print_error(f"🔥 {error_msg}")
-                raise ValueError(error_msg)
+                log_and_raise_error(
+                    self.logger,
+                    ValueError(error_msg),
+                    ValueError,
+                    error_msg,
+                    self.correlation_id,
+                )
 
             # Log token usage details for debugging
             self.logger.info(
                 f"Token usage details - Prompt Tokens: {prompt_tokens}, "
                 f"Available Tokens: {available_tokens}, Max Completion Tokens: {max_completion}",
-                extra={"correlation_id": self.correlation_id}
+                extra={"correlation_id": self.correlation_id},
             )
 
             # Prepare request parameters
@@ -206,34 +236,38 @@ class TokenManager:
 
             # Log the input sent to the AI
             self.logger.debug(
-                "Prepared Request Parameters",
-                extra={"request_params": request_params}
+                "Prepared Request Parameters", extra={"request_params": request_params}
             )
             return request_params
 
         except Exception as e:
-            self.logger.error(f"Error preparing request: {e}", exc_info=True, extra={"prompt_snippet": prompt[:50]})
-            print_error(f"🔥 Failed to prepare request: {e}")
-            raise ProcessingError(f"Failed to prepare request: {str(e)}")
+            log_and_raise_error(
+                self.logger,
+                e,
+                ProcessingError,
+                "Failed to prepare request",
+                self.correlation_id,
+                prompt_snippet=prompt[:50],
+            )
+            return {}
 
     async def _check_rate_limits(self) -> None:
         """Check and enforce Azure OpenAI rate limits."""
         current_time = time.time()
-        
+
         # Clean old request times
-        self.request_times = [
-            t for t in self.request_times 
-            if current_time - t < 60
-        ]
+        self.request_times = [t for t in self.request_times if current_time - t < 60]
 
         # Check rate limit
         if len(self.request_times) >= self.rate_limit_per_minute:
             wait_time = 60 - (current_time - self.request_times[0])
             if wait_time > 0:
-                print_warning(f"⏳ Rate limit reached. Waiting {wait_time:.2f} seconds before the next request.")
+                print_warning(
+                    f"⏳ Rate limit reached. Waiting {wait_time:.2f} seconds before the next request."
+                )
                 self.logger.warning(
                     f"Rate limit reached. Waiting {wait_time:.2f} seconds.",
-                    extra={"wait_time": wait_time}
+                    extra={"wait_time": wait_time},
                 )
                 await asyncio.sleep(wait_time)
 
@@ -272,10 +306,16 @@ class TokenManager:
         """
         self.total_prompt_tokens += prompt_tokens
         self.total_completion_tokens += max_completion
-        print_success(f"✅ Tracked Tokens - Prompt: {prompt_tokens}, Completion: {max_completion} (Total: {prompt_tokens + max_completion})")
+        print_success(
+            f"✅ Tracked Tokens - Prompt: {prompt_tokens}, Completion: {max_completion} (Total: {prompt_tokens + max_completion})"
+        )
         self.logger.info(
             f"Tracked request - Prompt Tokens: {prompt_tokens}, Max Completion Tokens: {max_completion}",
-            extra={"correlation_id": self.correlation_id, "prompt_tokens": prompt_tokens, "max_completion": max_completion}
+            extra={
+                "correlation_id": self.correlation_id,
+                "prompt_tokens": prompt_tokens,
+                "max_completion": max_completion,
+            },
         )
 
     async def process_completion(self, completion: Any) -> Tuple[str, dict[str, Any]]:
@@ -300,33 +340,47 @@ class TokenManager:
                 content = message.get("content", "")
 
             usage = completion.get("usage", {})
-            
+
             if usage:
                 self.total_completion_tokens += usage.get("completion_tokens", 0)
                 self.total_prompt_tokens += usage.get("prompt_tokens", 0)
-                
+
                 if self.metrics_collector:
                     await self.metrics_collector.track_operation(
                         "token_usage",
                         success=True,
                         duration=0,
-                        usage=self._calculate_usage(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)).__dict__,
+                        usage=self._calculate_usage(
+                            usage.get("prompt_tokens", 0),
+                            usage.get("completion_tokens", 0),
+                        ).__dict__,
                         metadata={
                             "model": self.model,
                             "deployment_id": self.deployment_id,
-                            "correlation_id": self.correlation_id
+                            "correlation_id": self.correlation_id,
                         },
                     )
-            
+
                 self.logger.info(
                     f"Processed completion - Content Length: {len(content)}, Usage: {usage}",
-                    extra={"correlation_id": self.correlation_id, "content_length": len(content), "usage": usage}
+                    extra={
+                        "correlation_id": self.correlation_id,
+                        "content_length": len(content),
+                        "usage": usage,
+                    },
                 )
-                print_success(f"✅ Completion processed successfully - Usage: {usage}") # More informative success
+                print_success(
+                    f"✅ Completion processed successfully - Usage: {usage}"
+                )  # More informative success
 
             return content, usage if isinstance(usage, dict) else {}
 
         except Exception as e:
-            self.logger.error(f"Error processing completion: {e}", exc_info=True)
-            print_error(f"🔥 Failed to process completion: {e}")
-            raise ProcessingError(f"Failed to process completion: {str(e)}")
+            log_and_raise_error(
+                self.logger,
+                e,
+                ProcessingError,
+                "Failed to process completion",
+                self.correlation_id,
+            )
+            raise

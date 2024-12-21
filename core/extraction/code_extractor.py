@@ -25,7 +25,8 @@ from core.extraction.extraction_utils import (
     extract_attributes,
     extract_instance_attributes,
 )
-# Removed the problematic `from core.dependency_injection import Injector`
+from utils import log_and_raise_error
+
 
 class CodeExtractor:
     """
@@ -49,7 +50,9 @@ class CodeExtractor:
         # Use Injector to fetch dependencies
         self.metrics_collector: MetricsCollector = Injector.get("metrics_collector")
         self.metrics: Metrics = Injector.get("metrics_calculator")
-        self.docstring_processor: DocstringProcessor = Injector.get("docstring_processor")
+        self.docstring_processor: DocstringProcessor = Injector.get(
+            "docstring_processor"
+        )
         self.read_file_safe_async = Injector.get("read_file_safe_async")
 
         # Initialize function and class extractors
@@ -65,10 +68,18 @@ class CodeExtractor:
     async def extract_code(self, source_code: str) -> ExtractionResult:
         """Extract code elements from source code."""
         if not source_code or not source_code.strip():
-            raise ExtractionError("Source code is empty or missing")
+            log_and_raise_error(
+                self.logger,
+                ExtractionError("Source code is empty or missing"),
+                ExtractionError,
+                "Source code is empty or missing",
+                self.correlation_id,
+            )
 
         module_name = self.context.module_name or "unnamed_module"
-        self.logger.info(f"ExtractionContext module_name: {module_name}, file_path: {getattr(self.context, 'base_path', 'Unknown')}")
+        self.logger.info(
+            f"ExtractionContext module_name: {module_name}, file_path: {getattr(self.context, 'base_path', 'Unknown')}"
+        )
 
         start_time = time.time()
 
@@ -100,14 +111,20 @@ class CodeExtractor:
                 module_name = Path(getattr(self.context, "base_path", Path())).stem
 
             # Update extraction order to ensure dependencies are available
-            module_metrics = self.metrics.calculate_metrics(modified_source_code, module_name)
+            module_metrics = self.metrics.calculate_metrics(
+                modified_source_code, module_name
+            )
             dependencies = self.dependency_analyzer.analyze_dependencies(tree)
-            
+
             # Extract functions first
-            functions: List[ExtractedFunction] = await self.function_extractor.extract_functions(tree, module_metrics)
-            
+            functions: List[ExtractedFunction] = (
+                await self.function_extractor.extract_functions(tree, module_metrics)
+            )
+
             # Then extract classes with the updated context
-            classes: List[ExtractedClass] = await self.class_extractor.extract_classes(tree, module_metrics)
+            classes: List[ExtractedClass] = await self.class_extractor.extract_classes(
+                tree, module_metrics
+            )
 
             variables = self._extract_variables(tree)
             constants = self._extract_constants(tree)
@@ -122,8 +139,12 @@ class CodeExtractor:
             module_metrics.scanned_functions = len(
                 [func for func in functions if func.get_docstring_info()]
             )
-            module_metrics.function_scan_ratio = module_metrics.scanned_functions / len(functions) if functions else 0.0
-            module_metrics.class_scan_ratio = module_metrics.scanned_classes / len(classes) if classes else 0.0
+            module_metrics.function_scan_ratio = (
+                module_metrics.scanned_functions / len(functions) if functions else 0.0
+            )
+            module_metrics.class_scan_ratio = (
+                module_metrics.scanned_classes / len(classes) if classes else 0.0
+            )
 
             self._display_metrics(
                 self._get_metrics_display(
@@ -167,58 +188,45 @@ class CodeExtractor:
                 module_name=module_name,
                 file_path=file_path,
             )
-            self.logger.debug(f"ExtractionResult: Classes: {len(extraction_result.classes)}, Functions: {len(extraction_result.functions)}, Variables: {len(extraction_result.variables)}, Constants: {len(extraction_result.constants)}")
+            self.logger.debug(
+                f"ExtractionResult: Classes: {len(extraction_result.classes)}, Functions: {len(extraction_result.functions)}, Variables: {len(extraction_result.variables)}, Constants: {len(extraction_result.constants)}"
+            )
             return extraction_result
 
         except ProcessingError as pe:
-            self.logger.error(
-                f"Processing error during code extraction: {pe}",
-                extra={
-                    "source_code_snippet": source_code[:50],
-                    "module_name": module_name,
-                    "file_path": file_path,
-                },
-                exc_info=True,
-            )
-            await self.metrics_collector.track_operation(
-                operation_type="code_extraction",
-                success=False,
-                duration=time.time() - start_time,
-                metadata={"error": str(pe)},
+            log_and_raise_error(
+                self.logger,
+                pe,
+                ProcessingError,
+                "Processing error during code extraction",
+                self.correlation_id,
+                source_code_snippet=source_code[:50],
+                module_name=module_name,
+                file_path=file_path,
             )
             raise
         except ExtractionError as ee:
-            self.logger.error(
-                f"Extraction error during code extraction: {ee}",
-                extra={
-                    "source_code_snippet": source_code[:50],
-                    "module_name": module_name,
-                    "file_path": file_path,
-                },
-                exc_info=True,
-            )
-            await self.metrics_collector.track_operation(
-                operation_type="code_extraction",
-                success=False,
-                duration=time.time() - start_time,
-                metadata={"error": str(ee)},
+            log_and_raise_error(
+                self.logger,
+                ee,
+                ExtractionError,
+                "Extraction error during code extraction",
+                self.correlation_id,
+                source_code_snippet=source_code[:50],
+                module_name=module_name,
+                file_path=file_path,
             )
             raise
         except Exception as e:
-            self.logger.error(
-                f"Unexpected error during code extraction: {e}",
-                extra={
-                    "source_code_snippet": source_code[:50],
-                    "module_name": module_name,
-                    "file_path": file_path,
-                },
-                exc_info=True,
-            )
-            await self.metrics_collector.track_operation(
-                operation_type="code_extraction",
-                success=False,
-                duration=time.time() - start_time,
-                metadata={"error": str(e)},
+            log_and_raise_error(
+                self.logger,
+                e,
+                ExtractionError,
+                "Unexpected error during code extraction",
+                self.correlation_id,
+                source_code_snippet=source_code[:50],
+                module_name=module_name,
+                file_path=file_path,
             )
             self.logger.error(f"Skipping file due to error: {e}", exc_info=True)
             return ExtractionResult(

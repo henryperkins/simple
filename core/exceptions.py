@@ -27,6 +27,7 @@ class ConfigurationError(WorkflowError):
     This exception is used when there are issues with loading, parsing, or
     validating the application's configuration settings.
     """
+
     pass
 
 
@@ -37,6 +38,7 @@ class ProcessingError(WorkflowError):
     This exception is used for errors that occur during the processing of data,
     such as parsing, formatting, or other data manipulation tasks.
     """
+
     pass
 
 
@@ -47,6 +49,7 @@ class DocumentationError(WorkflowError):
     This exception is used when there are issues with generating documentation,
     including errors in code extraction, AI interaction, or markdown generation.
     """
+
     pass
 
 
@@ -57,6 +60,7 @@ class ValidationError(WorkflowError):
     This exception is used when data fails validation against a defined schema
     or other validation rules.
     """
+
     pass
 
 
@@ -67,6 +71,7 @@ class APIError(WorkflowError):
     This exception is used when there are issues with API calls, such as
     authentication failures, network errors, or invalid responses.
     """
+
     pass
 
 
@@ -77,6 +82,7 @@ class CacheError(WorkflowError):
     This exception is used when there are issues with the application's cache,
     such as errors loading, saving, or accessing cached data.
     """
+
     pass
 
 
@@ -87,6 +93,38 @@ class ExtractionError(WorkflowError):
     This exception is used when there are issues with extracting code elements
     from source code using the AST or other methods.
     """
+
+    pass
+
+
+class MetricsError(WorkflowError):
+    """
+    Exception raised for errors in metrics tracking.
+
+    This exception is used when there are issues with tracking or reporting
+    metrics data within the application.
+    """
+
+    pass
+
+
+class InvalidRequestError(WorkflowError):
+    """
+    Exception raised for invalid requests.
+
+    This exception is used when a request is invalid or malformed.
+    """
+
+    pass
+
+
+class CircularDependencyError(WorkflowError):
+    """
+    Exception raised for circular dependencies.
+
+    This exception is used when circular dependencies are detected in the code.
+    """
+
     pass
 
 
@@ -97,6 +135,7 @@ class TokenLimitError(WorkflowError):
     This exception is used when the number of tokens in a prompt or completion
     exceeds the maximum allowed limit.
     """
+
     pass
 
 
@@ -107,6 +146,7 @@ class AIInteractionError(WorkflowError):
     This exception is used when there are problems with the communication
     or data exchange with the AI service.
     """
+
     pass
 
 
@@ -116,6 +156,7 @@ class AIServiceError(WorkflowError):
 
     This exception is used when there are internal errors within the AI service.
     """
+
     pass
 
 
@@ -126,6 +167,7 @@ class TooManyRetriesError(WorkflowError):
     This exception is used when an operation has been retried too many times
     and has still failed.
     """
+
     pass
 
 
@@ -136,6 +178,7 @@ class APICallError(APIError):
     This exception is used when there are issues during the API call process,
     such as network errors, timeouts, or invalid responses.
     """
+
     pass
 
 
@@ -146,8 +189,10 @@ class DataValidationError(ValidationError):
     This exception is used when data fails validation against a defined schema
     or other validation rules.
     """
+
     def __init__(self, message: str):
         super().__init__(message)
+
 
 class ResponseParsingError(ProcessingError):
     """
@@ -156,6 +201,7 @@ class ResponseParsingError(ProcessingError):
     This exception is used when the response from the AI model cannot be
     parsed correctly.
     """
+
     pass
 
 
@@ -166,6 +212,7 @@ class IntegrationError(WorkflowError):
     This exception is used when there are issues integrating the generated
     documentation with other systems or processes.
     """
+
     pass
 
 
@@ -176,6 +223,7 @@ class LiveError(WorkflowError):
     This exception is used for errors that occur during real-time processing,
     such as issues with the user interface or live updates.
     """
+
     pass
 
 
@@ -186,7 +234,9 @@ class DocumentationGenerationError(DocumentationError):
     This exception is used when there are specific errors during the
     documentation generation process.
     """
+
     pass
+
 
 class ConnectionError(WorkflowError):
     """
@@ -195,4 +245,46 @@ class ConnectionError(WorkflowError):
     This exception is used when there are issues connecting to external
     services, such as databases or APIs.
     """
+
+    pass
+
+
+class PromptGenerationError(ProcessingError):
+    """
+    Exception raised for errors during prompt generation.
+
+    This exception is used when there are issues with creating prompts for the AI,
+    such as template rendering errors or invalid input data.
+    """
+
+    pass
+
+
+class TemplateLoadingError(ProcessingError):
+    """
+    Exception raised for errors during template loading.
+
+    This exception is used when there are issues with loading or rendering Jinja templates.
+    """
+
+    pass
+
+
+class DependencyAnalysisError(ProcessingError):
+    """
+    Exception raised for errors during dependency analysis.
+
+    This exception is used when there are issues with analyzing dependencies in the code.
+    """
+
+    pass
+
+
+class MaintainabilityError(ProcessingError):
+    """
+    Exception raised for errors during maintainability calculation.
+
+    This exception is used when there are issues with calculating the maintainability index.
+    """
+
     pass

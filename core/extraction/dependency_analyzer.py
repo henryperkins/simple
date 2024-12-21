@@ -10,7 +10,12 @@ from pathlib import Path
 
 from core.logger import LoggerSetup, get_correlation_id
 from core.types import ExtractionContext
-from utils import handle_extraction_error, get_node_name
+from core.exceptions import (
+    DependencyAnalysisError,
+    CircularDependencyError,
+    MaintainabilityError,
+)
+from utils import handle_extraction_error, get_node_name, log_and_raise_error
 
 
 class DependencyAnalyzer:
@@ -57,14 +62,20 @@ class DependencyAnalyzer:
                     "Categorized dependencies are not a dictionary. Formatting it as an empty dictionary.",
                     extra={"correlation_id": get_correlation_id()},
                 )
-                categorized_deps = {"stdlib": set(), "third_party": set(), "local": set()}
+                categorized_deps = {
+                    "stdlib": set(),
+                    "third_party": set(),
+                    "local": set(),
+                }
             return categorized_deps
 
-        except (AttributeError, ValueError) as e:
-            handle_extraction_error(self.logger, self.errors, "dependency_analysis", e)
-            self.logger.error(
-                "Failed to analyze dependencies. Returning empty structure.",
-                extra={"correlation_id": get_correlation_id()},
+        except Exception as e:
+            log_and_raise_error(
+                self.logger,
+                e,
+                DependencyAnalysisError,
+                "Failed to analyze dependencies",
+                get_correlation_id(),
             )
             return {
                 "stdlib": set(),
@@ -97,13 +108,14 @@ class DependencyAnalyzer:
                 elif isinstance(child, ast.Attribute):
                     dependencies["attributes"].add(get_node_name(child))
 
-            except (AttributeError, ValueError) as e:  # Handle specific errors during extraction
-                handle_extraction_error(
-                    self.logger, self.errors, "dependency_item_extraction", e
+            except Exception as e:
+                log_and_raise_error(
+                    self.logger,
+                    e,
+                    DependencyAnalysisError,
+                    "Failed to extract dependency item",
+                    get_correlation_id(),
                 )
-                if self.context.strict_mode:
-                    raise
-
         return dependencies
 
     def _categorize_dependencies(
@@ -163,8 +175,14 @@ class DependencyAnalyzer:
         self, dependencies: Dict[str, Set[str]]
     ) -> List[Tuple[str, str]]:
         if not isinstance(dependencies, dict):
-            raise TypeError(
-                f"Expected 'dependencies' to be a dictionary, got {type(dependencies).__name__}"
+            log_and_raise_error(
+                self.logger,
+                TypeError(
+                    f"Expected 'dependencies' to be a dictionary, got {type(dependencies).__name__}"
+                ),
+                TypeError,
+                "Dependencies must be a dictionary",
+                get_correlation_id(),
             )
 
         circular_deps: List[Tuple[str, str]] = []
@@ -238,8 +256,12 @@ class DependencyAnalyzer:
             return max(0.0, min(100.0, impact))  # Normalize between 0 and 100
 
         except Exception as e:
-            handle_extraction_error(
-                self.logger, self.errors, "maintainability_calculation", e
+            log_and_raise_error(
+                self.logger,
+                e,
+                MaintainabilityError,
+                "Error calculating maintainability impact",
+                get_correlation_id(),
             )
             return 0.0
 
@@ -291,7 +313,13 @@ class DependencyAnalyzer:
             self.logger.warning("graphviz package not installed, cannot generate graph")
             return None
         except Exception as e:
-            handle_extraction_error(self.logger, self.errors, "graph_generation", e)
+            log_and_raise_error(
+                self.logger,
+                e,
+                DependencyAnalysisError,
+                "Error generating dependency graph",
+                get_correlation_id(),
+            )
             return None
 
     def get_dependency_metrics(self) -> Dict[str, Any]:
@@ -316,7 +344,13 @@ class DependencyAnalyzer:
             }
 
         except Exception as e:
-            handle_extraction_error(self.logger, self.errors, "dependency_metrics", e)
+            log_and_raise_error(
+                self.logger,
+                e,
+                DependencyAnalysisError,
+                "Error getting dependency metrics",
+                get_correlation_id(),
+            )
             return {}
 
     async def analyze_project_dependencies(self, project_root: Path) -> Dict[str, Any]:
@@ -380,7 +414,11 @@ class DependencyAnalyzer:
             return project_deps
 
         except Exception as e:
-            handle_extraction_error(
-                self.logger, self.errors, "project_dependency_analysis", e
+            log_and_raise_error(
+                self.logger,
+                e,
+                DependencyAnalysisError,
+                "Error analyzing project dependencies",
+                get_correlation_id(),
             )
             return {}

@@ -14,8 +14,10 @@ from core.console import (
     print_info,
     print_warning,
 )
+from core.exceptions import MetricsError
 from core.metrics_collector import MetricsCollector
 from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from utils import log_and_raise_error
 
 if TYPE_CHECKING:
     from core.metrics_collector import MetricsCollector
@@ -72,6 +74,7 @@ class Metrics:
         Returns:
             MetricData containing all calculated metrics
         """
+        metrics = None
         try:
             from core.types import MetricData
 
@@ -128,24 +131,16 @@ class Metrics:
             return metrics
 
         except Exception as e:
-            self.logger.error(
-                f"Error calculating metrics: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating metrics",
+                self.correlation_id,
+                module_name=module_name,
+                code_snippet=code[:50],
             )
-            self.logger.debug(
-                f"Invalid response or metrics content: {metrics}",
-                extra={"correlation_id": self.correlation_id},
-            )
-            self.logger.debug(
-                f"Raw response content: {metrics}",
-                extra={"correlation_id": self.correlation_id},
-            )
-            if not isinstance(metrics, dict):
-                self.logger.error(
-                    "Metrics data is not a dictionary. Formatting it as an empty dictionary.",
-                    extra={"correlation_id": self.correlation_id},
-                )
-                metrics = {}
+
             # Return default metrics on error
             from core.types import MetricData
 
@@ -172,9 +167,12 @@ class Metrics:
             )
             return maintainability
         except Exception as e:
-            self.logger.error(
-                f"Error calculating maintainability index: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating maintainability index",
+                self.correlation_id,
             )
             return 0.0
 
@@ -201,9 +199,12 @@ class Metrics:
             return metrics
 
         except Exception as e:
-            self.logger.error(
-                f"Error calculating class metrics: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating class metrics",
+                self.correlation_id,
             )
             from core.types import MetricData
 
@@ -232,9 +233,12 @@ class Metrics:
             return metrics
 
         except Exception as e:
-            self.logger.error(
-                f"Error calculating function metrics: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating function metrics",
+                self.correlation_id,
             )
             from core.types import MetricData
 
@@ -263,9 +267,12 @@ class Metrics:
 
             return complexity
         except Exception as e:
-            self.logger.error(
-                f"Error calculating cyclomatic complexity: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating cyclomatic complexity",
+                self.correlation_id,
             )
             return 1
 
@@ -284,9 +291,12 @@ class Metrics:
 
             return complexity
         except Exception as e:
-            self.logger.error(
-                f"Error calculating cognitive complexity: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating cognitive complexity",
+                self.correlation_id,
             )
             return 0
 
@@ -310,9 +320,12 @@ class Metrics:
             return max(0.0, min(100.0, mi))
 
         except Exception as e:
-            self.logger.error(
-                f"Error calculating maintainability index: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating maintainability index",
+                self.correlation_id,
             )
             return 50.0  # Return a neutral value on error
 
@@ -354,9 +367,12 @@ class Metrics:
             }
 
         except Exception as e:
-            self.logger.error(
-                f"Error calculating Halstead metrics: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating Halstead metrics",
+                self.correlation_id,
             )
             return {
                 "volume": 0.0,
@@ -372,9 +388,12 @@ class Metrics:
             metrics = self._calculate_halstead_metrics(code)
             return max(0.0, metrics["volume"])
         except Exception as e:
-            self.logger.error(
-                f"Error calculating Halstead volume: {e} with correlation ID: {self.correlation_id}",
-                exc_info=True,
+            log_and_raise_error(
+                self.logger,
+                e,
+                MetricsError,
+                "Error calculating Halstead volume",
+                self.correlation_id,
             )
             return 0.0
 

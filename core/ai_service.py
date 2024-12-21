@@ -6,19 +6,21 @@ from typing import Any, Dict, Optional, TypeVar
 
 from aiohttp.client import ClientSession  # type: ignore
 from aiohttp.client import ClientTimeout  # type: ignore
-from aiohttp import ClientError  # Added import for ClientError
-from openai import AzureOpenAI  # type: ignore
+from aiohttp import ClientError
+from openai import AzureOpenAI
 
 from api.token_management import TokenManager
 from core.config import AIConfig
 from core.docstring_processor import DocstringProcessor
-from core.exceptions import APICallError, DocumentationError
-from core.logger import LoggerSetup
+from core.exceptions import APICallError, DocumentationError, InvalidRequestError
+from core.logger import LoggerSetup, CorrelationLoggerAdapter
 from core.metrics_collector import MetricsCollector
 from core.prompt_manager import PromptManager
 from core.types.base import ProcessingResult, DocumentationContext
+from utils import log_and_raise_error
 
-T = TypeVar('T')  # For generic type hints
+T = TypeVar("T")  # For generic type hints
+
 
 class AIService:
     """
@@ -29,10 +31,9 @@ class AIService:
     and structured data handling to ensure reliable and efficient communication
     with the AI model.
     """
+
     def __init__(
-        self,
-        config: Optional[AIConfig] = None,
-        correlation_id: Optional[str] = None
+        self, config: Optional[AIConfig] = None, correlation_id: Optional[str] = None
     ) -> None:
         """
         Initialize the AI Service with Azure OpenAI configurations.
@@ -71,8 +72,13 @@ class AIService:
                 },
             )
         except Exception as e:
-            self.logger.error(f"Failed to initialize AI Service: {e}", exc_info=True)
-            raise
+            log_and_raise_error(
+                self.logger,
+                e,
+                ConfigurationError,
+                "Failed to initialize AI Service",
+                self.correlation_id,
+            )
 
         self.prompt_manager = PromptManager(correlation_id=correlation_id)
         self.response_parser = Injector.get("response_parser")  # type: ignore
@@ -124,23 +130,40 @@ class AIService:
         if self.correlation_id:
             headers["x-correlation-id"] = self.correlation_id
 
-        request_params = await self.token_manager.validate_and_prepare_request(
-            prompt,
-            max_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
-            truncation_strategy=str(self.config.truncation_strategy)
-            if self.config.truncation_strategy
-            else None,
-            tool_choice=str(self.config.tool_choice) if self.config.tool_choice else None,
-            parallel_tool_calls=self.config.parallel_tool_calls,
-            response_format=str(self.config.response_format)
-            if self.config.response_format
-            else None,
-            stream_options=self.config.stream_options,
-        )
+        try:
+            request_params = await self.token_manager.validate_and_prepare_request(
+                prompt,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature,
+                truncation_strategy=(
+                    str(self.config.truncation_strategy)
+                    if self.config.truncation_strategy
+                    else None
+                ),
+                tool_choice=(
+                    str(self.config.tool_choice) if self.config.tool_choice else None
+                ),
+                parallel_tool_calls=self.config.parallel_tool_calls,
+                response_format=(
+                    str(self.config.response_format)
+                    if self.config.response_format
+                    else None
+                ),
+                stream_options=self.config.stream_options,
+            )
+        except ValueError as e:
+            log_and_raise_error(
+                self.logger,
+                e,
+                InvalidRequestError,
+                "Invalid request parameters",
+                self.correlation_id,
+            )
 
         if function_schema:
-            request_params["tools"] = [{"type": "function", "function": function_schema}]
+            request_params["tools"] = [
+                {"type": "function", "function": function_schema}
+            ]
             if not request_params.get("tool_choice"):
                 request_params["tool_choice"] = "auto"
 
@@ -163,8 +186,12 @@ class AIService:
                     )
                     if response_json:
                         # Save raw response to a debug file
-                        debug_file = Path("logs") / f"api_response_{self.correlation_id}.json"
-                        debug_file.write_text(json.dumps(response_json, indent=2), encoding="utf-8")
+                        debug_file = (
+                            Path("logs") / f"api_response_{self.correlation_id}.json"
+                        )
+                        debug_file.write_text(
+                            json.dumps(response_json, indent=2), encoding="utf-8"
+                        )
                         self.logger.debug(f"Raw API response saved to {debug_file}")
                         return response_json
 
@@ -175,13 +202,21 @@ class AIService:
                 await asyncio.sleep(2**attempt)
             except APICallError as e:
                 if attempt == max_retries - 1:
-                    raise APICallError(
-                        f"API call failed after {max_retries} retries: {e}"
+                    log_and_raise_error(
+                        self.logger,
+                        e,
+                        APICallError,
+                        f"API call failed after {max_retries} retries",
+                        self.correlation_id,
                     )
                 await asyncio.sleep(2**attempt)
             except Exception as e:
-                self.logger.error(
-                    f"Error during API call: {e}", exc_info=True, extra=log_extra
+                log_and_raise_error(
+                    self.logger,
+                    e,
+                    APICallError,
+                    "Unexpected error during API call",
+                    self.correlation_id,
                 )
                 await asyncio.sleep(2**attempt)
 
@@ -198,7 +233,11 @@ class AIService:
         """Makes a single API call and handles response."""
         self.logger.info(
             "Making API call",
-            extra={"url": url, "attempt": attempt + 1, "correlation_id": self.correlation_id},
+            extra={
+                "url": url,
+                "attempt": attempt + 1,
+                "correlation_id": self.correlation_id,
+            },
         )
         try:
             async with self._client.post(
@@ -218,27 +257,36 @@ class AIService:
                             },
                         )
                         # Save raw response to a debug file
-                        debug_file = Path("logs") / f"api_response_{self.correlation_id}.json"
-                        debug_file.write_text(json.dumps(response_json, indent=2), encoding="utf-8")
+                        debug_file = (
+                            Path("logs") / f"api_response_{self.correlation_id}.json"
+                        )
+                        debug_file.write_text(
+                            json.dumps(response_json, indent=2), encoding="utf-8"
+                        )
                         self.logger.debug(f"Raw API response saved to {debug_file}")
                         return response_json
                     except json.JSONDecodeError as e:
-                        self.logger.warning(
-                            f"Invalid JSON received from AI response (attempt {attempt + 1}), retrying: {e}",
-                            extra={**(log_extra or {}), "raw_response": await response.text()},
+                        log_and_raise_error(
+                            self.logger,
+                            e,
+                            ResponseParsingError,
+                            f"Invalid JSON received from AI response (attempt {attempt + 1}), retrying",
+                            self.correlation_id,
+                            raw_response=await response.text(),
                         )
                         return None
 
                 error_text = await response.text()
+                log_extra = {
+                    "status_code": response.status,
+                    "error_text": error_text[:200],
+                    "correlation_id": self.correlation_id,
+                    "azure_api_base": self.config.azure_api_base,
+                    "azure_deployment_name": self.config.azure_deployment_name,
+                }
                 self.logger.error(
                     "API call failed",
-                    extra={
-                        "status_code": response.status,
-                        "error_text": error_text[:200],
-                        "correlation_id": self.correlation_id,
-                        "azure_api_base": self.config.azure_api_base,
-                        "azure_deployment_name": self.config.azure_deployment_name,
-                    },
+                    extra=log_extra,
                 )
 
                 if response.status == 429:  # Rate limit
@@ -247,7 +295,10 @@ class AIService:
                     )
                     self.logger.warning(
                         f"Rate limit hit. Retrying after {retry_after} seconds.",
-                        extra={"attempt": attempt + 1, "correlation_id": self.correlation_id},
+                        extra={
+                            "attempt": attempt + 1,
+                            "correlation_id": self.correlation_id,
+                        },
                     )
                     await asyncio.sleep(retry_after)
                     return None
@@ -270,28 +321,49 @@ class AIService:
                         return None
                     self.logger.warning(
                         f"Service unavailable. Retrying after {2**attempt} seconds.",
-                        extra={"attempt": attempt + 1, "correlation_id": self.correlation_id},
+                        extra={
+                            "attempt": attempt + 1,
+                            "correlation_id": self.correlation_id,
+                        },
                     )
                     await asyncio.sleep(2**attempt)
                     return None
                 else:
-                    raise APICallError(f"API call failed: {error_text}")
+                    log_and_raise_error(
+                        self.logger,
+                        Exception(
+                            f"API call failed with status code: {response.status}"
+                        ),
+                        APICallError,
+                        "API call failed",
+                        self.correlation_id,
+                        status_code=response.status,
+                        error_text=error_text,
+                        azure_api_base=self.config.azure_api_base,
+                        azure_deployment_name=self.config.azure_deployment_name,
+                    )
         except ClientError as e:
-            self.logger.error(f"Client error during API call: {e}", exc_info=True, extra=log_extra)
-            raise APICallError(f"Client error during API call: {e}")
+            log_and_raise_error(
+                self.logger,
+                e,
+                APICallError,
+                "Client error during API call",
+                self.correlation_id,
+            )
         except asyncio.CancelledError:
             self.logger.warning(
                 "API call was cancelled",
-                extra={"attempt": attempt + 1, "correlation_id": self.correlation_id}
+                extra={"attempt": attempt + 1, "correlation_id": self.correlation_id},
             )
             return None
         except Exception as e:
-            self.logger.error(
-                f"Unexpected error during API call: {e}",
-                exc_info=True,
-                extra=log_extra
+            log_and_raise_error(
+                self.logger,
+                e,
+                APICallError,
+                "Unexpected error during API call",
+                self.correlation_id,
             )
-            raise APICallError(f"Unexpected error during API call: {e}")
 
     async def generate_documentation(
         self, context: DocumentationContext, schema: Optional[Dict[str, Any]] = None
@@ -331,7 +403,9 @@ class AIService:
             if not prompt:
                 raise DocumentationError("Generated prompt is empty")
 
-            self.logger.info("Rendered prompt", extra={**log_extra, "prompt_length": len(prompt)})
+            self.logger.info(
+                "Rendered prompt", extra={**log_extra, "prompt_length": len(prompt)}
+            )
 
             # Add function calling instructions if schema is provided
             if schema:
@@ -350,7 +424,11 @@ class AIService:
 
             # Log the raw response before validation
             # Extract and log relevant fields from the response
-            summary = response.get("choices", [{}])[0].get("message", {}).get("content", "")[:100]
+            summary = (
+                response.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")[:100]
+            )
             self.logger.info(f"AI Response Summary: {summary}", extra=log_extra)
             self.logger.debug(f"Raw AI response: {response}", extra=log_extra)
 
@@ -368,16 +446,20 @@ class AIService:
                 metadata={
                     "module": context.metadata.get("module_name", ""),
                     "file": str(context.module_path),
-                    "tokens": response.get("usage", {}), # Corrected selectedText error
+                    "tokens": response.get("usage", {}),  # Corrected selectedText error
                     "validation_success": parsed_response.validation_success,
-                    "errors": parsed_response.errors if not parsed_response.validation_success else None
+                    "errors": (
+                        parsed_response.errors
+                        if not parsed_response.validation_success
+                        else None
+                    ),
                 },
             )
 
             # Return ProcessingResult with validation status and any errors
             return ProcessingResult(
                 content=parsed_response.content,  # Use the content even if validation failed
-                usage=response.get("usage", {}), # Corrected selectedText error
+                usage=response.get("usage", {}),  # Corrected selectedText error
                 metrics={"processing_time": processing_time},
                 validation_status=parsed_response.validation_success,
                 validation_errors=parsed_response.errors or [],
@@ -392,7 +474,11 @@ class AIService:
                 duration=processing_time,
                 metadata={"error": str(e)},
             )
-            self.logger.error(
-                f"Documentation generation failed: {e}", exc_info=True, extra=log_extra
+            log_and_raise_error(
+                self.logger,
+                e,
+                DocumentationError,
+                "Documentation generation failed",
+                self.correlation_id,
             )
             raise
