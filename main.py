@@ -326,8 +326,8 @@ class DocumentationGenerator:
                 f"Error processing repository {repo_path}",
                 self.correlation_id,
             )
-        except asyncio.CancelledError:
-            print_error("Operation was cancelled.")
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            print_error("Operation was cancelled or interrupted.")
             return False
         finally:
             processing_time = asyncio.get_event_loop().time() - start_time
@@ -535,8 +535,10 @@ async def main(args: argparse.Namespace) -> int:
         print_error("🔥 Operation Interrupted: The script was stopped by the user.")
         if doc_generator:
             await doc_generator.cleanup()
+        if args.live_layout:
+            stop_live_layout()
         print_success("✅ Cleanup completed. Exiting.")
-        return 1
+        return 130  # Standard exit code for terminated by Ctrl+C
     finally:
         if doc_generator:
             print_info("Info: Starting cleanup process...")
