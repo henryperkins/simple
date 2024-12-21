@@ -317,6 +317,9 @@ class DocumentationGenerator:
 
             success = True
 
+        except KeyboardInterrupt:
+            print_error("🔥 Operation interrupted during repository processing.")
+            raise  # Re-raise the exception to allow higher-level handling
         except (FileNotFoundError, ValueError, IOError) as repo_error:
             log_and_raise_error(
                 self.logger,
@@ -325,11 +328,6 @@ class DocumentationGenerator:
                 f"Error processing repository {repo_path}",
                 self.correlation_id,
             )
-        except (asyncio.CancelledError, KeyboardInterrupt):
-            print_error("🔥 Operation was cancelled or interrupted.")
-            try:
-                if hasattr(self, "ai_service") and self.ai_service:
-                    await self.ai_service.close()
                 if hasattr(self, "metrics_collector") and self.metrics_collector:
                     await self.metrics_collector.close()
                 if hasattr(self, "system_monitor") and self.system_monitor:
@@ -555,12 +553,12 @@ async def main(args: argparse.Namespace) -> int:
         print_error("🔥 Operation Interrupted: The script was stopped by the user.")
         try:
             if doc_generator:
-                await doc_generator.cleanup()
+                await doc_generator.cleanup()  # Ensure cleanup is awaited
         except Exception as cleanup_error:
             print_error(f"Error during cleanup after interruption: {cleanup_error}")
         finally:
             if args.live_layout:
-                stop_live_layout()
+                stop_live_layout()  # Stop the live layout properly
         print_success("✅ Cleanup completed. Exiting.")
         return 130  # Standard exit code for terminated by Ctrl+C
     except asyncio.CancelledError:
