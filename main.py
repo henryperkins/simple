@@ -686,41 +686,6 @@ async def main(args: argparse.Namespace) -> int:
             display_metrics(aggregated_metrics, title="Aggregated Statistics")
 
             # Display token usage metrics
-            token_metrics = doc_generator.metrics_collector.get_aggregated_token_usage()
-            print_section_break()
-            print_info("📊 Token Usage Summary 📊")
-            display_metrics({
-                "Total Prompt Tokens": token_metrics.get("total_prompt_tokens", 0),
-                "Total Completion Tokens": token_metrics.get("total_completion_tokens", 0),
-                "Total Tokens": token_metrics.get("total_tokens", 0),
-                "Estimated Cost": f"${token_metrics.get('total_cost', 0):.2f}",
-            })
-            print_section_break()
-
-            total_lines_of_code = (
-                sum(
-                    entry.get("lines_of_code", 0)
-                    for module_metrics in metrics.get("history", {}).values()
-                    for entry in module_metrics if isinstance(entry, dict)
-                )
-                if metrics.get("history")
-                else 0
-            )
-
-            aggregated_metrics = {
-                "Total Files Processed": total_files_processed,
-                "Total Classes Extracted": total_classes_extracted,
-                "Total Functions Extracted": total_functions_extracted,
-                "Total Variables Extracted": total_variables_extracted,
-                "Total Constants Extracted": total_constants_extracted,
-                "Average Cyclomatic Complexity": average_cyclomatic_complexity,
-                "Average Maintainability Index": average_maintainability_index,
-                "Total Lines of Code": total_lines_of_code,
-            }
-            display_metrics(
-                aggregated_metrics, title="Aggregated Statistics"
-            )
-
             token_metrics = (
                 doc_generator.metrics_collector.get_aggregated_token_usage()
             )
@@ -739,6 +704,7 @@ async def main(args: argparse.Namespace) -> int:
                 }
             )
             print_section_break()
+
         print_section_break()
         print_info("📊 Final Summary 📊")
         print_status(
