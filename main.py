@@ -477,15 +477,16 @@ async def main(args: argparse.Namespace) -> int:
 
         if args.repository:
             print_info(f"Processing repository: {args.repository}")
-            success = await doc_generator.process_repository(
-                args.repository, Path(args.output), args.fix_indentation
-            )
-        except KeyboardInterrupt:
-            logger.info("Keyboard interrupt detected. Shutting down gracefully...")
-            return 130
-        except Exception as e:
-            logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-            return 1
+            try:
+                success = await doc_generator.process_repository(
+                    args.repository, Path(args.output), args.fix_indentation
+                )
+            except KeyboardInterrupt:
+                logger.info("Keyboard interrupt detected. Shutting down gracefully...")
+                return 130
+            except Exception as e:
+                logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+                return 1
         metrics = doc_generator.metrics_collector.get_metrics()
         processed_files = len(
                 [
