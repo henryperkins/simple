@@ -10,12 +10,14 @@ logger = LoggerSetup.get_logger(__name__)
 
 def setup_live_layout() -> None:
     """Placeholder for setup_live_layout."""
-    print("Live layout setup (placeholder)")
+    if logger.isEnabledFor(logging.DEBUG):
+        print("Live layout setup (placeholder)")
 
 
 def stop_live_layout() -> None:
     """Placeholder for stop_live_layout."""
-    print("Live layout stopped (placeholder)")
+    if logger.isEnabledFor(logging.DEBUG):
+        print("Live layout stopped (placeholder)")
 
 
 def format_error_output(error_message: str) -> str:
@@ -62,7 +64,7 @@ def print_status(message: str, details: dict[str, Any] | None = None) -> None:
 
 def display_metrics(metrics: dict[str, Any], title: str = "Metrics") -> None:
     """Display metrics in a formatted table."""
-    print(f"{title}:")
+    print(f"📊 {title} 📊")
     print("+----------------------+----------------+")
     print(f"| {'Metric':<20} | {'Value':<14} |")
     print("+----------------------+----------------+")
@@ -124,7 +126,8 @@ def display_code_snippet(
     line_numbers: bool = True,
 ) -> None:
     """Display a code snippet."""
-    print(f"Code Snippet ({language}):\n{code}")
+    if logger.isEnabledFor(logging.DEBUG):
+        print(f"Code Snippet ({language}):\n{code}")
 
 
 def print_warning(message: str) -> None:
@@ -159,7 +162,7 @@ def create_status_table(title: str, data: dict[str, Any]) -> None:
 
 def format_validation_status(success: bool, errors: list[str] | None = None) -> None:
     """Display validation status with optional errors."""
-    status = "Passed" if success else "Failed"
+    status = "✅ Passed" if success else "❌ Failed"
     print(f"Validation Status: {status}")
 
     if not success and errors:
@@ -185,18 +188,20 @@ def display_validation_results(
     results: dict[str, bool], details: Optional[dict[str, Any]] = None
 ) -> None:
     """Display validation results with details."""
-    print("Validation Results")
-    for key, value in results.items():
-        print(f"  {key}: {value} Details: {details.get(key, '') if details else ''}")
+    if logger.isEnabledFor(logging.DEBUG):
+        print("Validation Results")
+        for key, value in results.items():
+            print(f"  {key}: {value} Details: {details.get(key, '') if details else ''}")
 
 
 def display_progress_summary(summary: dict[str, Any]) -> None:
     """Display a summary of the processing progress."""
-    print("Processing Summary")
-    for key, value in summary.items():
-        print(f"  {key}: {value}")
+    if logger.isEnabledFor(logging.DEBUG):
+        print("Processing Summary")
+        for key, value in summary.items():
+            print(f"  {key}: {value}")
 
 
 def print_section_break() -> None:
     """Print a visual section break."""
-    print("-" * 40)
+    print("-" * 60)
