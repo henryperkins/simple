@@ -1,12 +1,10 @@
 import asyncio
 import json
 import time
-from pathlib import Path
 from typing import Any, Dict, Optional, TypeVar
 
-from aiohttp.client import ClientSession  # type: ignore
-from aiohttp.client import ClientTimeout  # type: ignore
-from aiohttp import ClientError
+from aiohttp.client import ClientSession
+from aiohttp.client import ClientTimeout
 from openai import AzureOpenAI
 
 from api.token_management import TokenManager
@@ -14,18 +12,19 @@ from core.config import AIConfig
 from core.docstring_processor import DocstringProcessor
 from core.exceptions import (
     APICallError,
+    ConfigurationError,
     DocumentationError,
     InvalidRequestError,
     ResponseParsingError,
-    ConfigurationError
 )
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
+from core.logger import CorrelationLoggerAdapter, LoggerSetup
 from core.metrics_collector import MetricsCollector
 from core.prompt_manager import PromptManager
-from core.types.base import ProcessingResult, DocumentationContext
+from core.types.base import DocumentationContext, ProcessingResult
 from utils import log_and_raise_error
 
 T = TypeVar("T")  # For generic type hints
+
 
 class AIService:
     """
@@ -38,7 +37,9 @@ class AIService:
     """
 
     def __init__(
-        self, config: Optional[AIConfig] = None, correlation_id: Optional[str] = None
+        self,
+        config: Optional[AIConfig] = None,
+        correlation_id: Optional[str] = None,
     ) -> None:
         """
         Initialize the AI Service with Azure OpenAI configurations.
@@ -49,7 +50,7 @@ class AIService:
         # Delayed import to avoid circular dependency
         from core.dependency_injection import Injector
 
-        self.config: AIConfig = config or Injector.get("config")().ai
+        self.config: AIConfig = config or Injector.get("config").ai
         self.correlation_id = correlation_id
         self.logger = CorrelationLoggerAdapter(
             LoggerSetup.get_logger(
@@ -62,7 +63,7 @@ class AIService:
         # Initialize the Azure OpenAI client
         try:
             self.client = AzureOpenAI(
-                azure_endpoint=self.config.endpoint,
+                azure_endpoint=self.config.azure_api_base,
                 api_key=self.config.api_key,
                 api_version=self.config.azure_api_version,
                 default_headers=(
@@ -75,8 +76,8 @@ class AIService:
                 "AI Service initialized",
                 extra={
                     "model": self.config.model,
-                    "deployment": self.config.deployment,
-                    "endpoint": self.config.endpoint,
+                    "deployment": self.config.azure_deployment_name,
+                    "endpoint": self.config.azure_api_base,
                 },
             )
         except Exception as e:
@@ -111,7 +112,7 @@ class AIService:
             self.docstring_processor = DocstringProcessor()
             Injector.register("docstring_processor", self.docstring_processor)
 
-        self.semaphore = asyncio.Semaphore(10)  # Default concurrency limit
+        self.semaphore = asyncio.Semaphore(self.config.api_call_semaphore_limit)
         self._client: Optional[ClientSession] = None
 
     async def close(self) -> None:
@@ -129,17 +130,17 @@ class AIService:
     async def _make_api_call_with_retry(
         self,
         prompt: str,
-        function_schema: Optional[dict[str, Any]],
+        function_schema: Optional[Dict[str, Any]],
         max_retries: int = 3,
-        log_extra: Optional[dict[str, str]] = None,
-    ) -> dict[str, Any]:
+        log_extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Make an API call with retry logic following Azure best practices."""
         if not self.config or not self.config.api_key:
             raise ConfigurationError("API configuration is missing or invalid")
 
         headers = {
             "api-key": self.config.api_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         if self.correlation_id:
             headers["x-correlation-id"] = self.correlation_id
@@ -168,30 +169,41 @@ class AIService:
         try:
             prompt_tokens = self.token_manager.estimate_tokens(prompt)
             max_allowed_tokens = int(self.config.max_tokens * 0.75)
-            
+
             is_valid, metrics, message = self.token_manager.validate_request(
                 prompt, max_allowed_tokens
             )
-            
+
             if not is_valid:
                 optimized_prompt, usage = self.token_manager.optimize_prompt(
                     prompt,
                     max_tokens=max_allowed_tokens,
-                    preserve_sections=["summary", "description", "parameters", "returns"]
+                    preserve_sections=[
+                        "summary",
+                        "description",
+                        "parameters",
+                        "returns",
+                    ],
                 )
                 prompt = optimized_prompt
                 prompt_tokens = usage.prompt_tokens
-                
+
                 # Update request parameters
                 request_params["messages"][0]["content"] = prompt
-                request_params["max_tokens"] = max(100, self.config.max_tokens - prompt_tokens)
+                request_params["max_tokens"] = max(
+                    100, self.config.max_tokens - prompt_tokens
+                )
         except ValueError as e:
             raise InvalidRequestError("Failed to validate tokens") from e
 
         # Add function schema if provided
         if function_schema:
-            request_params["tools"] = [{"type": "function", "function": function_schema}]
-            request_params["tool_choice"] = request_params.get("tool_choice", "auto")
+            request_params["functions"] = [function_schema]
+            request_params["function_call"] = {
+                "name": function_schema.get("name", "auto")
+            }
+        else:
+            request_params["function_call"] = "none"
 
         # Initialize retry counter
         retry_count = 0
@@ -222,7 +234,7 @@ class AIService:
 
             # Increment retry counter
             retry_count += 1
-            
+
             if retry_count <= max_retries:
                 # Calculate backoff time: 2^retry_count seconds
                 backoff = 2 ** retry_count
@@ -238,11 +250,11 @@ class AIService:
     async def _make_single_api_call(
         self,
         url: str,
-        headers: dict[str, str],
-        request_params: dict[str, Any],
+        headers: Dict[str, str],
+        request_params: Dict[str, Any],
         attempt: int,
-        log_extra: Optional[dict[str, str]] = None,
-    ) -> Optional[dict[str, Any]]:
+        log_extra: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Makes a single API call and handles response."""
         self.logger.info(
             "Making API call",
@@ -252,14 +264,14 @@ class AIService:
                 "correlation_id": self.correlation_id,
             },
         )
-        
+
         # Validate credentials before making call
-        if not self.config.api_key or self.config.api_key == "your-deployment-name":
+        if not self.config.api_key:
             raise APICallError(
                 "Invalid API key. Please set AZURE_OPENAI_KEY in your environment variables."
             )
-        
-        if not self.config.azure_deployment_name or self.config.azure_deployment_name == "your-deployment-name":
+
+        if not self.config.azure_deployment_name:
             raise APICallError(
                 "Invalid deployment name. Please set AZURE_DEPLOYMENT_NAME in your environment variables."
             )
@@ -292,38 +304,41 @@ class AIService:
                         )
                         return None
 
+                # Handle error responses
                 error_text = await response.text()
-                
-                if response.status == 401:
-                    self.logger.error(
-                        "Authentication failed. Please check:\n"
-                        "1. AZURE_OPENAI_KEY is set correctly\n"
-                        "2. AZURE_OPENAI_ENDPOINT is correct\n" 
-                        "3. AZURE_DEPLOYMENT_NAME matches your deployment\n"
-                        "4. Your API key is valid and not expired",
-                        extra={
-                            "status_code": response.status,
-                            "correlation_id": self.correlation_id,
-                        }
-                    )
-                    # Don't retry auth failures
-                    raise APICallError("Authentication failed - invalid credentials")
-
-                log_extra = {
-                    "status_code": response.status,
-                    "error_text": error_text[:200],
-                    "correlation_id": self.correlation_id,
-                    "azure_api_base": self.config.azure_api_base,
-                    "azure_deployment_name": self.config.azure_deployment_name,  
-                }
-                
                 self.logger.error(
-                    "API call failed",
-                    extra=log_extra,
+                    f"API call failed with status {response.status}: {error_text}",
+                    extra={
+                        "status_code": response.status,
+                        "correlation_id": self.correlation_id,
+                    },
                 )
-                
-                # Handle other status codes...
-                return None
+
+                if response.status == 401:
+                    # Authentication error
+                    raise APICallError(
+                        "Authentication failed - invalid credentials. Please check your API key and endpoint."
+                    )
+                elif response.status == 403:
+                    # Forbidden error
+                    raise APICallError(
+                        "Access forbidden. You may not have permission to access this resource."
+                    )
+                elif response.status == 429:
+                    # Too many requests
+                    raise APICallError(
+                        "Rate limit exceeded. Please wait before making more requests."
+                    )
+                elif response.status >= 500:
+                    # Server error
+                    self.logger.warning(
+                        f"Server error (status {response.status}). Retrying..."
+                    )
+                else:
+                    # Other errors
+                    raise APICallError(
+                        f"API call failed with status {response.status}: {error_text}"
+                    )
 
         except asyncio.CancelledError:
             self.logger.warning(
@@ -331,7 +346,7 @@ class AIService:
                 extra={"attempt": attempt + 1, "correlation_id": self.correlation_id},
             )
             return None
-            
+
         except Exception as e:
             log_and_raise_error(
                 self.logger,
@@ -376,52 +391,63 @@ class AIService:
             optimized_prompt, usage = self.token_manager.optimize_prompt(
                 prompt,
                 max_tokens=int(self.config.max_tokens * 0.75),  # Use 75% of limit
-                preserve_sections=["summary", "description", "parameters", "returns"]
+                preserve_sections=["summary", "description", "parameters", "returns"],
             )
             prompt = optimized_prompt
             prompt_tokens = usage.prompt_tokens
 
             # Validate token count
             is_valid, metrics, message = self.token_manager.validate_request(
-                prompt, 
-                max_completion_tokens=self.config.max_completion_tokens
+                prompt, max_completion_tokens=self.config.max_completion_tokens
             )
-            
+
             if not is_valid:
                 self.logger.warning(f"Token validation failed: {message}")
                 # Try more aggressive optimization with lower token limit
                 optimized_prompt, usage = self.token_manager.optimize_prompt(
                     prompt,
-                    max_tokens=int(self.config.max_tokens * 0.5),  # Use 50% of limit for more aggressive optimization
-                    preserve_sections=["summary", "description"]  # Keep only essential sections
+                    max_tokens=int(
+                        self.config.max_tokens * 0.5
+                    ),  # Use 50% of limit for more aggressive optimization
+                    preserve_sections=[
+                        "summary",
+                        "description",
+                    ],  # Keep only essential sections
                 )
                 prompt = optimized_prompt
                 prompt_tokens = usage.prompt_tokens
-                
+
                 # Final validation
                 is_valid, metrics, message = self.token_manager.validate_request(
                     prompt, self.config.max_completion_tokens
                 )
                 if not is_valid:
-                    self.logger.warning("Unable to reduce token usage sufficiently; returning partial documentation.")
+                    self.logger.warning(
+                        "Unable to reduce token usage sufficiently; returning partial documentation."
+                    )
                     # Instead of raising DocumentationError, return a minimal response
                     return ProcessingResult(
                         content="Partial documentation due to token limit.",
                         usage={},
                         metrics={},
                         validation_status=False,
-                        validation_errors=["Token limit exceeded; partial documentation returned."],
+                        validation_errors=[
+                            "Token limit exceeded; partial documentation returned."
+                        ],
                         schema_errors=[],
                     )
 
             self.logger.info(
-                "Rendered prompt", 
-                extra={**log_extra, "prompt_length": len(prompt), "prompt_tokens": prompt_tokens}
+                "Rendered prompt",
+                extra={
+                    **log_extra,
+                    "prompt_length": len(prompt),
+                    "prompt_tokens": prompt_tokens,
+                },
             )
 
             # Add function calling instructions if schema is provided
             if schema:
-                prompt = self.prompt_manager.get_prompt_with_schema(prompt, schema)
                 function_schema = self.prompt_manager.get_function_schema(schema)
             else:
                 function_schema = None
@@ -440,7 +466,7 @@ class AIService:
                 .get("message", {})
                 .get("content", "")[:100]
             )
-            
+
             self.logger.info(f"AI Response Summary: {summary}", extra=log_extra)
             parsed_response = await self.response_parser.parse_response(
                 response, expected_format="docstring", validate_schema=True
@@ -456,7 +482,9 @@ class AIService:
                     "file": str(context.module_path),
                     "tokens": response.get("usage", {}),
                     "validation_success": parsed_response.validation_success,
-                    "errors": parsed_response.errors if not parsed_response.validation_success else None,
+                    "errors": parsed_response.errors
+                    if not parsed_response.validation_success
+                    else None,
                 },
             )
 

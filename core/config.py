@@ -1,9 +1,12 @@
 """Configuration module for AI documentation service."""
-
+# config.py
 import os
-import logging
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables
+
+from dataclasses import dataclass
+from typing import Any, Optional, Union
 from dotenv import load_dotenv
 import uuid
 from pathlib import Path
@@ -36,7 +39,7 @@ def get_env_var(
                 logger,
                 ValueError(f"Required environment variable {key} is not set"),
                 ConfigurationError,
-                "Missing required environment variable",
+                f"Missing required environment variable: {key}",
             )
         return default
 
@@ -54,7 +57,7 @@ def get_env_var(
             logger,
             e,
             ConfigurationError,
-            f"Failed to validate {key}",
+            f"Failed to validate {key}: {str(e)}",
         )
 
 @dataclass
@@ -71,27 +74,27 @@ class AIConfig:
     api_key: str
     endpoint: str
     deployment: str
-    model: str = "gpt-4o"
-    azure_api_version: str = "2024-10-01-preview"
-    max_tokens: int = 128000
+    azure_api_base: str
+    azure_deployment_name: str
+    model: str = "gpt-4"
+    azure_api_version: str = "2023-05-15"
+    max_tokens: int = 8000
     temperature: float = 0.7
     timeout: int = 30
     api_call_semaphore_limit: int = 10
     api_call_max_retries: int = 3
     max_completion_tokens: Optional[int] = None
     truncation_strategy: Optional[dict[str, Any]] = None
-    tool_choice: Optional[str | dict[str, Any]] = None
+    tool_choice: Optional[Union[str, dict[str, Any]]] = None
     parallel_tool_calls: Optional[bool] = True
     response_format: Optional[dict[str, str]] = None
     stream_options: Optional[dict[str, bool]] = None
-    azure_api_base: str = field(default_factory=lambda: os.getenv("AZURE_API_BASE", ""))
-    azure_deployment_name: str = field(default="")
 
     @staticmethod
     def from_env() -> "AIConfig":
         """Create configuration from environment variables."""
         try:
-            # Get deployment name first
+            # Get deployment name and API base first
             deployment_name = get_env_var(
                 "AZURE_DEPLOYMENT_NAME",
                 required=True,
@@ -102,20 +105,31 @@ class AIConfig:
                 }
             )
 
+            azure_api_base = get_env_var(
+                "AZURE_API_BASE",
+                required=True,
+                validation_schema={
+                    "type": "string",
+                    "minLength": 1
+                }
+            )
+
             # Create config object
             config = AIConfig(
                 api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
                 endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
                 deployment=deployment_name,
+                azure_api_base=azure_api_base,
                 azure_deployment_name=deployment_name,
-                model=get_env_var("MODEL_NAME", "gpt-4o"),
-                max_tokens=get_env_var("MAX_TOKENS", 128000, int),
+                model=get_env_var("MODEL_NAME", "gpt-4"),
+                max_tokens=get_env_var("MAX_TOKENS", 8000, int),
                 temperature=get_env_var("TEMPERATURE", 0.7, float),
-                azure_api_version=get_env_var("AZURE_API_VERSION", "2024-10-01-preview")
+                azure_api_version=get_env_var("AZURE_API_VERSION", "2023-05-15")
             )
 
             return config
         except Exception as e:
+            print_error(f"Error initializing AIConfig: {str(e)}")
             raise ConfigurationError(f"Failed to initialize AIConfig: {str(e)}") from e
 
 
@@ -133,9 +147,9 @@ class AppConfig:
 
     def ensure_directories(self):
         """Ensure all required directories exist."""
-        self.repos_dir.mkdir(exist_ok=True)
-        self.docs_output_dir.mkdir(exist_ok=True)
-        self.log_dir.mkdir(exist_ok=True)
+        self.repos_dir.mkdir(parents=True, exist_ok=True)
+        self.docs_output_dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def from_env() -> "AppConfig":
@@ -145,7 +159,7 @@ class AppConfig:
             log_level=get_env_var("LOG_LEVEL", "INFO"),
             repos_dir=Path(get_env_var("REPOS_DIR", str(REPOS_DIR))),
             docs_output_dir=Path(get_env_var("DOCS_OUTPUT_DIR", str(DOCS_OUTPUT_DIR))),
-            log_dir=Path(get_env_var("LOG_DIR", "logs")),
+            log_dir=Path(get_env_var("LOG_DIR", str(ROOT_DIR / "logs"))),
             use_cache=get_env_var("USE_CACHE", False, bool),
             cache_ttl=get_env_var("CACHE_TTL", 3600, int)
         )
@@ -155,8 +169,7 @@ class Config:
     def __init__(self):
         """Initialize configuration from environment."""
         try:
-            if not load_dotenv():
-                raise ConfigurationError("Failed to load .env file")
+            # Environment variables are already loaded at module level with load_dotenv()
 
             # Initialize AI config first
             self.ai = AIConfig.from_env()
@@ -193,6 +206,8 @@ class Config:
                 "parallel_tool_calls": self.ai.parallel_tool_calls,
                 "response_format": self.ai.response_format,
                 "stream_options": self.ai.stream_options,
+                "azure_api_base": self.ai.azure_api_base,
+                "azure_deployment_name": self.ai.azure_deployment_name,
             },
             "app": {
                 "debug": self.app.debug,
@@ -207,5 +222,5 @@ class Config:
             "project_root": str(self.project_root),
         }
 
-# Create global configuration instance
-config = Config()
+# Instantiate the global configuration if needed
+# config = Config()
