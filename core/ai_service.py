@@ -134,14 +134,24 @@ class AIService:
         log_extra: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
         """Make an API call with retry logic following Azure best practices."""
-        headers = {"api-key": self.config.api_key, "Content-Type": "application/json"}
+        headers = {
+            "api-key": self.config.api_key,
+            "Content-Type": "application/json"
+        }
         if self.correlation_id:
             headers["x-correlation-id"] = self.correlation_id
 
+        # Initialize request_params at the start
+        request_params = {
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+        }
+
         try:
-            # Estimate and validate tokens with aggressive optimization
+            # Token validation and optimization
             prompt_tokens = self.token_manager.estimate_tokens(prompt)
-            max_allowed_tokens = int(self.config.max_tokens * 0.75)  # Use 75% of limit for safety
+            max_allowed_tokens = int(self.config.max_tokens * 0.75)
             
             is_valid, metrics, message = self.token_manager.validate_request(
                 prompt, max_allowed_tokens
@@ -151,7 +161,6 @@ class AIService:
                 self.logger.warning(
                     f"Initial request validation failed: {message}. Attempting optimization..."
                 )
-                # Try aggressive optimization
                 optimized_prompt, usage = self.token_manager.optimize_prompt(
                     prompt,
                     max_tokens=max_allowed_tokens,
@@ -160,7 +169,6 @@ class AIService:
                 prompt = optimized_prompt
                 prompt_tokens = usage.prompt_tokens
                 
-                # Validate again after optimization
                 is_valid, metrics, message = self.token_manager.validate_request(
                     prompt, max_allowed_tokens
                 )
@@ -168,16 +176,11 @@ class AIService:
                     self.logger.warning("Still above token limit after optimization. Force truncating.")
                     prompt = prompt[: int(len(prompt) * 0.6)]
                     prompt_tokens = self.token_manager.estimate_tokens(prompt)
-                    # Return truncated prompt instead of raising error
                     self.logger.warning(f"Using truncated prompt (tokens={prompt_tokens}).")
-                    request_params["messages"][0]["content"] = prompt
-
-            # Prepare request parameters with optimized prompt
-            request_params = {
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": self.config.max_tokens - prompt_tokens,
-                "temperature": self.config.temperature,
-            }
+                
+                # Update the request params with optimized prompt
+                request_params["messages"][0]["content"] = prompt
+                request_params["max_tokens"] = max(100, self.config.max_tokens - prompt_tokens)
 
         except ValueError as e:
             log_and_raise_error(
@@ -188,14 +191,13 @@ class AIService:
                 self.correlation_id,
             )
 
+        # Add function calling schema if provided
         if function_schema:
-            request_params["tools"] = [
-                {"type": "function", "function": function_schema}
-            ]
+            request_params["tools"] = [{"type": "function", "function": function_schema}]
             if not request_params.get("tool_choice"):
                 request_params["tool_choice"] = "auto"
 
-        # Construct the URL using AZURE_API_BASE and AZURE_DEPLOYMENT_NAME
+        # Construct Azure OpenAI API URL
         url = (
             f"{self.config.azure_api_base.rstrip('/')}/openai/deployments/"
             f"{self.config.azure_deployment_name}/chat/completions"
@@ -203,8 +205,10 @@ class AIService:
         )
         self.logger.debug(f"Constructed API URL: {url}")
 
+        # Retry loop for API calls
         for attempt in range(max_retries):
             try:
+                # Ensure client session is initialized
                 if self._client is None:
                     await self.start()
 
@@ -213,46 +217,18 @@ class AIService:
                         url, headers, request_params, attempt, log_extra
                     )
                     if response_json:
-                        # Track token usage
-                        prompt_tokens = response_json.get('usage', {}).get('prompt_tokens', 0)
-                        completion_tokens = response_json.get('usage', {}).get('completion_tokens', 0)
-                        self.token_manager.track_request(prompt_tokens, completion_tokens)
-                        self.logger.debug(f"Tracked token usage: prompt={prompt_tokens}, completion={completion_tokens}")
-
-                        # Save raw response to a debug file
-                        debug_file = (
-                            Path("logs") / f"api_response_{self.correlation_id}.json"
-                        )
-                        debug_file.write_text(
-                            json.dumps(response_json, indent=2), encoding="utf-8"
-                        )
-                        self.logger.debug(f"Raw API response saved to {debug_file}")
                         return response_json
 
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                
             except asyncio.TimeoutError:
-                self.logger.warning(
-                    f"Request timeout (attempt {attempt + 1})", extra=log_extra
-                )
-                await asyncio.sleep(2**attempt)
-            except APICallError as e:
+                self.logger.warning(f"Request timeout (attempt {attempt + 1}/{max_retries})")
                 if attempt == max_retries - 1:
-                    log_and_raise_error(
-                        self.logger,
-                        e,
-                        APICallError,
-                        f"API call failed after {max_retries} retries",
-                        self.correlation_id,
-                    )
-                await asyncio.sleep(2**attempt)
+                    raise
             except Exception as e:
-                log_and_raise_error(
-                    self.logger,
-                    e,
-                    APICallError,
-                    "Unexpected error during API call",
-                    self.correlation_id,
-                )
-                await asyncio.sleep(2**attempt)
+                self.logger.error(f"API call failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt == max_retries - 1:
+                    raise
 
         raise APICallError(f"API call failed after {max_retries} retries")
 
@@ -273,6 +249,18 @@ class AIService:
                 "correlation_id": self.correlation_id,
             },
         )
+        
+        # Validate credentials before making call
+        if not self.config.api_key or self.config.api_key == "your-deployment-name":
+            raise APICallError(
+                "Invalid API key. Please set AZURE_OPENAI_KEY in your environment variables."
+            )
+        
+        if not self.config.azure_deployment_name or self.config.azure_deployment_name == "your-deployment-name":
+            raise APICallError(
+                "Invalid deployment name. Please set AZURE_DEPLOYMENT_NAME in your environment variables."
+            )
+
         try:
             async with self._client.post(
                 url,
@@ -290,106 +278,57 @@ class AIService:
                                 "correlation_id": self.correlation_id,
                             },
                         )
-                        # Save raw response to a debug file
-                        debug_file = (
-                            Path("logs") / f"api_response_{self.correlation_id}.json"
-                        )
-                        debug_file.write_text(
-                            json.dumps(response_json, indent=2), encoding="utf-8"
-                        )
-                        self.logger.debug(f"Raw API response saved to {debug_file}")
                         return response_json
                     except json.JSONDecodeError as e:
                         log_and_raise_error(
                             self.logger,
                             e,
                             ResponseParsingError,
-                            f"Invalid JSON received from AI response (attempt {attempt + 1}), retrying",
+                            f"Invalid JSON received from AI response (attempt {attempt + 1})",
                             self.correlation_id,
-                            raw_response=await response.text(),
                         )
                         return None
 
                 error_text = await response.text()
+                
+                if response.status == 401:
+                    self.logger.error(
+                        "Authentication failed. Please check:\n"
+                        "1. AZURE_OPENAI_KEY is set correctly\n"
+                        "2. AZURE_OPENAI_ENDPOINT is correct\n" 
+                        "3. AZURE_DEPLOYMENT_NAME matches your deployment\n"
+                        "4. Your API key is valid and not expired",
+                        extra={
+                            "status_code": response.status,
+                            "correlation_id": self.correlation_id,
+                        }
+                    )
+                    # Don't retry auth failures
+                    raise APICallError("Authentication failed - invalid credentials")
+
                 log_extra = {
                     "status_code": response.status,
                     "error_text": error_text[:200],
                     "correlation_id": self.correlation_id,
                     "azure_api_base": self.config.azure_api_base,
-                    "azure_deployment_name": self.config.azure_deployment_name,
+                    "azure_deployment_name": self.config.azure_deployment_name,  
                 }
+                
                 self.logger.error(
                     "API call failed",
                     extra=log_extra,
                 )
+                
+                # Handle other status codes...
+                return None
 
-                if response.status == 429:  # Rate limit
-                    retry_after = int(
-                        response.headers.get("Retry-After", 2 ** (attempt + 2))
-                    )
-                    self.logger.warning(
-                        f"Rate limit hit. Retrying after {retry_after} seconds.",
-                        extra={
-                            "attempt": attempt + 1,
-                            "correlation_id": self.correlation_id,
-                        },
-                    )
-                    await asyncio.sleep(retry_after)
-                    return None
-                elif response.status == 503:  # Service unavailable
-                    if "DeploymentNotFound" in error_text:
-                        self.logger.critical(
-                            "Azure OpenAI deployment not found. Please verify the following:\n"
-                            "1. The deployment name in the configuration matches an existing deployment in your Azure OpenAI resource.\n"
-                            "2. The deployment is active and fully provisioned.\n"
-                            "3. The API key and endpoint are correct.\n"
-                            "4. If the deployment was recently created, wait a few minutes and try again.\n"
-"5. Ensure the deployment name is set correctly in the AZURE_DEPLOYMENT_NAME environment variable.",
-                            extra={
-                                "azure_api_base": self.config.azure_api_base,
-                                "azure_deployment_name": self.config.azure_deployment_name,
-                                "correlation_id": self.correlation_id,
-                            },
-                        )
-                        await asyncio.sleep(10)  # Wait longer for deployment issues
-                        return None
-                    self.logger.warning(
-                        f"Service unavailable. Retrying after {2**attempt} seconds.",
-                        extra={
-                            "attempt": attempt + 1,
-                            "correlation_id": self.correlation_id,
-                        },
-                    )
-                    await asyncio.sleep(2**attempt)
-                    return None
-                else:
-                    log_and_raise_error(
-                        self.logger,
-                        Exception(
-                            f"API call failed with status code: {response.status}"
-                        ),
-                        APICallError,
-                        "API call failed",
-                        self.correlation_id,
-                        status_code=response.status,
-                        error_text=error_text,
-                        azure_api_base=self.config.azure_api_base,
-                        azure_deployment_name=self.config.azure_deployment_name,
-                    )
-        except ClientError as e:
-            log_and_raise_error(
-                self.logger,
-                e,
-                APICallError,
-                "Client error during API call",
-                self.correlation_id,
-            )
         except asyncio.CancelledError:
             self.logger.warning(
                 "API call was cancelled",
                 extra={"attempt": attempt + 1, "correlation_id": self.correlation_id},
             )
             return None
+            
         except Exception as e:
             log_and_raise_error(
                 self.logger,
@@ -398,6 +337,8 @@ class AIService:
                 "Unexpected error during API call",
                 self.correlation_id,
             )
+
+        return None
 
     async def generate_documentation(
         self, context: DocumentationContext, schema: Optional[Dict[str, Any]] = None

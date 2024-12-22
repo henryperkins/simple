@@ -2,13 +2,12 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Optional, Dict, List, Literal
+from typing import Any, Optional
 from dotenv import load_dotenv
 import uuid
 from pathlib import Path
-import json
 import jsonschema
-from core.console import print_info, print_error, print_warning
+from core.console import print_error
 from core.logger import LoggerSetup
 from core.exceptions import ConfigurationError
 from utils import log_and_raise_error
@@ -77,7 +76,7 @@ def get_env_var(
             value=value,
             var_type=var_type.__name__,
         )
-        return config
+        return default
 
 
 @dataclass
@@ -124,43 +123,19 @@ class AIConfig:
                 "⚠️ Warning: The 'AZURE_DEPLOYMENT_NAME' environment variable is not set."
             )
         import logging
-
         LoggerSetup.log_once(
-            self.logger, logging.DEBUG, "AIConfig initialized successfully"
+            self.logger, logging.INFO, "AIConfig initialized successfully"
         )
-
-    # Model configurations including Azure-specific limits
-    model_limits: dict[str, ModelConfig] = field(
-        default_factory=lambda: {
-            "gpt-4o": ModelConfig(
-                max_tokens=128000,
-                chunk_size=4096,
-                cost_per_token=0.00003,
-                rate_limit=10000,
-            ),
-            "gpt-3.5-turbo": ModelConfig(
-                max_tokens=4096,
-                chunk_size=2048,
-                cost_per_token=0.000002,
-                rate_limit=10000,
-            ),
-            "gpt-4o-2024-11-20": ModelConfig(
-                max_tokens=128000,
-                chunk_size=4096,
-                cost_per_token=0.00003,
-                rate_limit=10000,
-            ),
-        }
-    )
 
     @staticmethod
     def from_env() -> "AIConfig":
         """Create configuration from environment variables with Azure defaults."""
         try:
+            deployment_name = get_env_var("AZURE_DEPLOYMENT_NAME", required=True)
             config = AIConfig(
                 api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
                 endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
-deployment=get_env_var("AZURE_DEPLOYMENT_NAME", required=True),
+                deployment=deployment_name,
                 model=get_env_var(
                     "AZURE_OPENAI_MODEL",
                     "gpt-4o",
@@ -172,56 +147,55 @@ deployment=get_env_var("AZURE_DEPLOYMENT_NAME", required=True),
                 azure_api_version=get_env_var(
                     "AZURE_API_VERSION", "2024-10-01-preview"
                 ),
-                max_tokens=get_env_var(
-                    "AZURE_MAX_TOKENS",
-                    128000,
-                    int,
-                    validation_schema={"type": "integer", "minimum": 1000},
-                ),
-                temperature=get_env_var(
-                    "TEMPERATURE",
-                    0.7,
-                    float,
-                    validation_schema={"type": "number", "minimum": 0, "maximum": 1},
-                ),
-                timeout=get_env_var(
-                    "TIMEOUT",
-                    30,
-                    int,
-                    validation_schema={"type": "integer", "minimum": 10},
-                ),
-                api_call_semaphore_limit=get_env_var(
-                    "API_CALL_SEMAPHORE_LIMIT",
-                    10,
-                    int,
-                    validation_schema={"type": "integer", "minimum": 1},
-                ),
-                api_call_max_retries=get_env_var(
-                    "API_CALL_MAX_RETRIES",
-                    3,
-                    int,
-                    validation_schema={"type": "integer", "minimum": 1},
-                ),
-                azure_api_base=get_env_var("AZURE_API_BASE", ""),
-                azure_deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", ""),
-                max_completion_tokens=get_env_var(
-                    "AZURE_MAX_COMPLETION_TOKENS",
-                    None,
-                    int,
-                    False,
-                    validation_schema={"type": "integer", "minimum": 100},
-                ),
-                truncation_strategy=get_env_var(
-                    "TRUNCATION_STRATEGY", None, dict, False
-                ),
-                tool_choice=get_env_var("TOOL_CHOICE", None, str, False),
-                parallel_tool_calls=get_env_var(
-                    "PARALLEL_TOOL_CALLS", True, bool, False
-                ),
-                response_format=get_env_var("RESPONSE_FORMAT", None, dict, False),
-                stream_options=get_env_var("STREAM_OPTIONS", None, dict, False),
             )
-            import logging
+            config.azure_deployment_name = deployment_name
+            config.max_tokens = get_env_var(
+                "AZURE_MAX_TOKENS",
+                128000,
+                int,
+                validation_schema={"type": "integer", "minimum": 1000},
+            )
+            config.temperature = get_env_var(
+                "TEMPERATURE",
+                0.7,
+                float,
+                validation_schema={"type": "number", "minimum": 0, "maximum": 1},
+            )
+            config.timeout = get_env_var(
+                "TIMEOUT",
+                30,
+                int,
+                validation_schema={"type": "integer", "minimum": 10},
+            )
+            config.api_call_semaphore_limit = get_env_var(
+                "API_CALL_SEMAPHORE_LIMIT",
+                10,
+                int,
+                validation_schema={"type": "integer", "minimum": 1},
+            )
+            config.api_call_max_retries = get_env_var(
+                "API_CALL_MAX_RETRIES",
+                3,
+                int,
+                validation_schema={"type": "integer", "minimum": 1},
+            )
+            config.azure_api_base = get_env_var("AZURE_API_BASE", "")
+            config.max_completion_tokens = get_env_var(
+                "AZURE_MAX_COMPLETION_TOKENS",
+                None,
+                int,
+                False,
+                validation_schema={"type": "integer", "minimum": 100},
+            )
+            config.truncation_strategy = get_env_var(
+                "TRUNCATION_STRATEGY", None, dict, False
+            )
+            config.tool_choice = get_env_var("TOOL_CHOICE", None, str, False)
+            config.parallel_tool_calls = get_env_var(
+                "PARALLEL_TOOL_CALLS", True, bool, False
+            )
+            config.response_format = get_env_var("RESPONSE_FORMAT", None, dict, False)
+            config.stream_options = get_env_var("STREAM_OPTIONS", None, dict, False)
 
             LoggerSetup.log_once(
                 config.logger, logging.INFO, "AIConfig initialized successfully"
@@ -230,7 +204,6 @@ deployment=get_env_var("AZURE_DEPLOYMENT_NAME", required=True),
         except Exception as e:
             print_error(f"Failed to initialize AIConfig: {e}")
             raise
-
 
 @dataclass
 class AppConfig:
