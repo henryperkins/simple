@@ -1,81 +1,47 @@
-Objective: Generate comprehensive Google-style documentation for the following Python module.
+Objective: Generate Google-style docstring in JSON.
 
-Context: This module is part of a larger system aimed at providing AI-driven solutions. The target audience includes developers who will use this documentation to understand and maintain the code.
+Module: {{ module_name }}
+Path: {{ file_path }}
 
-Module Name: {{ module_name }}
-File Path: {{ file_path }}
-
-Code Structure:
-
-{% if classes %}
+{% if classes -%}
 Classes:
-{% for cls in classes %}
+{% for cls in classes -%}
 {{ _format_class_info(cls) }}
-{% endfor %}
-{% endif %}
+{% endfor -%}
+{% endif -%}
 
-{% if functions %}
+{% if functions -%}
 Functions:
-{% for func in functions %}
+{% for func in functions -%}
 {{ _format_function_info(func) }}
-{% endfor %}
-{% endif %}
+{% endfor -%}
+{% endif -%}
 
 Source Code:
 {{ source_code }}
 
-Analyze the code and generate a JSON response adhering to this schema:
-
+JSON Schema:
 {
-    "summary": "A concise summary of what the code does",
-    "description": "A detailed description of the functionality",
+    "summary": "str",
+    "description": "str",
     "args": [
         {
-            "name": "argument_name",
-            "type": "argument_type",
-            "description": "argument description"
-        }
-    ],
-    "returns": {
-        "type": "return_type",
-        "description": "description of the return value"
-    },
-    "raises": [
-        {
-            "exception": "exception_type",
-            "description": "when this exception is raised"
-        }
-    ],
-    "complexity": 1
-}
-
-### Example of a Valid JSON Response:
-{
-    "summary": "This module provides utility functions for string manipulation.",
-    "description": "The module includes functions for formatting, parsing, and validating strings.",
-    "args": [
-        {
-            "name": "input_string",
+            "name": "str",
             "type": "str",
-            "description": "The string to be processed."
+            "description": "str"
         }
     ],
     "returns": {
         "type": "str",
-        "description": "The processed string."
+        "description": "str"
     },
     "raises": [
         {
-            "exception": "ValueError",
-            "description": "Raised if the input string is invalid."
+            "exception": "str",
+            "description": "str"
         }
     ],
-    "complexity": 2
+    "complexity": "int | str"
 }
 
-Notes:
-- Ensure the response matches the schema exactly, including required fields (`summary`, `description`, `returns`, `complexity`).
-- If any data is unavailable, explicitly state "Not available."
-- Optional fields like `args` and `raises` can default to empty arrays.
-
-Respond **only** with a JSON object. Do not include any additional text or explanations.
+Respond with JSON object ONLY. No additional text.

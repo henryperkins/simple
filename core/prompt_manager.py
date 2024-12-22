@@ -26,7 +26,6 @@ from core.types.docstring import DocstringData
 from core.exceptions import PromptGenerationError, TemplateLoadingError
 from utils import log_and_raise_error
 
-
 class PromptManager:
     documentation_template: (
         Template  # Explicitly declare the type of documentation_template
@@ -285,6 +284,9 @@ class PromptManager:
 
             # Track token usage
             token_usage = await self._calculate_token_usage(prompt)
+
+            print(f"----- DEBUG: Generated Prompt Length (tokens): {token_usage.prompt_tokens}")
+            print(f"----- DEBUG: Generated Prompt:\n{prompt}")
 
             # Track metrics
             metrics = await self._create_metrics(prompt, start_time)

@@ -32,34 +32,13 @@ from git.exc import GitCommandError
 import tiktoken
 
 from core.exceptions import LiveError, DocumentationError, WorkflowError
-from core.logger import LoggerSetup, CorrelationLoggerAdapter
+# Corrected import to use get_logger from logging_utils.py
+from core.logging_utils import get_logger, CorrelationLoggerAdapter
 from core.types.base import TokenUsage
 
-# Initialize logger
-correlation_id_var = ContextVar("correlation_id", default=None)
+# Initialize logger using the get_logger from logging_utils
+logger = get_logger(__name__)
 
-
-def get_correlation_id() -> Optional[str]:
-    """Retrieve the correlation ID from the context or return 'N/A' if not set."""
-    return correlation_id_var.get()
-
-
-def set_correlation_id(correlation_id: str) -> None:
-    """Set the correlation ID in the context."""
-    correlation_id_var.set(correlation_id)
-
-
-def get_logger(
-    name: str | None = None, correlation_id: str | None = None
-) -> CorrelationLoggerAdapter:
-    """Get a logger instance with optional correlation ID."""
-    return CorrelationLoggerAdapter(
-        LoggerSetup.get_logger(name or __name__),
-        extra={"correlation_id": correlation_id or get_correlation_id()},
-    )
-
-
-logger = get_logger()
 
 # -----------------------------------------------------------------------------
 # AST Node Visitor

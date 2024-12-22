@@ -13,7 +13,8 @@ from core.ai_service import AIService
 from core.extraction.function_extractor import FunctionExtractor
 from core.extraction.dependency_analyzer import DependencyAnalyzer
 from core.extraction.code_extractor import CodeExtractor
-from core.logger import LoggerSetup
+from core.logger import LoggerSetup  # Import LoggerSetup
+from core.logging_utils import get_logger
 from core.types.base import ExtractionContext
 from core.docs import DocumentationOrchestrator
 from core.metrics_collector import MetricsCollector  # Import here

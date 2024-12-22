@@ -30,6 +30,26 @@ class ConfigurationError(WorkflowError):
 
     pass
 
+class InvalidSourceCodeError(WorkflowError):
+    """
+    Exception raised for invalid source code.
+
+    This exception is used when the source code provided is invalid or cannot be processed.
+    """
+
+    pass
+
+
+class APIConnectionError(WorkflowError):
+    """
+    Exception raised for errors connecting to an API.
+
+    This exception is used when there are issues connecting to an external API,
+    such as network errors, timeouts, or authentication failures.
+    """
+
+    pass
+
 
 class ProcessingError(WorkflowError):
     """

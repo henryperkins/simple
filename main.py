@@ -8,7 +8,10 @@ from typing import Any
 
 import autopep8
 from rich.progress import Progress
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
 
+from core.logger import LoggerSetup
 from core.config import Config
 from core.console import (
     display_metrics,
@@ -21,7 +24,6 @@ from core.console import (
     print_success,
 )
 from core.dependency_injection import Injector, setup_dependencies
-from core.logger import LoggerSetup
 from core.monitoring import SystemMonitor
 from core.docs import DocumentationOrchestrator
 from core.docstring_processor import DocstringProcessor
@@ -276,7 +278,7 @@ class DocumentationGenerator:
                         )
                         if source_code and not source_code.isspace():
                             print_status(
-                                "Processing file ({i}/{total_files}): "
+                                f"Processing file ({i}/{total_files}): "
                                 f"{file_path.name}"
                             )
                             if await self.process_file(
@@ -406,7 +408,7 @@ class DocumentationGenerator:
         """Clone a repository and return its local path."""
         try:
             print_info(
-                "Cloning repository: {repo_url} with correlation ID: "
+                f"Cloning repository: {repo_url} with correlation ID: "
                 f"{self.correlation_id}"
             )
             local_path = (
@@ -430,7 +432,7 @@ class DocumentationGenerator:
 
             if process.returncode != 0:
                 print_error(
-                    "Error cloning repository {repo_url}: "
+                    f"Error cloning repository {repo_url}: "
                     f"{stderr.decode().strip()}"
                 )
                 return None

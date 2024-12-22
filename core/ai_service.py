@@ -12,6 +12,7 @@ from core.exceptions import (
     APICallError,
     DocumentationError,
     InvalidRequestError,
+    APIConnectionError
 )
 from core.logger import CorrelationLoggerAdapter, LoggerSetup
 from core.metrics_collector import MetricsCollector
@@ -68,6 +69,7 @@ class AIService:
     async def _make_api_call_with_retry(
         self,
         prompt: str,
+        model: str,
         max_retries: int = 3,
         log_extra: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
@@ -77,23 +79,11 @@ class AIService:
             "Content-Type": "application/json",
             "api-key": self.config.api_key,
         }
-        request_body = {
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": self.config.max_completion_tokens,
-            "temperature": self.config.temperature,
-        }
-        if "model" in request_body:
-            del request_body["model"]
-        self.logger.info(f"Request body: {request_body}")
-        url = f"{self.config.endpoint}openai/deployments/{self.config.deployment_name}/chat/completions?api-version={self.config.api_version}"
-        self.logger.info(f"API URL: {url}")
-        url = f"{self.config.endpoint}openai/deployments/{self.config.deployment_name}/chat/completions?api-version={self.config.api_version}"
-        self.logger.debug(f"API URL: {url}")
-        if hasattr(self.config, "functions") and self.config.functions:
-            request_body["functions"] = self.config.functions
-        if hasattr(self.config, "function_call") and self.config.function_call:
-            request_body["function_call"] = self.config.function_call
+        # Construct the API URL using the deployment name
+        url = f"{self.config.endpoint}openai/deployments/{model}/chat/completions?api-version={self.config.api_version}"
 
+        self.logger.debug(f"API URL: {url}")
+        
         if self.correlation_id:
             headers["x-correlation-id"] = self.correlation_id
 
@@ -103,13 +93,9 @@ class AIService:
             "temperature": self.config.temperature,
         }
 
-        # Construct the API URL
-        url = f"{self.config.endpoint}openai/deployments/{self.config.deployment_name}/chat/completions?api-version={self.config.api_version}"
-
-        self.logger.debug(f"Constructed API URL: {url}")
         self.logger.debug(f"Request headers: {headers}")
         self.logger.debug(f"Endpoint: {self.config.endpoint}")
-        self.logger.debug(f"Deployment Name: {self.config.deployment_name}")
+        self.logger.debug(f"Deployment Name: {model}")
         self.logger.debug(f"API Version: {self.config.api_version}")
         retry_count = 0
         last_error = None
@@ -125,23 +111,36 @@ class AIService:
                     json=request_body,
                     timeout=aiohttp.ClientTimeout(total=self.config.timeout),
                 ) as response:
+                    response_json = await response.json()
                     if response.status == 200:
-                        response_json = await response.json()
+                        
                         self.logger.info("API call succeeded", extra=log_extra)
                         return response_json
                     else:
-                        error_text = await response.text()
+                        
+                        error_message = response_json.get("error", {}).get("message", "Unknown error")
                         self.logger.error(
-                            f"API call failed with status {response.status}: {error_text}",
+                            f"API call failed with status {response.status}: {error_message}",
                             extra={
                                 "status_code": response.status,
                                 "correlation_id": self.correlation_id,
                             },
                         )
+                        
                         if response.status == 404:
                             raise APICallError("Resource not found. Check your endpoint and deployment name.")
+                        elif response.status == 429:
+                            raise APICallError("Rate limit reached or quota exceeded.")
+                        elif response.status >= 500:
+                            raise APICallError("Server error occurred.")
                         else:
-                            raise APICallError(f"API call failed with status {response.status}: {error_text}")
+                            raise APICallError(f"API call failed with status {response.status}: {error_message}")
+
+            except aiohttp.ClientConnectionError as e:
+                last_error = e
+                error_message = "Failed to connect to the API"
+                self.logger.error(f"{error_message}: {str(e)}", extra={"correlation_id": self.correlation_id})
+                raise APIConnectionError(error_message) from e
 
             except Exception as e:
                 last_error = e
@@ -159,7 +158,7 @@ class AIService:
         raise APICallError(f"API call failed after {max_retries} retries") from last_error
 
     async def generate_documentation(
-        self, context: DocumentationContext
+        self, context: DocumentationContext, model: str = "gpt-4"
     ) -> ProcessingResult:
         """Generate documentation for the provided source code context."""
         start_time = time.time()
@@ -201,6 +200,7 @@ class AIService:
             # Make the API call
             response = await self._make_api_call_with_retry(
                 prompt,
+                model,
                 max_retries=self.config.api_call_max_retries,
                 log_extra=log_extra,
             )
@@ -210,7 +210,7 @@ class AIService:
             # For now, we'll extract the content from the response
             choices = response.get("choices", [])
             if not choices:
-                raise ResponseParsingError("No choices found in the API response.")
+                raise ValueError("No choices found in the API response.")
 
             message_content = choices[0]["message"]["content"]
 
