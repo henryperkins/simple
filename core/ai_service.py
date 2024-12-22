@@ -134,6 +134,9 @@ class AIService:
         log_extra: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
         """Make an API call with retry logic following Azure best practices."""
+        if not self.config or not self.config.api_key:
+            raise ConfigurationError("API configuration is missing or invalid")
+
         headers = {
             "api-key": self.config.api_key,
             "Content-Type": "application/json"
@@ -148,8 +151,21 @@ class AIService:
             "temperature": self.config.temperature,
         }
 
+        # Validate Azure configuration
+        if not self.config.azure_deployment_name or not self.config.azure_api_base:
+            raise ConfigurationError(
+                "Azure deployment name or API base URL is missing"
+            )
+
+        # Construct Azure OpenAI API URL
+        url = (
+            f"{self.config.azure_api_base.rstrip('/')}/openai/deployments/"
+            f"{self.config.azure_deployment_name}/chat/completions"
+            f"?api-version={self.config.azure_api_version}"
+        )
+
+        # Token validation and optimization
         try:
-            # Token validation and optimization
             prompt_tokens = self.token_manager.estimate_tokens(prompt)
             max_allowed_tokens = int(self.config.max_tokens * 0.75)
             
@@ -158,9 +174,6 @@ class AIService:
             )
             
             if not is_valid:
-                self.logger.warning(
-                    f"Initial request validation failed: {message}. Attempting optimization..."
-                )
                 optimized_prompt, usage = self.token_manager.optimize_prompt(
                     prompt,
                     max_tokens=max_allowed_tokens,
@@ -169,68 +182,58 @@ class AIService:
                 prompt = optimized_prompt
                 prompt_tokens = usage.prompt_tokens
                 
-                is_valid, metrics, message = self.token_manager.validate_request(
-                    prompt, max_allowed_tokens
-                )
-                if not is_valid:
-                    self.logger.warning("Still above token limit after optimization. Force truncating.")
-                    prompt = prompt[: int(len(prompt) * 0.6)]
-                    prompt_tokens = self.token_manager.estimate_tokens(prompt)
-                    self.logger.warning(f"Using truncated prompt (tokens={prompt_tokens}).")
-                
-                # Update the request params with optimized prompt
+                # Update request parameters
                 request_params["messages"][0]["content"] = prompt
                 request_params["max_tokens"] = max(100, self.config.max_tokens - prompt_tokens)
-
         except ValueError as e:
-            log_and_raise_error(
-                self.logger,
-                e,
-                InvalidRequestError,
-                "Invalid request parameters",
-                self.correlation_id,
-            )
+            raise InvalidRequestError("Failed to validate tokens") from e
 
-        # Add function calling schema if provided
+        # Add function schema if provided
         if function_schema:
             request_params["tools"] = [{"type": "function", "function": function_schema}]
-            if not request_params.get("tool_choice"):
-                request_params["tool_choice"] = "auto"
+            request_params["tool_choice"] = request_params.get("tool_choice", "auto")
 
-        # Construct Azure OpenAI API URL
-        url = (
-            f"{self.config.azure_api_base.rstrip('/')}/openai/deployments/"
-            f"{self.config.azure_deployment_name}/chat/completions"
-            f"?api-version={self.config.azure_api_version}"
-        )
-        self.logger.debug(f"Constructed API URL: {url}")
+        # Initialize retry counter
+        retry_count = 0
+        last_error = None
 
-        # Retry loop for API calls
-        for attempt in range(max_retries):
+        # Retry loop
+        while retry_count <= max_retries:
             try:
-                # Ensure client session is initialized
-                if self._client is None:
+                if not self._client:
                     await self.start()
 
-                if self._client:
-                    response_json = await self._make_single_api_call(
-                        url, headers, request_params, attempt, log_extra
-                    )
-                    if response_json:
-                        return response_json
+                response_json = await self._make_single_api_call(
+                    url, headers, request_params, retry_count, log_extra
+                )
+                if response_json:
+                    return response_json
 
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                
-            except asyncio.TimeoutError:
-                self.logger.warning(f"Request timeout (attempt {attempt + 1}/{max_retries})")
-                if attempt == max_retries - 1:
-                    raise
+            except asyncio.TimeoutError as e:
+                last_error = e
+                self.logger.warning(
+                    f"Request timeout (attempt {retry_count + 1}/{max_retries + 1})"
+                )
             except Exception as e:
-                self.logger.error(f"API call failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
-                if attempt == max_retries - 1:
-                    raise
+                last_error = e
+                self.logger.error(
+                    f"API call failed (attempt {retry_count + 1}/{max_retries + 1}): {str(e)}"
+                )
 
-        raise APICallError(f"API call failed after {max_retries} retries")
+            # Increment retry counter
+            retry_count += 1
+            
+            if retry_count <= max_retries:
+                # Calculate backoff time: 2^retry_count seconds
+                backoff = 2 ** retry_count
+                self.logger.info(f"Retrying in {backoff} seconds...")
+                await asyncio.sleep(backoff)
+
+        # If we get here, all retries failed
+        error_msg = f"API call failed after {max_retries} retries"
+        if last_error:
+            error_msg += f": {str(last_error)}"
+        raise APICallError(error_msg)
 
     async def _make_single_api_call(
         self,

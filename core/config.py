@@ -1,6 +1,7 @@
 """Configuration module for AI documentation service."""
 
 import os
+import logging  # Move import to top
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from dotenv import load_dotenv
