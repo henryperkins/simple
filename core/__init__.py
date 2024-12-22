@@ -30,7 +30,7 @@ from core.prompt_manager import PromptManager
 from core.metrics import Metrics
 from core.markdown_generator import MarkdownGenerator
 from core.cache import Cache
-from core.config import Config, AppConfig, AIConfig, ModelConfig
+from core.config import Config, AppConfig, AIConfig
 from core.console import (
     display_code_snippet,
     print_status,
@@ -97,7 +97,6 @@ __all__ = [
     "Config",
     "AppConfig",
     "AIConfig",
-    "ModelConfig",
     "display_code_snippet",
     "print_status",
     "print_error",

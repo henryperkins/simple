@@ -119,8 +119,7 @@ async def setup_dependencies(config: Config, correlation_id: str | None = None) 
             raise ValueError("AIConfig is not initialized. Check environment variables and configuration.")
 
         token_manager = TokenManager(
-            model=config.ai.model,
-            deployment_name=config.ai.deployment,
+            deployment_name=config.ai.deployment_name,
             correlation_id=correlation_id
         )
         Injector.register("token_manager", token_manager)

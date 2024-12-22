@@ -124,7 +124,6 @@ class DocumentationOrchestrator:
             # Step 4: Generate documentation with AI service
             processing_result: ProcessingResult = await self.ai_service.generate_documentation(
                 context,
-                schema=None  # Add schema if needed
             )
 
             # Step 5: Parse AI response
