@@ -190,35 +190,35 @@ class FunctionExtractor(BaseExtractor):
         for node in ast.walk(
             nodes_to_process[0] if nodes_to_process else ast.Module(body=[])
         ):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if self._should_process_function(node):
-                    try:
-                        extracted_function = await self._process_function(
-                            node, module_metrics
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and self._should_process_function(node):
+                try:
+                    extracted_function = await self._process_function(
+                        node, module_metrics
+                    )
+                    if extracted_function:
+                        functions.append(extracted_function)
+                        self.logger.debug(
+                            f"Extracted function: {extracted_function.name}, Arguments: {[arg.name for arg in extracted_function.args]}, Return Type: {extracted_function.returns['type']}"
                         )
-                        if extracted_function:
-                            functions.append(extracted_function)
-                            self.logger.debug(
-                                f"Extracted function: {extracted_function.name}, Arguments: {[arg.name for arg in extracted_function.args]}, Return Type: {extracted_function.returns['type']}"
+                        if self.context.metrics_collector:
+                            self.context.metrics_collector.update_scan_progress(
+                                self.context.module_name
+                                or Path(
+                                    getattr(self.context.base_path, "name", "")
+                                ).stem,
+                                "function",
+                                node.name,
                             )
-                            if self.context.metrics_collector:
-                                self.context.metrics_collector.update_scan_progress(
-                                    self.context.module_name
-                                    or Path(
-                                        getattr(self.context.base_path, "name", "")
-                                    ).stem,
-                                    "function",
-                                    node.name,
-                                )
-                    except Exception as e:
-                        log_and_raise_error(
-                            self.logger,
-                            e,
-                            ExtractionError,
-                            f"Error extracting function {node.name}",
-                            self.correlation_id,
-                            function_name=node.name,
-                        )
+                except Exception as e:
+                    log_and_raise_error(
+                        self.logger,
+                        e,
+                        ExtractionError,
+                        f"Error extracting function {node.name}",
+                        self.correlation_id,
+                        function_name=node.name,
+                    )
+
 
         self.logger.info(
             f"Function extraction completed. Total functions extracted: {len(functions)}"
