@@ -17,15 +17,11 @@ from core.exceptions import ExtractionError
 from utils import log_and_raise_error
 
 
-class FunctionExtractor:
-    """Handles extraction of functions from Python source code."""
+class BaseExtractor:
+    """Base class for shared extraction methods."""
 
-    def __init__(
-        self,
-        context,
-        correlation_id: Optional[str] = None,
-    ) -> None:
-        """Initialize the function extractor."""
+    def __init__(self, context, correlation_id: Optional[str] = None) -> None:
+        """Initialize the base extractor."""
         self.correlation_id = correlation_id or str(uuid.uuid4())
         self.logger = LoggerSetup.get_logger(
             __name__, correlation_id=self.correlation_id
@@ -73,53 +69,6 @@ class FunctionExtractor:
                 if parent != node:
                     return True
         return False
-
-    async def extract_functions(
-        self, nodes: Union[ast.AST, List[ast.AST]], module_metrics: Any
-    ) -> List[ExtractedFunction]:
-        """Extract function definitions from AST nodes."""
-        functions: List[ExtractedFunction] = []
-
-        # Ensure we process all nodes
-        nodes_to_process = [nodes] if isinstance(nodes, ast.AST) else nodes
-        self.logger.info("Starting function extraction.")
-        for node in ast.walk(
-            nodes_to_process[0] if nodes_to_process else ast.Module(body=[])
-        ):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if self._should_process_function(node):
-                    try:
-                        extracted_function = await self._process_function(
-                            node, module_metrics
-                        )
-                        if extracted_function:
-                            functions.append(extracted_function)
-                            self.logger.debug(
-                                f"Extracted function: {extracted_function.name}, Arguments: {[arg.name for arg in extracted_function.args]}, Return Type: {extracted_function.returns['type']}"
-                            )
-                            if self.context.metrics_collector:
-                                self.context.metrics_collector.update_scan_progress(
-                                    self.context.module_name
-                                    or Path(
-                                        getattr(self.context.base_path, "name", "")
-                                    ).stem,
-                                    "function",
-                                    node.name,
-                                )
-                    except Exception as e:
-                        log_and_raise_error(
-                            self.logger,
-                            e,
-                            ExtractionError,
-                            f"Error extracting function {node.name}",
-                            self.correlation_id,
-                            function_name=node.name,
-                        )
-
-        self.logger.info(
-            f"Function extraction completed. Total functions extracted: {len(functions)}"
-        )
-        return functions
 
     def _extract_arguments(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]
@@ -216,6 +165,65 @@ class FunctionExtractor:
                 elif child.module:
                     imports.append(child.module)
         return imports
+
+
+class FunctionExtractor(BaseExtractor):
+    """Handles extraction of functions from Python source code."""
+
+    def __init__(
+        self,
+        context,
+        correlation_id: Optional[str] = None,
+    ) -> None:
+        """Initialize the function extractor."""
+        super().__init__(context, correlation_id)
+
+    async def extract_functions(
+        self, nodes: Union[ast.AST, List[ast.AST]], module_metrics: Any
+    ) -> List[ExtractedFunction]:
+        """Extract function definitions from AST nodes."""
+        functions: List[ExtractedFunction] = []
+
+        # Ensure we process all nodes
+        nodes_to_process = [nodes] if isinstance(nodes, ast.AST) else nodes
+        self.logger.info("Starting function extraction.")
+        for node in ast.walk(
+            nodes_to_process[0] if nodes_to_process else ast.Module(body=[])
+        ):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and self._should_process_function(node):
+                try:
+                    extracted_function = await self._process_function(
+                        node, module_metrics
+                    )
+                    if extracted_function:
+                        functions.append(extracted_function)
+                        self.logger.debug(
+                            f"Extracted function: {extracted_function.name}, Arguments: {[arg.name for arg in extracted_function.args]}, Return Type: {extracted_function.returns['type']}"
+                        )
+                        if self.context.metrics_collector:
+                            self.context.metrics_collector.update_scan_progress(
+                                self.context.module_name
+                                or Path(
+                                    getattr(self.context.base_path, "name", "")
+                                ).stem,
+                                "function",
+                                node.name,
+                            )
+                except Exception as e:
+                    log_and_raise_error(
+                        self.logger,
+                        e,
+                        ExtractionError,
+                        f"Error extracting function {node.name}",
+                        self.correlation_id,
+                        function_name=node.name,
+                    )
+
+
+        self.logger.info(
+            f"Function extraction completed. Total functions extracted: {len(functions)}"
+        )
+        return functions
 
     async def _process_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], module_metrics: Any

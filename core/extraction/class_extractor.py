@@ -13,13 +13,13 @@ from utils import handle_extraction_error, log_and_raise_error
 from core.extraction.extraction_utils import (
     extract_decorators,
     extract_attributes,
-    extract_instance_attributes,
     extract_bases,
     get_node_name,
 )
+from core.extraction.function_extractor import BaseExtractor
 
 
-class ClassExtractor:
+class ClassExtractor(BaseExtractor):
     """Handles extraction of classes from Python source code."""
 
     def __init__(
@@ -28,12 +28,7 @@ class ClassExtractor:
         correlation_id: str | None = None,
     ) -> None:
         """Initialize the ClassExtractor."""
-        self.correlation_id = correlation_id or str(uuid.uuid4())
-        self.logger = CorrelationLoggerAdapter(
-            context.logger,
-            extra={"correlation_id": self.correlation_id},
-        )
-        self.context = context
+        super().__init__(context, correlation_id)
         self.function_extractor = self.context.function_extractor
         self.errors: List[str] = []
         from core.dependency_injection import Injector  # Local import
@@ -79,32 +74,6 @@ class ClassExtractor:
             f"Class extraction completed. Total classes extracted: {len(classes)}"
         )
         return classes
-
-    def _should_process_class(self, node: ast.ClassDef) -> bool:
-        """Check if a class should be processed based on context."""
-        if not self.context.include_private and node.name.startswith("_"):
-            self.logger.debug(
-                f"Skipping private class: {node.name}",
-                extra={"class_name": node.name, "correlation_id": self.correlation_id},
-            )
-            return False
-        if not self.context.include_nested and self._is_nested_class(node):
-            self.logger.debug(
-                f"Skipping nested class: {node.name}",
-                extra={"class_name": node.name, "correlation_id": self.correlation_id},
-            )
-            return False
-        return True
-
-    def _is_nested_class(self, node: ast.ClassDef) -> bool:
-        """Check if the class is nested within another class."""
-        if not hasattr(self.context, "tree") or self.context.tree is None:
-            return False  # Cannot determine without the full tree
-        for parent in ast.walk(self.context.tree):
-            if isinstance(parent, ast.ClassDef) and node in ast.walk(parent):
-                if parent != node:  # Don't count the node itself
-                    return True
-        return False
 
     def _extract_metaclass(self, node: ast.ClassDef) -> Optional[str]:
         """Extract metaclass name."""
@@ -275,7 +244,7 @@ class ClassExtractor:
                 node.body, module_metrics
             )
             attributes = extract_attributes(node, source_code)
-            instance_attributes = extract_instance_attributes(node, source_code)
+            instance_attributes = extract_attributes(node, source_code, instance=True)
             metaclass = self._extract_metaclass(node)
             is_exception = self._is_exception_class(node)
 
