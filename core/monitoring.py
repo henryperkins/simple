@@ -244,3 +244,39 @@ class SystemMonitor:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         await self.stop()
+
+    def _send_alert(self, message: str) -> None:
+        """
+        Send an alert for critical system states.
+
+        Args:
+            message: The alert message to send
+        """
+        try:
+            # Placeholder for actual alerting logic (e.g., email, SMS, etc.)
+            self.logger.warning(f"ALERT: {message}")
+        except Exception as e:
+            self.logger.error(f"Error sending alert: {e}", exc_info=True)
+
+    def _check_critical_states(self) -> None:
+        """
+        Check for critical system states and send alerts if necessary.
+        """
+        try:
+            current = self._collect_system_metrics()
+            cpu_threshold = 95
+            memory_threshold = 95
+            disk_threshold = 95
+
+            cpu_value = current.get("cpu", {}).get("percent", 0)
+            memory_value = current.get("memory", {}).get("percent", 0)
+            disk_value = current.get("disk", {}).get("percent", 0)
+
+            if cpu_value > cpu_threshold:
+                self._send_alert(f"CPU usage critical: {cpu_value}%")
+            if memory_value > memory_threshold:
+                self._send_alert(f"Memory usage critical: {memory_value}%")
+            if disk_value > disk_threshold:
+                self._send_alert(f"Disk usage critical: {disk_value}%")
+        except Exception as e:
+            self.logger.error(f"Error checking critical states: {e}", exc_info=True)

@@ -43,18 +43,19 @@ def extract_decorators(node: ast.AST) -> List[str]:
     return decorators
 
 
-def extract_attributes(node: ast.ClassDef, source_code: str) -> List[Dict[str, Any]]:
-    """Extract class-level attributes.
+def extract_attributes(node: ast.ClassDef, source_code: str, instance: bool = False) -> List[Dict[str, Any]]:
+    """Extract class-level or instance-level attributes.
 
     Args:
         node (ast.ClassDef): The class node to extract attributes from.
         source_code (str): The source code of the module.
+        instance (bool): Whether to extract instance attributes (default: False).
 
     Returns:
         List[Dict[str, Any]]: A list of dictionaries containing attribute information.
     """
     attributes = []
-    for child in node.body:
+    for child in ast.walk(node) if instance else node.body:
         if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
             attributes.append(
                 {
@@ -75,31 +76,13 @@ def extract_attributes(node: ast.ClassDef, source_code: str) -> List[Dict[str, A
                             "lineno": child.lineno,
                         }
                     )
-    return attributes
-
-
-def extract_instance_attributes(
-    node: ast.ClassDef, source_code: str
-) -> List[Dict[str, Any]]:
-    """Extract instance attributes (assigned to 'self').
-
-    Args:
-        node (ast.ClassDef): The class node to extract instance attributes from.
-        source_code (str): The source code of the module.
-
-    Returns:
-        List[Dict[str, Any]]: A list of dictionaries containing instance attribute information.
-    """
-    instance_attributes = []
-    for child in ast.walk(node):
-        if isinstance(child, ast.Assign):
-            for target in child.targets:
-                if (
-                    isinstance(target, ast.Attribute)
+                elif (
+                    instance
+                    and isinstance(target, ast.Attribute)
                     and isinstance(target.value, ast.Name)
                     and target.value.id == "self"
                 ):
-                    instance_attributes.append(
+                    attributes.append(
                         {
                             "name": target.attr,
                             "type": "Any",
@@ -107,21 +90,7 @@ def extract_instance_attributes(
                             "lineno": child.lineno,
                         }
                     )
-        elif isinstance(child, ast.AnnAssign):
-            if (
-                isinstance(child.target, ast.Attribute)
-                and isinstance(child.target.value, ast.Name)
-                and child.target.value.id == "self"
-            ):
-                instance_attributes.append(
-                    {
-                        "name": child.target.attr,
-                        "type": get_node_name(child.annotation),
-                        "value": ast.unparse(child.value) if child.value else None,
-                        "lineno": child.lineno,
-                    }
-                )
-    return instance_attributes
+    return attributes
 
 
 def extract_bases(node: ast.ClassDef) -> List[str]:

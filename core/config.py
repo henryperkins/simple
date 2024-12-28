@@ -40,8 +40,8 @@ def get_env_var(
         raise
 
 @dataclass
-class AIConfig:
-    """Azure OpenAI service configuration."""
+class Config:
+    """Main configuration class combining all config sections."""
     api_key: str
     endpoint: str
     deployment_name: str
@@ -52,33 +52,6 @@ class AIConfig:
     api_call_semaphore_limit: int = 10
     api_call_max_retries: int = 3
     max_completion_tokens: int = 1000  
-
-    @staticmethod
-    def from_env() -> "AIConfig":
-        """Create configuration from environment variables."""
-        config = AIConfig(
-            api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
-            endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
-            deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", required=True),
-            max_tokens=get_env_var("AZURE_MAX_TOKENS", 8192, int),
-            temperature=get_env_var("TEMPERATURE", 0.7, float),
-            timeout=get_env_var("TIMEOUT", 30, int),
-            api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int),
-            api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int),
-            max_completion_tokens=get_env_var("AZURE_MAX_COMPLETION_TOKENS", 1000, int),
-        )
-        # Check that the environment variables were loaded correctly.
-        print("--- Loaded AIConfig ---")
-        print(f"  api_key: {'*' * (len(config.api_key)-4)}{config.api_key[-4:]}") # Only display last 4 digits of the key
-        print(f"  endpoint: {config.endpoint}")
-        print(f"  deployment_name: {config.deployment_name}")
-        print(f"  api_version: {config.api_version}")
-        print("-----------------------")
-        return config
-
-@dataclass
-class AppConfig:
-    """Application configuration."""
     debug: bool = False
     log_level: str = "INFO"
     verbose: bool = False
@@ -95,9 +68,18 @@ class AppConfig:
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def from_env() -> "AppConfig":
+    def from_env() -> "Config":
         """Create configuration from environment variables."""
-        return AppConfig(
+        config = Config(
+            api_key=get_env_var("AZURE_OPENAI_KEY", required=True),
+            endpoint=get_env_var("AZURE_OPENAI_ENDPOINT", required=True),
+            deployment_name=get_env_var("AZURE_DEPLOYMENT_NAME", required=True),
+            max_tokens=get_env_var("AZURE_MAX_TOKENS", 8192, int),
+            temperature=get_env_var("TEMPERATURE", 0.7, float),
+            timeout=get_env_var("TIMEOUT", 30, int),
+            api_call_semaphore_limit=get_env_var("API_CALL_SEMAPHORE_LIMIT", 10, int),
+            api_call_max_retries=get_env_var("API_CALL_MAX_RETRIES", 3, int),
+            max_completion_tokens=get_env_var("AZURE_MAX_COMPLETION_TOKENS", 1000, int),
             debug=get_env_var("DEBUG", False, bool),
             log_level=get_env_var("LOG_LEVEL", "INFO"),
             verbose=get_env_var("VERBOSE", False, bool),
@@ -107,42 +89,40 @@ class AppConfig:
             use_cache=get_env_var("USE_CACHE", False, bool),
             cache_ttl=get_env_var("CACHE_TTL", 3600, int),
         )
-
-class Config:
-    """Main configuration class combining all config sections."""
-    def __init__(self):
-        """Initialize configuration from environment."""
-        self.ai = AIConfig.from_env()
-        self.app = AppConfig.from_env()
-        self.app.ensure_directories()
-        self.correlation_id = str(uuid.uuid4())
-        self.project_root = ROOT_DIR
+        # Check that the environment variables were loaded correctly.
+        print("--- Loaded Config ---")
+        print(f"  api_key: {'*' * (len(config.api_key)-4)}{config.api_key[-4:]}") # Only display last 4 digits of the key
+        print(f"  endpoint: {config.endpoint}")
+        print(f"  deployment_name: {config.deployment_name}")
+        print(f"  api_version: {config.api_version}")
+        print("-----------------------")
+        return config
 
     def to_dict(self) -> dict:
         """Convert configuration to dictionary."""
         return {
             "ai": {
                 "api_key": "********",  # Redact API key for security
-                "endpoint": self.ai.endpoint,
-                "deployment_name": self.ai.deployment_name,
-                "api_version": self.ai.api_version,
-                "max_tokens": self.ai.max_tokens,
-                "temperature": self.ai.temperature,
-                "timeout": self.ai.timeout,
-                "api_call_semaphore_limit": self.ai.api_call_semaphore_limit,
-                "api_call_max_retries": self.ai.api_call_max_retries,
-                "max_completion_tokens": self.ai.max_completion_tokens
+                "endpoint": self.endpoint,
+                "deployment_name": self.deployment_name,
+                "api_version": self.api_version,
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature,
+                "timeout": self.timeout,
+                "api_call_semaphore_limit": self.api_call_semaphore_limit,
+                "api_call_max_retries": self.api_call_max_retries,
+                "max_completion_tokens": self.max_completion_tokens
             },
             "app": {
-                "debug": self.app.debug,
-                "log_level": self.app.log_level,
-                "verbose": self.app.verbose,
-                "repos_dir": str(self.app.repos_dir),
-                "docs_output_dir": str(self.app.docs_output_dir),
-                "log_dir": str(self.app.log_dir),
-                "use_cache": self.app.use_cache,
-                "cache_ttl": self.app.cache_ttl,
+                "debug": self.debug,
+                "log_level": self.log_level,
+                "verbose": self.verbose,
+                "repos_dir": str(self.repos_dir),
+                "docs_output_dir": str(self.docs_output_dir),
+                "log_dir": str(self.log_dir),
+                "use_cache": self.use_cache,
+                "cache_ttl": self.cache_ttl,
             },
-            "correlation_id": self.correlation_id,
-            "project_root": str(self.project_root)
+            "correlation_id": str(uuid.uuid4()),
+            "project_root": str(ROOT_DIR)
         }
